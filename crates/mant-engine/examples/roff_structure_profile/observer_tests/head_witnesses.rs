@@ -246,3 +246,84 @@ fn structural_equation_payloads_stay_at_their_term_and_column_addresses() {
         );
     }
 }
+
+#[test]
+fn structured_head_row_obligations_survive_a_mixed_literal() {
+    // CVS termp_bd_pre and print_mdoc_node keep the first two rows
+    // separate, including when the third field changes font or uses .br.
+    for body in [
+        ".Bd -literal\nALPHA\nBRAVO\n.Em CHARLIE\n.Ed\n",
+        ".Bd -literal\n.Em ALPHA\n.Em BRAVO\n.Ed\n",
+        ".Bd -literal\nALPHA\nBRAVO\n.br\nCHARLIE\n.Ed\n",
+    ] {
+        let (_, native, mut document) = parsed(&structured_term(body));
+        assert!(violations(&native, &document).is_empty(), "{body}");
+        let nodes = first_term(&mut document);
+        let bravo = nodes
+            .iter()
+            .position(|node| mant_ir::inline_plain_text(std::slice::from_ref(node)) == "BRAVO")
+            .unwrap();
+        let at = nodes[..bravo]
+            .iter()
+            .rposition(|node| matches!(node, Inline::LineBreak {}))
+            .unwrap();
+        nodes[at] = Inline::Text { value: " ".into() };
+        let issues = violations(&native, &document);
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("missing hard line")),
+            "{body}: {issues:?}"
+        );
+    }
+}
+
+#[test]
+fn head_rows_distinguish_a_tag_run_in_invisible_text_and_continued_blank() {
+    // term_flushln() keeps the two one-column D1 fields on one row
+    // inside the wide tag. A NBRZW field and an empty TEXT after
+    // NONEWLINE also have no independent physical line in these tags.
+    for (width, body) in [
+        ("10n", ".D1 A\n.D1 B\n"),
+        ("a", ".Bd -literal\nALPHA\n\\&\nBRAVO\n.Ed\n"),
+        ("a", ".Bd -literal\nA\\c\n\nB\n.Ed\n"),
+    ] {
+        let source = structured_term(body).replacen("-width a", &format!("-width {width}"), 1);
+        let (_, native, document) = parsed(&source);
+        let issues = violations(&native, &document);
+        assert!(issues.is_empty(), "{width} {body}: {issues:?}");
+    }
+}
+
+#[test]
+fn generated_wrappers_do_not_hide_authored_words_or_supply_missing_words() {
+    // Pinned termp_quote_pre() and termp_fo_pre() place [ALPHA and out(
+    // respectively on the same row. Only the generated affix is optional.
+    for (body, author) in [
+        (".Oo\n.No ALPHA\n.Dl PROBE\n.Oc\n", "ALPHA"),
+        (".Fo out\n.EQ\nalpha\n.EN\n.Fc\n", "out"),
+    ] {
+        let (_, native, mut document) = parsed(&structured_term(body));
+        let issues = violations(&native, &document);
+        assert!(issues.is_empty(), "{body}: {issues:?}");
+        fn erase(nodes: &mut [Inline], author: &str) {
+            for node in nodes {
+                match node {
+                    Inline::Text { value } | Inline::Code { value } => {
+                        *value = value.replace(author, "");
+                    }
+                    Inline::Link { children, .. }
+                    | Inline::Strong { children }
+                    | Inline::Emphasis { children } => erase(children, author),
+                    _ => {}
+                }
+            }
+        }
+        erase(first_term(&mut document), author);
+        assert!(
+            violations(&native, &document)
+                .iter()
+                .any(|issue| issue.contains(author))
+        );
+    }
+}

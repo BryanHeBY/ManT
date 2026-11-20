@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v25";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v26";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -162,7 +162,7 @@ struct IrTopology {
     table_occurrences: BTreeMap<(u32, u32), usize>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 enum EquationContext {
     Display,
@@ -187,6 +187,7 @@ struct AstEquationTopology {
     context: EquationContext,
     value: String,
     cell: Option<EquationCell>,
+    unproved_cell: bool,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -198,7 +199,7 @@ struct IrEquationTopology {
     cell: Option<EquationCell>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct EquationCell {
     table_source_line: u32,
@@ -263,6 +264,7 @@ struct IrListTopology {
 struct AstTableRowTopology {
     table_source_line: u32,
     table_source_column: u32,
+    table_occurrence: usize,
     row_index: usize,
     kind: mant_ir::TableRowKind,
     cells: Vec<AstTableCellTopology>,
@@ -281,6 +283,7 @@ struct AstTableCellTopology {
 struct IrTableRowTopology {
     table_source_line: u32,
     table_source_column: u32,
+    table_occurrence: usize,
     row_index: usize,
     kind: mant_ir::TableRowKind,
     cells: Vec<IrTableCellTopology>,
@@ -390,12 +393,4 @@ fn path_field(request: &Value, field: &str) -> Result<PathBuf, String> {
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .ok_or_else(|| format!("request.{field} must be a non-empty string"))
-}
-
-const fn equation_context_order(context: EquationContext) -> u8 {
-    match context {
-        EquationContext::Display => 0,
-        EquationContext::Inline => 1,
-        EquationContext::TableCell => 2,
-    }
 }

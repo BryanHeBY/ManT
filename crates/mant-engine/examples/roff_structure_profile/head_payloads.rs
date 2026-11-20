@@ -69,12 +69,14 @@ struct ExpectedAtom {
     value: String,
     origin: Origin,
     row: Option<DisplayRow>,
+    wrappers: (String, String),
 }
 
 #[derive(Clone, Copy)]
 struct DisplayRow {
     display: usize,
     within: usize,
+    ended: bool,
 }
 
 #[derive(Default)]
@@ -84,6 +86,7 @@ struct TermPayload {
     partial: bool,
     opaque_words: bool,
     displays: usize,
+    field: literal_rows::Field,
 }
 
 impl TermPayload {
@@ -106,6 +109,7 @@ impl TermPayload {
                     value: token.to_owned(),
                     origin,
                     row,
+                    wrappers: Default::default(),
                 }),
         );
     }
@@ -129,7 +133,7 @@ impl TermPayload {
             .atoms
             .iter()
             .filter(|item| !matches!(item.origin, Origin::Equation))
-            .map(|item| item.value.as_str())
+            .flat_map(ExpectedAtom::spellings)
             .collect();
         let mut observation = TermObservation::default();
         for (index, term) in terms.iter().enumerate() {
@@ -146,7 +150,7 @@ impl TermPayload {
         for expected in &self.atoms {
             let matches = |item: &ObservedAtom| {
                 item.equation == matches!(expected.origin, Origin::Equation)
-                    && item.value == expected.value
+                    && expected.spellings().any(|word| word == item.value)
             };
             let found = if self.opaque_words {
                 observed.find(|item| matches(item))
@@ -172,7 +176,7 @@ impl TermPayload {
                             std::cmp::Ordering::Greater => Some("unexpected hard line"),
                             std::cmp::Ordering::Equal => None,
                         }
-                    } else if found.row == projected {
+                    } else if source.ended && found.row == projected {
                         Some("missing hard line")
                     } else {
                         None
@@ -197,6 +201,17 @@ impl TermPayload {
                 extra.value
             ));
         }
+    }
+}
+
+impl ExpectedAtom {
+    fn spellings(&self) -> impl Iterator<Item = String> + '_ {
+        let (left, right) = &self.wrappers;
+        ["", left.as_str()].into_iter().flat_map(move |left| {
+            ["", right.as_str()]
+                .into_iter()
+                .map(move |right| format!("{left}{}{right}", self.value))
+        })
     }
 }
 
@@ -267,11 +282,17 @@ pub(super) struct TermReview {
 impl HeadPayloads {
     pub(super) fn collect(root: &Node, source: &SourceContext) -> Self {
         let mut result = Self::default();
-        result.walk(root, source, &mut HashSet::new());
+        result.walk(root, source, &mut HashSet::new(), None);
         result
     }
 
-    fn walk(&mut self, node: &Node, source: &SourceContext, recovered: &mut HashSet<u32>) {
+    fn walk(
+        &mut self,
+        node: &Node,
+        source: &SourceContext,
+        recovered: &mut HashSet<u32>,
+        list: Option<&Node>,
+    ) {
         if source.destination(node) != Some(SourceDestination::Blocks) {
             return;
         }
@@ -292,7 +313,10 @@ impl HeadPayloads {
                         && source.destination(part) == Some(SourceDestination::Term)
                 })
             {
-                let mut payload = TermPayload::default();
+                let mut payload = TermPayload {
+                    field: literal_rows::Field::for_item(list, node),
+                    ..TermPayload::default()
+                };
                 if contains_structure(head, source) {
                     payload.structured = true;
                     Self::walk_part(head, source, Origin::Term, &mut payload);
@@ -303,14 +327,28 @@ impl HeadPayloads {
                     .push(payload);
             }
         }
+        let list = if node.kind == NodeKind::Block && node.macro_token.as_deref() == Some("Bl") {
+            Some(node)
+        } else {
+            list
+        };
         for child in &node.children {
-            self.walk(child, source, recovered);
+            self.walk(child, source, recovered, list);
         }
     }
 
     fn walk_part(node: &Node, source: &SourceContext, origin: Origin, payload: &mut TermPayload) {
+        Self::walk_part_slice(&node.children, source, origin, payload);
+    }
+
+    fn walk_part_slice(
+        children: &[Node],
+        source: &SourceContext,
+        origin: Origin,
+        payload: &mut TermPayload,
+    ) {
         let mut start = 0;
-        for (index, child) in node.children.iter().enumerate() {
+        for (index, child) in children.iter().enumerate() {
             let structural = matches!(
                 child.kind,
                 NodeKind::Block | NodeKind::Table | NodeKind::Equation
@@ -326,7 +364,7 @@ impl HeadPayloads {
                 )
             );
             if structural || closes_field || child.flags.no_fill && child.flags.line_start {
-                record_words(&node.children[start..index], source, origin, None, payload);
+                record_words(&children[start..index], source, origin, None, payload);
                 start = index;
             }
             if structural {
@@ -340,7 +378,7 @@ impl HeadPayloads {
                 start = index + 1;
             }
         }
-        record_words(&node.children[start..], source, origin, None, payload);
+        record_words(&children[start..], source, origin, None, payload);
     }
 
     fn collect_structure(
@@ -379,6 +417,7 @@ impl HeadPayloads {
                         value: super::native::equation_visible_text(&equation.readable_text()),
                         origin: Origin::Equation,
                         row: None,
+                        wrappers: Default::default(),
                     });
                 }
             }
@@ -390,12 +429,7 @@ impl HeadPayloads {
                     // blk_part_imp puts boundary punctuation beside BODY.
                     // termp_d1_pre and its post-handler enclose all those
                     // siblings in one executed field.
-                    payload.displays += 1;
-                    let row = DisplayRow {
-                        display: payload.displays,
-                        within: 0,
-                    };
-                    record_words(&node.children, source, Origin::Display, Some(row), payload);
+                    literal_rows::record_short(node, source, payload);
                 } else if matches!(token, Some("Bd" | "Xo")) {
                     for part in node
                         .children
@@ -441,6 +475,7 @@ impl HeadPayloads {
                     value,
                     origin: Origin::ListMarker,
                     row: None,
+                    wrappers: Default::default(),
                 });
             }
             for part in item
@@ -462,11 +497,13 @@ impl HeadPayloads {
         // The wrapper's generated layout remains under review;
         // independently executed descendants still have witnesses.
         payload.partial = true;
+        let start = payload.atoms.len();
         for part in node
             .children
             .iter()
             .filter(|part| source.destination(part) == Some(SourceDestination::Term))
         {
+            let from = payload.atoms.len();
             if matches!(part.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail)
                 && contains_structure(part, source)
             {
@@ -478,6 +515,23 @@ impl HeadPayloads {
                 Self::collect_structure(part, source, origin, payload);
             } else {
                 record_words(std::slice::from_ref(part), source, origin, None, payload);
+            }
+            if part.kind == NodeKind::Body
+                && let Some((left, right)) = macro_delimiters(node)
+            {
+                // Fo writes its opening after executing HEAD; enclosure
+                // macros write theirs before executing BODY.
+                if node.macro_token.as_deref() == Some("Fo") && from > start {
+                    payload.atoms[from - 1].wrappers.1.push_str(&left);
+                } else if let Some(first) = payload.atoms.get_mut(from) {
+                    first.wrappers.0.insert_str(0, &left);
+                }
+                if payload.atoms.len() > from
+                    && let Some(last) = payload.atoms.last_mut()
+                    && !matches!(last.origin, Origin::Equation)
+                {
+                    last.wrappers.1.push_str(&right);
+                }
             }
         }
     }
@@ -545,6 +599,20 @@ fn contains_structure(node: &Node, source: &SourceContext) -> bool {
                 .children
                 .iter()
                 .any(|child| contains_structure(child, source)))
+}
+
+fn macro_delimiters(node: &Node) -> Option<(String, String)> {
+    let (open, close) = match node.enclosure.as_ref() {
+        Some(enclosure) if node.macro_token.as_deref() == Some("En") => (
+            enclosure.opening.as_str(),
+            enclosure.closing.as_deref().unwrap_or_default(),
+        ),
+        _ => ordinal_labels::description::scope_delimiters(node.macro_token.as_deref())?,
+    };
+    Some((
+        RoffWordEvidence::read(open).text,
+        RoffWordEvidence::read(close).text,
+    ))
 }
 
 fn record_words(

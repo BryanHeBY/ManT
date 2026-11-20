@@ -102,6 +102,19 @@ pub(crate) fn description(node: &Node, continues: bool, context: &SourceContext)
     source_evidence(std::slice::from_ref(node), node, continues, context, false).0
 }
 
+pub(crate) fn scope_delimiters(token: Option<&str>) -> Option<(&'static str, &'static str)> {
+    Some(match token {
+        Some("Ao" | "Aq") => (r"\(la", r"\(ra"),
+        Some("Bro" | "Brq") => ("{", "}"),
+        Some("Bo" | "Bq" | "Oo" | "Op") => ("[", "]"),
+        Some("Do" | "Dq") => (r"\(lq", r"\(rq"),
+        Some("Po" | "Pq" | "Fo") => ("(", ")"),
+        Some("Qo" | "Qq") => ("\"", "\""),
+        Some("Ql" | "So" | "Sq") => (r"\(oq", r"\(cq"),
+        _ => return None,
+    })
+}
+
 pub(crate) fn source_evidence(
     nodes: &[Node],
     node: &Node,
@@ -203,15 +216,7 @@ impl DescriptionProbe<'_> {
                     | "Pq" | "Ql" | "Qo" | "Qq" | "So" | "Sq",
                 ),
             ) => {
-                let (open, close) = match token {
-                    Some("Ao" | "Aq") => (r"\(la", r"\(ra"),
-                    Some("Bro" | "Brq") => ("{", "}"),
-                    Some("Bo" | "Bq" | "Oo" | "Op") => ("[", "]"),
-                    Some("Do" | "Dq") => (r"\(lq", r"\(rq"),
-                    Some("Po" | "Pq") => ("(", ")"),
-                    Some("Qo" | "Qq") => ("\"", "\""),
-                    _ => (r"\(oq", r"\(cq"),
-                };
+                let (open, close) = scope_delimiters(token).expect("quote macro");
                 return self.delimiters(node, open, close, false);
             }
             (NodeKind::Table, _) => {

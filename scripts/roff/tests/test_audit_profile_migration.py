@@ -13,6 +13,53 @@ from scripts.roff.audit import audit_roff_structure as structure
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_structure_limited_scans_cover_new_pages_before_retrying_persistent_failures(self):
+        for quota in ('--max-pages', '--max-pages-per-section'):
+            with self.subTest(quota=quota), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for section in ('1', '7'):
+                    directory = root / f'man{section}'
+                    directory.mkdir()
+                    for name in ('a', 'b'):
+                        (directory / f'{name}.{section}').write_text(
+                            f'.TH {name.upper()} {section}\n.SH DESCRIPTION\n{section} {name}\n',
+                            encoding='utf-8',
+                        )
+                profiler = root / 'profiler'
+                profiler.touch()
+                ledger = root / 'audit.csv'
+                args = ['--manpath', str(root), '--corpus', 'test', '--profiler', str(profiler),
+                        '--audit-db', str(ledger), quota, '1']
+                failing = True
+
+                def probe(selected, *_args):
+                    for page in selected:
+                        label = structure.relative_label(page, [root])
+                        status = 'hard-failure' if failing and page.stem == 'a' else 'clean'
+                        yield structure.Finding(label, status, [])
+
+                def scan():
+                    with contextlib.redirect_stdout(io.StringIO()):
+                        return structure.main(args)
+
+                with patch.object(structure, 'profile_findings', side_effect=probe) as profile:
+                    self.assertEqual(scan(), 1)
+                    rounds = 3 if quota == '--max-pages' else 1
+                    for _ in range(rounds):
+                        scan()
+                    snapshot = list(structure.read_structure_database(ledger).values())
+                    self.assertEqual(len(snapshot), 4)
+                    self.assertEqual([row.scan_status for row in snapshot].count('hard-failure'), 2)
+                    self.assertEqual(scan(), 1)
+                    failing = False
+                    for _ in range(2):
+                        self.assertEqual(scan(), 0)
+                    self.assertTrue(all(row.scan_status == 'clean' for row in
+                                        structure.read_structure_database(ledger).values()))
+                    count = profile.call_count
+                    self.assertEqual(scan(), 0)
+                    self.assertEqual(profile.call_count, count)
+
     def test_invalid_structure_profiler_cannot_stamp_source_as_checked(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
             root = Path(directory)

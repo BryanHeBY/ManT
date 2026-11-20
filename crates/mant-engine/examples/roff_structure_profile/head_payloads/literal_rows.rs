@@ -1,10 +1,96 @@
-//! Row witnesses for short, source-proved no-fill display runs.
+//! Local row witnesses for source-proved display fields in a definition HEAD.
 
 use super::{
     DisplayRow, Node, NodeKind, Origin, RoffWordEffect, RoffWordEvidence, SourceContext,
-    TermPayload, record_words, source_evidence,
+    TermPayload, source_evidence,
 };
-use libmandoc_rs::DisplayKind;
+use libmandoc_rs::{DefinitionListStyle, DisplayKind, TableColumnMetrics};
+
+#[derive(Clone, Copy, Default)]
+pub(super) enum Field {
+    #[default]
+    Unknown,
+    Ordinary,
+    Tagged(usize),
+    Hanging,
+}
+
+impl Field {
+    pub(super) fn for_item(list: Option<&Node>, item: &Node) -> Self {
+        let Some(list) = list else {
+            return Self::Unknown;
+        };
+        match list.definition_list_style {
+            Some(DefinitionListStyle::Tag) => {
+                // termp_it_pre() sets HANG for a tag without a BODY.
+                if !item
+                    .children
+                    .iter()
+                    .any(|part| part.kind == NodeKind::Body && !part.children.is_empty())
+                {
+                    return Self::Hanging;
+                }
+                match list.width.as_deref() {
+                    None => Self::Tagged(8),
+                    Some(width) => simple_width(width)
+                        .map_or(Self::Unknown, |width| Self::Tagged(width.saturating_add(2))),
+                }
+            }
+            Some(DefinitionListStyle::Hang) => Self::Hanging,
+            Some(DefinitionListStyle::Inset | DefinitionListStyle::Overhang) => Self::Ordinary,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn closes(self, columns: usize, advance: usize, origin: usize) -> Option<bool> {
+        match self {
+            Self::Unknown => None,
+            Self::Hanging => Some(false),
+            Self::Ordinary => Some(true),
+            Self::Tagged(width) => {
+                // term_flushln() tests the remaining margin with the tag's
+                // two trailing spaces. Integer cell widths leave the half
+                // cell tolerance between, rather than on, the boundaries.
+                let gap = origin
+                    .saturating_sub(columns)
+                    .max(if columns == 0 { 0 } else { 2 });
+                Some(
+                    columns
+                        .saturating_add(gap)
+                        .saturating_add(advance)
+                        .saturating_add(2)
+                        > width,
+                )
+            }
+        }
+    }
+}
+
+fn simple_width(width: &str) -> Option<usize> {
+    if let Some((units, "")) = TableColumnMetrics::motion_argument(width)
+        && units >= 0
+        && units % 24 == 0
+    {
+        return usize::try_from(units / 24).ok();
+    }
+    width
+        .bytes()
+        .all(|ch| ch.is_ascii_alphabetic())
+        .then_some(width.len())
+}
+
+pub(super) fn record_short(node: &Node, source: &SourceContext, payload: &mut TermPayload) {
+    let mut rows = Rows::begin(payload);
+    // termp_d1_pre adds defindent + 1 to offset for this short display.
+    // A field longer than the entire tag width must close regardless of
+    // previously printed columns. A fitting field may share its row.
+    let offset = if matches!(payload.field, Field::Tagged(_)) {
+        6
+    } else {
+        0
+    };
+    rows.record(&node.children, source, payload, offset);
+}
 
 pub(super) fn record(
     display: &Node,
@@ -18,69 +104,158 @@ pub(super) fn record(
     ) {
         return false;
     }
-    let Some(words) = body
-        .children
-        .iter()
-        .map(|node| match node.kind {
-            NodeKind::Text => Some(RoffWordEvidence::read(
-                node.text.as_deref().unwrap_or_default(),
-            )),
-            NodeKind::Element
-                if node.macro_token.as_deref() == Some("No")
-                    && node
-                        .children
-                        .iter()
-                        .all(|child| child.kind == NodeKind::Text) =>
-            {
-                source_evidence(std::slice::from_ref(node), node, false, source, true).1
-            }
-            _ => None,
-        })
-        .collect::<Option<Vec<_>>>()
-    else {
+    if !matches!(display.offset.as_deref(), None | Some("left")) {
+        payload.partial = true;
         return false;
-    };
-
-    // print_mdoc_node() honors a pending \c at node entry. A tag field
-    // can still retain a later macro word on its current physical line
-    // (termp_it_pre's NOBREAK/BRTRSP). Prove relative hard rows for raw
-    // source rows; leave an independent macro-word boundary ungraded.
-    payload.displays += 1;
-    let mut row = DisplayRow {
-        display: payload.displays,
-        within: 0,
-    };
+    }
+    let mut rows = Rows::begin(payload);
     let mut start = 0;
     let mut continues = false;
-    let mut proved_rows = true;
-    for (index, (node, word)) in body.children.iter().zip(&words).enumerate() {
-        if index > 0 && node.flags.line_start && !continues && node.kind != NodeKind::Text {
-            proved_rows = false;
-        }
-        continues = word.has(RoffWordEffect::Continues);
-    }
-    let mut continues = false;
-    for (index, (node, word)) in body.children.iter().zip(&words).enumerate() {
-        if index > start && node.flags.line_start && !continues {
-            record_words(
-                &body.children[start..index],
+    for (index, node) in body.children.iter().enumerate() {
+        let empty_text = node.kind == NodeKind::Text
+            && node.text.as_deref() == Some("")
+            && node.flags.line_start;
+        if !simple_node(node) {
+            rows.record(&body.children[start..index], source, payload, 0);
+            super::HeadPayloads::walk_part_slice(
+                std::slice::from_ref(node),
                 source,
                 Origin::Display,
-                proved_rows.then_some(row),
                 payload,
             );
-            start = index;
-            row.within += 1;
+            payload.partial = true;
+            rows.forget(payload);
+            start = index + 1;
+            continues = false;
+            continue;
         }
-        continues = word.has(RoffWordEffect::Continues);
+        if node.flags.line_start && (!continues || empty_text) {
+            rows.record(&body.children[start..index], source, payload, 0);
+            start = index;
+        }
+        if empty_text {
+            // print_mdoc_node() uses term_vspace() for empty TEXT, except
+            // after NONEWLINE, in which case it only flushes the field.
+            if !continues {
+                rows.end_line();
+            }
+            start = index + 1;
+        }
+        continues = !empty_text
+            && node
+                .children
+                .last()
+                .unwrap_or(node)
+                .text
+                .as_deref()
+                .is_some_and(|text| RoffWordEvidence::read(text).has(RoffWordEffect::Continues));
     }
-    record_words(
-        &body.children[start..],
-        source,
-        Origin::Display,
-        proved_rows.then_some(row),
-        payload,
-    );
-    payload.partial |= !proved_rows;
+    rows.record(&body.children[start..], source, payload, 0);
     true
+}
+
+fn simple_node(node: &Node) -> bool {
+    node.kind == NodeKind::Text
+        || node.kind == NodeKind::Element
+            && matches!(node.macro_token.as_deref(), Some("No" | "Em" | "Sy" | "Li"))
+            && node
+                .children
+                .iter()
+                .all(|child| child.kind == NodeKind::Text)
+}
+
+struct Rows {
+    row: DisplayRow,
+    columns: Option<usize>,
+}
+
+impl Rows {
+    fn begin(payload: &mut TermPayload) -> Self {
+        payload.displays += 1;
+        Self {
+            row: DisplayRow {
+                display: payload.displays,
+                within: 0,
+                ended: false,
+            },
+            columns: if payload
+                .atoms
+                .last()
+                .is_none_or(|atom| atom.row.is_some_and(|row| row.ended))
+            {
+                Some(0)
+            } else {
+                None
+            },
+        }
+    }
+
+    fn forget(&mut self, payload: &mut TermPayload) {
+        *self = Self::begin(payload);
+        self.columns = None;
+    }
+
+    fn end_line(&mut self) {
+        self.columns = Some(0);
+        self.row.within += 1;
+    }
+
+    fn record(
+        &mut self,
+        nodes: &[Node],
+        source: &SourceContext,
+        payload: &mut TermPayload,
+        origin: usize,
+    ) {
+        let Some(first) = nodes.first() else { return };
+        let (closed, word) = source_evidence(nodes, first, false, source, true);
+        if closed.has_text() || closed.needs_review() {
+            payload.leave_unproved_words();
+            self.forget(payload);
+        }
+        let Some(word) = word else { return };
+        // Width is only a proof for ordinary ASCII cells. In particular,
+        // NBRZW is written to the buffer but prints no column.
+        if !word
+            .text
+            .bytes()
+            .all(|ch| ch.is_ascii_graphic() || ch == b' ')
+            || word.has(RoffWordEffect::Unclassified)
+        {
+            payload.record(Origin::Display, &word, None);
+            payload.partial = true;
+            self.forget(payload);
+            return;
+        }
+        let advance = word.text.len();
+        if advance == 0 && !word.has(RoffWordEffect::Buffered) {
+            return;
+        }
+        let ended = self
+            .columns
+            .and_then(|columns| payload.field.closes(columns, advance, origin));
+        // A long field that would overflow even at a fresh start always
+        // closes. This permits resuming an exact witness after an opaque
+        // neighboring request without asserting its own row position.
+        let guaranteed_close = payload.field.closes(0, advance, origin) == Some(true);
+        self.row.ended = ended == Some(true) || guaranteed_close;
+        payload.record(Origin::Display, &word, Some(self.row));
+        if self.row.ended {
+            self.end_line();
+        } else if ended == Some(false) {
+            if advance != 0
+                && let Some(column) = self.columns.as_mut()
+            {
+                let gap = if *column == 0 {
+                    origin
+                } else {
+                    2.max(origin.saturating_sub(*column))
+                };
+                *column += gap + advance;
+            }
+        } else {
+            payload.partial = true;
+            self.forget(payload);
+        }
+    }
 }

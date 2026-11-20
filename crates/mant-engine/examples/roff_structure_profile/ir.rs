@@ -2,7 +2,7 @@
 use super::{
     Block, Document, EquationCell, EquationContext, Inline, IrEquationTopology, IrListTopology,
     IrStructure, IrTableCellTopology, IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind,
-    Section, equation_context_order,
+    Section,
 };
 
 pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
@@ -24,12 +24,6 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
     }
     profile.literal_origins = super::literal_owners::record_ir_displays(document);
     topology.lists.sort_by_key(|list| list.source_line);
-    topology.equations.sort_by_key(|equation| {
-        (
-            equation.source_line,
-            equation_context_order(equation.context),
-        )
-    });
     (profile, topology)
 }
 
@@ -265,12 +259,15 @@ fn collect_table(
 ) {
     profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
     profile.table_rows += rows.len();
+    let (line, column) = source.map_or((0, 0), |span| (span.line, span.column));
+    let occurrence = super::next_table_occurrence(&mut topology.table_occurrences, line, column);
     topology
         .table_rows
         .extend(rows.iter().enumerate().map(|(row_index, row)| {
             IrTableRowTopology {
-                table_source_line: source.map_or(0, |origin| origin.line),
-                table_source_column: source.map_or(0, |origin| origin.column),
+                table_source_line: line,
+                table_source_column: column,
+                table_occurrence: occurrence,
                 row_index,
                 kind: row.kind.clone(),
                 cells: row
@@ -284,8 +281,6 @@ fn collect_table(
                     .collect(),
             }
         }));
-    let (line, column) = source.map_or((0, 0), |span| (span.line, span.column));
-    let occurrence = super::next_table_occurrence(&mut topology.table_occurrences, line, column);
     for (row_index, row) in rows.iter().enumerate() {
         profile.table_spanning_cells += row
             .cells

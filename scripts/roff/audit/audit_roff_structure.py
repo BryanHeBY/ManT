@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v25"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v26"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -489,7 +489,7 @@ def profile_findings(
                         source_review.extend(
                             SourceReview(eq["sourceLine"], 0, "equation has no proved table cell owner")
                             for eq in topology["expected"]["equations"]
-                            if eq["context"] == "table-cell" and eq["cell"] is None
+                            if eq["unprovedCell"]
                         )
                     yield Finding(
                         label,
@@ -594,10 +594,21 @@ def valid_structure_topology(value: object) -> bool:
             return False
         for field, validate in (("lists", valid_list_topology),
                                 ("tableRows", lambda row: valid_table_topology(row, side)),
-                                ("equations", valid_equation_topology)):
+                                ("equations", lambda equation: valid_equation_topology(equation, side))):
             records = topology.get(field)
             if not isinstance(records, list) or not all(validate(record) for record in records):
                 return False
+        address = ("tableSourceLine", "tableSourceColumn", "tableOccurrence", "rowIndex")
+        cells = {
+            tuple(row[key] for key in address): len(row["cells"])
+            for row in topology["tableRows"]
+        }
+        if len(cells) != len(topology["tableRows"]):
+            return False
+        for equation in topology["equations"]:
+            if (cell := equation["cell"]) is not None:
+                if cell["cellIndex"] >= cells.get(tuple(cell[key] for key in address), 0):
+                    return False
     return True
 
 
@@ -611,8 +622,8 @@ def valid_list_topology(value: object) -> bool:
     )
 
 
-def valid_equation_topology(value: object) -> bool:
-    return (
+def valid_equation_topology(value: object, side: str) -> bool:
+    if not (
         isinstance(value, dict)
         and is_nonnegative_integer(value.get("sourceLine"))
         and isinstance(value.get("context"), str)
@@ -620,7 +631,17 @@ def valid_equation_topology(value: object) -> bool:
         and isinstance(value.get("value"), str)
         and "cell" in value
         and (value["cell"] is None or valid_equation_cell(value["cell"]))
-    )
+    ):
+        return False
+    cell = value["cell"]
+    if side == "expected" and not isinstance(value.get("unprovedCell"), bool):
+        return False
+    unknown = side == "expected" and value["unprovedCell"]
+    if unknown:
+        return cell is None and value["context"] in {"table-cell", "display"}
+    if value["context"] == "display":
+        return True
+    return (value["context"] == "table-cell") == (cell is not None)
 
 
 def valid_equation_cell(value: object) -> bool:
@@ -636,8 +657,10 @@ def valid_equation_cell(value: object) -> bool:
 def valid_table_topology(value: object, side: str) -> bool:
     if not isinstance(value, dict) or not all(
         is_nonnegative_integer(value.get(field))
-        for field in ("tableSourceLine", "tableSourceColumn", "rowIndex")
+        for field in ("tableSourceLine", "tableSourceColumn", "tableOccurrence", "rowIndex")
     ):
+        return False
+    if value["tableOccurrence"] == 0:
         return False
     kind = value.get("kind")
     if isinstance(kind, dict) and list(kind) == ["layout-rule"]:
@@ -719,6 +742,18 @@ def main(argv: Sequence[str]) -> int:
                 or previous.profile_schema != PROFILE_SCHEMA
                 or previous.scan_status == "hard-failure"
             ]
+            if arguments.max_pages or arguments.max_pages_per_section:
+                # Give each unattempted identity a turn before a same-schema
+                # failure can spend another limited scan slot.
+                def is_retry(page: Path) -> bool:
+                    previous = database.get((corpus, *records[page]))
+                    return (
+                        previous is not None
+                        and previous.profile_schema == PROFILE_SCHEMA
+                        and previous.scan_status == "hard-failure"
+                    )
+
+                pages.sort(key=is_retry)
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section

@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v25` successful page response requires
+The `mant.roff-structure-profile/v26` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -132,6 +132,15 @@ redirect identity.
 List, equation and table topology records are validated on both sides. Native
 coordinates, item counts, row indexes and spans require nonboolean integers.
 Known enum values and table-cell flags retain the distinct AST and IR shapes.
+A table address includes its occurrence at the same source coordinates.
+Equation checks preserve order and multiplicity in each known owner. Each
+referenced cell must exist in the same observation stream. A source equation
+known to be inside a table without an exact cell address is recorded for
+review. A known table-external equation has no cell address.
+
+Limited incremental scans allocate the quota to unattempted or stale source
+identities before retrying failures already recorded with the current profile
+version. Per-section limits follow the same order within each section.
 The source ordinal observer retains overwrite evidence across node boundaries,
 including styled pieces and source continuations, and records an uncertain
 owner with its original coordinates instead of inventing a definite shape.
@@ -148,6 +157,9 @@ Short display witnesses include delimiter words executed beside the native
 BODY, using the same spacing rules as its content. A known prefix of a
 table cell keeps its exact row obligations when a later source range needs
 review.
+Definition HEAD witnesses keep provable neighboring rows inside mixed
+displays. They account for fields that fit on the same tag row and distinguish
+an invisible buffered cell from an empty TEXT that emits vertical space.
 Display source evidence follows the active native field across formatter
 words and their actual separators. An unproved edit keeps the owning
 display's source coordinates for Review. A nested column's cells or a

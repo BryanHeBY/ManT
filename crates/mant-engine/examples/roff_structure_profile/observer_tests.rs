@@ -645,3 +645,95 @@ fn headless_continuation_is_located_without_waiving_a_lower_item_count() {
     assert_eq!(damaged["irTotal"], census["irTotal"]);
     assert!(!continuation_is_retained(&damaged));
 }
+
+#[test]
+fn a_display_equation_outside_a_table_cannot_enter_a_cell() {
+    // The CVS tree places EQ after the Bl's BODY, not in either It cell.
+    let source = format!(
+        "{DISPATCH_HEADER}.Bl -column a b\n.It LEFT Ta RIGHT\n.El\n.EQ\nx\n.EN\n.Sh ENDPROBE\nDone.\n"
+    );
+    let (expected, native, mut document) = parsed(&source);
+    let check = |document: &Document| {
+        let (observed, ir) = ir_profile(document);
+        compare_structure(&expected, &observed, &native, &ir)
+    };
+    assert!(check(&document).is_empty());
+    let blocks = &mut document.sections[1].blocks;
+    let eq = blocks.remove(
+        blocks
+            .iter()
+            .position(|block| matches!(block, Block::Equation { .. }))
+            .unwrap(),
+    );
+    let Block::Table { rows, .. } = &mut blocks[0] else {
+        panic!("expected table")
+    };
+    rows[0].cells[1].blocks.push(eq);
+    let issues = check(&document);
+    assert!(
+        issues
+            .iter()
+            .any(|message| message.contains("no matching IR value"))
+    );
+    assert!(
+        issues
+            .iter()
+            .any(|message| message.contains("unexpected occurrence"))
+    );
+}
+
+#[test]
+fn equation_obligations_check_order_and_multiplicity_even_inside_one_cell() {
+    // roff_eqndelim() allocates x then y in the same It BODY, even when
+    // both invocations are reparsed from the same source line.
+    let source = format!(
+        "{DISPATCH_HEADER}.EQ\ndelim $$\n.EN\n.Bl -column a b\n.It LEFT Ta RIGHT\n$x$ + $y$\n.El\n.Sh ENDPROBE\nDone.\n"
+    );
+    let (expected, native, document) = parsed(&source);
+    let check = |document: &Document| {
+        let (observed, ir) = ir_profile(document);
+        compare_structure(&expected, &observed, &native, &ir)
+    };
+    assert!(check(&document).is_empty());
+    for (change, diagnostic) in [
+        (0, "out of order"),
+        (1, "unexpected occurrence"),
+        (2, "unexpected occurrence"),
+    ] {
+        let mut document = document.clone();
+        let Block::Table { rows, .. } = &mut document.sections[1].blocks[0] else {
+            panic!("expected table")
+        };
+        let right_cell = &mut rows[0].cells[1];
+        let near = right_cell.blocks.iter().position(|block| {
+            matches!(block, Block::Paragraph { children, .. } if children.iter().any(|node| matches!(node, Inline::Equation { .. })))
+        }).unwrap();
+        let Block::Paragraph { children, .. } = &mut right_cell.blocks[near] else {
+            unreachable!()
+        };
+        let equation_nodes: Vec<_> = children
+            .iter()
+            .enumerate()
+            .filter_map(|(index, node)| matches!(node, Inline::Equation { .. }).then_some(index))
+            .collect();
+        assert_eq!(equation_nodes.len(), 2);
+        match change {
+            0 => children.swap(equation_nodes[0], equation_nodes[1]),
+            1 => children.push(children[equation_nodes[0]].clone()),
+            _ => {
+                let duplicate = children[equation_nodes[0]].clone();
+                rows[0].cells[0].blocks.push(Block::Paragraph {
+                    children: vec![duplicate],
+                    source: None,
+                    layout: Default::default(),
+                    inline_layout: Default::default(),
+                });
+            }
+        }
+        let issues = check(&document);
+        assert!(
+            issues.iter().any(|message| message.contains(diagnostic)),
+            "{change}: {issues:?}"
+        );
+    }
+}

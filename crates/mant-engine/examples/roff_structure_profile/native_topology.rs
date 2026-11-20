@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
-    EquationCell, EquationContext, ListTopologyKind, equation_context_order,
+    EquationCell, EquationContext, ListTopologyKind,
     native::{equation_has_payload, equation_visible_text},
     next_table_occurrence, ordinal_labels,
 };
@@ -21,12 +21,6 @@ pub(super) fn collect(root: &Node, spacing: &ordinal_labels::SourceContext) -> A
         &mut ColumnBodies::default(),
     );
     topology.lists.sort_by_key(|list| list.source_line);
-    topology.equations.sort_by_key(|equation| {
-        (
-            equation.source_line,
-            equation_context_order(equation.context),
-        )
-    });
     topology
 }
 
@@ -80,12 +74,16 @@ pub(super) fn column_data_items(node: &Node) -> impl Iterator<Item = &Node> {
         .filter(|item| item.children.iter().any(|part| part.kind == NodeKind::Body))
 }
 
-fn mdoc_column_rows(node: &Node) -> impl Iterator<Item = AstTableRowTopology> {
+fn mdoc_column_rows(
+    node: &Node,
+    table_occurrence: usize,
+) -> impl Iterator<Item = AstTableRowTopology> {
     column_data_items(node)
         .enumerate()
-        .map(|(row_index, item)| AstTableRowTopology {
+        .map(move |(row_index, item)| AstTableRowTopology {
             table_source_line: node.line,
             table_source_column: node.column,
+            table_occurrence,
             row_index,
             kind: mant_ir::TableRowKind::Data,
             cells: item
@@ -108,7 +106,7 @@ struct ColumnBodies {
 }
 
 impl ColumnBodies {
-    fn observe_table(&mut self, table: &Node) {
+    fn observe_table(&mut self, table: &Node) -> usize {
         let occurrence = next_table_occurrence(&mut self.occurrences, table.line, table.column);
         // mdoc_term.c::termp_it_pre walks preceding BODY siblings to
         // obtain the column. HEAD is not an additional cell.
@@ -131,6 +129,7 @@ impl ColumnBodies {
                 );
             }
         }
+        occurrence
     }
 }
 
@@ -147,28 +146,16 @@ fn collect_ast_topology(
     };
     let blocks = destination == SourceDestination::Blocks;
     let cell = column_bodies.addresses.remove(&node.id).or(cell);
-    // CVS roff_parseln bypasses equation delimiters while tbl consumes a
-    // cell. Only an owned Equation node establishes an obligation.
-    if node.kind == NodeKind::Equation
-        && let Some(equation) = node
-            .equation
-            .as_ref()
-            .filter(|equation| equation_has_payload(equation))
-    {
-        topology.equations.push(AstEquationTopology {
-            source_line: node.line,
-            context: equation_context(node, inside_table, !blocks),
-            value: equation_visible_text(&equation.readable_text()),
-            cell,
-        });
-    }
+    record_equation(node, inside_table, blocks, cell, &mut topology.equations);
     if blocks
         && node.kind == NodeKind::Block
         && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
         && node.line > 0
     {
-        topology.table_rows.extend(mdoc_column_rows(node));
-        column_bodies.observe_table(node);
+        let occurrence = column_bodies.observe_table(node);
+        topology
+            .table_rows
+            .extend(mdoc_column_rows(node, occurrence));
     } else if blocks
         && node.kind == NodeKind::Block
         && let Some(kind) = mdoc_list_topology_kind(node)
@@ -207,14 +194,17 @@ fn collect_ast_topology(
             && let Some(kind) = native_table_kind(child)
         {
             if child.flags.table_start || table_origin.is_none() {
-                table_origin = Some((child.line, child.column));
+                let occurrence =
+                    next_table_occurrence(&mut column_bodies.occurrences, child.line, child.column);
+                table_origin = Some((child.line, child.column, occurrence));
                 row_index = 0;
-                next_table_occurrence(&mut column_bodies.occurrences, child.line, child.column);
             }
-            let (table_source_line, table_source_column) = table_origin.expect("native tbl start");
+            let (table_source_line, table_source_column, table_occurrence) =
+                table_origin.expect("native tbl start");
             topology.table_rows.push(AstTableRowTopology {
                 table_source_line,
                 table_source_column,
+                table_occurrence,
                 row_index,
                 kind,
                 cells: child
@@ -239,6 +229,31 @@ fn collect_ast_topology(
             spacing,
             column_bodies,
         );
+    }
+}
+
+fn record_equation(
+    node: &Node,
+    inside_table: bool,
+    blocks: bool,
+    cell: Option<EquationCell>,
+    equations: &mut Vec<AstEquationTopology>,
+) {
+    // CVS roff_parseln bypasses equation delimiters while tbl consumes a
+    // cell. Only an owned Equation node establishes an obligation.
+    if node.kind == NodeKind::Equation
+        && let Some(equation) = node
+            .equation
+            .as_ref()
+            .filter(|equation| equation_has_payload(equation))
+    {
+        equations.push(AstEquationTopology {
+            source_line: node.line,
+            context: equation_context(node, inside_table, !blocks),
+            value: equation_visible_text(&equation.readable_text()),
+            cell,
+            unproved_cell: inside_table && cell.is_none(),
+        });
     }
 }
 

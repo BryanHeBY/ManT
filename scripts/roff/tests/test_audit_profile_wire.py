@@ -328,11 +328,14 @@ class AuditProfileWireTests(unittest.TestCase):
             response = successful_page(structure)
             current = response['topology'][side]
             current['tableRows'] = [{
-                'tableSourceLine': 9, 'tableSourceColumn': 1, 'rowIndex': 0, 'kind': 'data',
+                'tableSourceLine': 9, 'tableSourceColumn': 1, 'tableOccurrence': 1,
+                'rowIndex': 0, 'kind': 'data',
                 'cells': [{'columnSpan': 1, 'rowSpan': 1,
                            'verticalContinuation' if side == 'expected' else 'empty': False}],
             }]
             current['equations'] = [{'sourceLine': 10, 'context': 'inline', 'value': 'x', 'cell': None}]
+            if side == 'expected':
+                current['equations'][0]['unprovedCell'] = False
             self.assertEqual(self.finding(structure, response).status, 'clean')
             for field in ('lists', 'tableRows', 'equations'):
                 for record in (None, False, [], {}):
@@ -349,6 +352,7 @@ class AuditProfileWireTests(unittest.TestCase):
                 ('equations', 'value', [None, False]),
                 ('tableRows', 'tableSourceLine', [True, -1]),
                 ('tableRows', 'tableSourceColumn', [True, -1]),
+                ('tableRows', 'tableOccurrence', [True, 0, -1]),
                 ('tableRows', 'rowIndex', [False, -1]),
                 ('tableRows', 'kind', ['unknown', {}, {'layout-rule': {'cells': ['unknown']}}]),
                 ('tableRows', 'cells', [None, [False], [{'columnSpan': True, 'rowSpan': 1}]]),
@@ -363,6 +367,44 @@ class AuditProfileWireTests(unittest.TestCase):
                              {'layout-rule': {'cells': ['horizontal', 'double-horizontal']}}):
                 current['tableRows'][0]['kind'] = row_kind
                 self.assertEqual(self.finding(structure, response).status, 'clean')
+
+    def test_equations_can_only_claim_cells_in_their_observation_stream(self):
+        cell = dict(tableSourceLine=9, tableSourceColumn=3, tableOccurrence=1, rowIndex=0, cellIndex=0)
+        for side in ('expected', 'observed'):
+            response = successful_page(structure)
+            topology = response['topology'][side]
+            topology['tableRows'] = [{
+                **{key: value for key, value in cell.items() if key != 'cellIndex'},
+                'kind': 'data',
+                'cells': [{'columnSpan': 1, 'rowSpan': 1,
+                           'verticalContinuation' if side == 'expected' else 'empty': False}],
+            }]
+            equation = {'sourceLine': 10, 'context': 'display', 'value': 'x', 'cell': cell}
+            if side == 'expected':
+                equation['unprovedCell'] = False
+            topology['equations'] = [equation]
+            self.assertEqual(self.finding(structure, response).status, 'clean')
+            for key, wrong in (
+                ('tableSourceLine', 99), ('tableSourceColumn', 9), ('tableOccurrence', 2),
+                ('rowIndex', 2), ('cellIndex', 1), ('cellIndex', False),
+            ):
+                with self.subTest(side=side, key=key, wrong=wrong):
+                    equation['cell'] = {**cell, key: wrong}
+                    self.assertEqual(self.finding(structure, response).status, 'hard-failure')
+            equation.update(context='inline', cell=cell)
+            self.assertEqual(self.finding(structure, response).status, 'hard-failure')
+            equation.update(context='table-cell', cell=None)
+            self.assertEqual(self.finding(structure, response).status, 'hard-failure')
+            equation['cell'] = cell
+            self.assertEqual(self.finding(structure, response).status, 'clean')
+            if side == 'expected':
+                for context in ('table-cell', 'display'):
+                    equation.update(context=context, cell=None, unprovedCell=True)
+                    found = self.finding(structure, response)
+                    self.assertEqual(found.status, 'review')
+                    self.assertEqual(len(found.source_review), 1)
+                equation['cell'] = cell
+                self.assertEqual(self.finding(structure, response).status, 'hard-failure')
 
     def test_uncertain_source_owner_findings_preserve_their_actual_review_evidence(self):
         # The genuine F5 HEAD-nested list is at 10:2. Its native source is
