@@ -13,6 +13,12 @@ that crate was not published for that change.
 
 ## Unreleased
 
+### mant-render
+
+- Render multiline outline labels on one line in text and Markdown query
+  reports. Exported Markdown outlines keep entries under their original
+  sections, and selected document content retains its hard breaks.
+
 ### libmandoc-rs
 
 - Keep empty tbl text blocks as valid vertical span owners. Parsing and
@@ -51,7 +57,9 @@ that crate was not published for that change.
   that the formatter actually produces.
   Field spacing persists across consecutive headings and empty native tags
   until a real device endline. A marker before a discretionary break can
-  retain a pending zero-advance glyph across native word boundaries.
+  retain a pending zero-advance glyph across native word boundaries. The
+  accepted row determines whether an overstrike covers the glyph and its
+  link. Subsection padding accepted on the preceding row adds no heading row.
 - Keep literal and macro-generated argument groups equivalent in mdoc
   command lists, including balanced brackets across text fragments of a
   single parameter.
@@ -60,9 +68,15 @@ that crate was not published for that change.
   evidence to invocation and comma-alias recognition.
   Inner native enclosures keep their bracket evidence local, including
   quoted arguments and independently declared aliases after an enclosure.
+  An authored closer after the native BODY can pair with its BLOCK's
+  leading delimiter. A run of attached closers can complete one parameter.
+- Expose both the short option name and its full invocation when an executed
+  literal equals sign joins the option to a proved parameter.
 - Resolve tbl word-end marks against the native accepted cell range.
   Horizontal advances retain exactly the part of a compressed run reached
   by the field scan, preventing both rejected text and extra empty rows.
+  Word-end requests place the break at the accepted position inside a cell,
+  including when a pending backstep consumes one of several spaces.
 - Keep source glyphs, links and accepted separators accurate through
   successive roff word overwrites. A word-end request in a table stays
   with the word that executes it, including after a width-only fold.
