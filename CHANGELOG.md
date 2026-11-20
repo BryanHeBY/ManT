@@ -47,6 +47,12 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Preserve the native row and word gap when a roff word-end marker follows
+  buffered whitespace. Order surviving overstruck glyphs within an accepted
+  field by their final columns, including styles, links and search positions.
+- Keep independently authored mdoc option names after a complete value.
+  Recognize grouped values and split path operands without promoting detached
+  explanatory words to signatures.
 - Carry a proved native cursor across an invisible control tail. Automatic
   spacing that traverses that tail can no longer introduce a hard line.
 - Preserve complete native flag spellings such as `-std=c++17` and recognize
