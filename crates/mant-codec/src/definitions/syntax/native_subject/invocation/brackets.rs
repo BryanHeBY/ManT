@@ -45,6 +45,8 @@ impl ParameterEdges {
                     // word. This pair is internal to that parameter.
                     opens.pop();
                     absorbed.push(word.bytes.start);
+                    previous = previous.map(|(node, scope, _)| (node, scope, word.bytes.end));
+                    continue;
                 }
                 finish_parameter(&mut edges, &mut opens);
                 previous = None;

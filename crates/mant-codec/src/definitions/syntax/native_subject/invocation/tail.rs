@@ -14,6 +14,7 @@ struct Group {
     kind: InvocationGroup,
     argument: bool,
     native_body: Option<u32>,
+    leading_offset: Option<usize>,
 }
 
 pub(super) struct InvocationTail {
@@ -32,7 +33,9 @@ enum ArgumentProof {
 #[derive(Default)]
 struct ScopeScan {
     groups: Vec<Group>,
-    leading_delimiters: Vec<(u32, char)>,
+    leading_delimiters: Vec<(u32, char, usize)>,
+    outer_delimiters: Vec<usize>,
+    root_scope: Option<u32>,
     malformed: bool,
     arguments: ArgumentProof,
     top_level_pipe: bool,
@@ -46,7 +49,44 @@ impl InvocationTail {
         bare: bool,
     ) -> Self {
         let edges = ParameterEdges::new(text, span.clone(), operands);
-        let mut state = ScopeScan::default();
+        let state = ScopeScan::read(text, &span, operands, &edges, None, bare);
+        // A damaged group cannot establish a pipe's scope, but it is not
+        // itself a pipe. A contiguous Nm/Cm name can still be complete.
+        let arguments = if state.malformed
+            || state.arguments == ArgumentProof::Bare && !text[span].trim().is_empty()
+        {
+            ArgumentProof::Unproved
+        } else {
+            state.arguments
+        };
+        Self {
+            arguments,
+            pipeline: state.top_level_pipe,
+        }
+    }
+
+    pub(super) fn proves_arguments(&self, allow_bare: bool) -> bool {
+        match self.arguments {
+            ArgumentProof::Bare => allow_bare,
+            ArgumentProof::Proved => true,
+            ArgumentProof::Unproved => false,
+        }
+    }
+}
+
+impl ScopeScan {
+    fn read(
+        text: &str,
+        span: &Range<usize>,
+        operands: &[NativeOperand],
+        edges: &ParameterEdges,
+        root_scope: Option<u32>,
+        bare: bool,
+    ) -> Self {
+        let mut state = Self {
+            root_scope,
+            ..Self::default()
+        };
         let mut cursor = span.start;
         let mut possible_pipeline = false;
         for (index, operand) in operands.iter().enumerate() {
@@ -70,10 +110,14 @@ impl InvocationTail {
                     state.open(InvocationGroup::Native(body), word == "\"");
                     state.enter_leading_delimiters(body);
                 }
-                NativeOperandRole::EnclosureEnd(body) => state.close(InvocationGroup::Native(body)),
+                NativeOperandRole::EnclosureEnd(body) => state.close_native(body),
                 NativeOperandRole::LiteralDelimiter { glyph, enclosure } => {
                     if !edges.absorbs(start) {
-                        state.authored_delimiter(glyph, enclosure);
+                        state.authored_delimiter(
+                            glyph,
+                            enclosure,
+                            end - text[start..end].trim_start().len(),
+                        );
                     }
                 }
                 NativeOperandRole::Literal
@@ -122,49 +166,67 @@ impl InvocationTail {
         }
         state.authored_text(&text[cursor..span.end]);
         state.malformed |= !state.groups.is_empty() || !state.leading_delimiters.is_empty();
-        // A damaged group cannot establish a pipe's scope, but it is not
-        // itself a pipe. A contiguous Nm/Cm name can still be complete.
-        let arguments = if state.malformed
-            || state.arguments == ArgumentProof::Bare && !text[span].trim().is_empty()
-        {
-            ArgumentProof::Unproved
-        } else {
-            state.arguments
-        };
-        Self {
-            arguments,
-            pipeline: state.top_level_pipe || possible_pipeline && state.malformed,
-        }
+        state.top_level_pipe |= possible_pipeline && state.malformed;
+        state
     }
 
-    pub(super) fn proves_arguments(&self, allow_bare: bool) -> bool {
-        match self.arguments {
-            ArgumentProof::Bare => allow_bare,
-            ArgumentProof::Proved => true,
-            ArgumentProof::Unproved => false,
-        }
-    }
-}
-
-impl ScopeScan {
-    fn authored_delimiter(&mut self, glyph: char, enclosure: Option<u32>) {
+    fn authored_delimiter(&mut self, glyph: char, enclosure: Option<u32>, offset: usize) {
         if let Some(body) = enclosure
             && Some(body) != self.native_body()
             && matches!(glyph, '(' | '[')
         {
-            self.leading_delimiters.push((body, glyph));
+            self.leading_delimiters.push((body, glyph, offset));
         } else {
             self.bracket(glyph);
         }
     }
 
     fn enter_leading_delimiters(&mut self, body: u32) {
-        for (scope, glyph) in std::mem::take(&mut self.leading_delimiters) {
+        for (scope, glyph, offset) in std::mem::take(&mut self.leading_delimiters) {
             if scope == body {
                 self.bracket(glyph);
+                if let Some(group) = self.groups.last_mut() {
+                    group.leading_offset = Some(offset);
+                }
             } else {
                 self.malformed = true;
             }
+        }
+    }
+
+    fn close_native(&mut self, body: u32) {
+        let trailing = self
+            .groups
+            .iter()
+            .rev()
+            .take_while(|group| group.leading_offset.is_some())
+            .count();
+        let Some(index) = self.groups.len().checked_sub(trailing + 1) else {
+            self.malformed = true;
+            return;
+        };
+        if self.groups[index].kind != InvocationGroup::Native(body) {
+            self.malformed = true;
+            return;
+        }
+        // blk_part_exp() emits these delimiters before the BODY opens.
+        // A close executed inside can pair with them there; otherwise they
+        // remain open in the parent's sequence across the entire BODY.
+        let native = self.groups.remove(index);
+        let parent = index
+            .checked_sub(1)
+            .map_or(self.root_scope, |at| self.groups[at].native_body);
+        for group in &mut self.groups[index..] {
+            if parent == self.root_scope {
+                self.outer_delimiters.extend(group.leading_offset);
+            }
+            group.native_body = parent;
+            group.leading_offset = None;
+        }
+        if native.argument {
+            self.argument();
+        } else {
+            self.unproved_prose();
         }
     }
 
@@ -210,11 +272,14 @@ impl ScopeScan {
             kind,
             argument,
             native_body,
+            leading_offset: None,
         });
     }
 
     fn native_body(&self) -> Option<u32> {
-        self.groups.last().and_then(|group| group.native_body)
+        self.groups
+            .last()
+            .map_or(self.root_scope, |group| group.native_body)
     }
 
     fn close(&mut self, kind: InvocationGroup) {
@@ -237,6 +302,34 @@ impl ScopeScan {
             self.arguments = ArgumentProof::Proved;
         }
     }
+}
+
+pub(in crate::definitions::syntax::native_subject) fn outer_leading_delimiters(
+    text: &str,
+    span: Range<usize>,
+    operands: &[NativeOperand],
+    edges: &ParameterEdges,
+    enclosure: Option<u32>,
+) -> Vec<usize> {
+    if !operands
+        .iter()
+        .take_while(|operand| operand.bytes.start < span.end)
+        .any(|operand| {
+            matches!(
+                operand.role,
+                NativeOperandRole::LiteralDelimiter {
+                    glyph: '(' | '[',
+                    enclosure: Some(_),
+                }
+            )
+        })
+    {
+        return Vec::new();
+    }
+    let mut result =
+        ScopeScan::read(text, &span, operands, edges, enclosure, false).outer_delimiters;
+    result.sort_unstable();
+    result
 }
 
 fn is_bracket(ch: char) -> bool {

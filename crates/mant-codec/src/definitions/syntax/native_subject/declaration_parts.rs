@@ -472,6 +472,13 @@ fn independent_groups<'a>(
     let mut group_start = start;
     let edges =
         invocation::ParameterEdges::new(text, start..start + head.len(), &operands[first..]);
+    let leading = invocation::outer_leading_delimiters(
+        text,
+        start..start + head.len(),
+        &operands[first..],
+        &edges,
+        enclosure,
+    );
     let mut nested = invocation::closed_child_enclosures(
         start..start + head.len(),
         &operands[first..],
@@ -491,7 +498,7 @@ fn independent_groups<'a>(
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
         let separator = matches!(head.as_bytes()[index], b',' | b'|');
-        if edges.exposes(offset, enclosure, scope) {
+        if edges.exposes(offset, enclosure, scope) || leading.binary_search(&offset).is_ok() {
             return false;
         }
         if top_level && separator && syntax.protects(group_start, offset) {

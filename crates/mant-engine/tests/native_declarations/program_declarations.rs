@@ -682,6 +682,64 @@ fn a_detached_parameter_closer_can_finish_the_same_display_word() {
 }
 
 #[test]
+fn scopes_pair_block_prefix_delimiters_and_detached_closers_before_aliases() {
+    // CVS blk_part_exp puts leading punctuation before HEAD, but an
+    // authored close can execute on either side of the native BODY post.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (head, form) in [
+            (
+                "Nm alpha Oo ( Ar file Oc ) , Nm gamma",
+                "alpha ([file]), gamma",
+            ),
+            (
+                "Nm alpha ( Oo Ar file Oc ) , Nm gamma",
+                "alpha ([file]), gamma",
+            ),
+            (
+                "Nm alpha Oo ( Ar file ) Oc , Nm gamma",
+                "alpha ([file)], gamma",
+            ),
+            (
+                "Nm alpha Ar path[[index ] ] , Nm gamma",
+                "alpha path[[index]], gamma",
+            ),
+            (
+                "Nm alpha Ar path[[index]] , Nm gamma",
+                "alpha path[[index]], gamma",
+            ),
+        ] {
+            for spelling in [head.to_owned(), format!("Xo\n.{head}\n.Xc")] {
+                let argument = if form.contains("file") {
+                    "file"
+                } else {
+                    "index"
+                };
+                check(
+                    &source(section, &spelling),
+                    form,
+                    &["alpha", "gamma"],
+                    &[argument],
+                    BODY,
+                    9,
+                );
+            }
+        }
+        for head in [
+            "Nm alpha Oo ( Ar file Oc ) | Nm beta , Nm gamma",
+            "Xo\n.Nm alpha Oo ( Ar file Oc ) | Nm beta , Nm gamma\n.Xc",
+        ] {
+            assert_program_group(
+                section,
+                head,
+                "alpha ([file]) | beta, gamma",
+                &["gamma"],
+                &["alpha", "beta", "file"],
+            );
+        }
+    }
+}
+
+#[test]
 fn native_environment_aliases_ignore_arguments_in_another_scope() {
     // The original BODY retains its own Ar/Em text. An adjacent Ev
     // outside the BODY has independent evidence on either comma side.
