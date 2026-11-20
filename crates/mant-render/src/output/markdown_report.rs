@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::presentation::navigation_title;
 use mant_protocol::{ExcerptSelection, OutlineNode, QueryExcerpt, QueryOutline};
 
 use mant_codec::encode::{
@@ -134,7 +135,7 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
             "  ".repeat(depth),
             code_span(node.path()),
             code_span(node.id()),
-            escape_text(node.title())
+            escape_text(&navigation_title(node.title()))
         ));
         let children = outline_list(node.children(), depth + 1);
         if !children.is_empty() {
@@ -149,8 +150,10 @@ fn selection_context(selection: &ExcerptSelection) -> String {
     let breadcrumb = trail
         .ancestors
         .iter()
-        .map(|ancestor| escape_text(&ancestor.title))
-        .chain(std::iter::once(escape_text(trail.title())))
+        .map(|ancestor| escape_text(&navigation_title(&ancestor.title)))
+        .chain(std::iter::once(escape_text(&navigation_title(
+            trail.title(),
+        ))))
         .collect::<Vec<_>>()
         .join(" → ");
     format!("*Outline {}: {breadcrumb}*", code_span(trail.path()))

@@ -1,5 +1,6 @@
 //! Markdown search reports consume only the supplied result DTO.
 use super::{context::group_coordinates, document_label};
+use crate::presentation::navigation_title;
 use mant_codec::encode::{commonmark_code_span as code_span, escape_commonmark as escape_text};
 use mant_protocol::QuerySearch;
 
@@ -43,7 +44,7 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
         blocks.push(format!(
             "## {}. {}",
             found.ordinal,
-            code_span(found.outline.title())
+            code_span(&navigation_title(found.outline.title()))
         ));
         let mut details = vec![
             format!("- Outline: {}", code_span(found.outline.path())),
@@ -53,8 +54,10 @@ pub fn render_search_markdown(search: &QuerySearch) -> String {
                     .outline
                     .ancestors
                     .iter()
-                    .map(|ancestor| code_span(&ancestor.title))
-                    .chain(std::iter::once(code_span(found.outline.title())))
+                    .map(|ancestor| code_span(&navigation_title(&ancestor.title)))
+                    .chain(std::iter::once(code_span(&navigation_title(
+                        found.outline.title()
+                    ))))
                     .collect::<Vec<_>>()
                     .join(" → ")
             ),

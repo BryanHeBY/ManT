@@ -1,7 +1,7 @@
 //! Report furniture is generated; source remains unframed in plain text and
 //! uses standard blockquotes in Markdown. Neither surface is a wire protocol.
 use super::{definition::DefinitionDisplay, metadata, spans};
-use crate::presentation::{TextPresentation, TextRole};
+use crate::presentation::{TextPresentation, TextRole, navigation_title};
 use mant_codec::encode::{MarkdownFragmentOptions, ScopedMarkdownFragments};
 use mant_protocol::{
     EvidenceClass, EvidenceCounts, ExplanationEvidence, ExplanationIdentityField,
@@ -234,13 +234,13 @@ impl Report<'_> {
         .expect("String writer");
         output.push('\n');
         for ancestor in &e.outline.ancestors {
-            output.push_str(&self.meta(TextRole::Heading, &ancestor.title));
+            output.push_str(&self.meta(TextRole::Heading, &navigation_title(&ancestor.title)));
             output.push_str(&self.meta(TextRole::Guide, " > "));
         }
         let kind = metadata::kind(e);
         output.push_str(&self.meta(
             kind.map_or(TextRole::Heading, TextRole::EntryLabel),
-            e.outline.title(),
+            &navigation_title(e.outline.title()),
         ));
         if let Some(path) = &e.block_path {
             self.line(

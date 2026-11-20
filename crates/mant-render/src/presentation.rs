@@ -61,10 +61,8 @@ pub fn render_evidence_heading(evidence: &mant_protocol::ExplanationEvidence) ->
         .outline
         .ancestors
         .iter()
-        .map(|a| sanitize_terminal_text(&a.title))
-        .chain(std::iter::once(sanitize_terminal_text(
-            evidence.outline.title(),
-        )))
+        .map(|a| navigation_title(&a.title))
+        .chain(std::iter::once(navigation_title(evidence.outline.title())))
         .collect::<Vec<_>>()
         .join(" > ");
     format!(
@@ -113,6 +111,16 @@ pub fn single_line_entry_label(value: &str) -> Cow<'_, str> {
         Cow::Owned(value.replace('\n', " "))
     } else {
         Cow::Borrowed(value)
+    }
+}
+
+pub(crate) fn navigation_title(value: &str) -> Cow<'_, str> {
+    match single_line_entry_label(value) {
+        Cow::Borrowed(title) => sanitize_terminal_text(title),
+        Cow::Owned(title) => Cow::Owned(match sanitize_terminal_text(&title) {
+            Cow::Borrowed(_) => title,
+            Cow::Owned(sanitized) => sanitized,
+        }),
     }
 }
 

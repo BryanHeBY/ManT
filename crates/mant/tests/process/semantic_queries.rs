@@ -5,6 +5,87 @@ use std::io::Write as _;
 use std::process::Command;
 use std::process::Stdio;
 
+#[cfg(feature = "roff")]
+#[test]
+fn multiline_outline_labels_keep_their_parent_and_full_readable_title() {
+    use super::{execution_scopes::without_sgr, process_support::run_text_input};
+    use mant_ir::{Block, inline_plain_text};
+
+    let run = |source: &str, language, format, color, options: &[&str]| {
+        let mut args = vec![
+            "--input",
+            "-",
+            "--input-format",
+            language,
+            "--format",
+            format,
+            "--color",
+            color,
+            "--display",
+            "direct",
+        ];
+        args.extend_from_slice(options);
+        let output = run_text_input(&args, source);
+        assert!(output.status.success(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    let options = ["--outline", "--outline-entries", "all"];
+    // roff_term_pre_sp() ends the native It head rows. Title labels may
+    // fold those rows, but the wire title and the selected text retain them.
+    for gap in 1..=3 {
+        for word in ["SECOND", "后文", "[SECOND]"] {
+            let source = format!(
+                ".Dd November 20, 2026\n.Dt TOOL 1\n.Os\n.Sh NAME\n.Nm tool\n.Nd probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Xo\n.No FIRST\n.sp {gap}\n.No {word}\n.Xc\nBODY\n.It Dv THIRD\nsibling\n.El\n"
+            );
+            let raw = format!("FIRST{}{word}", "\n".repeat(gap));
+            let label = format!("FIRST{}{word}", " ".repeat(gap));
+            let wire: serde_json::Value =
+                serde_json::from_str(&run(&source, "roff", "json", "never", &options)).unwrap();
+            assert_eq!(wire["nodes"][1]["children"][0]["title"], raw);
+            let exported = run(&source, "roff", "markdown", "never", &options);
+            let bundle: mant_protocol::QueryBundle =
+                serde_json::from_str(&run(&exported, "markdown", "json", "never", &[])).unwrap();
+            let document = bundle.document.unwrap();
+            let Block::List { items, .. } = &document.blocks[0] else {
+                panic!("{exported}")
+            };
+            assert_eq!(items.len(), 2);
+            let [
+                Block::Paragraph { children, .. },
+                Block::List { items: entries, .. },
+            ] = items[1].blocks.as_slice()
+            else {
+                panic!("{exported}")
+            };
+            assert_eq!(inline_plain_text(children), "2 (description) DESCRIPTION");
+            assert_eq!(entries.len(), 2);
+            for (index, entry_label) in [(0, &*label), (1, "THIRD")] {
+                let [Block::Paragraph { children, .. }] = entries[index].blocks.as_slice() else {
+                    panic!("{exported}")
+                };
+                let line = inline_plain_text(children);
+                assert!(line.starts_with(&format!("2/e{} (", index + 1)), "{line}");
+                assert_eq!(line.split_once(") ").unwrap().1, entry_label);
+            }
+            for (command, query) in [
+                ("--node", "2/e1"),
+                ("--search", "BODY"),
+                ("--explain", "2/e1"),
+            ] {
+                let args = [command, query];
+                let text = run(&source, "roff", "text", "never", &args);
+                assert_eq!(
+                    text,
+                    without_sgr(&run(&source, "roff", "text", "always", &args))
+                );
+                assert!(text.contains(&format!("DESCRIPTION > {label}")), "{text}");
+                let markdown = run(&source, "roff", "markdown", "never", &args);
+                assert!(!markdown.contains('\u{fffd}'), "{markdown}");
+            }
+        }
+    }
+}
+
 #[test]
 fn dynamic_newline_selectors_are_rejected_before_diagnostic_interpolation() {
     let root = std::env::temp_dir().join(format!("mant-diagnostic-newline-{}", std::process::id()));

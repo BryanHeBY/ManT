@@ -1,5 +1,6 @@
 //! Presents structure-aware search results for terminals and language models.
 
+use crate::presentation::navigation_title;
 use mant_ir::EntryKind;
 use std::ops::Range;
 
@@ -231,12 +232,15 @@ where
         if index > 0 {
             output.push(SearchTextRole::Muted, " > ");
         }
-        output.push(SearchTextRole::Heading, &ancestor.title);
+        output.push(SearchTextRole::Heading, &navigation_title(&ancestor.title));
     }
     if !trail.ancestors.is_empty() {
         output.push(SearchTextRole::Muted, " > ");
     }
-    output.push(search_node_role(&trail.node), trail.title());
+    output.push(
+        search_node_role(&trail.node),
+        &navigation_title(trail.title()),
+    );
 }
 
 const fn search_node_role(node: &OutlineNodeReference) -> SearchTextRole {

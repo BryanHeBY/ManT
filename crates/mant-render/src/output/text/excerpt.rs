@@ -1,7 +1,7 @@
 //! Materialized excerpt furniture and breadcrumbs around original source bodies.
 
 use super::{blocks, body::render_tldr_text, document_label, flow::Flow};
-use crate::presentation::{EntryStyleMap, TextPresentation, TextRole};
+use crate::presentation::{EntryStyleMap, TextPresentation, TextRole, navigation_title};
 use mant_protocol::{ExcerptSelection, QueryExcerpt};
 
 /// Render selected query nodes as unstyled text with outline context.
@@ -104,8 +104,8 @@ fn render_outline_trail(trail: &mant_protocol::OutlineTrail) -> String {
     let breadcrumb = trail
         .ancestors
         .iter()
-        .map(|ancestor| ancestor.title.as_str())
-        .chain(std::iter::once(trail.title()))
+        .map(|ancestor| navigation_title(&ancestor.title))
+        .chain(std::iter::once(navigation_title(trail.title())))
         .collect::<Vec<_>>()
         .join(" > ");
     format!("Outline {}: {breadcrumb}", trail.path())

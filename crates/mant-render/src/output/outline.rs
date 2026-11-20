@@ -2,14 +2,11 @@
 mod metadata;
 mod references;
 use super::text::document_label;
-use crate::presentation::{
-    TextPresentation, TextRole, sanitize_terminal_text, single_line_entry_label,
-};
+use crate::presentation::{TextPresentation, TextRole, navigation_title, sanitize_terminal_text};
 use mant_protocol::{OutlineNode, QueryOutline};
 pub(super) use metadata::entry_kind_label;
 use metadata::outline_summary;
 pub use metadata::{render_outline_entry_summary, render_outline_relationships};
-use std::borrow::Cow;
 
 /// Render a complete outline with full titles and separately labeled identities.
 #[must_use]
@@ -64,10 +61,7 @@ fn nodes(
         };
         // Entry forms can span structural hard rows. A tree label uses a
         // single visual row, while the original form stays in the outline.
-        let title = match node {
-            OutlineNode::DocumentEntry { .. } => single_line_entry_label(node.title()),
-            _ => Cow::Borrowed(node.title()),
-        };
+        let title = navigation_title(node.title());
         lines.push(format!(
             "{} {} {}{}",
             paint(
