@@ -882,6 +882,70 @@ fn definition_heads_count_in_native_order_before_projecting_display_obligations(
 }
 
 #[test]
+fn skipped_item_arguments_do_not_advance_native_occurrences() {
+    // post_bl in mdoc_validate.c retains rejected HEAD arguments in
+    // the tree. termp_it_pre() and mdoc_it_pre() skip that HEAD, while
+    // valid definition heads execute before the second table's LAST.
+    const HEADER: &str = ".Dd November 19, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd example\n.Sh DESCRIPTION\n";
+    for (list, executes) in [
+        ("-bullet", false),
+        ("-dash", false),
+        ("-hyphen", false),
+        ("-enum", false),
+        ("-item", false),
+        ("-tag -width a", true),
+        ("-hang", true),
+        ("-inset", true),
+        ("-ohang", true),
+    ] {
+        for (head, is_table) in [
+            (".Dl BEFORE\n", false),
+            (".Bl -column a b\n.It C Ta D\n.Dl BEFORE\n.El\n", true),
+        ] {
+            for detached in [false, true] {
+                let seam = if detached { "..\n.XX\n.de YY\n" } else { "" };
+                let call = if detached { ".YY" } else { ".XX" };
+                let source = format!(
+                    "{HEADER}.de XX\n.Bl {list}\n.It Xo\n{head}.Xc\nDesc.\n.El\n{seam}.Bl -column a b\n.It C Ta D\n.Dl LAST\n.ta 3n\n.El\n..\n{call}\n.Sh ENDPROBE\nDone.\n",
+                );
+                let (native, _, document) = parsed_structure(&source);
+                assert_eq!(
+                    document.diagnostics.iter().any(|diagnostic| {
+                        diagnostic.message.contains("skipping all arguments: It Xo")
+                    }),
+                    !executes,
+                    "{source}"
+                );
+                let [last] = native.literal_display_reviews.as_slice() else {
+                    panic!("expected the cell review for LAST: {source}");
+                };
+                let invocation =
+                    u32::try_from(source.lines().position(|line| line == call).unwrap() + 1)
+                        .unwrap();
+                let earlier = usize::from(executes && !detached);
+                assert_eq!(
+                    (last.line, last.column, last.occurrence),
+                    (invocation, 2, 1 + earlier),
+                    "{source}"
+                );
+                let cell = last.cell.unwrap();
+                assert_eq!(
+                    (
+                        cell.table_line,
+                        cell.table_column,
+                        cell.table_occurrence,
+                        cell.row,
+                        cell.column
+                    ),
+                    (invocation, 2, 1 + earlier * usize::from(is_table), 0, 1),
+                    "{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn filtered_displays_keep_their_source_occurrence() {
     // CVS tree retains every at-call-site BLOCK. mdoc_html.c emits its
     // display BODY even when it contains only a zero-width character.

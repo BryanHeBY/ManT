@@ -227,9 +227,11 @@ displays with no exported review record still occupy their source
 occurrences. A display inside a column cell
 also reports the enclosing column table's coordinates and page-wide
 occurrence with the zero-based row and column. Occurrences count tables
-across parent scopes. Native displays and tables in extended definition
-headings also occupy their source occurrences. Review records may skip
-occurrences and may be in any order. A repeated display coordinate and
+across parent scopes. Native displays and tables in executed extended
+definition headings also occupy their source occurrences. When the native
+list handler skips an item HEAD, arguments retained in the AST for source
+diagnostics do not advance the display or table occurrence. Review records
+may skip occurrences and may be in any order. A repeated display coordinate and
 occurrence is invalid.
 
 Build the profiler and scan the reproducible real fixtures:
