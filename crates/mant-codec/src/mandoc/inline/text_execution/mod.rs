@@ -263,7 +263,7 @@ fn execute_formatter_word_events(
         );
         if word.native_writes.len() > write_start {
             last_font = Some((context.font.current, write_start));
-            if can_record_last_font && decorated_writes < 2 {
+            if can_record_last_font {
                 decorated_writes += native_writes::decorated_write_count(
                     &word.native_writes[write_start..],
                     context.font.current,
@@ -296,7 +296,10 @@ fn execute_formatter_word_events(
         });
         word.native_writes.push(FieldWrite::OpaqueRawSlots {
             styled_suffix,
-            keeps_prior_slots: can_record_last_font && decorated_writes == 1,
+            // The exact final run may contain more than one styled glyph.
+            // Only keep prior slots when it covers every decorated write.
+            keeps_prior_slots: can_record_last_font
+                && styled_suffix.is_some_and(|(count, _)| count == decorated_writes),
         });
     }
     word.finish_content_prefix();

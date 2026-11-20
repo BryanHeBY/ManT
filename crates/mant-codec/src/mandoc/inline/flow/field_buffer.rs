@@ -226,7 +226,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     // native input. Only the proved append suffix can be used for slot edits.
     raw_slot_fence: usize,
     write_cursor: WriteCursor,
-    raw_tail_font: Option<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
+    raw_tail_fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
     raw_copy_aliases: Vec<(usize, usize)>,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.

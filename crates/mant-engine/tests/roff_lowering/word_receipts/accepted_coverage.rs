@@ -880,6 +880,65 @@ fn terminal_marker_uses_buffered_cells_instead_of_the_last_escape_event() {
 }
 
 #[test]
+fn claimed_source_blanks_follow_the_accepted_slots_after_marker_edits() {
+    // CVS term_word/term_field. The controls leave the marker at the
+    // native write cursor until the next word can overwrite its slots.
+    for (spaces, rows) in [(0, ["HX", "X"]), (1, ["H X", "HX"]), (2, ["H  X", "H X"])] {
+        for (control, no_space) in [
+            ("", false),
+            (r"\c", true),
+            (r"\h'1n'", false),
+            (r"\:", false),
+            (r"\fP", false),
+            (r"\h'0n'", false),
+        ] {
+            let blanks = " ".repeat(spaces);
+            let body = format!(
+                r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H{blanks}\p{control}" Em "\h'-2n'X""#,
+            );
+            assert_device_row(&body, &[rows[usize::from(no_space)]], None);
+        }
+    }
+    assert_device_row(
+        r#".Sy "\z\X'tty: link https://c.test'C\X'tty: link'\pD\zJ" No "\&\h'-2n'\pF" Ns No "H\p\c" Ns No "\h'-1n'X""#,
+        &["DFHX"],
+        None,
+    );
+    assert_device_row(
+        r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H \p\h'1n'" Em "\:\h'-2n'X""#,
+        &["H  X"],
+        None,
+    );
+}
+
+#[test]
+fn independent_font_runs_preserve_earlier_overprint_owners() {
+    // In both devices encode1's decoration copies in an independent
+    // suffix do not change the earlier term_field coverage or ink order.
+    for (tail, expected) in [
+        ("Ns No QQ", "HXQQ"),
+        ("Ns Sy QQ", "HXQQ"),
+        ("Ns Em QQ", "HXQQ"),
+        ("Ns Sy QQ Ns Em RR", "HXQQRR"),
+        ("Ns Sy Q Ns Em R", "HXQR"),
+        ("Ns Sy QQQQQ", "HXQQQQQ"),
+    ] {
+        let body =
+            format!(r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" {tail}"#);
+        assert_device_row(&body, &[expected], None);
+    }
+    // The suffix is stored as a range. The 64-cell replay window limits
+    // raw placement without disqualifying the earlier accepted overlap.
+    for (style, length) in [("Sy", 63), ("Sy", 64), ("Sy", 65), ("Em", 96)] {
+        let tail = "Q".repeat(length);
+        let body = format!(
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" Ns {style} {tail}"#
+        );
+        assert_device_row(&body, &[&format!("HX{tail}")], None);
+    }
+}
+
+#[test]
 fn surviving_owners_follow_device_columns_across_fill_controls() {
     // term.c::term_field() emits both retreats. D is overwritten and X
     // precedes the original F, even when a different owner supplies X.

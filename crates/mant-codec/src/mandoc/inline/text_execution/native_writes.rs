@@ -29,7 +29,6 @@ pub(super) fn proved_decorated_tail(
     let count = writes
         .iter()
         .rev()
-        .take(64)
         .take_while(|write| {
             matches!(
                 write,
@@ -60,7 +59,6 @@ pub(super) fn decorated_write_count(
                 FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen)
             )
         })
-        .take(2)
         .count()
 }
 

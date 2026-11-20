@@ -1,6 +1,6 @@
 # Accepted word receipts and deferred hard rows
 
-The fixture has 758 members and 754 unique source byte strings. Each member
+The fixture has 759 members and 755 unique source byte strings. Each member
 binds its source hash, pristine identity, UTF-8 rows, text-node witnesses,
 and status and stream hashes for ASCII, UTF-8, tree, HTML and lint. The
 terminal profiles run at 160 columns. All profiles set the footer OS to

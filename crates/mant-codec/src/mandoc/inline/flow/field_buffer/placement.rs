@@ -100,13 +100,24 @@ impl FieldBuffer {
             let start = end.checked_sub(count)?;
             (self.projection_length(start, end) == count).then_some((start..end, font))
         });
-        // A proved styled suffix on an otherwise exact append leaves the
-        // previous prefix usable. Keep at most one compressed style run.
-        if !(keeps_prior_slots && tail.is_some() && self.raw_tail_font.is_none()) {
+        // A proved styled append preserves both the editable slots and
+        // every earlier decoration copy. Each run expands through encode1
+        // only when the bounded placement window reaches it.
+        if !keeps_prior_slots || tail.is_none() {
             self.raw_slot_fence = tail.as_ref().map_or(end, |(range, _)| range.start);
             self.raw_copy_aliases.clear();
+            self.raw_tail_fonts.clear();
         }
-        self.raw_tail_font = tail;
+        if let Some((range, font)) = tail {
+            if let Some((prior, prior_font)) = self.raw_tail_fonts.last_mut()
+                && prior.end == range.start
+                && *prior_font == font
+            {
+                prior.end = range.end;
+            } else {
+                self.raw_tail_fonts.push((range, font));
+            }
+        }
     }
 
     pub(in crate::mandoc::inline::flow) fn field_prefix(
@@ -172,11 +183,12 @@ impl FieldBuffer {
             automatic,
             cursor_retreat: self.write_cursor.retreat(),
             kept,
-            tail_font: self
-                .raw_tail_font
-                .as_ref()
-                .filter(|(range, _)| range.end > start)
-                .map(|(range, font)| (range.start.saturating_sub(start)..range.end - start, *font)),
+            tail_fonts: self.raw_tail_fonts[self
+                .raw_tail_fonts
+                .partition_point(|(range, _)| range.end <= start)..]
+                .iter()
+                .map(|(range, font)| (range.start.saturating_sub(start)..range.end - start, *font))
+                .collect(),
             duplicates: self.raw_copy_aliases[first_alias..]
                 .iter()
                 .map(|&(copy, owner)| (copy - start, owner - start))
@@ -362,11 +374,12 @@ impl FieldBuffer {
         self.break_markers
             .truncate(self.break_markers.partition_point(|&marker| marker < end));
         self.raw_slot_fence = self.raw_slot_fence.min(end);
-        if let Some((range, _)) = &mut self.raw_tail_font {
+        self.raw_tail_fonts.truncate(
+            self.raw_tail_fonts
+                .partition_point(|(range, _)| range.start < end),
+        );
+        if let Some((range, _)) = self.raw_tail_fonts.last_mut() {
             range.end = range.end.min(end);
-            if range.start >= range.end {
-                self.raw_tail_font = None;
-            }
         }
         self.raw_copy_aliases
             .retain(|&(copy, owner)| copy < end && owner < end);

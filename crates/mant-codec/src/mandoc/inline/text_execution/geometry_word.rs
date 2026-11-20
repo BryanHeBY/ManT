@@ -818,9 +818,22 @@ fn execute_seed<'a>(
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
     let pending_glyph = seed.placement.slots.pending_owner().is_some();
-    // term_word() writes a marker at col, independently of font changes
-    // and zero relative motions. A following word can still address it.
-    let terminal_marker = seed.earlier != 0 && terminal_marker(events);
+    // term_word() writes a marker at col. An unpainted native suffix can
+    // carry it through continuation, motion or a second break control.
+    // Keep its slots editable until term_fill() accepts a pass.
+    let terminal_marker = seed.earlier != 0
+        && slots.has_unpainted_marker_tail()
+        && events
+            .iter()
+            .rposition(|event| matches!(event, RoffInlineEvent::LineBreak))
+            .is_some_and(|marker| {
+                // Earlier motion may have left the marker in an older
+                // word. That edit needs the live-cursor proof above.
+                !events[..marker].iter().any(|event| {
+                    matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
+                        if argument.as_deref().and_then(motion_columns) != Some((false, 0)))
+                })
+            });
     let retain_suffix = context.policy.field_authoritative
         && (!has_marker || marker.is_some() || live_cursor || pending_glyph || terminal_marker);
     let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
@@ -844,20 +857,4 @@ fn execute_seed<'a>(
     word.source_continuation = continuation;
     placed.project(context, word);
     Ok(())
-}
-
-fn terminal_marker(events: &[RoffInlineEvent]) -> bool {
-    let moves_cursor = |event: &RoffInlineEvent| {
-        matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
-            if argument.as_deref().and_then(motion_columns) != Some((false, 0)))
-    };
-    matches!(
-        events.iter().rev().find(|event| {
-            !matches!(
-                event,
-                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
-            ) && (!matches!(event, RoffInlineEvent::HorizontalMotion { .. }) || moves_cursor(event))
-        }),
-        Some(RoffInlineEvent::LineBreak)
-    ) && !events.iter().any(moves_cursor)
 }

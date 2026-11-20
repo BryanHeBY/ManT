@@ -163,6 +163,30 @@ fn visit_readbacks(source: &str, mut visit: impl FnMut(&ResolvedContent)) {
 }
 
 #[test]
+fn overprinted_link_after_continuation_leaves_no_clickable_ghost() {
+    // term.c::term_word keeps the marker editable across \c. The fixed
+    // devices agree on DFHX, and only X owns a surviving annotation.
+    let source = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/overprinted-link-after-continuation.1"
+    );
+    visit_readbacks(source, |content| {
+        for width in [32, 78, 100] {
+            assert_rows(content, width, &["DFHX"], "DFHX", None);
+            let (mut app, terminal) = paint(content, width);
+            let (first, row) = only_position(terminal.backend().buffer(), "DFHX");
+            for offset in 0..4 {
+                click(&mut app, first + offset, row);
+                let expected = (offset == 3).then_some("https://x.test");
+                assert_eq!(
+                    opened_targets(&mut app),
+                    expected.into_iter().collect::<Vec<_>>()
+                );
+            }
+        }
+    });
+}
+
+#[test]
 fn overwritten_cells_and_hard_rows_remain_searchable_after_reader_readbacks() {
     // Pinned term_field() prints advances only before real output cells.
     // These exact sources ran all five pristine reference profiles.

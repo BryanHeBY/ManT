@@ -152,7 +152,7 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) automatic: usize,
     pub(in crate::mandoc::inline) cursor_retreat: usize,
     pub(in crate::mandoc::inline) kept: bool,
-    pub(in crate::mandoc::inline) tail_font: Option<(std::ops::Range<usize>, RoffFont)>,
+    pub(in crate::mandoc::inline) tail_fonts: Vec<(std::ops::Range<usize>, RoffFont)>,
     pub(in crate::mandoc::inline) duplicates: Vec<(usize, usize)>,
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
@@ -267,9 +267,13 @@ impl NativeSlots {
     pub(in crate::mandoc::inline) fn with_field_prefix(prefix: &FieldPrefix) -> Self {
         let mut slots = Self::after_entry(prefix.start != 0);
         let mut aliases = prefix.duplicates.iter().peekable();
+        let mut fonts = prefix.tail_fonts.iter().peekable();
         let mut pending_slot = None;
         for (index, (cell, _)) in prefix.cells.iter().enumerate() {
-            if let Some((range, font)) = &prefix.tail_font
+            if fonts.peek().is_some_and(|(range, _)| range.end == index) {
+                fonts.next();
+            }
+            if let Some((range, font)) = fonts.peek()
                 && range.contains(&index)
             {
                 // encode1 writes the decoration before the final glyph.
@@ -326,6 +330,23 @@ impl NativeSlots {
 
     pub(in crate::mandoc::inline) fn cursor_before_end(&self) -> bool {
         self.cursor < self.extent
+    }
+
+    pub(in crate::mandoc::inline) fn has_unpainted_marker_tail(&self) -> bool {
+        self.runs
+            .range(..self.cursor)
+            .rev()
+            .map(|(&start, run)| run.pattern.cell(run.end.min(self.cursor) - start - 1))
+            .find(|cell| {
+                !matches!(
+                    cell,
+                    FieldCell::BreakableBlank
+                        | FieldCell::NonBreakingBlank
+                        | FieldCell::Breakpoint
+                        | FieldCell::TabReference
+                )
+            })
+            == Some(&FieldCell::BreakMarker)
     }
 
     pub(in crate::mandoc::inline) fn follows_blank(&self) -> bool {

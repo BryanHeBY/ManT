@@ -208,7 +208,7 @@ impl FieldBuffer {
         self.device_tail = None;
         self.raw_slot_fence = 0;
         self.write_cursor = WriteCursor::End;
-        self.raw_tail_font = None;
+        self.raw_tail_fonts.clear();
         self.raw_copy_aliases.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();

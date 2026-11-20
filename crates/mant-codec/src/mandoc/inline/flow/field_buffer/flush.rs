@@ -153,7 +153,7 @@ impl FieldBuffer {
             device_tail: None,
             raw_slot_fence: 0,
             write_cursor: WriteCursor::End,
-            raw_tail_font: None,
+            raw_tail_fonts: Vec::new(),
             raw_copy_aliases: Vec::new(),
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,

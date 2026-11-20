@@ -51,6 +51,7 @@ impl<'a> PlacedWord<'a> {
         if exact_inner_blanks {
             publish_inner_advances(&mut slots, &mut reading, earlier);
         }
+        publish_retained_separator_advances(&mut slots, &mut reading, earlier);
         let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
@@ -216,6 +217,44 @@ impl<'a> PlacedWord<'a> {
             from_end: self.slots.len() - index,
         });
         self.slots[index].owner = None;
+    }
+}
+
+/// The next word can leave a short motion after an authored separator in
+/// the same accepted pass. Read it from the replayed slots: an edit can
+/// overwrite that motion, and `term_field()` can still drop it at row end.
+fn publish_retained_separator_advances(
+    slots: &mut [FillSlot],
+    reading: &mut Vec<ReadingCell<'_>>,
+    earlier: usize,
+) {
+    for index in 2..slots.len() {
+        let [blank, marker, motion] = &slots[index - 2..=index] else {
+            unreachable!()
+        };
+        if blank.cell != FieldCell::BreakableBlank
+            || !blank
+                .owner
+                .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(1)))
+            || marker.cell != FieldCell::BreakMarker
+            || motion.cell != FieldCell::NonBreakingBlank
+            || motion.count != 1
+            || !motion
+                .owner
+                .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(0)))
+        {
+            continue;
+        }
+        let Some(owner) = slots[index + 1..].iter().find_map(|slot| {
+            slot.owner.filter(|&owner| owner >= earlier && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace()))
+        }) else { continue };
+        let id = reading.len();
+        reading.push(ReadingCell {
+            glyph: ReadingGlyph::Scalar(' '),
+            link: None,
+            ..reading[owner]
+        });
+        slots[index].owner = Some(id);
     }
 }
 

@@ -130,10 +130,10 @@ class WordSpacingFixtureTests(unittest.TestCase):
         cases = fixture["cases"]
         self.assertEqual(Counter(case["cohort"] for case in cases), {
             "W1": 630, "W1-control": 20, "W2": 23, "W3": 45, "W4": 19,
-            "W5": 5, "W6": 13, "consumer": 3,
+            "W5": 5, "W6": 13, "consumer": 4,
         })
         self.assertEqual(len({case["id"] for case in cases}), len(cases))
-        self.assertEqual(len({case["source_sha256"] for case in cases}), 754)
+        self.assertEqual(len({case["source_sha256"] for case in cases}), 755)
         for expected, actual in zip(receipts.specifications(), cases, strict=True):
             with self.subTest(case=actual["id"]):
                 self.assertEqual(expected, {key: actual[key] for key in expected})
