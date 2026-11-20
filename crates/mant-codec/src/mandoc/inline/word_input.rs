@@ -1,4 +1,5 @@
 //! Execution and projection of an input formatter word.
+use super::flow::native_slots::PrefixExtension;
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
@@ -183,12 +184,25 @@ impl super::InlineExecutionState {
         });
         let leading_retreat = matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument, .. })
             if negative_entry_columns(argument.as_deref()).is_some());
-        let extend = events.iter().any(|event| {
+        let leading_marker = matches!(
+            events.iter().find(|event| !matches!(
+                event,
+                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::Link(_)
+            )),
+            Some(RoffInlineEvent::LineBreak)
+        );
+        let extend = if leading_marker {
+            PrefixExtension::LeadingMarker
+        } else if events.iter().any(|event| {
             matches!(
                 event,
                 RoffInlineEvent::LineBreak | RoffInlineEvent::ZeroAdvance
             )
-        });
+        }) {
+            PrefixExtension::Word
+        } else {
+            PrefixExtension::None
+        };
         self.native_slot_entry(capture_prefix || pending, extend, leading_retreat)
     }
 

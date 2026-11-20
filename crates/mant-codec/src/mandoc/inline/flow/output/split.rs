@@ -5,6 +5,37 @@ pub(in crate::mandoc::inline::flow) use accepted_owners::{
     remove_covered_native_glyphs, retain_native_field_owners,
 };
 
+// A section transition already represents the device row end in public
+// output. Its private event still consumes the same separator as a break.
+const SECTION_END: &str = "\0mant:output-scope:section-row-end";
+
+#[derive(Clone, Copy)]
+pub(super) struct PassBoundary {
+    pub(super) scalar: usize,
+    pub(super) section_seam: bool,
+}
+
+impl PassBoundary {
+    pub(super) const fn hard(scalar: usize) -> Self {
+        Self {
+            scalar,
+            section_seam: false,
+        }
+    }
+
+    pub(super) fn projection(self) -> Inline {
+        if self.section_seam {
+            Inline::anchor(SECTION_END)
+        } else {
+            Inline::line_break()
+        }
+    }
+
+    pub(super) fn is_section_end(node: &Inline) -> bool {
+        matches!(node, Inline::Anchor { id, .. } if id.as_str() == SECTION_END)
+    }
+}
+
 /// Split a formatter word at the row boundaries its field passes decided
 /// (term.c:220 with 205-207): each boundary is a cell offset inside the
 /// word's content; the breakable blanks immediately before it were
@@ -16,13 +47,14 @@ pub(super) fn split_word_at_row_boundaries(
 ) -> Vec<Inline> {
     boundaries.sort_unstable();
     boundaries.dedup();
+    let boundaries: Vec<_> = boundaries.iter().copied().map(PassBoundary::hard).collect();
     let mut output = Vec::with_capacity(incoming.len() + boundaries.len());
     let mut next_boundary = 0;
     split_nodes_at_boundaries(
         incoming,
         &mut 0,
         &mut next_boundary,
-        boundaries,
+        &boundaries,
         &mut output,
     );
     output
@@ -35,7 +67,7 @@ fn split_nodes_at_boundaries(
     nodes: &[Inline],
     cell: &mut usize,
     next_boundary: &mut usize,
-    boundaries: &[usize],
+    boundaries: &[PassBoundary],
     output: &mut Vec<Inline>,
 ) {
     for node in nodes {
@@ -94,7 +126,7 @@ fn split_nodes_at_boundaries_owned(
     nodes: &[Inline],
     cell: &mut usize,
     next_boundary: &mut usize,
-    boundaries: &[usize],
+    boundaries: &[PassBoundary],
 ) -> Vec<Inline> {
     let mut output = Vec::with_capacity(nodes.len());
     split_nodes_at_boundaries(nodes, cell, next_boundary, boundaries, &mut output);
@@ -106,7 +138,7 @@ pub(super) fn split_text_at_boundaries(
     node: &Inline,
     cell: &mut usize,
     next_boundary: &mut usize,
-    boundaries: &[usize],
+    boundaries: &[PassBoundary],
     output: &mut Vec<Inline>,
 ) {
     split_text_with_blank_run(
@@ -152,7 +184,7 @@ fn split_text_with_blank_run(
     node: &Inline,
     cell: &mut usize,
     next_boundary: &mut usize,
-    boundaries: &[usize],
+    boundaries: &[PassBoundary],
     output: &mut Vec<Inline>,
     blank_run: &mut BlankRun,
 ) {
@@ -165,9 +197,12 @@ fn split_text_with_blank_run(
         // word-tail candidate an overrun cut at (353-354): the row ends
         // here and the graph starts the next one. The breakpoint itself
         // never prints (term.c:396-398).
-        while boundaries.get(*next_boundary) == Some(cell) {
+        while let Some(boundary) = boundaries
+            .get(*next_boundary)
+            .filter(|end| end.scalar == *cell)
+        {
             push_split_text(&mut run, node, output);
-            output.push(Inline::line_break());
+            output.push(boundary.projection());
             advance_boundary(cell, next_boundary, boundaries);
         }
         let character = chars[index];
@@ -188,7 +223,10 @@ fn split_text_with_blank_run(
             // (term.c:205-207): the accepted row ends here and the word
             // continues on the next device row.
             let end = blank_run.end_from(&chars, index);
-            if boundaries.get(*next_boundary) == Some(&(*cell + (end - index))) {
+            if let Some(boundary) = boundaries
+                .get(*next_boundary)
+                .filter(|cut| cut.scalar == *cell + (end - index))
+            {
                 while run
                     .chars()
                     .next_back()
@@ -197,7 +235,7 @@ fn split_text_with_blank_run(
                     run.pop();
                 }
                 push_split_text(&mut run, node, output);
-                output.push(Inline::line_break());
+                output.push(boundary.projection());
                 *cell += end - index;
                 index = end;
                 advance_boundary(cell, next_boundary, boundaries);
@@ -211,8 +249,15 @@ fn split_text_with_blank_run(
     push_split_text(&mut run, node, output);
 }
 
-pub(super) fn advance_boundary(cell: &mut usize, next_boundary: &mut usize, boundaries: &[usize]) {
-    if boundaries.get(*next_boundary) == Some(cell) {
+pub(super) fn advance_boundary(
+    cell: &mut usize,
+    next_boundary: &mut usize,
+    boundaries: &[PassBoundary],
+) {
+    if boundaries
+        .get(*next_boundary)
+        .is_some_and(|end| end.scalar == *cell)
+    {
         *next_boundary += 1;
     }
 }
@@ -232,7 +277,9 @@ fn push_split_text(run: &mut String, node: &Inline, output: &mut Vec<Inline>) {
 mod blank_run_tests {
     use crate::mandoc::inline::plain_text;
 
-    use super::{BlankRun, Inline, split_text_with_blank_run, split_word_at_row_boundaries};
+    use super::{
+        BlankRun, Inline, PassBoundary, split_text_with_blank_run, split_word_at_row_boundaries,
+    };
 
     #[test]
     fn later_boundary_inspects_each_blank_once() {
@@ -255,7 +302,7 @@ mod blank_run_tests {
                 &node,
                 &mut cell,
                 &mut boundary,
-                &[count + 3],
+                &[PassBoundary::hard(count + 3)],
                 &mut output,
                 &mut blank_run,
             );

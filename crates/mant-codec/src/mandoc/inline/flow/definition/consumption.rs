@@ -389,6 +389,7 @@ impl InlineBuilder {
             &state.field_word_anchors,
             passes,
             start,
+            None,
         );
     }
 

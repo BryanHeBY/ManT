@@ -270,7 +270,10 @@ fn publish_inner_advances(
                     Some(_) => false,
                     None => matches!(
                         gap.cell,
-                        FieldCell::ZeroWidthGraph | FieldCell::TabReference | FieldCell::Breakpoint
+                        FieldCell::ZeroWidthGraph
+                            | FieldCell::TabReference
+                            | FieldCell::Breakpoint
+                            | FieldCell::BreakMarker
                     ),
                 }
             });

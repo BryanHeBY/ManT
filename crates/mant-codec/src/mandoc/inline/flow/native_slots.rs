@@ -136,6 +136,13 @@ pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) prefix: Option<FieldPrefix>,
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::mandoc::inline) enum PrefixExtension {
+    None,
+    Word,
+    LeadingMarker,
+}
+
 /// A small, uncommitted field with a proved one-to-one slot correspondence.
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.

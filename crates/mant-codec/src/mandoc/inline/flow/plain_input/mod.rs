@@ -236,7 +236,7 @@ impl InlineBuilder {
             accepted,
             inherited_printed_row,
             |start, end| buffer.printed_columns(start, end, 0, 0).is_some(),
-            handoff,
+            handoff.as_deref_mut(),
         );
         let reprojected_literal_rows = accepted.rejected()
             && empty_rows > 0
@@ -253,6 +253,7 @@ impl InlineBuilder {
                 &anchors,
                 passes,
                 output_start,
+                handoff.as_deref(),
             );
         }
         let outcome = match &receipt {

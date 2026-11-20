@@ -324,6 +324,7 @@ fn record_row_split(
             offset,
             pass_end,
             before_cached_glyph,
+            section_seam: false,
         });
 }
 

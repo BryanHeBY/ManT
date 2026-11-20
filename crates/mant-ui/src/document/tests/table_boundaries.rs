@@ -137,18 +137,86 @@ fn active_native_words_paint_and_copy_the_accepted_rows() {
             None,
         ),
     ] {
-        assert_native_word_appearance(word, rows, label, &link);
+        let source = format!("{REVIEW_HEADER}{word}\n");
+        assert_native_word_appearance(&source, rows, label, &link);
+    }
+}
+
+#[test]
+fn marker_rewinds_keep_painted_words_and_remove_overwritten_link_hits() {
+    // Exact inputs ran pinned CVS. term_word leaves both \p cells live
+    // until the later rewind, including the native cells of a link label.
+    let head = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    for (word, rows) in [
+        (r#".No "P\p" Ns No "\pA" No "\h'-4n'T""#, &["PTA"][..]),
+        (r#".No "P\p" Ns No "\pA" No "\h'-5n'T""#, &["TA"][..]),
+        (
+            r#".No "A\p \X'tty: link https://one.test'B\X'tty: link'" No "\h'-3n'T""#,
+            &["A", "T"][..],
+        ),
+        (r#".No "A\p\h'2n'B" No "\h'-2n'T""#, &["A  T"][..]),
+    ] {
+        assert_native_word_appearance(&format!("{head}{word}\n"), rows, None, &link);
+    }
+}
+
+#[test]
+fn live_subsection_rows_preserve_only_the_real_gap_when_painted_and_copied() {
+    // pre_SS with PD=0 and post_SH::term_newln share the old field.
+    // The exact source forms distinguish its end from an empty HEAD pass.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n";
+    let tail = "\nGG\n.PD 1\n.SH ENDTEST\nZZ\n";
+    for (word, heading, gap) in [
+        (r"AA\p\~BB", "DD", 0),
+        (r"AA\p\:BB", r"\&\p DD", 0),
+        (r"AA\p\~BB", r"\&\p DD", 1),
+    ] {
+        let source = format!("{head}{word}\n.SS {heading}{tail}");
+        let view = DocumentView::new(&restored(&source));
+        for width in [24, 78] {
+            let rendered = view.render(width);
+            let before = rendered.search("BB")[0].row;
+            let title = rendered.search("DD")[0].row;
+            let after = rendered.search("GG")[0].row;
+            assert_eq!((title - before, after - title), (1 + gap, 1), "{source}");
+            let buffer = paint(&rendered, width);
+            assert_eq!(painted(&buffer, title, 0, width.into()).trim(), "DD");
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: before,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: after,
+                    column: usize::from(width) - 1,
+                },
+            });
+            let expected = if gap == 0 {
+                "BB\nDD\nGG"
+            } else {
+                "BB\n\nDD\nGG"
+            };
+            let copied = copied.replace("\u{a0}", " ");
+            assert!(
+                copied
+                    .lines()
+                    .map(str::trim)
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .ends_with(expected)
+            );
+        }
     }
 }
 
 fn assert_native_word_appearance(
-    word: &str,
+    source: &str,
     rows: &[&str],
     label: Option<&str>,
     link: &LinkTarget,
 ) {
-    let source = format!("{REVIEW_HEADER}{word}\n");
-    let view = DocumentView::new(&restored(&source));
+    let view = DocumentView::new(&restored(source));
     for width in [24, 78] {
         let rendered = view.render(width);
         let first = rendered.search("DESCRIPTION")[0].row + 1;

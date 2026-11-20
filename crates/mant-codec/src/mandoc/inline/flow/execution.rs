@@ -1,5 +1,5 @@
 use super::definition::PendingFieldGapOrigin;
-use super::native_slots::ReplayDomain;
+use super::native_slots::{PrefixExtension, ReplayDomain};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
     InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
@@ -588,7 +588,7 @@ impl super::InlineExecutionState {
     pub(in crate::mandoc::inline) fn native_slot_entry(
         &self,
         capture_prefix: bool,
-        extend: bool,
+        extend: PrefixExtension,
         leading_retreat: bool,
     ) -> super::native_slots::SlotEntry {
         let (input, _) = self.word_input();
@@ -611,6 +611,16 @@ impl super::InlineExecutionState {
             } else {
                 ReplayDomain::Filled
             };
+        let extend = match extend {
+            PrefixExtension::None => false,
+            PrefixExtension::Word => {
+                !input.has_pending_break_markers() || input.word_scan_deferred()
+            }
+            // A new leading marker is itself a cell write, not a flush of
+            // the preceding marker. field_prefix still excludes any pass
+            // already consumed by the incremental scanner.
+            PrefixExtension::LeadingMarker => true,
+        };
         super::native_slots::SlotEntry {
             prior_input: !input.is_empty(),
             domain,
@@ -623,13 +633,12 @@ impl super::InlineExecutionState {
                 0
             },
             device_tail,
-            prefix: (capture_prefix || live_edit || leading_retreat && !input.has_entry_retreat()
-                // An incremental marker pass owns the earlier spaces and
-                // glyphs until acceptance. Extending an already editable
-                // buffer can carry that prefix without re-publishing it.
-                || extend && (!input.has_pending_break_markers() || input.word_scan_deferred()))
-            .then(|| input.field_prefix(automatic_blanks, kept_blanks))
-            .flatten(),
+            prefix: (capture_prefix
+                || live_edit
+                || leading_retreat && !input.has_entry_retreat()
+                || extend)
+                .then(|| input.field_prefix(automatic_blanks, kept_blanks))
+                .flatten(),
         }
     }
 

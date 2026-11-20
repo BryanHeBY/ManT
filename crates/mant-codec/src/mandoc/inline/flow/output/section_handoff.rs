@@ -31,6 +31,15 @@ impl SectionHandoff {
                     == self.previous_cell_end
     }
 
+    pub(super) fn closes_at_section_seam(
+        &self,
+        buffer: &FieldBuffer,
+        pass: Range<usize>,
+        next_owner_start: usize,
+    ) -> bool {
+        next_owner_start >= self.previous_cell_end && self.owns_loop_end(buffer, pass)
+    }
+
     pub(in crate::mandoc::inline::flow) fn note_heading_word(&mut self, start: usize) {
         // Use the stable word range, as in accepted_owner_lengths(). A
         // heading's first write can land before the original seam after

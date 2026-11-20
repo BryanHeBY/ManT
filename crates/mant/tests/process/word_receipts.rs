@@ -1348,6 +1348,123 @@ fn live_markers_and_backspaces_commit_the_same_text_and_link_owners() {
 }
 
 #[test]
+fn adjacent_markers_leave_the_live_field_editable_across_word_boundaries() {
+    // term_word writes both markers into one field before term_fill
+    // accepts it. The terminal rewind can land in either source word.
+    for (join, distance, expected) in [
+        ("Ns No", 3, "PTA"),
+        ("Ns No", 4, "PTA"),
+        ("Ns No", 5, "TA"),
+        ("No", 4, "PTA"),
+        ("No", 5, "PT A"),
+    ] {
+        let source =
+            format!(r#"{EDITABLE_FIELD}.No "P\p" {join} "\pA" No "\h'-{distance}n'T""#) + "\n";
+        assert_readbacks(&source, expected, None);
+        if expected != "PT A" {
+            assert_eq!(search_visible_word(&source, expected), 1, "{source}");
+        }
+        assert_eq!(search_visible_word(&source, "PA T"), 0, "{source}");
+    }
+}
+
+#[test]
+fn word_end_markers_preserve_the_cells_and_owners_of_inner_separators() {
+    // term_fill treats ASCII_NBRSP as a printable cell and accepts the
+    // earlier breakable blank as a row end. A later term_word can replace
+    // the linked glyph or the glyph after a horizontal advance.
+    let link = r#".No "A\p \X'tty: link https://one.test'B\X'tty: link'" No "#;
+    let overwritten = format!("{EDITABLE_FIELD}{link}\"\\h'-3n'T\"\n");
+    let retained = format!("{EDITABLE_FIELD}{link}\"T\"\n");
+    assert_readbacks(&overwritten, "A\nT", None);
+    assert_readbacks(&retained, "A\nB T", None);
+    for (source, expected) in [(&overwritten, &[][..]), (&retained, &["B"][..])] {
+        let markdown = render(source, "roff", "markdown", "never", false);
+        for (text, format) in [(source.as_str(), "roff"), (markdown.as_str(), "markdown")] {
+            let labels: Vec<_> = document_links(text, format)
+                .into_iter()
+                .filter_map(|(target, label)| {
+                    assert_eq!(
+                        target,
+                        LinkTarget::External {
+                            uri: "https://one.test".into()
+                        }
+                    );
+                    (!label.is_empty()).then_some(label)
+                })
+                .collect();
+            assert_eq!(labels, expected, "{source}");
+        }
+    }
+    let source = format!(r#"{EDITABLE_FIELD}.No "A\p\h'2n'B" No "\h'-2n'T""#) + "\n";
+    assert_readbacks(&source, "A  T", None);
+}
+
+#[test]
+fn subsection_excerpts_keep_only_the_heading_owned_hard_rows() {
+    // man_term.c::pre_SS with PD=0 leaves the old field live. A pass
+    // ending the old owner's row must consume its padding without
+    // appearing as a leading hard row in the new heading.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\n";
+    let tail = "\nGG\n.PD 1\n.SH ENDTEST\nZZ\n";
+    for (word, heading, id, rows, title) in [
+        (r"AA\p\~BB", "DD", "dd", "AA\u{a0}BB\nDD\nGG", "DD"),
+        (r"AA\p\:BB", r"\&\p DD", "p-dd", "AA\nBB\nDD\nGG", "DD"),
+        (r"AA\p BB", r"\&\p DD", "p-dd", "AA\nBB\nDD\nGG", "DD"),
+        (
+            r"AA\p\~BB",
+            r"\&\p DD",
+            "p-dd",
+            "AA\u{a0}BB\n\nDD\nGG",
+            "\nDD",
+        ),
+    ] {
+        let source = format!("{head}{word}\n.SS {heading}{tail}");
+        let bundle: mant_protocol::QueryBundle =
+            serde_json::from_str(&render(&source, "roff", "json", "never", false)).unwrap();
+        let section = &bundle.document.unwrap().sections[1].children[0];
+        assert_eq!(section.heading.plain_text(), title, "{source}");
+        let full = render(&source, "roff", "text", "never", false);
+        let between = full.split_once("\nFIRST\n").unwrap().1;
+        let body = between.split_once("\nENDTEST").unwrap().0.trim_end();
+        assert_eq!(
+            body.lines().map(str::trim_start).collect::<Vec<_>>(),
+            rows.lines().collect::<Vec<_>>(),
+            "{source}"
+        );
+        let selector = format!("id:{id}");
+        let excerpt = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "text",
+                "--display",
+                "direct",
+                "--color",
+                "never",
+                "--node",
+                &selector,
+            ],
+            &source,
+        );
+        assert!(excerpt.status.success(), "{source}: {excerpt:?}");
+        let excerpt = String::from_utf8(excerpt.stdout).unwrap();
+        assert_eq!(
+            excerpt.splitn(3, "\n\n").last().unwrap().trim_end(),
+            format!("{title}\nGG"),
+            "{source}"
+        );
+        if title == "DD" {
+            let markdown = render(&source, "roff", "markdown", "never", false);
+            assert!(markdown.lines().any(|row| row == "### DD"), "{markdown}");
+        }
+    }
+}
+
+#[test]
 fn long_device_advances_leave_complete_words_editable_after_them() {
     // The pinned term_word() advances col independently of its later
     // term_fill()/term_field() view. These short rewinds replace B or C.
@@ -1385,31 +1502,37 @@ fn long_device_advances_leave_complete_words_editable_after_them() {
 fn pending_native_writes_define_only_the_final_label() {
     // term_word overwrites B and retires the following slots before the
     // list HEAD is flushed. The definition spans the surviving A and T.
-    let head = r#"No "A\zB\pC" No "\h'-2n'T""#;
     for list in ["tag", "hang"] {
-        let source = format!("{EDITABLE_FIELD}.Bl -{list} -width 12n\n.It {head}\nBODYWORD\n.El\n");
-        let json = |query: &[&str]| {
-            let mut args = vec!["--input", "-", "--input-format", "roff", "--format", "json"];
-            args.extend_from_slice(query);
-            let result = run_text_input(&args, &source);
-            assert!(result.status.success(), "{source}: {result:?}");
-            serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap()
-        };
-        let doc = json(&[]);
-        let item = &doc["document"]["sections"][1]["blocks"][0]["items"][0];
-        let entry = &item["entry"];
-        assert_eq!(entry["names"], serde_json::json!(["AT"]), "{item}");
-        let parts = &entry["nameBindings"][0]["occurrences"][0]["parts"];
-        assert_eq!(parts.as_array().unwrap().len(), 2, "{item}");
-        assert!(
-            item["description"].to_string().contains("BODYWORD"),
-            "{item}"
-        );
-        for (query, count) in [("AT", 1), ("ABC T", 0)] {
-            assert_eq!(
-                json(&["--explain", query])["counts"]["directEntry"]["total"],
-                count
+        for (head, name, parts_count, rejected) in [
+            (r#"No "A\zB\pC" No "\h'-2n'T""#, "AT", 2, "ABC T"),
+            (r#"No "P\p" Ns No "\pA" No "\h'-4n'T""#, "PTA", 3, "PA T"),
+            (r#"No "P\p" Ns No "\pA" No "\h'-5n'T""#, "TA", 2, "PA T"),
+        ] {
+            let source =
+                format!("{EDITABLE_FIELD}.Bl -{list} -width 12n\n.It {head}\nBODYWORD\n.El\n");
+            let json = |query: &[&str]| {
+                let mut args = vec!["--input", "-", "--input-format", "roff", "--format", "json"];
+                args.extend_from_slice(query);
+                let result = run_text_input(&args, &source);
+                assert!(result.status.success(), "{source}: {result:?}");
+                serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap()
+            };
+            let doc = json(&[]);
+            let item = &doc["document"]["sections"][1]["blocks"][0]["items"][0];
+            let entry = &item["entry"];
+            assert_eq!(entry["names"], serde_json::json!([name]), "{item}");
+            let parts = &entry["nameBindings"][0]["occurrences"][0]["parts"];
+            assert_eq!(parts.as_array().unwrap().len(), parts_count, "{item}");
+            assert!(
+                item["description"].to_string().contains("BODYWORD"),
+                "{item}"
             );
+            for (query, count) in [(name, 1), (rejected, 0)] {
+                assert_eq!(
+                    json(&["--explain", query])["counts"]["directEntry"]["total"],
+                    count
+                );
+            }
         }
     }
 }

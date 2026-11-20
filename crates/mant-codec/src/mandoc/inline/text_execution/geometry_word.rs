@@ -253,6 +253,7 @@ fn can_publish_inner_advances(
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::ZeroWidthGlyph => {}
+            RoffInlineEvent::LineBreak if context.slot_entry.domain == ReplayDomain::Filled => {}
             _ => return false,
         }
     }
@@ -276,12 +277,17 @@ fn marker_replay(
     // Wider word shapes are replayable as a whole at a fresh filled
     // field. A pending run-in or source-blank receipt still owns its
     // earlier spans and must finish through the shared word path.
-    // Breakable spaces stay with the incremental pass scanner, whose
-    // row ends can close the previous owner as a section HEAD begins.
     let filled = context.slot_entry.domain == ReplayDomain::Filled
         && !context.slot_entry.prior_input
         && !context.defer_leading_blanks
         && !context.zero_advance.has_annotation_output_owner();
+    // Plain source blanks already have an incremental pass receipt.
+    // When they separate an annotation from surrounding text, keep the
+    // blank and label in the editable slots until acceptance can decide
+    // both their row and their visible ownership.
+    let owns_link = events
+        .iter()
+        .any(|event| matches!(event, RoffInlineEvent::Link(_)));
     let mut has_ink = false;
     let mut has_marker = false;
     let mut ink_after_marker = false;
@@ -297,9 +303,9 @@ fn marker_replay(
             }
             RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
                 if filled
-                    && text
-                        .chars()
-                        .all(|ch| ch == '\u{a0}' || ch.is_ascii_graphic()) =>
+                    && text.chars().all(|ch| {
+                        ch == '\u{a0}' || ch == ' ' && owns_link || ch.is_ascii_graphic()
+                    }) =>
             {
                 let ink = text.bytes().any(|byte| byte.is_ascii_graphic());
                 has_ink |= ink;

@@ -343,6 +343,7 @@ fn incremental_pass_acknowledges_only_its_materialized_owner_boundary() {
                 offset: 5,
                 pass_end: pass.end,
                 before_cached_glyph,
+                section_seam: false,
             }],
         )])
     };
@@ -370,7 +371,7 @@ fn incremental_pass_acknowledges_only_its_materialized_owner_boundary() {
     }];
     let mut settled = vec![Inline::anchor(word.clone()), text("ALPHAX")];
     for _ in 0..2 {
-        project_accepted_native_passes(&mut settled, &mut retiring, &anchors, &passes, 0);
+        project_accepted_native_passes(&mut settled, &mut retiring, &anchors, &passes, 0, None);
         assert_eq!(plain_text(&settled), "ALPHA\nX");
         assert!(retiring.has_projected_pass(pass.end));
     }
