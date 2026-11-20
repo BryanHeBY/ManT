@@ -246,6 +246,74 @@ fn assigned_paths_and_dotted_values_stop_before_an_independent_aside() {
 }
 
 #[test]
+fn assignment_groups_prove_their_content_and_dots_require_adjacency() {
+    // mdoc_macro.c::blk_part_imp/blk_part_exp and termp_ns_pre() preserve
+    // the delimiters and operand adjacency in the fixed CVS output.
+    for (head, label, full) in [
+        ("Fl a= Ns Ar x [ Ar opt ]", "-a=x [opt]", true),
+        ("Fl a= Ns Ar x Op Ar opt", "-a=x [opt]", true),
+        ("Fl a= Ns Ar x ( Ar port )", "-a=x (port)", true),
+        ("Fl a= Ns Ar x Po Ar port Pc", "-a=x (port)", true),
+        (
+            r#"Fl a= Ns Ar x Po "default:" Pa /tmp Pc"#,
+            "-a=x (default: /tmp)",
+            false,
+        ),
+        (
+            r#"Fl a= Ns Ar x Po "default:" Ar none Pc"#,
+            "-a=x (default: none)",
+            false,
+        ),
+        ("Fl a= Ns Li example.com", "-a=example.com", true),
+        ("Fl a= Ns Li example Ns Li .com", "-a=example.com", true),
+        (
+            r"Fl a= Ns Li example Ns Li \&. Ns Li com",
+            "-a=example.com",
+            true,
+        ),
+        (
+            r"Fl a= Ns Li example Ns Li \&. No Deprecated",
+            "-a=example. Deprecated",
+            false,
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            &["-a"],
+            label,
+            full,
+            &["port", "opt", "none", "/tmp", "Deprecated"],
+        );
+    }
+}
+
+#[test]
+fn an_executed_path_can_consist_only_of_punctuation() {
+    // CVS mdoc_pa_pre() marks these complete words as paths. The same
+    // visible punctuation under Li has no pathname evidence by itself.
+    for role in ["Pa", "Li"] {
+        for (operand, visible) in [
+            ("/", "/"),
+            (r"\&.", "."),
+            (r"\&..", ".."),
+            ("./", "./"),
+            ("../", "../"),
+        ] {
+            let head = format!("Fl a= Ns {role} {operand}");
+            check(
+                "OPTIONS",
+                &head,
+                &["-a"],
+                &format!("-a={visible}"),
+                role == "Pa",
+                &[visible],
+            );
+        }
+    }
+}
+
+#[test]
 fn real_assignment_forms_keep_compound_and_literal_alternatives() {
     // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
     // and exports. CVS term_word(), termp_ns_pre() and quote pre/post
