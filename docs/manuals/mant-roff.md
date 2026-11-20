@@ -154,6 +154,9 @@ Empty rows followed by accepted text from the preceding body stay between
 its words. The heading does not repeat them as spacing. If no later glyph
 from the preceding body survives, its trailing empty rows remain, even when
 the heading prints new text or covers a pending body glyph.
+When only the body's live fixed spaces share a man subsection's first
+accepted row, the heading carries those spaces on that row. A physical
+blank row already ended by the formatter stays with the body.
 
 A no-fill reading space from positive horizontal motion can occupy a row
 of the preceding literal even when mandoc defers the advance until the
@@ -251,6 +254,10 @@ appears in the accepted order and keeps its original style and link, even
 if it was pending under `\z`. Native copies of a bold glyph refer to one
 author glyph. Successive writes keep each earlier glyph's position within
 its original source word, including when it moves into a separate run.
+A horizontal move that only changes the write cursor leaves buffered input
+available for the next accepted pass. Coverage of a pending glyph or its
+padding is settled within that pass, including when a new word rewrites
+an invisible control or blank at a proved live slot.
 A queued blank can cover it when a later device write on the same pass
 makes the blank print. That gap can move or disappear with its native
 slot while the field stays live. A
@@ -779,6 +786,15 @@ Complete command, configuration-key and variable heads can use the same paragrap
 
 Adjacent literal native runs may form one multiword command name, such as `Nm zfs Cm get`; the first argument ends that name. Native literal heads with explicit option-group syntax can establish a command under a topical heading; other ambiguous `Ic`/`Cm` heads remain named Terms. Parameter alternations and later argument fragments never create extra names, and multiple names do not imply aliases.
 Command-name evidence respects both authored parentheses or brackets and executed enclosure macros. Balanced brackets inside a single parameter, such as `Ar path[index]` or `Ar [source target\&]`, stay with that parameter and preserve the surrounding command's name. This also applies when the parser stores the parameter in several text nodes. At the outer level, a native pipe that joins two program invocations keeps their complete form without registering either side as an independent command name. A comma may still introduce an independent alias. The bare pipe and the native Roman-font spelling have the same meaning.
+
+Authored punctuation can open before a native enclosure and close inside
+it, or remain open when several nested enclosures end. A comma on the
+outer level still separates independent declarations. For an explicit
+`Fl` assignment, the complete form requires a proved right-hand side.
+For example, `Fl a Ns Li \&= Ns Op Ar x` binds `-a` and publishes
+`-a=[x]`. Compound parameters retain their separators. A trailing prose
+operand or unrelated link remains readable with the definition and
+cannot extend the exact signature.
 
 A complete option group can expose up to 256 explicitly spelled names, including
 `-c --stdout --to-stdout`, `-a or --ascii`, and an authored numeric enumeration

@@ -62,6 +62,12 @@ that crate was not published for that change.
   link. A later operand can consume the last breakable blank before a
   marker closes its pass. Subsection padding accepted on the preceding row
   adds no heading row.
+- Keep a zero-advance glyph and its link when a later backspace prints on
+  another row. Resolve covered cells through the same accepted pass after
+  a proved local rewind, and retain buffered input after a cursor-only move.
+- Move live padding before a man subsection into its accepted reading row,
+  preserving authored fixed spaces and independently completed blank rows.
+  Close emphasis in Markdown excerpt paths before authored trailing spaces.
 - Keep literal and macro-generated argument groups equivalent in mdoc
   command lists, including balanced brackets across text fragments of a
   single parameter.
@@ -72,8 +78,15 @@ that crate was not published for that change.
   quoted arguments and independently declared aliases after an enclosure.
   An authored closer after the native BODY can pair with its BLOCK's
   leading delimiter. A run of attached closers can complete one parameter.
+  Pair authored delimiters across nested BODY entry and exit, preserving
+  independent comma aliases even when a neighboring pipeline is unnameable.
 - Expose both the short option name and its full invocation when an executed
-  literal equals sign joins the option to a proved parameter.
+  literal equals sign joins the option to a complete proved right-hand side.
+  Keep wrapped and compound parameters intact and leave trailing prose or
+  unrelated links outside the queryable signature.
+- Keep page-wide table occurrence numbers in column display audit records.
+  Preserve provable missing-row bounds when exact alignment exceeds its
+  budget, and reject duplicate display identities in audit input.
 - Resolve tbl word-end marks against the native accepted cell range.
   Horizontal advances retain exactly the part of a compressed run reached
   by the field scan, preventing both rejected text and extra empty rows.
