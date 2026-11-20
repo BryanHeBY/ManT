@@ -238,3 +238,93 @@ fn styled_linked_padding_is_one_accepted_subsection_row() {
         }
     }
 }
+
+#[test]
+fn shared_subsection_prefix_keeps_both_authored_blank_labels() {
+    use mant_ir::{Block, Inline, LinkTarget};
+
+    fn links(nodes: &[Inline], out: &mut Vec<(String, String)>) {
+        for node in nodes {
+            match node {
+                Inline::Link {
+                    target: LinkTarget::External { uri },
+                    children,
+                    ..
+                } => {
+                    out.push((uri.clone(), mant_ir::inline_plain_text(children)));
+                }
+                Inline::Strong { children } | Inline::Emphasis { children } => links(children, out),
+                _ => {}
+            }
+        }
+    }
+
+    // Fixed UTF-8 term_field() prints both fixed blanks on one row after
+    // AA, even when the heading ends there or an authored \p closes it.
+    let header = ".TH PROBE 1 2026-11-19\n.SH NAME\nprobe \\- example\n.SH FIRST\n.PD 0\nAA\n.br\n";
+    for mode in ["", ".nf\n"] {
+        for first in [r"\~", r"\0"] {
+            for second in [r"\~", r"\fI\~\fP"] {
+                for tail in [r"\p Z", ""] {
+                    let source = format!(
+                        "{header}{mode}\\X'tty: link https://one.test'{first}\\X'tty: link'\n.SS \"\\X'tty: link https://two.test'{second}\\X'tty: link'{tail}\"\nDD\n"
+                    );
+                    let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+                    let query = crate::json_roundtrip::json_string_roundtrip(&content);
+                    let section = &query.document.as_ref().unwrap().sections[1];
+                    let mut tags = Vec::new();
+                    for block in &section.blocks {
+                        if let Block::Paragraph { children, .. }
+                        | Block::Preformatted { children, .. } = block
+                        {
+                            links(children, &mut tags);
+                        }
+                    }
+                    assert_eq!(
+                        tags,
+                        [
+                            ("https://one.test".into(), "\u{a0}".into()),
+                            ("https://two.test".into(), "\u{a0}".into())
+                        ],
+                        "{source}"
+                    );
+                    let heading = &section.children[0].heading;
+                    assert_eq!(heading.plain_text(), if tail.is_empty() { "" } else { "Z" });
+                    let rendered = mant_render::render_query_man(&query);
+                    let rows = rendered
+                        .split_once("\nFIRST\n")
+                        .unwrap()
+                        .1
+                        .lines()
+                        .map(|row| row.trim_start_matches(' '))
+                        .collect::<Vec<_>>();
+                    let expected = if tail.is_empty() {
+                        &["AA", "\u{a0}\u{a0}", "DD"][..]
+                    } else {
+                        &["AA", "\u{a0}\u{a0}", "Z", "DD"]
+                    };
+                    assert_eq!(rows, expected, "{source}");
+                    if mode.is_empty() && !tail.is_empty() {
+                        let markdown = mant_codec::encode::render_markdown(&query);
+                        let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                        let first = reloaded
+                            .document
+                            .as_ref()
+                            .unwrap()
+                            .sections
+                            .iter()
+                            .find(|section| section.heading.plain_text() == "FIRST")
+                            .unwrap();
+                        let mut targets = Vec::new();
+                        for block in &first.blocks {
+                            if let Block::Paragraph { children, .. } = block {
+                                links(children, &mut targets);
+                            }
+                        }
+                        assert_eq!(targets, tags, "{markdown}");
+                    }
+                }
+            }
+        }
+    }
+}

@@ -84,6 +84,50 @@ fn a_literal_reading_space_does_not_paint_a_second_completed_blank() {
 }
 
 #[test]
+fn a_shared_subsection_row_keeps_both_blank_link_hit_cells() {
+    // The pinned UTF-8 device prints both NBSPs on the row before Z.
+    // Two exact cells preserve the two source labels in the reader.
+    let source = concat!(
+        ".TH PROBE 1 2026-11-19\n.SH NAME\nprobe \\- example\n.SH FIRST\n.PD 0\nAA\n.br\n",
+        "\\X'tty: link https://one.test'\\~\\X'tty: link'\n",
+        ".SS \"\\X'tty: link https://two.test'\\~\\X'tty: link'\\p Z\"\nDD\n",
+    );
+    let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let wire = serde_json::to_string(&QueryBundle::from(&content)).unwrap();
+    let input = ResolvedContent::from(serde_json::from_str::<QueryBundle>(&wire).unwrap());
+    let mut app = App::new(&input);
+    key(&mut app, KeyCode::Char('B'));
+    let mut terminal = Terminal::new(TestBackend::new(82, 24)).unwrap();
+    for width in [24, 78] {
+        terminal.backend_mut().resize(width + 4, 24);
+        draw(&mut app, &mut terminal);
+        let rendered = &app.session.rendered_cache[&width];
+        let row = rendered.search("AA")[0].row + 1;
+        assert_eq!(rendered.search("Z")[0].row, row + 1);
+        let (left, y) = viewport_cell(&app, row, 0);
+        let columns: Vec<_> = (left..app.geometry.content.right())
+            .filter(|&x| terminal.backend().buffer()[(x, y)].symbol() == "\u{a0}")
+            .map(|x| usize::from(x - left))
+            .collect();
+        let [first, second] = columns.as_slice() else {
+            panic!("expected two authored blanks at {width} columns: {columns:?}");
+        };
+        for (column, uri) in [(*first, "https://one.test"), (*second, "https://two.test")] {
+            click_document_cell(&mut app, column, row);
+            assert_eq!(
+                app.take_external_request()
+                    .as_ref()
+                    .map(crate::ExternalUri::as_str),
+                Some(uri)
+            );
+        }
+        let start = viewport_cell(&app, row, *first);
+        let end = viewport_cell(&app, row, *second);
+        assert_eq!(copy_label(&mut app, start, end), "\u{a0}\u{a0}");
+    }
+}
+
+#[test]
 fn an_old_link_does_not_acquire_the_reading_tail_or_new_heading() {
     // The exact old UR example ran pristine first. post_UR prints
     // its own target; neither the later source rows nor HEAD are labels.

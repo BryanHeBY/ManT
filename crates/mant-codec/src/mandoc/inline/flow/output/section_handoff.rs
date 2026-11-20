@@ -290,13 +290,17 @@ impl InlineBuilder {
             };
             move_previous_padding(&mut previous, &mut head, start);
         }
-        if handoff.shared_row == Some(SharedRow::HeadingPrefix) {
-            discard_shared_heading_row(&mut head, &mut false);
-        }
-        if handoff.shared_row == Some(SharedRow::PrintedTail) && heading_has_only_padding(&head) {
-            // A blank-only man SS tail can print with the preceding BODY.
-            // Keep its navigation identity without replaying a second row.
-            projection::retain_inline_identities(&mut head);
+        if handoff.shared_row == Some(SharedRow::HeadingPrefix)
+            || handoff.shared_row == Some(SharedRow::PrintedTail) && heading_has_only_padding(&head)
+        {
+            // `term_field()` printed this prefix on the live BODY row.
+            // Move its surviving source padding, consuming the redundant
+            // delimiter and leaving generated layout advances implicit.
+            previous.extend(take_shared_heading_padding(
+                &mut head,
+                &mut SharedHeadingPadding::default(),
+                false,
+            ));
         }
         let shares_literal_tail = handoff.shared_row == Some(SharedRow::UnprintedTail);
         if handoff.previous_literal && (rows > 0 || shares_literal_tail) {
@@ -334,40 +338,85 @@ impl super::super::InlineExecutionState {
     }
 }
 
-/// Consume the projection of the first accepted heading row. Transparent
-/// style and link wrappers do not delimit that row.
-fn discard_shared_heading_row(nodes: &mut Vec<Inline>, ended: &mut bool) {
+#[derive(Default)]
+struct SharedHeadingPadding {
+    ended: bool,
+    deferred_blank: bool,
+}
+
+/// Transfer authored whitespace from the accepted shared row. Style and
+/// link wrappers are transparent to the delimiter, but their contents
+/// keep the wrapper when they change output owners.
+fn take_shared_heading_padding(
+    nodes: &mut Vec<Inline>,
+    state: &mut SharedHeadingPadding,
+    inside_label: bool,
+) -> Vec<Inline> {
+    let mut padding = Vec::new();
     nodes.retain_mut(|node| {
-        if *ended {
+        if state.ended {
             return true;
         }
         match node {
             Inline::LineBreak { .. } => {
-                *ended = true;
+                state.ended = true;
                 false
             }
-            Inline::Strong { children } | Inline::Emphasis { children } => {
-                discard_shared_heading_row(children, ended);
+            Inline::Strong { children } => {
+                let moved = take_shared_heading_padding(children, state, inside_label);
+                if !moved.is_empty() {
+                    padding.push(Inline::Strong { children: moved });
+                }
                 !children.is_empty()
             }
-            Inline::Link { children, .. } => {
-                discard_shared_heading_row(children, ended);
-                true
+            Inline::Emphasis { children } => {
+                let moved = take_shared_heading_padding(children, state, inside_label);
+                if !moved.is_empty() {
+                    padding.push(Inline::Emphasis { children: moved });
+                }
+                !children.is_empty()
             }
-            Inline::Anchor { .. } => !super::is_private_output_marker(node),
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => {
+                let moved = take_shared_heading_padding(children, state, true);
+                if moved.is_empty() {
+                    return true;
+                }
+                padding.push(Inline::Link {
+                    target: target.clone(),
+                    title: title.clone(),
+                    children: moved,
+                });
+                !children.is_empty()
+            }
+            Inline::Anchor { .. } => {
+                if super::deferred_blanks::projected_blank_count(node).is_some() {
+                    state.deferred_blank = true;
+                }
+                !super::is_private_output_marker(node)
+            }
             Inline::Text { value } | Inline::Code { value }
                 if value.chars().all(char::is_whitespace) =>
             {
+                let deferred_blank = std::mem::take(&mut state.deferred_blank);
+                if !value.is_empty() && (deferred_blank || inside_label || value.contains('\u{a0}'))
+                {
+                    padding.push(node.clone());
+                }
                 false
             }
             _ => {
                 // A source recovery spelling may carry reading content
                 // without native ink. Leave its projection intact.
-                *ended = true;
+                state.ended = true;
                 true
             }
         }
     });
+    padding
 }
 
 fn heading_has_only_padding(head: &[Inline]) -> bool {
