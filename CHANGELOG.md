@@ -187,6 +187,13 @@ that crate was not published for that change.
 - Use accepted `Ev` operands to distinguish an environment name, its value,
   and its annotation. Retain declaration names through nested `Eo`/`Ec`
   annotations with matching visible marks and native bodies.
+- Preserve overwritten glyph and link ownership when another roff word
+  appends an editable break marker. Keep the hard rows accepted by the same
+  field in text, Markdown readback, search and the reader.
+- Keep complete mdoc flag assignments with comparison signs, literal
+  connectors before enclosure closers, path roots, MIME parameters and
+  globs. Keep relative paths after explanatory text from extending the
+  preceding word's declaration proof.
 - Keep link labels, addresses, and styled descriptions in their executed
   declaration operands. Their punctuation cannot introduce extra names.
 - Preserve the exact fragment of an argument-less mdoc `Tg` when a user
@@ -361,6 +368,10 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Check generated list markers independently from equal authored words,
+  verify short-display punctuation and retained hard rows, and locate each
+  proved equation at its table cell. Structure audit v25 rechecks stale
+  ledgers and preserves human review notes.
 - Check mixed definition terms in execution order, with independent evidence
   for repeated words, Unicode spacing, literal rows and column equations.
   Report partial term evidence and ambiguous owners separately.

@@ -19,7 +19,7 @@ oracle.
 | Field | Meaning |
 | --- | --- |
 | `corpus`, `path`, `section`, `source_sha256` | Same exact decompressed-source identity used by `FIDELITY_AUDIT.csv` |
-| `profile_schema` | Structural checks that produced the row. A stale version triggers a new scan for the same source identity. |
+| `profile_schema` | Structural checks that produced the row. A stale version or a failed scan triggers a new scan for the same source identity. |
 | `scan_status` | Latest automatic result: `clean`, `review`, or `hard-failure` |
 | `review_status` | Human disposition: `not-required`, `pending`, `false-positive`, `confirmed-open`, or `confirmed-fixed` |
 | `note` | Reason for the human conclusion and any focused regression |
@@ -30,7 +30,7 @@ mapping. A `review` row is useful precisely because it may identify an
 unanticipated topology loss; inspect source, AST/IR JSON, and both ManT text
 renderers before deciding whether to add a Rust regression.
 
-## What v5 verifies
+## Structural checks
 
 The profiler retains compact topology signatures in the JSON report. An mdoc
 `Bl` is matched to the IR container at the same source line and must retain its
@@ -121,12 +121,13 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v16` successful page response requires
-`ordinalCasesForReview`, `literalDisplaysForReview`, and
+The `mant.roff-structure-profile/v25` successful page response requires
+`ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
-evidence. Incomplete observations fail validation. A pure alias retains its
-own redirect identity.
+evidence. Incomplete observations fail validation. Rescanning a source keeps
+its recorded human disposition and notes. A pure alias retains its own
+redirect identity.
 
 List, equation and table topology records are validated on both sides. Native
 coordinates, item counts, row indexes and spans require nonboolean integers.
@@ -232,12 +233,16 @@ definition headings also occupy their source occurrences. When the native
 list handler skips an item HEAD, arguments retained in the AST for source
 diagnostics do not change formatting state or advance an occurrence. An
 executed HEAD contributes its nested lists, column rows, literal rows and
-equations to one ordered term witness. The witness consumes each word
-occurrence once and keeps non-ASCII spaces in the authored token. Proven
+equations to one ordered term witness. The witness consumes generated list
+markers and equal authored words separately, includes punctuation beside a
+short display's BODY, and checks proved hard rows within the same term. It
+keeps non-ASCII spaces in the authored token. Proven
 ordinal recovery does not occupy any definition-term occurrence. Partial
 source evidence and ambiguous owner positions are reported for review.
-Standalone block and row obligations apply in the BODY. An inline
-equation in a column item is checked at its table cell. Review records
+Standalone block and row obligations apply in the BODY. An executed equation
+in a column item carries the enclosing table's native coordinates and
+occurrence, plus its row and cell. If source evidence identifies only the
+table context, the cell remains in review. Review records
 may skip occurrences and may be in any order.
 A repeated display coordinate and occurrence is invalid.
 

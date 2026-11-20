@@ -920,12 +920,14 @@ operands, such as `Fl a= Ns Pa / Ns Pa foo`. A real word separator ends the
 path. In a detached argument group, a typed argument can be joined to a
 literal `Li` alternative, as in `Ar opt | Li auto`. Connectors such as
 `|`, `=`, and a touching `@` join the operands at their own group level.
-Punctuation inside an `Ar` operand stays in that operand. A connector or
-unmatched bracket at its edge can join a touching operand. A leading
-slash after a real space starts a new value, including when a later macro
-supplies the rest of the pathname. A nested group must prove its own value
-before contributing to its parent. A single `Fl` can spell a complete
-assignment such as `-std=c++17` or `-a=*.conf`. Native `Op`
+Punctuation inside an `Ar` operand stays in that operand, including comparison
+signs in `size<1024` and `pkg>=2`. An edge connector can join a touching
+operand. A generated enclosure closer leaves a literal trailing connector
+in place, as in `[login@]`. A leading slash or relative path after a real
+space starts a new value, including when a later macro supplies its suffix.
+A nested group must prove its own value before contributing to its parent.
+A single `Fl` can spell a complete assignment such as `-std=c++17`,
+`-a=/`, `-a=[0-9]*`, or `-a=text/plain;charset=utf-8`. Native `Op`
 and `Oo` can also supply optional values such as `[host]`. An authored
 bracket in the assignment's `Fl` text can enclose later operands, as in
 `--skip=[-][sample|hh:mm:ss.ss]`. A group describing a default or other
