@@ -188,8 +188,25 @@ impl<'a> HeadView<'a> {
                 .operand(offset)
                 .is_some_and(|operand| match operand.role {
                     #[cfg(feature = "roff")]
-                    role if role.is_description() => !self.style(offset).emphasis,
+                    role if role.is_description() => {
+                        !(self.style(offset).emphasis
+                            || role == NativeOperandRole::Description
+                                && self.is_assignment_separator(offset, operand))
+                    }
                     _ => false,
                 })
+    }
+
+    #[cfg(feature = "roff")]
+    fn is_assignment_separator(&self, offset: usize, operand: &NativeOperand) -> bool {
+        // A separately executed Li can supply the assignment operator
+        // between Fl and Ar (mdoc_term.c::termp_li_pre). Arbitrary Li
+        // suffixes still require independent evidence for the whole form.
+        if self.text[operand.bytes.clone()].trim() != "=" || self.text.as_bytes()[offset] != b'=' {
+            return false;
+        }
+        let argument = self.text[operand.bytes.end..].trim_start_matches([' ', '\t']);
+        self.operand(self.text.len() - argument.len())
+            .is_some_and(|operand| matches!(operand.role, NativeOperandRole::Placeholder { .. }))
     }
 }

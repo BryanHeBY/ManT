@@ -5,6 +5,29 @@ use super::support::{check_head, explain, explanation_ranges, load, roundtrip};
 
 const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n";
 
+#[test]
+fn literal_assignment_separator_preserves_the_complete_native_option_form() {
+    // CVS termp_fl_pre and termp_li_pre print the same assignment for a
+    // literal equals operand and a bare equals sign followed by Ar.
+    for section in ["DESCRIPTION", "OPTIONS"] {
+        for (option, name) in [("Fl a", "-a"), ("Fl Fl allowed-ips", "--allowed-ips")] {
+            for equals in ["=", r"Li \&="] {
+                let source = format!(
+                    "{HEADER}.Nd sample\n.Sh {section}\n.Bl -tag -width Ds\n.It {option} Ns {equals} Ns Ar x Ns / Ns Ar y Ns Op , Ns Ar z\nOwner proof.\n.El\n"
+                );
+                check(
+                    &source,
+                    &format!("{name}=x/y[,z]"),
+                    &[name],
+                    &["x", "y", "z"],
+                    "Owner proof.",
+                    9,
+                );
+            }
+        }
+    }
+}
+
 pub(super) fn check(
     source: &str,
     form: &str,
