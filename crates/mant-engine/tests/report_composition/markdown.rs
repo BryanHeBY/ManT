@@ -46,6 +46,43 @@ fn section(title: &str, blocks: Vec<Block>, children: Vec<Section>) -> Section {
 }
 
 #[test]
+#[cfg(feature = "roff")]
+fn excerpt_breadcrumb_closes_emphasis_before_authored_terminal_padding() {
+    use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+
+    // CVS roff_term_pre_sp() accepts both label rows. The exact sources
+    // with \~ or \0 keep their final padding in the UTF-8 device output.
+    let start = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd label probe\n.Sh DESCRIPTION\n.Bl -tag -width Ds\n.It Xo\n.No \"[FIRST]\"\n.sp 1\n";
+    for tail in [r"SECOND\~", r"SECOND\0"] {
+        let source = format!("{start}.No \"{tail}\"\n.Xc\nbody\n.El\n");
+        let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let excerpt =
+            select_excerpt(&loaded, &[mant_protocol::ContentSelector::path("2/e1")]).unwrap();
+        let markdown = render_excerpt_markdown(&excerpt);
+        let mut events = Parser::new(&markdown)
+            .skip_while(|event| !matches!(event, Event::Start(Tag::Emphasis)));
+        assert_eq!(events.next(), Some(Event::Start(Tag::Emphasis)));
+        let mut label = String::new();
+        let mut closed = false;
+        for event in events.by_ref() {
+            match event {
+                Event::Text(text) | Event::Code(text) => label.push_str(&text),
+                Event::End(TagEnd::Emphasis) => {
+                    closed = true;
+                    break;
+                }
+                other => panic!("unclosed breadcrumb: {other:?}\n{markdown}"),
+            }
+        }
+        assert!(closed);
+        // The breadcrumb flattens the two native row boundaries to spaces.
+        assert_eq!(label, "Outline 2/e1: DESCRIPTION → [FIRST]  SECOND");
+        assert!(matches!(events.next(), Some(Event::Text(text)) if text.as_ref() == "\u{a0}"));
+        assert_eq!(events.next(), Some(Event::End(TagEnd::Paragraph)));
+    }
+}
+
+#[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let query = ResolvedContent {
         address: None,

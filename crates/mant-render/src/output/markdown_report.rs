@@ -146,6 +146,8 @@ fn outline_list(nodes: &[OutlineNode], depth: usize) -> String {
 }
 
 fn selection_context(selection: &ExcerptSelection) -> String {
+    use std::fmt::Write;
+
     let trail = selection.outline();
     let breadcrumb = trail
         .ancestors
@@ -156,7 +158,15 @@ fn selection_context(selection: &ExcerptSelection) -> String {
         ))))
         .collect::<Vec<_>>()
         .join(" → ");
-    format!("*Outline {}: {breadcrumb}*", code_span(trail.path()))
+    // CommonMark cannot close emphasis after whitespace, even NBSP.
+    // Encode the trailing characters outside the delimiter so document
+    // assembly and Markdown line trimming cannot consume them either.
+    let label = breadcrumb.trim_end();
+    let mut context = format!("*Outline {}: {label}*", code_span(trail.path()));
+    for ch in breadcrumb[label.len()..].chars() {
+        write!(context, "&#{};", u32::from(ch)).expect("writing to a String");
+    }
+    context
 }
 
 fn document_label(title: &str, section: Option<&str>) -> String {
