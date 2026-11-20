@@ -16,6 +16,88 @@
 use super::{FieldBuffer, FieldCell};
 
 #[test]
+fn rewound_word_entry_walks_over_the_invisible_tail_before_filling() {
+    use super::{FillTargets, FlushReceipt};
+    use crate::mandoc::inline::{
+        Font, FontState,
+        flow::native_slots::{ReplayDomain, SlotEntry},
+        text_execution::{
+            TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
+            parse_roff_text_with_zero_advance,
+        },
+    };
+    use crate::mandoc::roff_escape::WordSpace;
+
+    // Fixed term.c::bufferc(), encode1() and term_flushln() retain the
+    // NBRZW in slot 12 and accept one device field across both markers.
+    let mut buffer = FieldBuffer::default();
+    let mut font = FontState::new();
+    let mut zero = ZeroAdvanceState::new();
+    for (index, (style, source, blanks)) in [
+        (Font::Strong, r"\zC\pD\zJ", 0),
+        (Font::Regular, r"\&\h'-2n'\pF", 1),
+        (Font::Emphasis, "H", 1),
+        (Font::Regular, r"\h'-1n'X", 0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let slot_entry = SlotEntry {
+            prior_input: !buffer.is_empty(),
+            domain: ReplayDomain::Filled,
+            automatic_blanks: blanks,
+            device_tail: buffer.device_tail(),
+            prefix: buffer.field_prefix(blanks, false, true),
+            ..SlotEntry::default()
+        };
+        font.select(style);
+        zero.set_native_word_owner(index as u64, true);
+        let executed = parse_roff_text_with_zero_advance(
+            source,
+            TextExecutionContext {
+                font: &mut font,
+                zero_advance: &mut zero,
+                defer_leading_blanks: false,
+                line_width_units: 78 * 24,
+                slot_entry,
+                table_field_units: None,
+                table_leading_blanks: 0,
+                policy: TextExecutionPolicy {
+                    recognize_generated_references: false,
+                    record_native_cells: true,
+                    field_authoritative: true,
+                    word_space: WordSpace::Breakable,
+                },
+            },
+        );
+        buffer.begin_word(blanks == 0, false);
+        buffer.apply_writes(&executed.native_writes);
+        if index == 1 {
+            assert!(buffer.has_retained_word_cursor());
+            assert_eq!(buffer.cells().last(), Some(&FieldCell::ZeroWidthGraph));
+        }
+    }
+    assert_eq!(buffer.cells().len(), 16);
+    assert_eq!(buffer.cells()[12], FieldCell::ZeroWidthGraph);
+    assert!(matches!(
+        buffer.cells()[13],
+        FieldCell::Graph { text: '_', .. }
+    ));
+    let FlushReceipt::Accepted { passes, .. } = buffer.flush_receipt(
+        FillTargets {
+            first: 78 * 24,
+            rest: 78 * 24,
+            unbounded: true,
+        },
+        false,
+    ) else {
+        panic!("expected one accepted native pass");
+    };
+    assert_eq!(passes.len(), 1);
+    assert_eq!((passes[0].start, passes[0].end), (0, 16));
+}
+
+#[test]
 fn rewind_treats_raw_and_deferred_spaces_as_the_same_native_write() {
     use super::{DeferredSourceBlank, EntryRewind, FieldWrite, FillTargets, FlushReceipt};
     use crate::mandoc::inline::Font;

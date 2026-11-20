@@ -7,6 +7,79 @@ const REPLAY_HEADER: &str =
     ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
 
 #[test]
+fn replayed_automatic_spacing_traverses_the_existing_native_slot() {
+    // term.c::bufferc() advances over an occupied cell without replacing
+    // it with SP. Both fixed devices accept one pass and print DFX.
+    let source = format!(
+        "{REPLAY_HEADER}{}\n",
+        r#".Sy "\zC\pD\zJ" No "\&\h'-2n'\pF" Em "H" Ns No "\h'-1n'X""#
+    );
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for document in [&content, &restored] {
+        assert_eq!(
+            description_rows(&mant_render::render_query_man(document), &source),
+            ["DFX"]
+        );
+        for (word, total) in [("DFX", 1), ("DF", 0), ("X", 0)] {
+            let hits = mant_query::search_query(
+                document,
+                &SearchQuery {
+                    pattern: word.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(hits.total, total, "{word}: {markdown}");
+        }
+    }
+}
+
+#[test]
+fn replay_only_carries_the_cursor_of_a_proved_native_suffix() {
+    // term_fill() accepts these intervals after the final overwrite. The
+    // first, third and fourth keep a real break between their device rows.
+    for (body, rows) in [
+        (
+            r#".No "A\zB" Em "\zCD" No "\:\h'-3n'\pF" No "\f[BI]H\fP" Ns Em "\h'-3n'\&X""#,
+            &["ABF", "X"][..],
+        ),
+        (
+            r#".No "A\zB" Ns Sy "\zCD" No "\&\h'-4n'\pF" No "H J" Ns Em "\h'-4n'\zWX""#,
+            &["ADFX"],
+        ),
+        (
+            r#".Sy "AB" Sy "\zC\pD\p" Em "\h'-5n'\pF" Em "\^H" Ns Em "\h'-3n'\zWX""#,
+            &["AB F", "X"],
+        ),
+        (
+            r#".Sy "\zA" Ns Em "\zCD" Ns Em "\h'-5n'\pF" Em "\:H" Ns Sy "\h'-1n'X""#,
+            &["FD", "X"],
+        ),
+    ] {
+        let source = format!("{REPLAY_HEADER}{body}\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for document in [&native, &readback] {
+            assert_eq!(
+                description_rows(&mant_render::render_query_man(document), &source),
+                rows,
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
 fn a_replayed_styled_suffix_keeps_the_earlier_cover() {
     // Pinned term.c::encode1() paints D over C, then ESCAPE_HORIZ moves
     // the cursor without truncating the stored copies. The fixed ASCII

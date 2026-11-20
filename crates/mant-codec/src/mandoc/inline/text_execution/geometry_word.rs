@@ -803,7 +803,9 @@ fn execute_seed<'a>(
     // The bounded overlay knows both col and lastcol. A marker in this
     // operand does not reset that cursor (term.c:659-660,678-714).
     // Carry the exact cursor if the next word must still write there.
-    let live_cursor = seed.prefix_start > 0 && seed.placement.slots.extent_and_retreat().1 > 0;
+    let slots = &seed.placement.slots;
+    let live_cursor = slots.cursor_before_end()
+        && (seed.prefix_start > 0 || seed.earlier != 0 && slots.cursor_before_invisible_tail());
     // A placed glyph can still be waiting under BACKBEFORE after a marker.
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
@@ -823,7 +825,7 @@ fn execute_seed<'a>(
         seed,
         retain_suffix,
         include_advances,
-        matches!(marker, Some(MarkerReplay::AwaitFieldFlush)),
+        matches!(marker, Some(MarkerReplay::AwaitFieldFlush)) || has_marker && live_cursor,
     )?;
     *context.font = font;
     context.zero_advance.take_armed();

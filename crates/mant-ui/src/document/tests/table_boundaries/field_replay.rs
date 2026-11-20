@@ -74,6 +74,11 @@ fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
     // before a word is available for rendering or search.
     let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
     for (word, expected, absent) in [
+        (
+            r#".Sy "\zC\pD\zJ" No "\&\h'-2n'\pF" Em "H" Ns No "\h'-1n'X""#,
+            "DFX",
+            "DF X",
+        ),
         (r#".Sy A No "\&" No "\z\o''T""#, "A T", "AT"),
         (r#".No "P\zQ" No "\&" Ns No "\z\o''T""#, "PQT", "PQ T"),
         (r#".No PM Ns No "\h'-1n'T""#, "PT", "PMT"),

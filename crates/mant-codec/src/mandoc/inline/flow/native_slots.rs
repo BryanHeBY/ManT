@@ -328,6 +328,29 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
+    /// A detached cursor can still traverse a tail of controls skipped by
+    /// `term_field()`. In particular, `bufferc()` must walk past a buffered
+    /// NBRZW instead of appending a separator after it at lastcol.
+    pub(in crate::mandoc::inline) fn cursor_before_invisible_tail(&self) -> bool {
+        self.cursor_before_end()
+            && self
+                .runs
+                .values()
+                .rev()
+                .take_while(|run| run.end > self.cursor)
+                .all(|run| {
+                    matches!(
+                        run.pattern,
+                        Pattern::Plain(
+                            FieldCell::ZeroWidthGraph
+                                | FieldCell::BreakMarker
+                                | FieldCell::Breakpoint
+                                | FieldCell::TabReference
+                        )
+                    )
+                })
+    }
+
     /// Padding written by `tbl_number()` before the actual cell word.
     pub(in crate::mandoc::inline) fn prepend_fixed_blanks(&mut self, count: usize) {
         self.advance(count, FieldCell::NonBreakingBlank, None);
