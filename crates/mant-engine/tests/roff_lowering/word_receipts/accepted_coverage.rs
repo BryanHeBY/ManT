@@ -7,6 +7,71 @@ const REPLAY_HEADER: &str =
     ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
 
 #[test]
+fn appending_a_marker_keeps_earlier_slot_owners_available_to_the_next_word() {
+    // Fixed term_field() paints one accepted interval for the first two
+    // variants and two intervals for the third. term_word() can overwrite
+    // the last marker without restoring a covered glyph or its link.
+    for (body, rows, linked) in [
+        (
+            r#".Sy "\zC\pD\zJ" No "\&\h'-2n'\pF" Ns No "H\p" Ns No "\h'-1n'X""#,
+            &["DFHX"][..],
+            false,
+        ),
+        (
+            r#".Sy "\z\X'tty: link https://c.test'C\X'tty: link'\pD\zJ" No "\&\h'-2n'\pF" Ns No "H\p" Ns No "\h'-1n'\X'tty: link https://x.test'X\X'tty: link'""#,
+            &["DFHX"],
+            true,
+        ),
+        (
+            r".Em D\zJ No \h'-3n'\&\pF Em H\p Ns No \h'-1n'X",
+            &["DF", "HX"],
+            false,
+        ),
+    ] {
+        let source = format!("{REPLAY_HEADER}{body}\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &restored] {
+            assert_eq!(
+                description_rows(&mant_render::render_query_man(content), &source),
+                rows,
+                "{source}"
+            );
+            for word in ["DFHX", "DF", "HX", "CDJFHX"] {
+                let hits = mant_query::search_query(
+                    content,
+                    &SearchQuery {
+                        pattern: word.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(
+                    hits.total,
+                    u32::from(rows.contains(&word)),
+                    "{word}: {source}"
+                );
+            }
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            let links: Vec<_> = linked
+                .then(|| ("https://x.test".into(), "X".into()))
+                .into_iter()
+                .collect();
+            assert_eq!(labels.0, links, "{source}");
+        }
+    }
+}
+
+#[test]
 fn replayed_automatic_spacing_traverses_the_existing_native_slot() {
     // term.c::bufferc() advances over an occupied cell without replacing
     // it with SP. Both fixed devices accept one pass and print DFX.

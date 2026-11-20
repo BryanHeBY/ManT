@@ -68,6 +68,36 @@ fn assert_visible_slots(source: &str, probe: &str, want: usize, target: Option<&
 }
 
 #[test]
+fn recorded_slot_covers_and_hard_rows_reach_the_reader() {
+    // The fixed ASCII and UTF-8 devices agree on DFHX and on DF / HX.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+    let linked = r#".Sy "\z\X'tty: link https://c.test'C\X'tty: link'\pD\zJ" No "\&\h'-2n'\pF" Ns No "H\p" Ns No "\h'-1n'\X'tty: link https://x.test'X\X'tty: link'""#;
+    let link = LinkTarget::External(ExternalUri::parse("https://x.test").unwrap());
+    let source = format!("{header}{linked}\n.Pp\nDONE.\n");
+    assert_visible_slots(&source, "X", 1, Some(&link));
+    assert_visible_slots(&source, "CDJFHX", 0, None);
+    assert_visible_slots(&source, "DFH", 1, None);
+
+    let split = r".Em D\zJ No \h'-3n'\&\pF Em H\p Ns No \h'-1n'X";
+    let source = format!("{header}{split}\n.Pp\nDONE.\n");
+    let view = DocumentView::new(&restored(&source));
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let [ref first] = rendered.search("DF")[..] else {
+            panic!("DF must survive")
+        };
+        let [ref second] = rendered.search("HX")[..] else {
+            panic!("HX must survive")
+        };
+        assert_eq!(second.row, first.row + 1);
+        assert_eq!(rendered.search("DFHX").len(), 0);
+        let buffer = paint(&rendered, width);
+        assert_eq!(painted(&buffer, first.row, 0, width.into()).trim(), "DF");
+        assert_eq!(painted(&buffer, second.row, 0, width.into()).trim(), "HX");
+    }
+}
+
+#[test]
 fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
     // Fixed terminal profiles agree on the body row after DESCRIPTION.
     // term_word() applies the retreat and term_fill() consumes the gap

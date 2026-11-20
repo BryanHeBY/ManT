@@ -804,14 +804,24 @@ fn execute_seed<'a>(
     // operand does not reset that cursor (term.c:659-660,678-714).
     // Carry the exact cursor if the next word must still write there.
     let slots = &seed.placement.slots;
+    let whole_field = seed.prefix_start == 0 && seed.earlier != 0;
     let live_cursor = slots.cursor_before_end()
-        && (seed.prefix_start > 0 || seed.earlier != 0 && slots.cursor_before_invisible_tail());
+        && (seed.prefix_start > 0 || whole_field && slots.cursor_before_invisible_tail());
     // A placed glyph can still be waiting under BACKBEFORE after a marker.
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
     let pending_glyph = seed.placement.slots.pending_owner().is_some();
+    // Appending a word with a trailing marker preserves the earlier raw
+    // slots and covers. A later motion can address the new marker too.
+    let appended_marker = seed.earlier != 0
+        && matches!(events.last(), Some(RoffInlineEvent::LineBreak))
+        && !events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::HorizontalMotion { .. }));
     let retain_suffix = context.policy.field_authoritative
-        && (!has_marker || marker.is_some() || live_cursor || pending_glyph);
+        && (!has_marker || marker.is_some() || live_cursor || pending_glyph || appended_marker);
+    let editable_marker =
+        matches!(marker, Some(MarkerReplay::AwaitFieldFlush)) || has_marker && live_cursor;
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
@@ -821,12 +831,7 @@ fn execute_seed<'a>(
         // carried forward at the end of that earlier word.
         return Err(PriorSlotEdit::Unresolved);
     }
-    let placed = PlacedWord::prepare(
-        seed,
-        retain_suffix,
-        include_advances,
-        matches!(marker, Some(MarkerReplay::AwaitFieldFlush)) || has_marker && live_cursor,
-    )?;
+    let placed = PlacedWord::prepare(seed, retain_suffix, include_advances, editable_marker)?;
     *context.font = font;
     context.zero_advance.take_armed();
     word.source_continuation = continuation;
