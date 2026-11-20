@@ -101,7 +101,7 @@ fn claim_cells(
         let physical = cells.get(path).map_or(&[][..], Vec::as_slice);
         if !plan.complete {
             if !claim_known_prefix(plan, physical, matched) {
-                review_partial_alignment(plan, physical, expected, &mut uncertain, violations);
+                bound_unresolved_cell(plan, physical, expected, &mut uncertain, violations);
             }
         } else if physical.len() == plan.rows.len()
             && plan
@@ -123,7 +123,7 @@ fn claim_cells(
                 violations,
             );
         } else {
-            review_unproved_alignment(plan, physical, expected, &mut uncertain, violations);
+            bound_unresolved_cell(plan, physical, expected, &mut uncertain, violations);
         }
     }
     // An unknown range is reported as source Review. An empty cell or a
@@ -162,14 +162,14 @@ fn claim_known_prefix(
     true
 }
 
-fn review_partial_alignment(
+fn bound_unresolved_cell(
     plan: &super::rows::CellPlan,
     physical: &[(&str, bool)],
     expected: &SourceDisplays,
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
-    // A shifted known row can match anywhere in the unknown cell. Give
+    // A shifted known row can match anywhere in an unaligned cell. Give
     // each owner the entire cell's literal capacity to bound its loss,
     // then bound the full cell separately without reusing a witness.
     let mut literal = BTreeMap::new();
@@ -263,46 +263,6 @@ fn claim_after_row_edits(
         let total = witnesses.total.label();
         violations.push(format!(
             "literal-displays: {count} missing row(s) among column display candidates {locations}; cell loss {total} row(s)"
-        ));
-    }
-}
-
-fn review_unproved_alignment(
-    plan: &super::rows::CellPlan,
-    physical: &[(&str, bool)],
-    expected: &SourceDisplays,
-    uncertain: &mut BTreeSet<usize>,
-    violations: &mut Vec<String>,
-) {
-    if physical.iter().all(|(_, literal)| !literal) {
-        // No observed literal row can witness any expected display.
-        return;
-    }
-    // Text matches alone cannot certify a greedy prefix or suffix:
-    // the same ink may have survived under a different source owner.
-    let candidates = plan
-        .rows
-        .iter()
-        .filter_map(|row| row.owner)
-        .collect::<BTreeSet<_>>();
-    report_unresolved(candidates, expected, uncertain, violations);
-}
-
-fn report_unresolved(
-    candidates: BTreeSet<usize>,
-    expected: &SourceDisplays,
-    uncertain: &mut BTreeSet<usize>,
-    violations: &mut Vec<String>,
-) {
-    if !candidates.is_empty() {
-        uncertain.extend(&candidates);
-        let locations = candidates
-            .into_iter()
-            .map(|id| display_identity(&expected.owners[id]))
-            .collect::<Vec<_>>()
-            .join(", ");
-        violations.push(format!(
-            "literal-displays: unresolved column slot alignment for candidates {locations}"
         ));
     }
 }

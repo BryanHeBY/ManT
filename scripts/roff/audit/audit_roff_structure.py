@@ -516,12 +516,17 @@ def literal_source_reviews(records: object) -> list[LiteralDisplaySourceReview] 
     if not isinstance(records, list):
         return None
     reviews = []
+    identities = set()
     for record in records:
         if (not isinstance(record, dict)
                 or not all(is_nonnegative_integer(record.get(key))
                            for key in ("line", "column", "occurrence"))
                 or record["occurrence"] == 0 or "cell" not in record):
             return None
+        identity = (record["line"], record["column"], record["occurrence"])
+        if identity in identities:
+            return None
+        identities.add(identity)
         cell = record["cell"]
         if cell is not None:
             keys = ("tableLine", "tableColumn", "tableOccurrence", "row", "column")

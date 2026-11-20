@@ -639,6 +639,7 @@ fn column_edit_budgets_never_make_equal_owners_more_certain() {
             assert!(errors[0].starts_with("literal-displays: 8 missing row(s)"));
         } else {
             assert!(errors[0].starts_with("literal-displays: unresolved column slot alignment"));
+            assert!(errors[0].ends_with("; cell loss 9..=10 row(s)"));
         }
     }
     for slots in [7_280, 7_281] {
@@ -770,6 +771,113 @@ fn expanded_display_reviews_identify_the_source_occurrence_and_column() {
         (8, 2, 1)
     );
     assert_eq!((cell.row, cell.column), (1, 1));
+}
+
+#[test]
+fn expanded_tables_have_page_wide_occurrences_across_parent_scopes() {
+    // In pinned CVS the macro expands every Bl and Dl at .XX:2.
+    // termp_it_pre() still visits each table and BODY independently.
+    for group in ["same", "item", "section"] {
+        for count in [2, 3] {
+            for marked in [1, 2, 7] {
+                let mut body = if group == "item" {
+                    ".Bl -item\n".to_owned()
+                } else {
+                    String::new()
+                };
+                for i in 0..count {
+                    if group == "item" {
+                        body.push_str(".It\n");
+                    } else if group == "section" {
+                        body.push_str(&format!(".Ss TOP{i}\n"));
+                    }
+                    body.push_str(&format!(
+                        ".Bl -column aa bb\n.It MARK{i} Ta B\n.Dl WORD{i}\n"
+                    ));
+                    if marked & (1 << i) != 0 {
+                        body.push_str(".ta 3n\n");
+                    }
+                    body.push_str(".El\n");
+                }
+                if group == "item" {
+                    body.push_str(".El\n");
+                }
+                let source = format!("{HEAD}.de XX\n{body}..\n.XX\n{TAIL}");
+                let call = source.lines().position(|line| line == ".XX").unwrap() as u32 + 1;
+                let (native, topology, document) = parsed_structure(&source);
+                assert_eq!(missing(&native, &topology, &document), 0, "{source}");
+                let actual = native.literal_display_reviews.iter().map(|review| {
+                    let cell = review.cell.unwrap();
+                    (
+                        (review.line, review.column, review.occurrence),
+                        (cell.table_line, cell.table_column, cell.table_occurrence),
+                        (cell.row, cell.column),
+                    )
+                });
+                let expected = (0..count)
+                    .filter(|&i| marked & (1 << i) != 0)
+                    .map(|i| ((call, 2, i + 1), (call, 2, i + 1), (0, 1)));
+                assert_eq!(
+                    actual.collect::<Vec<_>>(),
+                    expected.collect::<Vec<_>>(),
+                    "{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn complete_and_partial_cells_keep_loss_bounds_at_both_edit_limits() {
+    // CVS termp_it_pre and termp_bd_pre put B and all the literal rows
+    // in the same cell. The terminal, tree and HTML keep the same rows
+    // when a trailing .ta prevents the auditor from proving the full plan.
+    let prefix = format!("{HEAD}.Bl -column aaa bbb\n.It A Ta B\n.Bd -literal -compact\n");
+    for count in [8, 9, 10, 3_853, 3_854] {
+        for distinct in [false, true] {
+            let words: Vec<_> = (0..count)
+                .map(|i| {
+                    if distinct {
+                        format!("WORD{i}")
+                    } else {
+                        "SAME".into()
+                    }
+                })
+                .collect();
+            let text = words.join("\n");
+            for extra in ["", ".ta 3n\n"] {
+                let source = format!("{prefix}{text}\n.Ed\n{extra}.El\n{TAIL}");
+                let (native, topology, document) = parsed_structure(&source);
+                assert!(compare(&native, &topology, &document).is_empty());
+                let deletions = if count < 20 {
+                    [count - 1, count]
+                } else {
+                    [1, 2]
+                };
+                for removed in deletions {
+                    let mut mutated = document.clone();
+                    for i in (count - removed..count).rev() {
+                        replace_column_payload_at(&mut mutated, i + 1, &words[i], "");
+                    }
+                    let errors: Vec<_> = compare(&native, &topology, &mutated)
+                        .into_iter()
+                        .filter(|error| error.starts_with("literal-displays:"))
+                        .collect();
+                    assert_eq!(errors.len(), 1, "{count}/{extra}: {errors:?}");
+                    let detail = &errors[0];
+                    let exact = format!("({removed} missing rows)");
+                    let lower_bound = format!("; cell loss {removed}..=");
+                    assert!(
+                        detail.contains(&exact)
+                            || detail.contains(&lower_bound)
+                            || removed == 1
+                                && detail.starts_with("literal-displays: missing sourced block"),
+                        "{count}/{extra}/{removed}: {errors:?}"
+                    );
+                }
+            }
+        }
+    }
 }
 
 #[test]

@@ -185,9 +185,16 @@ class AuditProfileWireTests(unittest.TestCase):
         self.assertIsNone(second.cell)
         for invalid in (None, [[17, 2]], [{**records[0], 'occurrence': 0}],
                         [{**records[0], 'cell': {**cell, 'row': True}}],
-                        [{'line': 17, 'column': 2, 'occurrence': 1}]):
+                        [{'line': 17, 'column': 2, 'occurrence': 1}],
+                        [records[0], records[0]],
+                        [records[0], {**records[0], 'cell': {**cell, 'row': 3}}],
+                        [records[0], {**records[0], 'cell': None}]):
             response['literalDisplaysForReview'] = invalid
             self.assertEqual(self.finding(structure, response).status, 'hard-failure')
+        response['literalDisplaysForReview'] = [{**records[1], 'occurrence': 5}, records[0]]
+        result = self.finding(structure, response)
+        self.assertEqual(result.status, 'review')
+        self.assertEqual([item.occurrence for item in result.source_review], [5, 1])
 
     def test_missing_origins_is_a_protocol_error_even_with_other_violations(self):
         response = structure_page()

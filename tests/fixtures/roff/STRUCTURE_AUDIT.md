@@ -215,16 +215,18 @@ neighbors also moved. A display row requires a literal observation and
 ordinary rows compete for identical observations. The audit reports the
 possible ranges of loss for the cell and for each display. A single deletion
 has a linear check that covers long cells. Beyond the alignment budget,
-unresolved display candidates remain in review. An unclassified tail also
-stays in source review when its verified prefix matches. If that prefix
-diverges, later literal observations can still be possible witnesses. V24
-compares their multiplicity with the verified display rows to bound each
-owner's loss and the whole cell's loss independently. Bounded edits with a
+unresolved display candidates remain in review. The audit compares literal
+row multiplicity with verified display rows to bound each owner's loss
+and the whole cell's loss independently. The same bounds apply to a
+partial cell whose known prefix diverges. An unclassified tail stays in
+source review when its verified prefix matches. Bounded edits with a
 complete cell still report exact alignment ranges. Each
 `literalDisplaysForReview` record names its source coordinates and its
 one-based occurrence at those coordinates. A display inside a column cell
-also reports the enclosing table's coordinates and occurrence with the
-zero-based row and column.
+also reports the enclosing column table's coordinates and page-wide
+occurrence with the zero-based row and column. Occurrences count tables
+across parent scopes. Review records may skip occurrences and may be in
+any order. A repeated display coordinate and occurrence is invalid.
 
 Build the profiler and scan the reproducible real fixtures:
 

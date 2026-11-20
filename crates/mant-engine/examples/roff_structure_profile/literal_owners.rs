@@ -64,6 +64,7 @@ struct SourceDisplay {
     occurrence: usize,
     origins: BTreeSet<LiteralOrigin>,
     path: Vec<ScopeOccurrence>,
+    cell: Option<LiteralReviewCell>,
     rows: usize,
     short: bool,
     pending_rows: BTreeMap<u32, String>,
@@ -89,21 +90,7 @@ pub(super) struct LiteralReviewCell {
 }
 
 impl LiteralDisplayReview {
-    fn new((line, column): Point, occurrence: usize, path: &[ScopeOccurrence]) -> Self {
-        let cell = path.windows(2).rev().find_map(|pair| {
-            let ScopeKind::ColumnCell { row, cell } = pair[1].scope.kind else {
-                return None;
-            };
-            debug_assert!(matches!(pair[0].scope.kind, ScopeKind::ColumnTable));
-            let (table_line, table_column) = pair[0].scope.point;
-            Some(LiteralReviewCell {
-                table_line,
-                table_column,
-                table_occurrence: pair[0].occurrence,
-                row,
-                column: cell,
-            })
-        });
+    fn new((line, column): Point, occurrence: usize, cell: Option<LiteralReviewCell>) -> Self {
         Self {
             line,
             column,
@@ -119,6 +106,7 @@ pub(super) struct SourceDisplays {
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
     display_occurrences: BTreeMap<Point, usize>,
+    table_occurrences: BTreeMap<Point, usize>,
     cells: BTreeMap<Vec<ScopeOccurrence>, CellPlan>,
     source_rows: Vec<(usize, String)>,
 }
@@ -135,7 +123,7 @@ fn enter_scope(path: &mut Vec<ScopeOccurrence>, scope: Scope, counts: &mut Scope
 }
 
 pub(super) fn record_source_displays(root: &Node, profile: &mut AstStructure) {
-    visit_native(root, &mut Vec::new(), None, profile);
+    visit_native(root, &mut Vec::new(), None, None, profile);
     profile.literal_displays = profile.literal_owners.owners.len();
 }
 
@@ -143,6 +131,7 @@ fn visit_native(
     node: &Node,
     path: &mut Vec<ScopeOccurrence>,
     mut display: Option<usize>,
+    cell: Option<LiteralReviewCell>,
     profile: &mut AstStructure,
 ) {
     if skips_source_children(node)
@@ -201,6 +190,7 @@ fn visit_native(
                         occurrence,
                         origins: BTreeSet::new(),
                         path: path.clone(),
+                        cell,
                         rows: pending_rows.len(),
                         short: node.macro_token.as_deref() != Some("Bd"),
                         pending_rows,
@@ -208,7 +198,7 @@ fn visit_native(
                 } else {
                     profile
                         .literal_display_reviews
-                        .push(LiteralDisplayReview::new(point, occurrence, path));
+                        .push(LiteralDisplayReview::new(point, occurrence, cell));
                 }
             }
         }
@@ -230,7 +220,7 @@ fn visit_native(
     }
     if node.kind != NodeKind::Table {
         for child in &node.children {
-            visit_native(child, path, display, profile);
+            visit_native(child, path, display, cell, profile);
         }
     }
     if kind.is_some() {
@@ -247,6 +237,15 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
     // CVS mdoc_it_pre() emits one <tr> per It and one <td> per BODY;
     // termp_it_pre() likewise uses the preceding BODY siblings as columns.
     let point = (node.line, node.column);
+    // The published locator has no parent path. Assign its ordinal across
+    // the source traversal, independent of the internal matching scopes.
+    let table_occurrence = profile
+        .literal_owners
+        .table_occurrences
+        .entry(point)
+        .or_default();
+    *table_occurrence += 1;
+    let table_occurrence = *table_occurrence;
     enter_native_scope(
         profile,
         path,
@@ -271,7 +270,19 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
                 },
             );
             let first_owner = profile.literal_owners.owners.len();
-            visit_native(body, path, None, profile);
+            visit_native(
+                body,
+                path,
+                None,
+                Some(LiteralReviewCell {
+                    table_line: point.0,
+                    table_column: point.1,
+                    table_occurrence,
+                    row,
+                    column: cell,
+                }),
+                profile,
+            );
             let owners = &profile.literal_owners.owners[first_owner..];
             if owners.iter().any(|owner| &owner.path == path) {
                 let plan = cell_plan(body, &profile.source_context, owners, first_owner, path);
@@ -285,7 +296,7 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
                             .push(LiteralDisplayReview::new(
                                 owner.opening,
                                 owner.occurrence,
-                                &owner.path,
+                                owner.cell,
                             ));
                     }
                 }
