@@ -167,10 +167,12 @@ fn zero_advance_links_follow_their_accepted_rows_in_paint_and_copy() {
             });
             assert_eq!(copy.lines().map(str::trim).collect::<Vec<_>>(), rows);
             let ink = if hit_cell.is_some() { "C" } else { "BD" };
-            let hit = rendered.search(ink);
-            assert_eq!(hit.len(), 1, "{body}: {ink}");
-            for column in hit[0].start_column..hit[0].end_column {
-                assert_eq!(rendered.link_target_at(hit[0].row, column), hit_cell);
+            let hits = rendered.search(ink);
+            let mut hits = hits.iter().filter(|hit| (start..=end).contains(&hit.row));
+            let hit = hits.next().expect("visible glyphs in the description body");
+            assert!(hits.next().is_none(), "{body}: {ink}");
+            for column in hit.start_column..hit.end_column {
+                assert_eq!(rendered.link_target_at(hit.row, column), hit_cell);
             }
         }
     }

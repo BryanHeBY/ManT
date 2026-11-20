@@ -28,14 +28,14 @@ fn read(old: &str) -> ResolvedContent {
 #[test]
 fn a_literal_reading_space_does_not_paint_a_second_completed_blank() {
     // The exact sources ran fixed CVS ASCII/UTF-8/HTML/tree/lint first.
-    // term_fill admits one/two NBRZW passes. The reading-only tail from
-    // term.c::ESCAPE_HORIZ is a distinct literal row; the old completion
-    // must not appear as a further blank. NBSP is an authored control.
-    for (old, completed) in [
-        ("ALPHA\\p \\p\\& \u{a0}", 1),
-        (r"ALPHA\p \p\& \h'1n'", 1),
-        (r"ALPHA\p \p\& \p\& \h'2n'\c", 2),
-        (LINKED, 1),
+    // term_fill admits one/two NBRZW passes. The reading-only HORIZ tail
+    // keeps its own literal row. The authored NBSP shares the row accepted
+    // by man_term.c::pre_SS, after the independently completed blank.
+    for (old, blank_rows, shared_padding) in [
+        ("ALPHA\\p \\p\\& \u{a0}", 1, true),
+        (r"ALPHA\p \p\& \h'1n'", 2, false),
+        (r"ALPHA\p \p\& \p\& \h'2n'\c", 3, false),
+        (LINKED, 2, false),
     ] {
         let mut app = App::new(&read(old));
         key(&mut app, KeyCode::Char('B'));
@@ -54,20 +54,22 @@ fn a_literal_reading_space_does_not_paint_a_second_completed_blank() {
             };
             let alpha = unique_row("ALPHA");
             let next = unique_row("NEXT");
-            assert_eq!(next, alpha + completed + 2, "{old} width {width}");
+            assert_eq!(next, alpha + blank_rows + 1, "{old} width {width}");
             assert_eq!(unique_row(BODY), next + 1, "{old} width {width}");
             for row in alpha + 1..next {
                 let (left, y) = viewport_cell(&app, row, 0);
-                let nonpadding: Vec<_> = (left..app.geometry.content.right())
-                    .map(|x| buffer[(x, y)].symbol())
-                    .filter(|symbol| *symbol != " ")
-                    .collect();
-                let expected = if row + 1 == next && old.ends_with('\u{a0}') {
-                    &["\u{a0}"][..]
-                } else {
-                    &[]
-                };
-                assert_eq!(nonpadding, expected, "{old} width {width}: row {row}");
+                assert!(
+                    (left..app.geometry.content.right()).all(|x| buffer[(x, y)].symbol() == " "),
+                    "{old} width {width}: row {row}"
+                );
+            }
+            if shared_padding {
+                let (left, y) = viewport_cell(&app, next, 0);
+                assert!(
+                    (left..app.geometry.content.right())
+                        .any(|x| buffer[(x, y)].symbol() == "\u{a0}"),
+                    "{old} width {width}: authored padding must share the heading row"
+                );
             }
         }
         key(&mut app, KeyCode::Char('/'));
@@ -128,7 +130,7 @@ fn markdown_keeps_the_literal_bytes_and_never_exports_a_second_gap() {
     for (old, literal, heading) in [
         (r"ALPHA\p \p\& \h'1n'", "ALPHA\n\n ", " NEXT"),
         (r"ALPHA\p \p\& \p\& \h'2n'\c", "ALPHA\n\n\n ", "NEXT"),
-        ("ALPHA\\p \\p\\& \u{a0}", "ALPHA\n\n\u{a0}", " NEXT"),
+        ("ALPHA\\p \\p\\& \u{a0}", "ALPHA\n", "\u{a0} NEXT"),
     ] {
         for options in [MarkdownOptions::default(), MarkdownOptions::ADDRESSABLE] {
             let mut input = read(old);
