@@ -91,7 +91,7 @@ impl InlinePublication {
                 if projected.len() != operand.bytes.len() {
                     lost_key |= operand.role == NativeOperandRole::ExplicitOption;
                     operand.role = match operand.role {
-                        NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => {
+                        NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder(_) => {
                             NativeOperandRole::Argument
                         }
                         role => role.without_complete_spelling(),

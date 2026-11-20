@@ -488,6 +488,50 @@ fn surviving_native_ink_owns_the_definition_name_and_its_body() {
 }
 
 #[test]
+fn argument_text_fragments_keep_their_native_parameter_scope() {
+    // CVS mdoc_macro.c::in_line allocates TEXT children under one Ar.
+    // The escaped closing delimiters below stay inside that element.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (argument, reading) in [
+            (r#"Ar "[source target]""#, "[source target]"),
+            (r"Ar [source target\&]", "[source target]"),
+            (r"Ar range(low high\&)", "range(low high)"),
+            (r"Ar map[(low high)\&]", "map[(low high)]"),
+            (r"Ar path[in Ns Ar dex\&]", "path[index]"),
+        ] {
+            assert_program_group(
+                section,
+                &format!("Nm alpha {argument}"),
+                &format!("alpha {reading}"),
+                &["alpha"],
+                &[],
+            );
+            assert_program_group(
+                section,
+                &format!("Nm alpha Op {argument}"),
+                &format!("alpha [{reading}]"),
+                &["alpha"],
+                &[],
+            );
+            assert_program_group(
+                section,
+                &format!("Nm alpha Cm dump Oo {argument} | Nm beta Oc"),
+                &format!("alpha dump [{reading} | beta]"),
+                &["alpha dump"],
+                &["beta"],
+            );
+            assert_program_group(
+                section,
+                &format!("Nm alpha {argument} | Nm beta"),
+                &format!("alpha {reading} | beta"),
+                &[],
+                &["alpha", "beta"],
+            );
+        }
+    }
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.

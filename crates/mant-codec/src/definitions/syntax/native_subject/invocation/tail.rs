@@ -46,21 +46,44 @@ impl InvocationTail {
         let mut state = ScopeScan::default();
         let mut cursor = span.start;
         let mut possible_pipeline = false;
-        for (index, operand) in operands.iter().enumerate() {
+        let mut operands = operands.iter().peekable();
+        while let Some(operand) = operands.next() {
             if operand.bytes.start >= span.end {
                 break;
             }
             if operand.bytes.end <= span.start {
                 continue;
             }
-            let end = operand.bytes.end.min(span.end);
+            let mut end = operand.bytes.end.min(span.end);
             if end <= cursor {
                 continue;
             }
             let start = operand.bytes.start.max(cursor);
             state.authored_text(&text[cursor..start]);
-            let word = text[start..end].trim();
             let role = operand.role;
+            if let NativeOperandRole::Placeholder(mut argument) = role {
+                // mdoc puts ordinary arguments in one Ar element even if
+                // it allocates multiple TEXT children (mdoc_macro.c::in_line).
+                // Tight adjacent Ar elements can also spell one token via Ns.
+                while let Some(next) = operands.peek() {
+                    let NativeOperandRole::Placeholder(id) = next.role else {
+                        break;
+                    };
+                    if next.bytes.start >= span.end
+                        || !text.get(end..next.bytes.start).is_some_and(|gap| {
+                            gap.is_empty()
+                                || id == argument
+                                    && gap.bytes().all(|ch| matches!(ch, b' ' | b'\t'))
+                        })
+                    {
+                        break;
+                    }
+                    argument = id;
+                    end = next.bytes.end.min(span.end);
+                    operands.next();
+                }
+            }
+            let word = text[start..end].trim();
             match role {
                 NativeOperandRole::EnclosureStart { body, parent } => {
                     state.malformed |= parent != state.native_body();
@@ -75,12 +98,12 @@ impl InvocationTail {
                 {
                     state.authored_text(word);
                 }
-                NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder => {
+                NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder(_) => {
                     state.argument();
                     // A bracket attached to Ar's spelling did not go
                     // through mdoc_isdelim(). Accepted edge glyphs can
                     // still enclose arguments in the visible invocation.
-                    if role == NativeOperandRole::Placeholder {
+                    if matches!(role, NativeOperandRole::Placeholder(_)) {
                         state.parameter_edges(word);
                     }
                 }
@@ -96,7 +119,7 @@ impl InvocationTail {
                     if matches!(
                         role.declaration_delimiter(),
                         NativeOperandRole::PipeDelimiter(_)
-                    ) && starts_program(text, end, span.end, &operands[index + 1..])
+                    ) && starts_program(text, end, span.end, operands.clone())
                     {
                         possible_pipeline = true;
                         state.top_level_pipe |= state.groups.is_empty();
@@ -243,13 +266,16 @@ fn opening_text(text: &str) -> bool {
         .all(|ch| matches!(ch, '(' | '[') || ch.is_whitespace())
 }
 
-pub(super) fn starts_program(
+pub(super) fn starts_program<'a>(
     text: &str,
     mut at: usize,
     end: usize,
-    operands: &[NativeOperand],
+    operands: impl IntoIterator<Item = &'a NativeOperand>,
 ) -> bool {
-    for operand in operands.iter().take_while(|word| word.bytes.start < end) {
+    for operand in operands
+        .into_iter()
+        .take_while(|word| word.bytes.start < end)
+    {
         if operand.bytes.end > end || !text.get(at..operand.bytes.start).is_some_and(opening_text) {
             return false;
         }

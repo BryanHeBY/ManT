@@ -276,8 +276,7 @@ fn recognize_operand_label(head: &str, start: usize, operands: &[NativeOperand])
         .unwrap_or_default()
         .into_iter()
         .filter(|name| {
-            uses.permits(name, NameSource::Operand(NativeOperandRole::Placeholder))
-                || uses.permits(name, NameSource::Lexical)
+            uses.permits(name, NameSource::Placeholder) || uses.permits(name, NameSource::Lexical)
         })
         .map(|mut name| {
             for part in &mut name.parts {

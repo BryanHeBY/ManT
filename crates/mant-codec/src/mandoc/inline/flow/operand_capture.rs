@@ -58,7 +58,7 @@ impl HeadOperandCapture {
         for owner in owners {
             if let Some(role) = self.roles.get_mut(&owner) {
                 *role = match *role {
-                    NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
+                    NativeOperandRole::Placeholder(_) => NativeOperandRole::IncompletePlaceholder,
                     NativeOperandRole::FlDash(_) => NativeOperandRole::Argument,
                     NativeOperandRole::FlWord(_)
                         if !matches!(
@@ -181,7 +181,7 @@ impl HeadOperandCapture {
         } else {
             if matches!(
                 role,
-                NativeOperandRole::Placeholder
+                NativeOperandRole::Placeholder(_)
                     | NativeOperandRole::FlDash(_)
                     | NativeOperandRole::FlWord(_)
                     | NativeOperandRole::Subject(..)
@@ -237,7 +237,7 @@ impl super::InlineBuilder {
         }) {
             NativeOperandRole::SearchArgument(node)
         } else {
-            NativeOperandRole::Placeholder
+            NativeOperandRole::Placeholder(node)
         }
     }
 
@@ -321,7 +321,9 @@ impl super::InlineBuilder {
                 }
                 let role = if text.is_some_and(|(_, decoded)| !decoded.proves_native_glyphs()) {
                     match role {
-                        NativeOperandRole::Placeholder => NativeOperandRole::IncompletePlaceholder,
+                        NativeOperandRole::Placeholder(_) => {
+                            NativeOperandRole::IncompletePlaceholder
+                        }
                         NativeOperandRole::SearchArgument(_) | NativeOperandRole::FlWord(_) => {
                             NativeOperandRole::Argument
                         }

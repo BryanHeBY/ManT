@@ -87,6 +87,8 @@ pub(super) enum NameSource {
     Lexical,
     #[cfg(feature = "roff")]
     Operand(NativeOperandRole),
+    #[cfg(feature = "roff")]
+    Placeholder,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -127,6 +129,12 @@ impl<'a> OperandUses<'a> {
                 !self.protects(part)
             }
             #[cfg(feature = "roff")]
+            NameSource::Placeholder => self.intersecting(part).any(|operand| {
+                matches!(operand.role, NativeOperandRole::Placeholder(_))
+                    && operand.bytes.start <= self.offset + part.start
+                    && operand.bytes.end >= self.offset + part.end
+            }),
+            #[cfg(feature = "roff")]
             NameSource::Operand(role) => {
                 if matches!(role, NativeOperandRole::ClippedSubject(..)) {
                     return false;
@@ -141,9 +149,6 @@ impl<'a> OperandUses<'a> {
                     end = operand.bytes.end;
                     if end >= self.offset + part.end {
                         return true;
-                    }
-                    if role == NativeOperandRole::Placeholder {
-                        return false;
                     }
                 }
                 false

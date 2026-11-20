@@ -364,7 +364,7 @@ fn collect_group(
     let lead = operand_at(operands, span.start);
     let operand_label = lead.is_some_and(|operand| {
         operand.role == NativeOperandRole::ExplicitOption
-            || operand.role == NativeOperandRole::Placeholder
+            || matches!(operand.role, NativeOperandRole::Placeholder(_))
     });
     let program = enclosure
         .is_none()
