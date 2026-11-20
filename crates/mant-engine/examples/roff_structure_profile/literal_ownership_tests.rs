@@ -393,7 +393,9 @@ fn column_display_proof_uses_the_spacing_mode_at_each_ordinary_row() {
                     let errors = compare(&native, &topology, &document);
                     assert_eq!(errors.len(), 1, "{source}: {errors:?}");
                     assert!(
-                        errors[0].contains(&format!("for {last_opening}:2 ")),
+                        errors[0].contains(&format!(
+                            "0..=1 missing row(s) among column display candidates {last_opening}:2"
+                        )),
                         "{source}: {errors:?}"
                     );
                 }
@@ -429,10 +431,15 @@ fn missing_equal_column_rows_use_the_physical_slot_or_report_all_candidates() {
                             replace_column_payload_at(&mut document, at, word, replacement);
                             let errors = compare(&native, &topology, &document);
                             assert_eq!(errors.len(), 1, "{source}: {errors:?}");
-                            assert!(
-                                errors[0].contains(&format!("for {line}:2 ")),
-                                "{source}: {errors:?}"
-                            );
+                            let expected = if gap.is_empty() && second_word == "SENTRY" {
+                                format!(
+                                    "1 missing row(s) among column display candidates {}:2, {}:2",
+                                    starts[0], starts[1]
+                                )
+                            } else {
+                                format!("for {line}:2 ")
+                            };
+                            assert!(errors[0].contains(&expected), "{source}: {errors:?}");
                         }
                     }
                     if second_word == "SENTRY" {
@@ -479,7 +486,7 @@ fn multiline_display_slots_constrain_equal_rows_across_native_spacing() {
                     let mut doc = intact.clone();
                     replace_column_payload_at(&mut doc, row, "SAME", replacement);
                     let errors = compare(&native, &topology, &doc);
-                    let expected = if replacement.is_empty() && second_same - first_same == 1 {
+                    let expected = if second_same - first_same == 1 {
                         format!(
                             "1 missing row(s) among column display candidates {first_opening}:2, {second_opening}:2"
                         )
@@ -529,7 +536,7 @@ fn column_row_damage_preserves_ordinary_and_invisible_slot_alternatives() {
         (
             ".Bd -literal -compact\n\\&\nFIRST\nSAME\n.Ed\n.Dl SAME\n",
             &[(3, "SAME", "WRONG")][..],
-            &["missing sourced block for 10:2 occurrence 1"][..],
+            &["1 missing row(s) among column display candidates 10:2, 15:2"][..],
         ),
         (
             ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.D1 SAME\n.Dl LAST\n",
@@ -598,6 +605,84 @@ fn replace_column_payload_at(
             }],
         );
     }
+}
+
+#[test]
+fn column_edit_budgets_never_make_equal_owners_more_certain() {
+    // The exact sources ran pinned ASCII, UTF-8, HTML, tree and lint.
+    // termp_d1_pre leaves each short display independently executed.
+    let prefix = format!("{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n");
+    for count in [9, 10] {
+        let source = format!("{prefix}{}.El\n{TAIL}", ".Dl SAME\n".repeat(count));
+        let (native, topology, mut document) = parsed_structure(&source);
+        assert!(compare(&native, &topology, &document).is_empty());
+        for slot in (2..=count).rev() {
+            replace_column_payload_at(&mut document, slot, "SAME", "");
+        }
+        let errors = compare(&native, &topology, &document);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        let start = prefix.lines().count() + 1;
+        assert!((start..start + count).all(|line| errors[0].contains(&format!("{line}:2"))));
+        if count == 9 {
+            assert!(errors[0].starts_with("literal-displays: 8 missing row(s)"));
+        } else {
+            assert!(errors[0].starts_with("literal-displays: unresolved column slot alignment"));
+        }
+    }
+    for slots in [7_280, 7_281] {
+        let padding = "PAD\n".repeat(slots - 3);
+        let source =
+            format!("{prefix}.Bd -literal -compact\n{padding}.Ed\n.Dl SAME\n.D1 SAME\n.El\n{TAIL}");
+        let (native, topology, mut document) = parsed_structure(&source);
+        replace_column_payload_at(&mut document, slots - 2, "SAME", "");
+        let first = prefix.lines().count() + slots;
+        assert_eq!(
+            compare(&native, &topology, &document),
+            [format!(
+                "literal-displays: 1 missing row(s) among column display candidates {first}:2, {}:2",
+                first + 1
+            )]
+        );
+    }
+}
+
+#[test]
+fn shifted_cells_keep_the_same_minimum_loss_as_replaced_rows() {
+    // CVS termp_bd_pre/termp_d1_pre establish the original literal
+    // rows. Mutated IR keeps LAST; an inserted WRONG cannot displace it
+    // as evidence of the surviving source row.
+    let prefix = format!("{MATRIX_HEAD}.Bl -column aaa bbb\n.It A Ta B\n");
+    let source = format!("{prefix}.Bd -literal -compact\nSAME\nLAST\n.Ed\n.El\n{TAIL}");
+    let (native, topology, mut document) = parsed_structure(&source);
+    replace_column_payload_at(&mut document, 1, "SAME", "");
+    let Block::Table { rows, .. } = &mut document.sections[1].blocks[0] else {
+        panic!()
+    };
+    let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
+        panic!()
+    };
+    children.extend([
+        Inline::line_break(),
+        Inline::Text {
+            value: "WRONG".into(),
+        },
+    ]);
+    assert_eq!(
+        compare(&native, &topology, &document),
+        ["literal-displays: missing sourced block for 10:2 occurrence 1"]
+    );
+
+    let source = format!("{prefix}.Dl SAME\n.D1 SAME\n.Dl LAST\n.El\n{TAIL}");
+    let (native, topology, mut document) = parsed_structure(&source);
+    replace_column_payload_at(&mut document, 3, "LAST", "WRONG");
+    replace_column_payload_at(&mut document, 1, "SAME", "");
+    assert_eq!(
+        compare(&native, &topology, &document),
+        [
+            "literal-displays: 1 missing row(s) among column display candidates 10:2, 11:2",
+            "literal-displays: missing sourced block for 12:2 occurrence 1",
+        ]
+    );
 }
 
 #[test]

@@ -10,7 +10,7 @@ use super::{
 #[path = "cell_alignment.rs"]
 mod cell_alignment;
 
-use cell_alignment::{DeletionWitnesses, MissingRows, deletion_witnesses, same_slot};
+use cell_alignment::{EditWitnesses, MissingRows, edit_witnesses, same_slot};
 
 pub(crate) fn compare(
     expected: &SourceDisplays,
@@ -103,18 +103,18 @@ fn claim_cells(
         let physical = cells.get(path).map_or(&[][..], Vec::as_slice);
         if !plan.complete {
             claim_known_prefix(plan, physical, matched);
-        } else if physical.len() == plan.rows.len() {
-            // A replacement leaves the slot in place. A damaged ordinary
-            // row does not invalidate an unchanged display after it.
-            for (row, &observed) in plan.rows.iter().zip(physical) {
-                if let Some(owner) = row.owner
-                    && same_slot(row, observed)
-                {
-                    matched[owner] += 1;
-                }
+        } else if physical.len() == plan.rows.len()
+            && plan
+                .rows
+                .iter()
+                .zip(physical)
+                .all(|(row, &observed)| same_slot(row, observed))
+        {
+            for owner in plan.rows.iter().filter_map(|row| row.owner) {
+                matched[owner] += 1;
             }
-        } else if let Some(witnesses) = deletion_witnesses(&plan.rows, physical) {
-            claim_after_row_deletions(
+        } else if let Some(witnesses) = edit_witnesses(&plan.rows, physical) {
+            claim_after_row_edits(
                 plan,
                 witnesses,
                 expected,
@@ -123,14 +123,7 @@ fn claim_cells(
                 violations,
             );
         } else {
-            review_unproved_alignment(
-                plan,
-                physical,
-                expected,
-                matched,
-                &mut uncertain,
-                violations,
-            );
+            review_unproved_alignment(plan, physical, expected, &mut uncertain, violations);
         }
     }
     // An unknown range is reported as source Review. An empty cell or a
@@ -173,9 +166,9 @@ fn claim_known_prefix(
     }
 }
 
-fn claim_after_row_deletions(
+fn claim_after_row_edits(
     plan: &super::rows::CellPlan,
-    witnesses: DeletionWitnesses,
+    witnesses: EditWitnesses,
     expected: &SourceDisplays,
     matched: &mut [usize],
     uncertain: &mut BTreeSet<usize>,
@@ -216,39 +209,17 @@ fn review_unproved_alignment(
     plan: &super::rows::CellPlan,
     physical: &[(&str, bool)],
     expected: &SourceDisplays,
-    matched: &mut [usize],
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
-    let prefix = plan
-        .rows
-        .iter()
-        .zip(physical)
-        .take_while(|(row, actual)| same_slot(row, **actual))
-        .count();
-    let suffix = plan.rows[prefix..]
-        .iter()
-        .rev()
-        .zip(physical[prefix..].iter().rev())
-        .take_while(|(row, actual)| same_slot(row, **actual))
-        .count();
-    let end = plan.rows.len() - suffix;
-    for owner in plan.rows[..prefix]
-        .iter()
-        .chain(&plan.rows[end..])
-        .filter_map(|row| row.owner)
-    {
-        matched[owner] += 1;
-    }
-    if physical[prefix..physical.len() - suffix]
-        .iter()
-        .all(|(_, literal)| !literal)
-    {
-        // An empty observation or a nonliteral replacement cannot
-        // witness any of the unmatched displays.
+    if physical.iter().all(|(_, literal)| !literal) {
+        // No observed literal row can witness any expected display.
         return;
     }
-    let candidates = plan.rows[prefix..end]
+    // Text matches alone cannot certify a greedy prefix or suffix:
+    // the same ink may have survived under a different source owner.
+    let candidates = plan
+        .rows
         .iter()
         .filter_map(|row| row.owner)
         .collect::<BTreeSet<_>>();
