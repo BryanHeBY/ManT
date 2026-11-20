@@ -31,15 +31,16 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
         let accepted = match operand.role {
             Role::Placeholder { .. } | Role::SearchArgument(_) => syntax.parameter(value, true),
             Role::PathOperand(_) => syntax.path(value),
-            Role::ExplicitOption
-                if operand.bytes.start < span.start || syntax.lexical.within_group() =>
-            {
-                // An enclosing Fl can own its own value. An inner Fl
-                // proves its spelling inside the group, not the group.
-                let optional = syntax
-                    .detached
-                    .is_some_and(|group| group.kind == GroupKind::Optional);
-                syntax.parameter(value, operand.bytes.start < span.start || optional)
+            Role::ExplicitOption if operand.bytes.start < span.start => {
+                // Fl can spell the start of its own assignment, including
+                // brackets that close in later operands: --skip=[-][sample|time].
+                syntax.literal(value, Literal::Explicit)
+            }
+            Role::ExplicitOption if syntax.lexical.within_group() => {
+                // An inner Fl proves its own spelling inside the optional
+                // group.
+                let optional = syntax.group().is_some_and(|group| group.bracketed);
+                syntax.parameter(value, optional)
             }
             Role::EnclosureStart {
                 body,
@@ -104,12 +105,13 @@ enum Atom {
     Expected,
     Complete,
     AfterDot,
+    Path,
     PathContinuation,
 }
 
 impl Atom {
     fn accepts_new_fragment(self) -> bool {
-        !matches!(self, Self::Complete)
+        !matches!(self, Self::Complete | Self::Path)
     }
 }
 
@@ -120,20 +122,10 @@ enum Literal {
     Explicit,
 }
 
-#[derive(Clone, Copy, Default)]
-struct DetachedGroup {
-    kind: GroupKind,
-    proved_argument: bool,
-    literal: bool,
-    connector: bool,
-    awaiting: Option<Join>,
-}
-
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-enum GroupKind {
-    #[default]
-    Ordinary,
-    Optional,
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum ValueEvidence {
+    Literal,
+    Argument,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -142,14 +134,55 @@ enum Join {
     Adjacent,
 }
 
-impl DetachedGroup {
-    fn complete(self) -> bool {
-        self.awaiting.is_none()
-            && if self.proved_argument {
-                !self.literal || self.connector
-            } else {
-                self.kind == GroupKind::Optional && self.literal
+/// Only an operator at this level can connect its two neighboring
+/// operands. A child group returns one value after its own validation.
+struct ArgumentGroup {
+    bracketed: bool,
+    completed: Option<ValueEvidence>,
+    current: Option<ValueEvidence>,
+    join: Option<Join>,
+}
+
+impl ArgumentGroup {
+    fn new(bracketed: bool) -> Self {
+        Self {
+            bracketed,
+            completed: None,
+            current: None,
+            join: None,
+        }
+    }
+
+    fn begin_value(&mut self, evidence: ValueEvidence, adjacent: bool) -> Result<(), ()> {
+        if self.join.take().is_some() || adjacent {
+            self.current = Some(self.current.map_or(evidence, |word| word.max(evidence)));
+        } else {
+            self.finish_value()?;
+            self.current = Some(evidence);
+        }
+        Ok(())
+    }
+
+    fn finish_value(&mut self) -> Result<(), ()> {
+        if let Some(value) = self.current.take() {
+            // Brackets can describe a selection of explicit literals.
+            // A disconnected literal and an argument are separate words,
+            // even when one has a delimiter in its own spelling.
+            if self.completed == Some(ValueEvidence::Literal)
+                || value == ValueEvidence::Literal && (!self.bracketed || self.completed.is_some())
+            {
+                return Err(());
             }
+            self.completed = Some(value);
+        }
+        Ok(())
+    }
+
+    fn close(mut self) -> Result<(), ()> {
+        self.finish_value()?;
+        (self.completed.is_some() && self.join.is_none())
+            .then_some(())
+            .ok_or(())
     }
 }
 
@@ -159,58 +192,92 @@ struct AssignmentSyntax {
     atom: Atom,
     has_value: bool,
     after_space: bool,
-    /// Detached groups need native argument evidence. Li can supply the
-    /// literal side of an assignment or alternative inside that group.
-    detached: Option<DetachedGroup>,
+    // Untracked frames are attached to the assignment directly. A
+    // detached group and each of its subexpressions need local proof.
+    groups: Vec<Option<ArgumentGroup>>,
 }
 
 impl AssignmentSyntax {
+    fn group(&self) -> Option<&ArgumentGroup> {
+        self.groups.last().and_then(Option::as_ref)
+    }
+
+    fn group_mut(&mut self) -> Option<&mut ArgumentGroup> {
+        self.groups.last_mut().and_then(Option::as_mut)
+    }
+
     fn parameter(&mut self, value: &str, proves_argument: bool) -> Result<(), ()> {
-        for ch in value.chars() {
-            if !self.punctuation(ch)? {
-                self.lexical.observe(ch);
-                self.record_value(proves_argument);
-            }
-        }
-        Ok(())
+        self.operand(value, proves_argument, false)
     }
 
     fn path(&mut self, value: &str) -> Result<(), ()> {
-        let path = value.trim_start();
-        self.literal(&value[..value.len() - path.len()], Literal::Delimiter)?;
-        if path.is_empty() {
-            return Ok(());
-        }
-        if !self.atom.accepts_new_fragment() {
-            return Err(());
-        }
-        let trimmed = path.trim_end();
-        // mdoc_html.c::mdoc_pa_pre() preserves a pathname even when it
-        // consists entirely of punctuation, as with /, . and ../.
-        let punctuation_only = trimmed.chars().all(|ch| matches!(ch, '/' | '.'));
-        if punctuation_only {
-            self.record_value(true);
-        } else {
-            self.parameter(trimmed, true)?;
-            // A typed pathname can itself end at a slash.
-            if trimmed.ends_with('/') {
-                self.record_value(true);
-            }
-        }
-        if trimmed.ends_with(['/', '.']) {
-            self.atom = Atom::PathContinuation;
-        }
-        self.literal(&path[trimmed.len()..], Literal::Delimiter)
+        self.operand(value, true, true)
     }
 
-    fn record_value(&mut self, proves_argument: bool) {
+    fn operand(&mut self, value: &str, proves_argument: bool, is_path: bool) -> Result<(), ()> {
+        let trimmed = value.trim_start();
+        self.literal(&value[..value.len() - trimmed.len()], Literal::Delimiter)?;
+        let operand = trimmed.trim_end();
+        if operand.is_empty() {
+            return Ok(());
+        }
+        let joined_path = is_path
+            && !self.after_space
+            && matches!(self.atom, Atom::Path)
+            && operand.starts_with('/');
+        if is_path && !self.atom.accepts_new_fragment() && !joined_path {
+            return Err(());
+        }
+        if operand.contains('\n') {
+            return Err(());
+        }
+        if self.group().is_some()
+            && operand
+                .split_whitespace()
+                .rev()
+                .skip(1)
+                .any(|word| word.ends_with(':'))
+        {
+            return Err(());
+        }
+        // A typed operand can end in '/', and delimiters inside its
+        // spelling cannot connect unrelated operands at this level.
+        let continuation = !self.after_space
+            && (joined_path || matches!(self.atom, Atom::PathContinuation | Atom::AfterDot));
+        self.record_value(
+            if proves_argument {
+                ValueEvidence::Argument
+            } else {
+                ValueEvidence::Literal
+            },
+            continuation,
+        )?;
+        self.atom = if operand.ends_with('/') || is_path && operand.ends_with('.') {
+            Atom::PathContinuation
+        } else if is_path {
+            Atom::Path
+        } else {
+            Atom::Complete
+        };
+        // A colon at the end of a typed word can introduce an adjacent
+        // fragment, but a spaced explanatory label does not prove a form.
+        if operand.ends_with(':')
+            && let Some(group) = self.group_mut()
+        {
+            group.join = Some(Join::Adjacent);
+            self.atom = Atom::Expected;
+        }
+        self.literal(&trimmed[operand.len()..], Literal::Delimiter)
+    }
+
+    fn record_value(&mut self, evidence: ValueEvidence, adjacent: bool) -> Result<(), ()> {
+        if let Some(group) = self.group_mut() {
+            group.begin_value(evidence, adjacent)?;
+        }
         self.atom = Atom::Complete;
         self.has_value = true;
         self.after_space = false;
-        if let Some(group) = &mut self.detached {
-            group.proved_argument |= proves_argument;
-            group.awaiting = None;
-        }
+        Ok(())
     }
 
     fn literal(&mut self, value: &str, literal: Literal) -> Result<(), ()> {
@@ -226,20 +293,17 @@ impl AssignmentSyntax {
             if self.punctuation(ch)? {
                 in_atom = false;
             } else if literal != Literal::Delimiter
-                && (self.detached.is_none() || literal == Literal::Explicit)
+                && (self.group().is_none() || literal == Literal::Explicit)
                 && (in_atom || self.atom.accepts_new_fragment())
                 && parameter_character(ch)
             {
                 self.lexical.observe(ch);
-                if let Some(group) = &mut self.detached {
-                    group.literal = true;
-                    // A real glyph after a touching path separator or
-                    // dot proves the continuation. A terminal dot or a
-                    // separator followed by whitespace cannot do that.
-                    group.connector |=
-                        !in_atom && matches!(self.atom, Atom::AfterDot | Atom::PathContinuation);
+                if in_atom {
+                    self.atom = Atom::Complete;
+                } else {
+                    let continuation = matches!(self.atom, Atom::AfterDot | Atom::PathContinuation);
+                    self.record_value(ValueEvidence::Literal, continuation)?;
                 }
-                self.record_value(false);
                 in_atom = true;
             } else {
                 return Err(());
@@ -251,69 +315,79 @@ impl AssignmentSyntax {
     fn punctuation(&mut self, ch: char) -> Result<bool, ()> {
         if ch.is_whitespace() {
             if self
-                .detached
-                .is_some_and(|group| group.awaiting == Some(Join::Adjacent))
+                .group()
+                .is_some_and(|group| group.join == Some(Join::Adjacent))
             {
-                // A detached `default: value` note can be styled as Ar
-                // on both sides. A colon joins atoms only without a gap.
                 return Err(());
             }
             self.after_space = true;
-            if matches!(self.atom, Atom::AfterDot | Atom::PathContinuation) {
-                self.atom = Atom::Complete;
-            }
+            self.atom = match self.atom {
+                Atom::AfterDot => Atom::Complete,
+                Atom::PathContinuation => Atom::Path,
+                atom => atom,
+            };
             return Ok(true);
         }
-        let opener = closing(ch).is_some() || quote_closer(ch).is_some();
-        let separator = matches!(ch, '=' | ',' | '/' | ':' | '@' | '|');
-        if opener || separator || matches!(ch, ']' | '}' | ')' | '>' | '”' | '’') {
-            if opener
-                && self.after_space
-                && self.lexical.is_top_level()
-                && (!self.has_value || !matches!(self.atom, Atom::Expected))
-            {
-                self.detached = Some(DetachedGroup {
-                    kind: if ch == '[' {
-                        GroupKind::Optional
-                    } else {
-                        GroupKind::Ordinary
-                    },
-                    ..DetachedGroup::default()
-                });
-            }
-            let join = match ch {
-                '|' | '=' | ',' => Some(Join::Word),
-                ':' => Some(Join::Adjacent),
-                '/' if !matches!(self.atom, Atom::Expected) && !self.after_space => {
-                    Some(Join::Adjacent)
-                }
-                _ => None,
-            };
-            if let (Some(group), Some(join)) = (&mut self.detached, join) {
-                let adjacent = join == Join::Adjacent;
-                if matches!(self.atom, Atom::Expected) || adjacent && self.after_space {
-                    return Err(());
-                }
-                group.connector = true;
-                group.awaiting = Some(join);
-            }
-            let closed = self.lexical.observe(ch);
-            if closed && self.detached.take().is_some_and(|group| !group.complete()) {
-                return Err(());
-            }
-            self.atom = if !closed && (opener || separator) {
-                Atom::Expected
-            } else {
-                Atom::Complete
-            };
+        let delimiter = closing(ch).is_some()
+            || quote_closer(ch).is_some()
+            || matches!(ch, ']' | '}' | ')' | '>' | '”' | '’');
+        if delimiter {
+            self.delimiter(ch)?;
+        } else if matches!(ch, '=' | ',' | '/' | ':' | '@' | '|') {
+            self.operator(ch)?;
         } else if ch == '.' && !self.after_space && self.has_value {
-            // A dot can bridge two touching literal fragments. Its
-            // permission expires at a word separator.
             self.atom = Atom::AfterDot;
         } else if !(matches!(ch, '.' | '…') || ch == '+' && self.lexical.within_group()) {
             return Ok(false);
         }
         self.after_space = false;
         Ok(true)
+    }
+
+    fn delimiter(&mut self, ch: char) -> Result<(), ()> {
+        let depth = self.lexical.group_depth();
+        self.lexical.observe(ch);
+        match self.lexical.group_depth().cmp(&depth) {
+            std::cmp::Ordering::Greater => {
+                let tracked = self.group().is_some()
+                    || depth == 0
+                        && self.after_space
+                        && (!self.has_value || !matches!(self.atom, Atom::Expected));
+                self.groups
+                    .push(tracked.then(|| ArgumentGroup::new(ch == '[')));
+                self.atom = Atom::Expected;
+            }
+            std::cmp::Ordering::Less => {
+                if let Some(Some(group)) = self.groups.pop() {
+                    group.close()?;
+                    self.record_value(ValueEvidence::Argument, false)?;
+                }
+                self.atom = Atom::Complete;
+            }
+            std::cmp::Ordering::Equal => {}
+        }
+        Ok(())
+    }
+
+    fn operator(&mut self, ch: char) -> Result<(), ()> {
+        if ch == '/' && self.after_space && matches!(self.atom, Atom::Path) {
+            return Err(());
+        }
+        let left = !matches!(self.atom, Atom::Expected);
+        let adjacent = !self.after_space;
+        let join = match ch {
+            '|' | '=' | ',' => Some(Join::Word),
+            ':' => Some(Join::Adjacent),
+            '/' | '@' if left && adjacent => Some(Join::Adjacent),
+            _ => None,
+        };
+        if let (Some(group), Some(join)) = (self.group_mut(), join) {
+            if !left || join == Join::Adjacent && !adjacent {
+                return Err(());
+            }
+            group.join = Some(join);
+        }
+        self.atom = Atom::Expected;
+        Ok(())
     }
 }

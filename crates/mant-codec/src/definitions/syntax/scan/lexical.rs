@@ -16,7 +16,11 @@ impl LexicalState {
     }
 
     pub(super) fn within_group(&self) -> bool {
-        self.quote.is_some() || !self.closers.is_empty()
+        self.group_depth() != 0
+    }
+
+    pub(super) fn group_depth(&self) -> usize {
+        self.closers.len() + usize::from(self.quote.is_some())
     }
 
     /// Return whether this scalar completed one outer quoted/bracketed value.

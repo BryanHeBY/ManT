@@ -441,6 +441,69 @@ fn native_optionality_proves_a_value_without_admitting_explanatory_text() {
 }
 
 #[test]
+fn rhs_connectors_prove_only_their_own_operand_and_group() {
+    // Fixed CVS gives @ two touching operands under Ns, preserves a
+    // final slash inside Ar, and prints a nested Op inside Pq. Neither
+    // punctuation inside Ar nor an Op child can bind the separate "see".
+    for (open, close, left, right) in [
+        ("Op", "", '[', ']'),
+        ("Oo", " Oc", '[', ']'),
+        ("Pq", "", '(', ')'),
+    ] {
+        for (operands, text) in [
+            ("Ar user Ns @ Ns Li localhost", "user@localhost"),
+            ("Ar dir/", "dir/"),
+            ("Ar section Ns Li .local", "section.local"),
+        ] {
+            let head = format!("Fl a= Ns Ar x {open} {operands}{close}");
+            let label = format!("-a=x {left}{text}{right}");
+            check(
+                "OPTIONS",
+                &head,
+                &["-a"],
+                &label,
+                true,
+                &["user", "dir", "section"],
+            );
+        }
+    }
+    for (operands, text) in [
+        ("Li see Ar sections 2,3", "see sections 2,3"),
+        ("Li see Op 4 | Ar mode", "see [4 | mode]"),
+        ("Li see Ar section 2 Ns Li .3", "see section 2.3"),
+        ("Li see Ar section 2.3", "see section 2.3"),
+    ] {
+        let head = format!("Fl a= Ns Ar x Pq {operands}");
+        let label = format!("-a=x ({text})");
+        check(
+            "OPTIONS",
+            &head,
+            &["-a"],
+            &label,
+            false,
+            &["see", "section", "mode"],
+        );
+    }
+}
+
+#[test]
+fn pathname_separators_can_begin_the_touching_operand() {
+    // Fixed mdoc Ns suppresses the word separator before the right-hand
+    // slash. A visible space is a real boundary in the other forms.
+    for (path, full) in [
+        ("Pa /var Ns Pa /log", true),
+        ("Pa /var Ns Li /log", true),
+        ("Pa /var Ns No /log", true),
+        ("Pa /var Li /log", false),
+        ("Pa /var Li / Ns Pa log", false),
+    ] {
+        let head = format!("Fl a= Ns {path}");
+        let label = if full { "-a=/var/log" } else { "-a=/var /log" };
+        check("OPTIONS", &head, &["-a"], label, full, &["/log"]);
+    }
+}
+
+#[test]
 fn real_assignment_forms_keep_compound_and_literal_alternatives() {
     // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
     // and exports. CVS term_word(), termp_ns_pre() and quote pre/post
@@ -464,6 +527,20 @@ fn real_assignment_forms_keep_compound_and_literal_alternatives() {
             "Fl -raw-pcm= Ns Ar sr , Ns Ar bits Ns [f|s|u], Ns Ar chans , Ns [le|be]",
             &["--raw-pcm"],
             "--raw-pcm=sr,bits[f|s|u],chans,[le|be]",
+        ),
+        // In wvunpack(1), termp_fl_pre() emits a dash before the Fl
+        // text. The last bracket it opens closes after three Ar operands.
+        (
+            "OPTIONS",
+            "Fl -skip=[-][ Ns Ar sample Ns | Ns Ar hh : Ns Ar mm : Ns Ar ss.ss ]",
+            &["--skip"],
+            "--skip=[-][sample|hh:mm:ss.ss]",
+        ),
+        (
+            "OPTIONS",
+            "Fl -until=[+|-][ Ns Ar sample Ns | Ns Ar hh : Ns Ar mm : Ns Ar ss.ss ]",
+            &["--until"],
+            "--until=[+|-][sample|hh:mm:ss.ss]",
         ),
         (
             "OPTIONS",
