@@ -156,7 +156,9 @@ from the preceding body survives, its trailing empty rows remain, even when
 the heading prints new text or covers a pending body glyph.
 When only the body's live fixed spaces share a man subsection's first
 accepted row, the heading carries those spaces on that row. A physical
-blank row already ended by the formatter stays with the body.
+blank row already ended by the formatter stays with the body. Font
+overprints that resolve to fixed spaces preserve the same row and keep
+the surviving spaces' styles and link ranges.
 
 A no-fill reading space from positive horizontal motion can occupy a row
 of the preceding literal even when mandoc defers the advance until the
@@ -794,9 +796,12 @@ outer level still separates independent declarations. For an explicit
 For example, `Fl a Ns Li \&= Ns Op Ar x` binds `-a` and publishes
 `-a=[x]`. Compound parameters retain separators between typed arguments
 and literal alternatives, including combinations like `--waitip=[4 | 6]`
-and `-maproot=user:[group1:group2:...]`. A trailing prose operand or
-unrelated link remains readable with the definition and cannot extend
-the exact signature.
+and `-maproot=user:[group1:group2:...]`. A `Pa` directly in a value can
+complete the assignment, as in `Fl a= Ns Pa file`. Internal dots stay
+with their literal value, as in `Fl a Ns = Ns Li 127.0.0.1`. Detached
+prose, including a trailing parenthesized explanation or unrelated
+link, stays readable with the definition and does not extend the exact
+signature.
 
 A complete option group can expose up to 256 explicitly spelled names, including
 `-c --stdout --to-stdout`, `-a or --ascii`, and an authored numeric enumeration
@@ -1521,6 +1526,10 @@ held blanks retain their birth font, style and annotation; only native
 acceptance decides whether they survive. Generated word separators and leading
 horizontal-motion padding stay outside labels, while authored SP and NBSP
 remain inside. Internal layout motion does not trim authored label content.
+When positive motion follows a rewind, it can advance across existing
+device slots while preserving their source glyphs. A generated separator
+that is skipped or suppressed takes no scalar from an accepted source
+glyph or its annotation.
 
 When native zero advance consumes the single ordinary space at the start of
 a label, a surviving automatic separator can represent that space inside

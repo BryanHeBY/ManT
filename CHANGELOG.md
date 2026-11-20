@@ -15,6 +15,8 @@ that crate was not published for that change.
 
 ### mant-render
 
+- Keep the outline-path emphasis in Markdown excerpts for sections with empty
+  headings. Preserve trailing whitespace outside the emphasis.
 - Render multiline outline labels on one line in text and Markdown query
   reports. Exported Markdown outlines keep entries under their original
   sections, and selected document content retains its hard breaks.
@@ -45,6 +47,12 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep accepted glyphs, hard rows and link ranges when roff horizontal motion
+  crosses an earlier slot or generated word separator. Retain styled,
+  linked subsection padding on its accepted row after terminal overprinting.
+- Recognize native mdoc path operands and dotted values in exact option
+  signatures. Keep detached explanatory parentheses out of the signature and
+  preserve the original owner and its short-name targets.
 - Keep glyph sources and styles available until native word writes settle.
   A later overwrite can reveal earlier glyphs through backspaces, word-end
   markers and horizontal advances while preserving link ranges and names.
@@ -326,6 +334,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Number literal displays in structure audits by native source occurrence,
+  including preceding displays with no visible text at the same coordinates.
 - The 0.15 resolver and query error APIs use the loading types from
   `mant-loader` 0.15.
 
