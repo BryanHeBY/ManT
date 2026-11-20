@@ -105,7 +105,7 @@ fn split_groups<'a>(
     let text = view.text.as_str();
     let mut assignments = Vec::new();
     let mut value_word = None;
-    let protect = |at, outside_group| {
+    let protect = |at, scope: Option<char>| {
         let role = operand_at(operands, at);
         if uses.protects_declaration_separator(at)
             || role.is_some_and(|operand| is_description(operand.role))
@@ -117,7 +117,7 @@ fn split_groups<'a>(
         {
             return !new_environment_after_rhs_separator(text, at, operands, role);
         }
-        if outside_group && text.as_bytes()[at] == b'=' {
+        if scope.is_none() && text.as_bytes()[at] == b'=' {
             assignments.push(at);
             value_word = role.map(|operand| operand.bytes.start);
         }

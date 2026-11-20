@@ -6,7 +6,9 @@ use crate::definitions::{
 };
 use std::ops::Range;
 
+mod brackets;
 mod tail;
+pub(super) use brackets::ParameterEdges;
 use tail::{InvocationTail, starts_program};
 
 /// Read the leading Nm and any consecutive Cm/Ic words in one visible

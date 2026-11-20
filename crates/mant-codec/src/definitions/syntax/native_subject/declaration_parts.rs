@@ -470,13 +470,19 @@ fn independent_groups<'a>(
     let mut last = None;
     let mut syntax = invocation::Syntax::new(text, operands);
     let mut group_start = start;
-    named::split_named_groups(head, |index, top_level| {
+    let edges =
+        invocation::ParameterEdges::new(text, start..start + head.len(), &operands[first..]);
+    named::split_named_groups(head, |index, scope| {
+        let top_level = scope.is_none();
         let offset = start + index;
         while let Some(operand) = receipts.next_if(|operand| operand.bytes.start <= offset) {
             last = Some(operand);
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
         let separator = matches!(head.as_bytes()[index], b',' | b'|');
+        if edges.exposes(offset, scope) {
+            return false;
+        }
         if top_level && separator && syntax.protects(group_start, offset) {
             argument_separators.push(offset);
             return true;

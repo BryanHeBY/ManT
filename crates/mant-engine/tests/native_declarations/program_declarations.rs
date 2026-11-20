@@ -532,6 +532,55 @@ fn argument_text_fragments_keep_their_native_parameter_scope() {
 }
 
 #[test]
+fn accepted_parameter_edges_keep_comma_aliases_and_reject_top_level_pipes() {
+    // CVS in_line() closes Ar at bare delimiters; attached edge glyphs
+    // remain in their original TEXT, even when Ns joins the next call.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (head, form, names, rejected) in [
+            (
+                "Nm alpha Ar path[ Ns Ar index ]",
+                "alpha path[index]",
+                &["alpha"][..],
+                &["index"][..],
+            ),
+            (
+                "Nm alpha [ Ar source] target | Nm beta Ar path[ Ns Ar index ]",
+                "alpha [source] target | beta path[index]",
+                &[][..],
+                &["alpha", "beta"][..],
+            ),
+            (
+                "Nm gamma , Nm alpha Ar path[ Ns Em index ]",
+                "gamma, alpha path[index]",
+                &["gamma", "alpha"][..],
+                &["index"][..],
+            ),
+            (
+                "Nm alpha Ar path[ Ns No index ] , Nm gamma",
+                "alpha path[index], gamma",
+                &["alpha", "gamma"][..],
+                &["index"][..],
+            ),
+            (
+                "Nm alpha Cm dump Oo Ar path[ Ns Ar index ] | Nm beta Oc",
+                "alpha dump [path[index] | beta]",
+                &["alpha dump"][..],
+                &["beta"][..],
+            ),
+            (
+                "Nm alpha [ Ar source] target | Nm beta Ar path[ Ns Ar index ] , Nm gamma",
+                "alpha [source] target | beta path[index], gamma",
+                &["gamma"][..],
+                &["alpha", "beta"][..],
+            ),
+        ] {
+            assert_program_group(section, head, form, names, rejected);
+            assert_program_group(section, &format!("Xo\n.{head}\n.Xc"), form, names, rejected);
+        }
+    }
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.

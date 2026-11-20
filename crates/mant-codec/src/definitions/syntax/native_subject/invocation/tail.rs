@@ -1,5 +1,6 @@
 //! Argument groups distinguish a program pipe from a nested choice.
 
+use super::ParameterEdges;
 use crate::definitions::{NativeOperand, NativeOperandRole};
 use std::ops::Range;
 
@@ -43,46 +44,24 @@ impl InvocationTail {
         operands: &[NativeOperand],
         bare: bool,
     ) -> Self {
+        let edges = ParameterEdges::new(text, span.clone(), operands);
         let mut state = ScopeScan::default();
         let mut cursor = span.start;
         let mut possible_pipeline = false;
-        let mut operands = operands.iter().peekable();
-        while let Some(operand) = operands.next() {
+        for (index, operand) in operands.iter().enumerate() {
             if operand.bytes.start >= span.end {
                 break;
             }
             if operand.bytes.end <= span.start {
                 continue;
             }
-            let mut end = operand.bytes.end.min(span.end);
+            let end = operand.bytes.end.min(span.end);
             if end <= cursor {
                 continue;
             }
             let start = operand.bytes.start.max(cursor);
             state.authored_text(&text[cursor..start]);
             let role = operand.role;
-            if let NativeOperandRole::Placeholder(mut argument) = role {
-                // mdoc puts ordinary arguments in one Ar element even if
-                // it allocates multiple TEXT children (mdoc_macro.c::in_line).
-                // Tight adjacent Ar elements can also spell one token via Ns.
-                while let Some(next) = operands.peek() {
-                    let NativeOperandRole::Placeholder(id) = next.role else {
-                        break;
-                    };
-                    if next.bytes.start >= span.end
-                        || !text.get(end..next.bytes.start).is_some_and(|gap| {
-                            gap.is_empty()
-                                || id == argument
-                                    && gap.bytes().all(|ch| matches!(ch, b' ' | b'\t'))
-                        })
-                    {
-                        break;
-                    }
-                    argument = id;
-                    end = next.bytes.end.min(span.end);
-                    operands.next();
-                }
-            }
             let word = text[start..end].trim();
             match role {
                 NativeOperandRole::EnclosureStart { body, parent } => {
@@ -104,7 +83,11 @@ impl InvocationTail {
                     // through mdoc_isdelim(). Accepted edge glyphs can
                     // still enclose arguments in the visible invocation.
                     if matches!(role, NativeOperandRole::Placeholder(_)) {
-                        state.parameter_edges(word);
+                        for (offset, glyph) in edges.within(start..end) {
+                            if edges.exposes(offset, state.authored_closer()) {
+                                state.bracket(glyph);
+                            }
+                        }
                     }
                 }
                 NativeOperandRole::Command if !state.groups.is_empty() => state.argument(),
@@ -119,7 +102,7 @@ impl InvocationTail {
                     if matches!(
                         role.declaration_delimiter(),
                         NativeOperandRole::PipeDelimiter(_)
-                    ) && starts_program(text, end, span.end, operands.clone())
+                    ) && starts_program(text, end, span.end, &operands[index + 1..])
                     {
                         possible_pipeline = true;
                         state.top_level_pipe |= state.groups.is_empty();
@@ -164,34 +147,10 @@ impl ScopeScan {
         }
     }
 
-    fn parameter_edges(&mut self, word: &str) {
-        let suffix = word.trim_end_matches(is_bracket).len();
-        if suffix == word.len() {
-            return;
-        }
-        // mdoc_isdelim() only sees bare punctuation. Pair brackets
-        // belonging to the same Ar before offering its unmatched edge
-        // glyphs to the enclosing invocation.
-        let mut local = Vec::new();
-        let mut edge = Vec::new();
-        for (offset, glyph) in word.char_indices() {
-            match glyph {
-                '(' | '[' => local.push((offset, glyph)),
-                ')' | ']' => {
-                    let open = if glyph == ')' { '(' } else { '[' };
-                    if local.last().is_some_and(|&(_, last)| last == open) {
-                        local.pop();
-                    } else if offset >= suffix {
-                        edge.push((offset, glyph));
-                    }
-                }
-                _ => {}
-            }
-        }
-        edge.extend(local.into_iter().filter(|&(offset, _)| offset >= suffix));
-        edge.sort_unstable_by_key(|&(offset, _)| offset);
-        for (_, glyph) in edge {
-            self.bracket(glyph);
+    fn authored_closer(&self) -> Option<char> {
+        match self.groups.last()?.kind {
+            InvocationGroup::Authored(closer) => Some(closer),
+            InvocationGroup::Native(_) => None,
         }
     }
 
@@ -266,16 +225,13 @@ fn opening_text(text: &str) -> bool {
         .all(|ch| matches!(ch, '(' | '[') || ch.is_whitespace())
 }
 
-pub(super) fn starts_program<'a>(
+pub(super) fn starts_program(
     text: &str,
     mut at: usize,
     end: usize,
-    operands: impl IntoIterator<Item = &'a NativeOperand>,
+    operands: &[NativeOperand],
 ) -> bool {
-    for operand in operands
-        .into_iter()
-        .take_while(|word| word.bytes.start < end)
-    {
+    for operand in operands.iter().take_while(|word| word.bytes.start < end) {
         if operand.bytes.end > end || !text.get(at..operand.bytes.start).is_some_and(opening_text) {
             return false;
         }
