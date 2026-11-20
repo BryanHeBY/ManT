@@ -17,6 +17,7 @@ pub(in crate::mandoc::inline::flow) struct SectionHandoff {
     projection_start: usize,
     shared_row: Option<SharedRow>,
     preceding_row_already_printed: bool,
+    heading: HeadingKind,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -24,6 +25,13 @@ enum SharedRow {
     PrintedTail,
     UnprintedTail,
     HeadingPrefix,
+    PreviousPadding,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum HeadingKind {
+    Section,
+    ManSubsection,
 }
 
 impl SectionHandoff {
@@ -72,18 +80,34 @@ impl SectionHandoff {
     ) -> bool {
         let closes_previous = ends_line && self.owns_loop_end(buffer, pass.clone());
         let old_end = pass.end.min(self.previous_cell_end);
-        let continues_previous = (pass.start < old_end
-            && buffer.printed_content_end(pass.start, old_end) > pass.start)
-            || std::mem::take(&mut self.preceding_row_already_printed);
-        if !closes_previous
+        let continues_detached = std::mem::take(&mut self.preceding_row_already_printed);
+        let continues_previous = continues_detached
+            || pass.start < old_end && buffer.printed_content_end(pass.start, old_end) > pass.start;
+        let shared_padding = if self.heading == HeadingKind::ManSubsection
+            && continues_previous
+            && pass.end > self.previous_cell_end
+        {
+            let heading = &buffer.cells()[self.previous_cell_end..pass.end];
+            // man_term.c::pre_SS can leave the previous field live at
+            // PD=0. If only its fixed padding shares a later heading's
+            // accepted pass, the heading supplies the reading row.
+            heading.iter().any(ink)
+                && (continues_detached
+                    || pass.start < old_end && {
+                        let previous = &buffer.cells()[pass.start..old_end];
+                        !previous.iter().any(ink) && previous.iter().any(fixed_padding)
+                    })
+        } else {
+            false
+        };
+        if shared_padding {
+            self.shared_row = Some(SharedRow::PreviousPadding);
+        } else if !closes_previous
             && continues_previous
             && pass.end > self.previous_cell_end
             && !buffer.cells()[self.previous_cell_end..pass.end]
                 .iter()
-                .any(|cell| {
-                    matches!(cell, FieldCell::Hyphen)
-                        || matches!(cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
-                })
+                .any(ink)
         {
             // term_field() printed the heading's fixed padding on the
             // preceding owner's row. A later pass may carry heading ink
@@ -93,7 +117,12 @@ impl SectionHandoff {
             } else {
                 SharedRow::PrintedTail
             });
-        } else if !ends_line && self.shared_row != Some(SharedRow::HeadingPrefix) {
+        } else if !ends_line
+            && !matches!(
+                self.shared_row,
+                Some(SharedRow::HeadingPrefix | SharedRow::PreviousPadding)
+            )
+        {
             self.shared_row = if pass.start >= old_end {
                 None
             } else if printed_row {
@@ -162,12 +191,8 @@ impl InlineBuilder {
         subsection: bool,
     ) -> bool {
         let previous_cell_end = self.execution.plain_input.buffer.cells().len();
-        let preceding_row_already_printed = subsection
-            && previous_cell_end == 0
-            && self
-                .execution
-                .detached_device_row
-                .is_some_and(|row| row.page_origin_printed || row.viscol > 0);
+        let preceding_row_already_printed =
+            subsection && previous_cell_end == 0 && self.execution.has_detached_printed_row();
         if !previous_output && !preceding_row_already_printed {
             return false;
         }
@@ -183,6 +208,11 @@ impl InlineBuilder {
             projection_start: 0,
             shared_row: None,
             preceding_row_already_printed,
+            heading: if subsection {
+                HeadingKind::ManSubsection
+            } else {
+                HeadingKind::Section
+            },
         });
         self.nodes.push(Inline::anchor(BOUNDARY));
         true
@@ -252,6 +282,16 @@ impl InlineBuilder {
             projection::split_output_scope_prefix(std::mem::take(&mut self.nodes), BOUNDARY);
         assert!(found, "section owner boundary survives native acceptance");
         let mut rows = handoff.previous_empty_passes;
+        if handoff.shared_row == Some(SharedRow::PreviousPadding) {
+            // A detached row was already projected before the new buffer's
+            // output_start. The caller lends exactly that row's payload.
+            let start = if handoff.previous_cell_end == 0 {
+                0
+            } else {
+                handoff.projection_start
+            };
+            move_previous_padding(&mut previous, &mut head, start);
+        }
         if handoff.shared_row == Some(SharedRow::HeadingPrefix) {
             discard_shared_heading_row(&mut head, &mut false);
         }
@@ -286,6 +326,13 @@ impl InlineBuilder {
         }
         self.nodes = head;
         previous
+    }
+}
+
+impl super::super::InlineExecutionState {
+    pub(in crate::mandoc) fn has_detached_printed_row(&self) -> bool {
+        self.detached_device_row
+            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
     }
 }
 
@@ -331,4 +378,28 @@ fn heading_has_only_padding(head: &[Inline]) -> bool {
         only_padding &= text.chars().all(char::is_whitespace);
     });
     only_padding
+}
+
+fn ink(cell: &FieldCell) -> bool {
+    matches!(cell, FieldCell::Hyphen)
+        || matches!(cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+}
+
+fn fixed_padding(cell: &FieldCell) -> bool {
+    matches!(cell, FieldCell::Graph { text, .. } if text.is_whitespace())
+        || matches!(cell, FieldCell::NonBreakingBlank)
+}
+
+fn move_previous_padding(previous: &mut Vec<Inline>, heading: &mut Vec<Inline>, start: usize) {
+    let start = start.min(previous.len());
+    // A previous authored hard row, even an empty one, is not part of
+    // this live tail. Never transfer its boundary or anything before it.
+    let row = previous[start..]
+        .iter()
+        .rposition(|node| matches!(node, Inline::LineBreak {}))
+        .map_or(start, |index| start + index + 1);
+    let tail = &previous[row..];
+    if heading_has_only_padding(tail) && projection::has_rendered_formatter_glyph(tail) {
+        heading.splice(0..0, previous.drain(row..));
+    }
 }

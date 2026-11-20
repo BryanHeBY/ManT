@@ -63,6 +63,7 @@ impl BlockState {
     /// Lend its exact projection vector, including native word coordinates.
     pub(in crate::mandoc::blocks) fn with_pending_section_output<R>(
         &mut self,
+        subsection: bool,
         run: impl FnOnce(
             &mut crate::mandoc::formatter::FormatterState,
             &mut Vec<mant_ir::Inline>,
@@ -74,12 +75,46 @@ impl BlockState {
             RowOwner::Paragraph => self.paragraph.output_nodes_mut(),
             RowOwner::Literal => self.literal.output_nodes_mut(),
         };
-        if !InlineBuilder::has_live_section_input(&self.formatter.execution, nodes) {
+        if InlineBuilder::has_live_section_input(&self.formatter.execution, nodes) {
+            let result = run(&mut self.formatter, nodes, owner == RowOwner::Literal);
+            if owner == RowOwner::Literal {
+                self.literal.finish_section_handoff();
+            }
+            return Some(result);
+        }
+        if !subsection || !nodes.is_empty() || !self.formatter.execution.has_detached_printed_row()
+        {
             return None;
         }
-        let result = run(&mut self.formatter, nodes, owner == RowOwner::Literal);
-        if owner == RowOwner::Literal {
-            self.literal.finish_section_handoff();
+        let mant_ir::Block::Paragraph {
+            children,
+            source,
+            layout,
+            ..
+        } = self.output.last_mut()?
+        else {
+            return None;
+        };
+        // A filled HP post can publish a paragraph before ending its
+        // native device row (man_term.c::post_HP, term.c:244-253).
+        // Lend only the padding-only projection of that open row.
+        let mut fixed_padding = false;
+        let mut only_padding = true;
+        mant_ir::visit_inline_plain_text(children, |text| {
+            fixed_padding |= text.contains('\u{a0}');
+            only_padding &= !text.contains('\n') && text.chars().all(char::is_whitespace);
+        });
+        if !fixed_padding || !only_padding {
+            return None;
+        }
+        let result = run(&mut self.formatter, children, false);
+        if children.is_empty() {
+            let (lines, source) = (layout.spacing_before_lines, *source);
+            self.output.pop();
+            if lines > 0 {
+                self.output
+                    .push(mant_ir::Block::VerticalSpace { lines, source });
+            }
         }
         Some(result)
     }

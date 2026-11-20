@@ -127,3 +127,42 @@ fn executed_empty_rows_have_one_owner_at_definition_and_section_edges() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+#[test]
+fn subsection_reads_padding_only_on_the_accepted_live_row() {
+    // man_term.c::pre_SS at PD=0 does not flush a live row. The checked
+    // CVS ASCII and UTF-8 results both put B immediately after AA, even
+    // if post_HP drained the previous padding under NOBREAK. Real .sp
+    // and the distinct SH row projection remain independent controls.
+    let start = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\nAA\n";
+    for (prefix, heading, expected) in [
+        (".br\n\\~\n", ".SS", &["AA", "B", "DD"][..]),
+        (".br\n\\~\n.br\n", ".SS", &["AA", "B", "DD"]),
+        (".HP 4n\n\\&\n\\~\n", ".SS", &["AA", "B", "DD"]),
+        (".br\n\\~\n.sp 1\n", ".SS", &["AA", "", "", "B", "DD"]),
+        (".br\n\\~\n", ".SH", &["AA", "", "B", "DD"]),
+    ] {
+        let source = format!("{start}{prefix}{heading} \\~ B\nDD\n");
+        let native = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&native, false).unwrap();
+        let readback: ResolvedContent = serde_json::from_str::<mant_protocol::QueryBundle>(&json)
+            .unwrap()
+            .into();
+        let rendered = mant_render::render_query_man(&readback);
+        let rows = rendered
+            .split_once("\nFIRST\n")
+            .unwrap()
+            .1
+            .lines()
+            .map(str::trim);
+        assert_eq!(rows.collect::<Vec<_>>(), expected, "{source}");
+        assert_eq!(rendered.matches('\u{a0}').count(), 2, "{source}");
+        let first = &readback.document.as_ref().unwrap().sections[1];
+        let section = if heading == ".SS" {
+            &first.children[0]
+        } else {
+            &readback.document.as_ref().unwrap().sections[2]
+        };
+        assert_eq!(section.id.as_str(), "b");
+    }
+}

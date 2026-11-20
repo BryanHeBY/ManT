@@ -128,9 +128,9 @@ fn lower_before_heading(
     let prepared = if context.macro_set == libmandoc_rs::MacroSet::Man
         && !entry.needs_newline(*lowerer.paragraph_distance)
     {
-        lowerer
-            .state
-            .with_pending_section_output(|formatter, previous, literal| {
+        lowerer.state.with_pending_section_output(
+            next.macro_token.as_deref() == Some("SS"),
+            |formatter, previous, literal| {
                 prepare_heading(
                     next,
                     context,
@@ -139,7 +139,8 @@ fn lower_before_heading(
                     previous,
                     literal,
                 )
-            })
+            },
+        )
     } else {
         None
     };
