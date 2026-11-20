@@ -47,6 +47,11 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep the accepted space count and surviving links when a word-end marker
+  is followed by a continuation, horizontal move, or breakpoint. Appended
+  font runs preserve earlier overprint coverage.
+- Keep native punctuation inside flag assignments, distinguish comparisons
+  from grouped values, and recognize adjacent typed fragments of dotted paths.
 - Preserve the native row and word gap when a roff word-end marker follows
   buffered whitespace. Order surviving overstruck glyphs within an accepted
   field by their final columns, including styles, links and search positions.
@@ -375,6 +380,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- In structure audits, check empty field flushes between definition displays,
+  verify equation owners, and rotate failed scans within the page quota.
 - Check generated list markers independently from equal authored words,
   verify short-display punctuation and retained hard rows, and locate each
   proved equation at its table cell. Structure audit v25 rechecks stale
