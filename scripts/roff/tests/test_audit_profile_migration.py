@@ -13,10 +13,49 @@ from scripts.roff.audit import audit_roff_structure as structure
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_invalid_structure_profiler_cannot_stamp_source_as_checked(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(directory)
+            man = root / 'man1'
+            man.mkdir()
+            page = man / 'probe.1'
+            page.write_text('.TH TEST 1\n.SH DESCRIPTION\nFIRST\n', encoding='utf-8')
+            profiler = root / 'profiler'
+            profiler.touch()
+            ledger = root / 'audit.csv'
+            args = ['--manpath', str(root), '--corpus', 'test', '--profiler', str(profiler),
+                    '--audit-db', str(ledger)]
+            topology = dict(lists=[], tableRows=[], equations=[])
+            response = {
+                'schema': 'mant.roff-structure-profile/v24', 'expected': {}, 'observed': {},
+                'violations': [], 'topology': {'expected': topology, 'observed': topology},
+                'sourceLinkOrigins': {'sectionLabelsForReview': []},
+                'ordinalCasesForReview': [], 'literalDisplaysForReview': [],
+            }
+
+            def exchange(_binary, requests, _timeout):
+                return dict.fromkeys(requests, response)
+
+            with patch.object(structure, 'run_profile_batch', side_effect=exchange) as run:
+                for schema in (response['schema'], structure.PROFILE_SCHEMA):
+                    response['schema'] = schema
+                    self.assertEqual(structure.main(args), 1)
+                    self.assertEqual(next(iter(structure.read_structure_database(ledger).values())).scan_status,
+                                     'hard-failure')
+                response['definitionHeadsForReview'] = []
+                self.assertEqual(structure.main(args), 0)
+                self.assertEqual(run.call_count, 3)
+                self.assertEqual(structure.main(args), 0)
+                self.assertEqual(run.call_count, 3)
+                page.write_text('.TH TEST 1\n.SH DESCRIPTION\nSECOND\n', encoding='utf-8')
+                self.assertEqual(structure.main(args), 0)
+                self.assertEqual(run.call_count, 4)
+
     def test_ordinal_review_positions_keep_occurrences_and_reject_malformed_data(self):
         for observe, required in (
             (structure.structure_source_reviews, {
                 'sourceLinkOrigins': {'sectionLabelsForReview': []}, 'literalDisplaysForReview': [],
+                'definitionHeadsForReview': [],
             }),
             (semantic.ordinal_source_reviews, {}),
         ):
@@ -29,7 +68,7 @@ class AuditProfileMigrationTests(unittest.TestCase):
 
     def test_stale_profiles_are_rescanned_once_without_losing_annotations(self):
         for audit, old_schema, read, write in (
-            (structure, 'mant.roff-structure-profile/v17',
+            (structure, 'mant.roff-structure-profile/v24',
              structure.read_structure_database, structure.write_structure_database),
             (semantic, 'mant.roff-semantic-profile/v13', semantic.read_database, semantic.write_database),
         ):

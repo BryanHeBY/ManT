@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v24"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v25"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -473,17 +473,24 @@ def profile_findings(
                 expected = response.get("expected")
                 observed = response.get("observed")
                 topology = response.get("topology")
+                valid_topology = valid_structure_topology(topology)
                 source_review = structure_source_reviews(response)
                 if (
                     not isinstance(violations, list)
                     or not all(isinstance(item, str) for item in violations)
                     or not valid_structure_counts(expected)
                     or not valid_structure_counts(observed)
-                    or not valid_structure_topology(topology)
+                    or not valid_topology
                     or source_review is None
                 ):
                     yield Finding(label, "hard-failure", [], "profiler returned invalid structure observations")
                 else:
+                    if response.get("alias") is not True:
+                        source_review.extend(
+                            SourceReview(eq["sourceLine"], 0, "equation has no proved table cell owner")
+                            for eq in topology["expected"]["equations"]
+                            if eq["context"] == "table-cell" and eq["cell"] is None
+                        )
                     yield Finding(
                         label,
                         "review" if violations or source_review else "clean",
@@ -507,7 +514,7 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
     )
     ordinal_reviews = ordinal_source_reviews(response)
     display_reviews = literal_source_reviews(response.get("literalDisplaysForReview"))
-    head_reviews = definition_head_reviews(response.get("definitionHeadsForReview", []))
+    head_reviews = definition_head_reviews(response.get("definitionHeadsForReview"))
     if any(reviews is None for reviews in (section_reviews, ordinal_reviews, display_reviews, head_reviews)):
         return None
     return [*section_reviews, *ordinal_reviews, *display_reviews, *head_reviews]
@@ -611,6 +618,18 @@ def valid_equation_topology(value: object) -> bool:
         and isinstance(value.get("context"), str)
         and value["context"] in {"display", "inline", "table-cell"}
         and isinstance(value.get("value"), str)
+        and "cell" in value
+        and (value["cell"] is None or valid_equation_cell(value["cell"]))
+    )
+
+
+def valid_equation_cell(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and all(is_nonnegative_integer(value.get(field)) for field in (
+            "tableSourceLine", "tableSourceColumn", "tableOccurrence", "rowIndex", "cellIndex",
+        ))
+        and value["tableOccurrence"] > 0
     )
 
 
@@ -698,6 +717,7 @@ def main(argv: Sequence[str]) -> int:
                 for page in pages
                 if (previous := database.get((corpus, *records[page]))) is None
                 or previous.profile_schema != PROFILE_SCHEMA
+                or previous.scan_status == "hard-failure"
             ]
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)

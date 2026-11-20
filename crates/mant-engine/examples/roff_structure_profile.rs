@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v24";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v25";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -158,6 +158,8 @@ struct IrTopology {
     lists: Vec<IrListTopology>,
     table_rows: Vec<IrTableRowTopology>,
     equations: Vec<IrEquationTopology>,
+    #[serde(skip)]
+    table_occurrences: BTreeMap<(u32, u32), usize>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -184,6 +186,7 @@ struct AstEquationTopology {
     source_line: u32,
     context: EquationContext,
     value: String,
+    cell: Option<EquationCell>,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -192,6 +195,27 @@ struct IrEquationTopology {
     source_line: u32,
     context: EquationContext,
     value: String,
+    cell: Option<EquationCell>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EquationCell {
+    table_source_line: u32,
+    table_source_column: u32,
+    table_occurrence: usize,
+    row_index: usize,
+    cell_index: usize,
+}
+
+fn next_table_occurrence(
+    counts: &mut BTreeMap<(u32, u32), usize>,
+    line: u32,
+    column: u32,
+) -> usize {
+    let count = counts.entry((line, column)).or_default();
+    *count += 1;
+    *count
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]

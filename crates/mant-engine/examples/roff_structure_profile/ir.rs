@@ -1,8 +1,8 @@
 //! IR observations using the same structure counters.
 use super::{
-    Block, Document, EquationContext, Inline, IrEquationTopology, IrListTopology, IrStructure,
-    IrTableCellTopology, IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind, Section,
-    equation_context_order,
+    Block, Document, EquationCell, EquationContext, Inline, IrEquationTopology, IrListTopology,
+    IrStructure, IrTableCellTopology, IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind,
+    Section, equation_context_order,
 };
 
 pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
@@ -18,7 +18,7 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
         }
     }
     let mut topology = IrTopology::default();
-    collect_blocks(&document.blocks, false, &mut profile, &mut topology);
+    collect_blocks(&document.blocks, None, &mut profile, &mut topology);
     for section in &document.sections {
         collect_section(section, &mut profile, &mut topology);
     }
@@ -38,11 +38,11 @@ fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut 
     collect_inlines(
         &section.heading.content,
         section.source.map_or(0, |source| source.line),
-        false,
+        None,
         profile,
         topology,
     );
-    collect_blocks(&section.blocks, false, profile, topology);
+    collect_blocks(&section.blocks, None, profile, topology);
     for child in &section.children {
         collect_section(child, profile, topology);
     }
@@ -50,7 +50,7 @@ fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut 
 
 fn collect_blocks(
     blocks: &[Block],
-    inside_table: bool,
+    cell: Option<EquationCell>,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
@@ -61,7 +61,7 @@ fn collect_blocks(
             } => {
                 profile.paragraph_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
-                collect_flow_inlines(block, children, inside_table, profile, topology);
+                collect_flow_inlines(block, children, cell, profile, topology);
             }
             Block::Unsupported { layout, .. } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
@@ -80,6 +80,7 @@ fn collect_blocks(
                         source_line: source.map_or(0, |span| span.line),
                         context: EquationContext::Display,
                         value: value.clone(),
+                        cell,
                     });
                 }
             }
@@ -92,7 +93,7 @@ fn collect_blocks(
                     profile.preformatted_lines += 1;
                 }
                 profile.preformatted_lines += line_break_count(children);
-                collect_flow_inlines(block, children, inside_table, profile, topology);
+                collect_flow_inlines(block, children, cell, profile, topology);
             }
             Block::List {
                 kind,
@@ -112,7 +113,7 @@ fn collect_blocks(
                     topology,
                 );
                 for item in items {
-                    collect_blocks(&item.blocks, inside_table, profile, topology);
+                    collect_blocks(&item.blocks, cell, profile, topology);
                 }
             }
             Block::DefinitionList {
@@ -133,9 +134,9 @@ fn collect_blocks(
                 );
                 for item in items {
                     for term in &item.terms {
-                        collect_inlines(term, 0, inside_table, profile, topology);
+                        collect_inlines(term, 0, cell, profile, topology);
                     }
-                    collect_blocks(&item.description, inside_table, profile, topology);
+                    collect_blocks(&item.description, cell, profile, topology);
                 }
             }
             Block::Table {
@@ -166,14 +167,14 @@ pub(super) fn has_visible_inline(inlines: &[Inline]) -> bool {
 fn collect_inlines(
     inlines: &[Inline],
     source_line: u32,
-    inside_table: bool,
+    cell: Option<EquationCell>,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
     for inline in inlines {
         match inline {
             Inline::Strong { children } | Inline::Emphasis { children } => {
-                collect_inlines(children, source_line, inside_table, profile, topology);
+                collect_inlines(children, source_line, cell, profile, topology);
             }
             Inline::Link {
                 target, children, ..
@@ -200,23 +201,24 @@ fn collect_inlines(
                 ) {
                     profile.known_links.record_target(target);
                 }
-                collect_inlines(children, source_line, inside_table, profile, topology);
+                collect_inlines(children, source_line, cell, profile, topology);
             }
             Inline::LineBreak { .. } => profile.hard_breaks += 1,
             Inline::Equation { value, .. } => {
-                if inside_table {
+                if cell.is_some() {
                     profile.table_equation_candidates += 1;
                 } else {
                     profile.inline_equation_candidates += 1;
                 }
                 topology.equations.push(IrEquationTopology {
                     source_line,
-                    context: if inside_table {
+                    context: if cell.is_some() {
                         EquationContext::TableCell
                     } else {
                         EquationContext::Inline
                     },
                     value: value.clone(),
+                    cell,
                 });
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}
@@ -282,14 +284,23 @@ fn collect_table(
                     .collect(),
             }
         }));
-    for row in rows {
+    let (line, column) = source.map_or((0, 0), |span| (span.line, span.column));
+    let occurrence = super::next_table_occurrence(&mut topology.table_occurrences, line, column);
+    for (row_index, row) in rows.iter().enumerate() {
         profile.table_spanning_cells += row
             .cells
             .iter()
             .filter(|cell| cell.column_span > 1 || cell.row_span > 1)
             .count();
-        for cell in &row.cells {
-            collect_blocks(&cell.blocks, true, profile, topology);
+        for (cell_index, cell) in row.cells.iter().enumerate() {
+            let address = EquationCell {
+                table_source_line: line,
+                table_source_column: column,
+                table_occurrence: occurrence,
+                row_index,
+                cell_index,
+            };
+            collect_blocks(&cell.blocks, Some(address), profile, topology);
         }
     }
 }
@@ -321,15 +332,9 @@ fn record_list_layout(
 fn collect_flow_inlines(
     block: &Block,
     children: &[Inline],
-    inside_table: bool,
+    cell: Option<EquationCell>,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
-    collect_inlines(
-        children,
-        source_line(block),
-        inside_table,
-        profile,
-        topology,
-    );
+    collect_inlines(children, source_line(block), cell, profile, topology);
 }

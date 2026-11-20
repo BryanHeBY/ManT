@@ -1,9 +1,14 @@
 //! Prove the retained payload of structures executed in definition terms.
 
-use libmandoc_rs::{DefinitionListStyle, Node, NodeKind, TableCellKind, TableRowKind};
+use libmandoc_rs::{
+    DefinitionListStyle, Node, NodeKind, NormalizedListKind, TableCellKind, TableRowKind,
+};
 use mant_codec::{RoffWordEffect, RoffWordEvidence};
 use mant_ir::{DefinitionItem, DefinitionTerm, Document, Inline, visit::Visit};
 use std::collections::{BTreeMap, HashMap, HashSet};
+
+#[path = "head_payloads/literal_rows.rs"]
+mod literal_rows;
 
 use super::{
     native_topology::{MdocContainerKind, mdoc_list_items, mdoc_list_topology_kind},
@@ -44,6 +49,7 @@ enum Origin {
     Table,
     Display,
     Equation,
+    ListMarker,
 }
 
 impl Origin {
@@ -54,6 +60,7 @@ impl Origin {
             Self::Table => "table",
             Self::Display => "literal",
             Self::Equation => "equation",
+            Self::ListMarker => "list-marker",
         }
     }
 }
@@ -61,8 +68,13 @@ impl Origin {
 struct ExpectedAtom {
     value: String,
     origin: Origin,
-    /// Rows proved from line-start words within one no-fill display.
-    literal_row: Option<usize>,
+    row: Option<DisplayRow>,
+}
+
+#[derive(Clone, Copy)]
+struct DisplayRow {
+    display: usize,
+    within: usize,
 }
 
 #[derive(Default)]
@@ -70,25 +82,22 @@ struct TermPayload {
     atoms: Vec<ExpectedAtom>,
     structured: bool,
     partial: bool,
-    literal_rows: usize,
+    opaque_words: bool,
+    displays: usize,
 }
 
 impl TermPayload {
-    fn record(&mut self, origin: Origin, word: &RoffWordEvidence, starts_literal_row: bool) {
+    fn record(&mut self, origin: Origin, word: &RoffWordEvidence, row: Option<DisplayRow>) {
         if [
             RoffWordEffect::Unclassified,
-            RoffWordEffect::Continues,
             RoffWordEffect::WordEndBreak,
             RoffWordEffect::ZeroAdvance,
         ]
         .iter()
         .any(|&effect| word.has(effect))
         {
-            self.partial = true;
+            self.leave_unproved_words();
             return;
-        }
-        if starts_literal_row {
-            self.literal_rows += 1;
         }
         self.atoms.extend(
             word.text
@@ -96,9 +105,14 @@ impl TermPayload {
                 .map(|token| ExpectedAtom {
                     value: token.to_owned(),
                     origin,
-                    literal_row: starts_literal_row.then_some(self.literal_rows),
+                    row,
                 }),
         );
+    }
+
+    fn leave_unproved_words(&mut self) {
+        self.partial = true;
+        self.opaque_words = true;
     }
 
     fn compare(
@@ -118,9 +132,11 @@ impl TermPayload {
             .map(|item| item.value.as_str())
             .collect();
         let mut observation = TermObservation::default();
-        for term in terms {
+        for (index, term) in terms.iter().enumerate() {
+            observation.term = index;
+            observation.row = 0;
             observation.visit_inlines(&term.content);
-            observation.end_line();
+            observation.end_run();
         }
         let mut observed = observation
             .atoms
@@ -132,7 +148,7 @@ impl TermPayload {
                 item.equation == matches!(expected.origin, Origin::Equation)
                     && item.value == expected.value
             };
-            let found = if self.partial {
+            let found = if self.opaque_words {
                 observed.find(|item| matches(item))
             } else {
                 observed.next().filter(|item| matches(item))
@@ -144,20 +160,36 @@ impl TermPayload {
                 ));
                 return;
             };
-            if let Some(row) = expected.literal_row {
-                if previous_row
-                    .is_some_and(|(source, projected)| source < row && found.row <= projected)
-                {
-                    violations.push(format!(
-                        "definition-head-literal at {line}:{column}, occurrence {occurrence}: missing hard line before {:?}",
-                        expected.value
+            if let Some(row) = expected.row {
+                if let Some((source, projected, term)) = previous_row {
+                    let source: DisplayRow = source;
+                    let problem = if found.term != term {
+                        Some("hard line replaced by a separate term")
+                    } else if source.display == row.display {
+                        let required = row.within - source.within;
+                        match found.row.saturating_sub(projected).cmp(&required) {
+                            std::cmp::Ordering::Less => Some("missing hard line"),
+                            std::cmp::Ordering::Greater => Some("unexpected hard line"),
+                            std::cmp::Ordering::Equal => None,
+                        }
+                    } else if found.row == projected {
+                        Some("missing hard line")
+                    } else {
+                        None
+                    };
+                    if let Some(problem) = problem {
+                        violations.push(format!(
+                            "definition-head-literal at {line}:{column}, occurrence {occurrence}: {problem} before {:?}", expected.value
                     ));
-                    return;
+                        return;
+                    }
                 }
-                previous_row = Some((row, found.row));
+                previous_row = Some((row, found.row, found.term));
+            } else {
+                previous_row = None;
             }
         }
-        if !self.partial
+        if !self.opaque_words
             && let Some(extra) = observed.next()
         {
             violations.push(format!(
@@ -173,11 +205,13 @@ struct TermObservation {
     atoms: Vec<ObservedAtom>,
     text: String,
     row: usize,
+    term: usize,
 }
 
 struct ObservedAtom {
     value: String,
     row: usize,
+    term: usize,
     equation: bool,
 }
 
@@ -187,6 +221,7 @@ impl TermObservation {
             .extend(self.text.split_ascii_whitespace().map(|word| ObservedAtom {
                 value: word.to_owned(),
                 row: self.row,
+                term: self.term,
                 equation: false,
             }));
         self.text.clear();
@@ -207,6 +242,7 @@ impl TermObservation {
                     self.atoms.push(ObservedAtom {
                         value: value.clone(),
                         row: self.row,
+                        term: self.term,
                         equation: true,
                     });
                 }
@@ -290,7 +326,7 @@ impl HeadPayloads {
                 )
             );
             if structural || closes_field || child.flags.no_fill && child.flags.line_start {
-                record_words(node, &node.children[start..index], source, origin, payload);
+                record_words(&node.children[start..index], source, origin, None, payload);
                 start = index;
             }
             if structural {
@@ -298,13 +334,13 @@ impl HeadPayloads {
             } else if control == Some(SourceControl::AlignedRows) {
                 // The generated rows have their own field retirement.
                 // Retain both neighbors and disclose the unproved interval.
-                payload.partial = true;
+                payload.leave_unproved_words();
             }
             if structural || closes_field {
                 start = index + 1;
             }
         }
-        record_words(node, &node.children[start..], source, origin, payload);
+        record_words(&node.children[start..], source, origin, None, payload);
     }
 
     fn collect_structure(
@@ -329,56 +365,120 @@ impl HeadPayloads {
                         })
                         .filter_map(|cell| cell.decoder_text())
                     {
-                        payload.record(Origin::Table, &RoffWordEvidence::read(value), false);
+                        payload.record(Origin::Table, &RoffWordEvidence::read(value), None);
                     }
                 }
             }
             NodeKind::Equation => {
-                if let Some(value) = node
+                if let Some(equation) = node
                     .equation
                     .as_ref()
-                    .map(libmandoc_rs::EquationBox::readable_text)
-                    && !value.is_empty()
+                    .filter(|equation| super::native::equation_has_payload(equation))
                 {
                     payload.atoms.push(ExpectedAtom {
-                        value: super::native::equation_visible_text(&value),
+                        value: super::native::equation_visible_text(&equation.readable_text()),
                         origin: Origin::Equation,
-                        literal_row: None,
+                        row: None,
                     });
                 }
             }
             NodeKind::Block => {
                 let token = node.macro_token.as_deref();
                 if let Some(kind) = mdoc_list_topology_kind(node) {
-                    let origin = if kind == MdocContainerKind::Table {
-                        Origin::Table
-                    } else {
-                        Origin::List
+                    Self::walk_list(node, kind, source, payload);
+                } else if matches!(token, Some("D1" | "Dl")) {
+                    // blk_part_imp puts boundary punctuation beside BODY.
+                    // termp_d1_pre and its post-handler enclose all those
+                    // siblings in one executed field.
+                    payload.displays += 1;
+                    let row = DisplayRow {
+                        display: payload.displays,
+                        within: 0,
                     };
-                    for item in mdoc_list_items(node) {
-                        for part in item.children.iter().filter(|part| {
-                            source.destination(part) == Some(SourceDestination::Term)
-                        }) {
-                            Self::walk_part(part, source, origin, payload);
-                        }
-                    }
-                } else if matches!(token, Some("Bd" | "D1" | "Dl" | "Xo")) {
-                    let display = token != Some("Xo");
-                    let origin = if display { Origin::Display } else { origin };
+                    record_words(&node.children, source, Origin::Display, Some(row), payload);
+                } else if matches!(token, Some("Bd" | "Xo")) {
                     for part in node
                         .children
                         .iter()
                         .filter(|part| part.kind == NodeKind::Body)
                     {
-                        Self::walk_part(part, source, origin, payload);
+                        if token == Some("Xo") {
+                            Self::walk_part(part, source, origin, payload);
+                        } else if !literal_rows::record(node, part, source, payload) {
+                            Self::walk_part(part, source, Origin::Display, payload);
+                        }
                     }
                 } else {
-                    // Generated enclosures and complex formatting are
-                    // outside the simple lexical witness for this interval.
-                    payload.partial = true;
+                    Self::walk_wrapper(node, source, origin, payload);
                 }
             }
             _ => unreachable!("only structural nodes enter the term walker"),
+        }
+    }
+
+    fn walk_list(
+        node: &Node,
+        kind: MdocContainerKind,
+        source: &SourceContext,
+        payload: &mut TermPayload,
+    ) {
+        let origin = if kind == MdocContainerKind::Table {
+            Origin::Table
+        } else {
+            Origin::List
+        };
+        for (index, item) in mdoc_list_items(node).enumerate() {
+            // termp_it_pre() writes one generated HEAD word before
+            // the author's BODY, even when the two spellings agree.
+            let marker = match node.list_kind {
+                Some(NormalizedListKind::Ordered) => Some(format!("{}.", index + 1)),
+                Some(NormalizedListKind::Bullet) => Some("•".into()),
+                Some(NormalizedListKind::Dash) => Some("-".into()),
+                _ => None,
+            };
+            if let Some(value) = marker {
+                payload.atoms.push(ExpectedAtom {
+                    value,
+                    origin: Origin::ListMarker,
+                    row: None,
+                });
+            }
+            for part in item
+                .children
+                .iter()
+                .filter(|part| source.destination(part) == Some(SourceDestination::Term))
+            {
+                Self::walk_part(part, source, origin, payload);
+            }
+        }
+    }
+
+    fn walk_wrapper(
+        node: &Node,
+        source: &SourceContext,
+        origin: Origin,
+        payload: &mut TermPayload,
+    ) {
+        // The wrapper's generated layout remains under review;
+        // independently executed descendants still have witnesses.
+        payload.partial = true;
+        for part in node
+            .children
+            .iter()
+            .filter(|part| source.destination(part) == Some(SourceDestination::Term))
+        {
+            if matches!(part.kind, NodeKind::Head | NodeKind::Body | NodeKind::Tail)
+                && contains_structure(part, source)
+            {
+                Self::walk_part(part, source, origin, payload);
+            } else if matches!(
+                part.kind,
+                NodeKind::Block | NodeKind::Table | NodeKind::Equation
+            ) {
+                Self::collect_structure(part, source, origin, payload);
+            } else {
+                record_words(std::slice::from_ref(part), source, origin, None, payload);
+            }
         }
     }
 
@@ -448,20 +548,18 @@ fn contains_structure(node: &Node, source: &SourceContext) -> bool {
 }
 
 fn record_words(
-    owner: &Node,
     words: &[Node],
     source: &SourceContext,
     origin: Origin,
+    row: Option<DisplayRow>,
     payload: &mut TermPayload,
 ) {
     let Some(first) = words.first() else { return };
     let (closed, word) = source_evidence(words, first, false, source, true);
-    payload.partial |= closed.has_text() || closed.needs_review();
+    if closed.has_text() || closed.needs_review() {
+        payload.leave_unproved_words();
+    }
     if let Some(word) = word {
-        let literal_row = matches!(origin, Origin::Display)
-            && first.flags.no_fill
-            && first.flags.line_start
-            && owner.macro_token.as_deref() != Some("D1");
-        payload.record(origin, &word, literal_row);
+        payload.record(origin, &word, row);
     }
 }

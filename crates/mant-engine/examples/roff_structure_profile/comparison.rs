@@ -149,11 +149,20 @@ fn compare_equation_topology(
     observed: &[IrEquationTopology],
 ) {
     let mut used = vec![false; observed.len()];
-    for equation in expected {
+    // Reserve exact cell addresses before comparing the equations whose
+    // source only proves that they belong to a table.
+    for equation in expected
+        .iter()
+        .filter(|eq| eq.cell.is_some())
+        .chain(expected.iter().filter(|eq| eq.cell.is_none()))
+    {
         let candidate = observed.iter().enumerate().position(|(index, candidate)| {
             !used[index]
                 && candidate.context == equation.context
                 && candidate.value == equation.value
+                && equation
+                    .cell
+                    .is_none_or(|cell| candidate.cell == Some(cell))
                 && (equation.context != EquationContext::Display
                     || candidate.source_line == equation.source_line)
         });
@@ -161,8 +170,18 @@ fn compare_equation_topology(
             used[index] = true;
             continue;
         }
+        let owner = equation.cell.map_or_else(String::new, |cell| {
+            format!(
+                " in table {}:{}, occurrence {}, row {}, cell {}",
+                cell.table_source_line,
+                cell.table_source_column,
+                cell.table_occurrence,
+                cell.row_index + 1,
+                cell.cell_index + 1,
+            )
+        });
         violations.push(format!(
-            "{}-equation at line {}: expected normalized value {:?}, observed no matching IR value",
+            "{}-equation at line {}{owner}: expected normalized value {:?}, observed no matching IR value",
             equation.context.as_str(),
             equation.source_line,
             equation.value,

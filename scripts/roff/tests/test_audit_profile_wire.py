@@ -24,6 +24,7 @@ def structure_page():
         'topology': {'expected': topology('definition'), 'observed': topology('generic')},
         'ordinalCasesForReview': [[8, 2]],
         'literalDisplaysForReview': [],
+        'definitionHeadsForReview': [],
         'sourceLinkOrigins': {'section': [[15, 2]], 'sectionLabelsForReview': [[15, 2]]},
         'violations': [],
     }
@@ -203,7 +204,8 @@ class AuditProfileWireTests(unittest.TestCase):
         self.assertEqual(result.status, 'review')
         self.assertEqual(result.violations, response['violations'])
         self.assertEqual(len(result.source_review), 2)
-        for field in ('sourceLinkOrigins', 'ordinalCasesForReview', 'literalDisplaysForReview'):
+        for field in ('sourceLinkOrigins', 'ordinalCasesForReview', 'literalDisplaysForReview',
+                      'definitionHeadsForReview'):
             broken = deepcopy(response)
             del broken[field]
             self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
@@ -211,7 +213,8 @@ class AuditProfileWireTests(unittest.TestCase):
     def test_alias_and_error_payloads_keep_their_contract(self):
         alias = structure_page()
         alias['alias'] = True
-        del alias['sourceLinkOrigins'], alias['ordinalCasesForReview'], alias['literalDisplaysForReview']
+        del (alias['sourceLinkOrigins'], alias['ordinalCasesForReview'], alias['literalDisplaysForReview'],
+             alias['definitionHeadsForReview'])
         result = self.finding(structure, alias)
         self.assertEqual(result.status, 'clean')
         self.assertEqual(result.source_review, [])
@@ -329,7 +332,7 @@ class AuditProfileWireTests(unittest.TestCase):
                 'cells': [{'columnSpan': 1, 'rowSpan': 1,
                            'verticalContinuation' if side == 'expected' else 'empty': False}],
             }]
-            current['equations'] = [{'sourceLine': 10, 'context': 'inline', 'value': 'x'}]
+            current['equations'] = [{'sourceLine': 10, 'context': 'inline', 'value': 'x', 'cell': None}]
             self.assertEqual(self.finding(structure, response).status, 'clean')
             for field in ('lists', 'tableRows', 'equations'):
                 for record in (None, False, [], {}):

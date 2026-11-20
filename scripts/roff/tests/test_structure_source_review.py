@@ -18,7 +18,8 @@ class StructureSourceReviewTests(unittest.TestCase):
             'ordinalCasesForReview': [],
             'literalDisplaysForReview': [],
         }
-        self.assertEqual(audit.structure_source_reviews(positions), [])
+        self.assertIsNone(audit.structure_source_reviews(positions))
+        self.assertEqual(audit.structure_source_reviews({**positions, 'definitionHeadsForReview': []}), [])
         reviews = audit.structure_source_reviews({
             **positions,
             'definitionHeadsForReview': [
@@ -69,6 +70,7 @@ class StructureSourceReviewTests(unittest.TestCase):
                     'ordinalCasesForReview': [],
                     'sourceLinkOrigins': {'sectionLabelsForReview': [[9, 2]] if uncertain else []},
                     'literalDisplaysForReview': [],
+                    'definitionHeadsForReview': [],
                     # Simulate a separate lowering mutation in the mixed page.
                     'violations': [lost_link] if name == 'mixed' else [],
                 }
@@ -122,6 +124,7 @@ class StructureSourceReviewTests(unittest.TestCase):
                     'ordinalCasesForReview': [],
                     'sourceLinkOrigins': {'sectionLabelsForReview': positions},
                     'literalDisplaysForReview': [],
+                    'definitionHeadsForReview': [],
                 } for key in requests}
 
             with self.subTest(positions=positions):
