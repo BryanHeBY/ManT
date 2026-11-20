@@ -309,15 +309,15 @@ fn profile_request(line: &str) -> Result<Value, String> {
     // the normal indexed-page path, which is also the path whose IR we audit.
     let is_alias = document.meta.alias_target.is_some();
     let (observed, observed_topology) = ir_profile(&document);
-    let violations = if is_alias {
-        Vec::new()
+    let (violations, definition_head_reviews) = if is_alias {
+        (Vec::new(), Vec::new())
     } else {
         let mut violations =
             compare_structure(&expected, &observed, &expected_topology, &observed_topology);
-        expected_topology
+        let reviews = expected_topology
             .head_payloads
             .compare(&document, &mut violations);
-        violations
+        (violations, reviews)
     };
 
     let item_census = request
@@ -349,6 +349,7 @@ fn profile_request(line: &str) -> Result<Value, String> {
         },
         "alias": is_alias,
         "literalDisplaysForReview": expected.literal_display_reviews,
+        "definitionHeadsForReview": definition_head_reviews,
         "ordinalCasesForReview": expected_topology.lists.iter()
             .filter(|list| list.ordinal_uncertain)
             .map(|list| [list.source_line, list.source_column])

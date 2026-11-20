@@ -4,19 +4,14 @@ use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
     EquationContext, ListTopologyKind, equation_context_order,
-    head_payloads::HeadPayloads,
     native::{equation_has_payload, equation_visible_text},
     ordinal_labels,
 };
 use ordinal_labels::{OrdinalDisposition, SourceDestination};
 
-pub(super) fn collect(
-    root: &Node,
-    head_payloads: &HeadPayloads,
-    spacing: &ordinal_labels::SourceContext,
-) -> AstTopology {
+pub(super) fn collect(root: &Node, spacing: &ordinal_labels::SourceContext) -> AstTopology {
     let mut topology = AstTopology::default();
-    collect_ast_topology(root, false, &mut topology, head_payloads, spacing);
+    collect_ast_topology(root, false, &mut topology, spacing);
     topology.lists.sort_by_key(|list| list.source_line);
     topology.equations.sort_by_key(|equation| {
         (
@@ -102,7 +97,6 @@ fn collect_ast_topology(
     node: &Node,
     inside_table: bool,
     topology: &mut AstTopology,
-    head_payloads: &HeadPayloads,
     spacing: &ordinal_labels::SourceContext,
 ) {
     let Some(destination) = spacing.destination(node) else {
@@ -119,13 +113,7 @@ fn collect_ast_topology(
     {
         topology.equations.push(AstEquationTopology {
             source_line: node.line,
-            context: if inside_table {
-                EquationContext::TableCell
-            } else if equation_is_display(node, head_payloads) {
-                EquationContext::Display
-            } else {
-                EquationContext::Inline
-            },
+            context: equation_context(node, inside_table, !blocks),
             value: equation_visible_text(&equation.readable_text()),
         });
     }
@@ -170,7 +158,6 @@ fn collect_ast_topology(
         if blocks
             && child.kind == NodeKind::Table
             && spacing.destination(child) == Some(SourceDestination::Blocks)
-            && !head_payloads.row_ids.contains(&child.id)
             && let Some(kind) = native_table_kind(child)
         {
             if child.flags.table_start || table_origin.is_none() {
@@ -194,27 +181,43 @@ fn collect_ast_topology(
                     .collect(),
             });
             row_index += 1;
-            collect_ast_topology(child, true, topology, head_payloads, spacing);
+            collect_ast_topology(child, true, topology, spacing);
             continue;
         }
         collect_ast_topology(
             child,
-            inside_table || blocks && node.kind == NodeKind::Table,
+            inside_table || blocks && is_table_container(node),
             topology,
-            head_payloads,
             spacing,
         );
     }
 }
 
-pub(super) fn equation_is_display(node: &Node, head_payloads: &HeadPayloads) -> bool {
+pub(super) fn is_table_container(node: &Node) -> bool {
+    node.kind == NodeKind::Table
+        || node.kind == NodeKind::Block
+            && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
+}
+
+pub(super) fn equation_context(
+    node: &Node,
+    inside_table: bool,
+    inside_term: bool,
+) -> EquationContext {
     // roff_eqndelim's executed origin is independent from roff_EQ's NODE_LINE.
     // Irrespective of the eqn delimiter mode, an executed definition HEAD
     // stores its value in the term and cannot own a stand-alone block.
-    !head_payloads.contains_equation(node)
+    let display = !inside_term
         && node
             .equation_inline
-            .map_or(node.flags.line_start, |inline| !inline)
+            .map_or(node.flags.line_start, |inline| !inline);
+    if display {
+        EquationContext::Display
+    } else if inside_table {
+        EquationContext::TableCell
+    } else {
+        EquationContext::Inline
+    }
 }
 
 fn native_table_kind(node: &Node) -> Option<mant_ir::TableRowKind> {

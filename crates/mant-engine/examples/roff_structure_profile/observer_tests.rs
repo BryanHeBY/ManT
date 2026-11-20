@@ -195,8 +195,205 @@ fn missing_table_cell_in_a_head_cannot_be_replaced_by_the_same_word_in_body() {
     native.head_payloads.compare(&document, &mut violations);
     assert_eq!(
         violations,
-        ["definition-head-table at 9:2, occurrence 1: missing cell word \"SECOND\" in term"]
+        ["definition-head-table at 9:2, occurrence 1: missing or out-of-order \"SECOND\" in term"]
     );
+}
+
+fn structured_term(source: &str) -> String {
+    format!(
+        "{DISPATCH_HEADER}.Bl -tag -width a\n.It Xo\n{source}.Xc\nBODY\n.El\n.Sh ENDPROBE\nDone.\n"
+    )
+}
+
+fn first_term(document: &mut Document) -> &mut Vec<Inline> {
+    let Block::DefinitionList { items, .. } = &mut document.sections[1].blocks[0] else {
+        panic!("expected definition list");
+    };
+    &mut items[0].terms[0].content
+}
+
+fn assert_term_observation(native: &AstTopology, document: &Document) {
+    let mut violations = Vec::new();
+    let reviews = native.head_payloads.compare(document, &mut violations);
+    assert!(violations.is_empty(), "{violations:?}");
+    assert!(reviews.is_empty());
+}
+
+#[test]
+fn term_witnesses_consume_an_ordered_stream_across_mixed_parts() {
+    // termp_it_pre() and termp_bd_pre() execute cells and their children
+    // in order. Both fixed devices and HTML retained all four words.
+    let source = structured_term(".Bl -column a b\n.It ALPHA Ta BRAVO\n.Dl CHARLIE\nDELTA\n.El\n");
+    let (_, native, document) = parsed(&source);
+    assert_term_observation(&native, &document);
+    for (word, axis) in [
+        ("ALPHA", "table"),
+        ("BRAVO", "table"),
+        ("CHARLIE", "literal"),
+        ("DELTA", "table"),
+    ] {
+        let mut observed = document.clone();
+        first_term(&mut observed)
+            .retain(|inline| !matches!(inline, Inline::Text { value } if value == word));
+        let mut violations = Vec::new();
+        native.head_payloads.compare(&observed, &mut violations);
+        assert!(
+            violations.iter().any(|item| {
+                item.starts_with(&format!("definition-head-{axis}")) && item.contains(word)
+            }),
+            "{word}: {violations:?}"
+        );
+    }
+    // roff_term_pre_br() closes BRAVO before CENTRE enters the
+    // same cell. The observer needs the earlier field as well.
+    let source = structured_term(
+        ".Bl -column a b\n.It ALPHA Ta BRAVO\n.br\nCENTRE\n.Dl CHARLIE\nDELTA\n.El\n",
+    );
+    let (_, native, mut document) = parsed(&source);
+    assert_term_observation(&native, &document);
+    first_term(&mut document)
+        .retain(|inline| !matches!(inline, Inline::Text { value } if value == "BRAVO"));
+    let mut violations = Vec::new();
+    native.head_payloads.compare(&document, &mut violations);
+    assert!(
+        violations.iter().any(|issue| issue.contains("BRAVO")),
+        "{violations:?}"
+    );
+}
+
+#[test]
+fn nested_terms_keep_execution_order_and_cannot_reuse_one_equal_word() {
+    // CVS renders the inner list before the second outer item. The
+    // second source writes SAME in two distinct executed structures.
+    for (body, words, swap) in [
+        (
+            ".Bl -tag -width a\n.It ONE\nTWO\n.Bl -tag -width a\n.It THREE\nFOUR\n.El\nFIVE\n.It SIX\nSEVEN\n.El\n",
+            ["THREE", "SIX"],
+            true,
+        ),
+        (
+            ".Bl -item\n.It\nSAME\n.El\n.Bl -column a\n.It SAME\n.El\n",
+            ["SAME", "SAME"],
+            false,
+        ),
+    ] {
+        let (_, native, document) = parsed(&structured_term(body));
+        assert_term_observation(&native, &document);
+        let mut observed = document.clone();
+        let term = first_term(&mut observed);
+        let (word_a, word_b) = (words[0], words[1]);
+        let a = term
+            .iter()
+            .position(|inline| matches!(inline, Inline::Text { value } if value == word_a))
+            .unwrap();
+        let b = term
+            .iter()
+            .rposition(|inline| matches!(inline, Inline::Text { value } if value == word_b))
+            .unwrap();
+        assert_ne!(a, b);
+        if swap {
+            term.swap(a, b);
+        } else {
+            term.remove(a);
+        }
+        let mut violations = Vec::new();
+        native.head_payloads.compare(&observed, &mut violations);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+        let mut observed = document.clone();
+        let term = first_term(&mut observed);
+        term.extend([Inline::line_break(), term[a].clone()]);
+        let mut violations = Vec::new();
+        native.head_payloads.compare(&observed, &mut violations);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+    }
+}
+
+#[test]
+fn term_witness_preserves_unicode_spacing_on_both_sides() {
+    // Fixed UTF-8 preserves NBRSP from \~ and literal Unicode spaces.
+    for (input, printed) in [
+        (r"\~", '\u{a0}'),
+        ("\u{2003}", '\u{2003}'),
+        ("\u{2009}", '\u{2009}'),
+        (" ", ' '),
+    ] {
+        let source = structured_term(&format!(
+            ".Bl -column a b\n.It FIRST{input}SECOND Ta BRAVO\n.El\n"
+        ));
+        let (_, native, mut document) = parsed(&source);
+        assert!(
+            mant_ir::inline_plain_text(first_term(&mut document))
+                .contains(&format!("FIRST{printed}SECOND"))
+        );
+        assert_term_observation(&native, &document);
+        for node in first_term(&mut document) {
+            if let Inline::Text { value } = node {
+                *value = value.replace("SECOND", "");
+            }
+        }
+        let mut violations = Vec::new();
+        native.head_payloads.compare(&document, &mut violations);
+        assert_eq!(violations.len(), 1, "{violations:?}");
+    }
+}
+
+#[test]
+fn a_literal_head_uses_its_term_rows_and_column_equations_use_their_cell() {
+    // termp_bd_post() closes the second literal row in the HEAD; only
+    // observations on that term can satisfy it. Inline eqn delimiters
+    // and a display EQ are independently checked in the column list.
+    let source = structured_term(".Bd -literal\nALPHA\nBRAVO\n.Ed\n");
+    let (expected, native, mut document) = parsed(&source);
+    let (ir, observed) = ir_profile(&document);
+    assert!(compare_structure(&expected, &ir, &native, &observed).is_empty());
+    assert_term_observation(&native, &document);
+    let term = first_term(&mut document);
+    let between = term
+        .iter()
+        .rposition(|node| matches!(node, Inline::LineBreak {}))
+        .unwrap();
+    term[between] = Inline::Text { value: " ".into() };
+    let mut violations = Vec::new();
+    native.head_payloads.compare(&document, &mut violations);
+    assert!(
+        violations
+            .iter()
+            .any(|item| item.contains("missing hard line")),
+        "{violations:?}"
+    );
+
+    for (body, context) in [
+        (
+            ".Bl -column a b\n.It LEFT Ta RIGHT\n.Bl -tag -width a\n.It Xo\n.EQ\nalpha\n.EN\n.Xc\nbody\n.El\n.El\n",
+            EquationContext::TableCell,
+        ),
+        (
+            ".EQ\ndelim $$\n.EN\n.Bl -column a b\n.It LEFT Ta RIGHT\ntext $alpha$ tail\n.El\n",
+            EquationContext::TableCell,
+        ),
+        (
+            ".Bl -column a b\n.It LEFT Ta RIGHT\n.EQ\nalpha\n.EN\n.El\n",
+            EquationContext::Display,
+        ),
+    ] {
+        let (expected, native, document) = parsed(&format!("{DISPATCH_HEADER}{body}"));
+        let (ir, observed) = ir_profile(&document);
+        assert_eq!(native.equations[0].context, context);
+        let violations = compare_structure(&expected, &ir, &native, &observed);
+        assert!(violations.is_empty(), "{body}: {violations:?}");
+        assert_term_observation(&native, &document);
+    }
+}
+
+#[test]
+fn recovered_ordinals_do_not_spend_a_definition_term_occurrence() {
+    // Mandoc emits the three It heads at the same invocation position.
+    // The first two form the independently proved ordinal list.
+    let source = format!(
+        "{DISPATCH_HEADER}.de XX\n.Bl -tag -width a\n.It 1.\nFIRST\n.It 2.\nSECOND\n.El\n.Bl -tag -width a\n.It Xo\n.Bl -column a b\n.It LEFT Ta RIGHT\n.El\n.Xc\nBODY\n.El\n..\n.XX\n.Sh ENDPROBE\nDone.\n"
+    );
+    let (_, native, document) = parsed(&source);
+    assert_term_observation(&native, &document);
 }
 
 fn row_kind(kind: &mant_ir::TableRowKind) -> &'static str {

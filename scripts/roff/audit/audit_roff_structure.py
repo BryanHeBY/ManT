@@ -507,9 +507,28 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
     )
     ordinal_reviews = ordinal_source_reviews(response)
     display_reviews = literal_source_reviews(response.get("literalDisplaysForReview"))
-    if section_reviews is None or ordinal_reviews is None or display_reviews is None:
+    head_reviews = definition_head_reviews(response.get("definitionHeadsForReview", []))
+    if any(reviews is None for reviews in (section_reviews, ordinal_reviews, display_reviews, head_reviews)):
         return None
-    return [*section_reviews, *ordinal_reviews, *display_reviews]
+    return [*section_reviews, *ordinal_reviews, *display_reviews, *head_reviews]
+
+
+def definition_head_reviews(records: object) -> list[SourceReview] | None:
+    if not isinstance(records, list):
+        return None
+    descriptions = {
+        "ambiguous-owner": "definition term source coordinates do not identify a unique owner",
+        "partial-payload": "definition term text is only partially proved",
+    }
+    reviews = []
+    for record in records:
+        if (not isinstance(record, dict)
+                or not all(is_nonnegative_integer(record.get(key)) for key in ("line", "column"))
+                or not isinstance(record.get("reason"), str)
+                or record["reason"] not in descriptions):
+            return None
+        reviews.append(SourceReview(record["line"], record["column"], descriptions[record["reason"]]))
+    return reviews
 
 
 def literal_source_reviews(records: object) -> list[LiteralDisplaySourceReview] | None:

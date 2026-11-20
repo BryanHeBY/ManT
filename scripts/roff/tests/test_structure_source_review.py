@@ -12,6 +12,30 @@ from scripts.roff.audit import audit_roff_structure as audit
 
 
 class StructureSourceReviewTests(unittest.TestCase):
+    def test_definition_head_review_reasons_are_validated_independently(self):
+        positions = {
+            'sourceLinkOrigins': {'sectionLabelsForReview': []},
+            'ordinalCasesForReview': [],
+            'literalDisplaysForReview': [],
+        }
+        self.assertEqual(audit.structure_source_reviews(positions), [])
+        reviews = audit.structure_source_reviews({
+            **positions,
+            'definitionHeadsForReview': [
+                {'line': 9, 'column': 2, 'reason': 'partial-payload'},
+                {'line': 18, 'column': 9, 'reason': 'ambiguous-owner'},
+            ],
+        })
+        self.assertEqual([(item.line, item.column) for item in reviews], [(9, 2), (18, 9)])
+        self.assertIn('partially proved', reviews[0].reason)
+        self.assertIn('unique owner', reviews[1].reason)
+        for records in (None, [{'line': True, 'column': 3, 'reason': 'partial-payload'}],
+                        [{'line': 9, 'column': 2, 'reason': 'unknown'}]):
+            with self.subTest(records=records):
+                self.assertIsNone(audit.structure_source_reviews({
+                    **positions, 'definitionHeadsForReview': records,
+                }))
+
     def test_source_review_and_unrelated_violations_are_reported_separately(self):
         # CVS term_word() emits zero-width output for the unknown named
         # special in mixed/unknown. A real ONE label still owes its link.

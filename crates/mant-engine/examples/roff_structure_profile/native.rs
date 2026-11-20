@@ -4,7 +4,7 @@ use super::{
     SpecialCharacter,
     head_payloads::HeadPayloads,
     native_topology::{
-        MdocContainerKind, column_data_items, equation_is_display, mdoc_list_items,
+        MdocContainerKind, column_data_items, equation_context, mdoc_list_items,
         mdoc_list_topology_kind,
     },
     ordinal_labels::{
@@ -25,19 +25,10 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
     let mut no_fill_lines = BTreeMap::new();
     super::literal_owners::record_source_displays(root, &mut profile);
     let head_payloads = HeadPayloads::collect(root, &profile.source_context);
-    collect_ast_structure(
-        root,
-        false,
-        false,
-        0,
-        &mut profile,
-        &mut no_fill_lines,
-        &head_payloads,
-    );
+    collect_ast_structure(root, false, false, 0, &mut profile, &mut no_fill_lines);
     profile.no_fill_lines = retained_no_fill_rows(&no_fill_lines);
     super::links::native_link_obligations(report, &mut profile);
-    let mut topology =
-        super::native_topology::collect(root, &head_payloads, &profile.source_context);
+    let mut topology = super::native_topology::collect(root, &profile.source_context);
     topology.head_payloads = head_payloads;
     (profile, topology)
 }
@@ -49,14 +40,13 @@ fn collect_ast_structure(
     relative_indent_depth: usize,
     profile: &mut AstStructure,
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
-    head_payloads: &HeadPayloads,
 ) {
     let Some(destination) = profile.source_context.destination(node) else {
         return;
     };
     let blocks = destination == SourceDestination::Blocks;
     let nonprinting = inherited_nonprinting || is_stateful_request(node);
-    if !nonprinting {
+    if blocks && !nonprinting {
         record_no_fill_line(node, no_fill_lines);
     }
     if blocks && node.kind == NodeKind::Block {
@@ -87,11 +77,7 @@ fn collect_ast_structure(
     if node.macro_token.as_deref() == Some("br") && node.kind == NodeKind::Element {
         profile.hard_breaks += 1;
     }
-    if blocks
-        && node.kind == NodeKind::Table
-        && node.table_row_kind.is_some()
-        && !head_payloads.row_ids.contains(&node.id)
-    {
+    if blocks && node.kind == NodeKind::Table && node.table_row_kind.is_some() {
         profile.table_rows += 1;
         profile.table_spanning_cells += node
             .table_cells
@@ -106,12 +92,15 @@ fn collect_ast_structure(
             .filter(|equation| equation_has_payload(equation))
         {
             None => profile.equation_configurations += 1,
-            Some(_) if inside_table => profile.table_equations += 1,
-            Some(_) if equation_is_display(node, head_payloads) => profile.display_equations += 1,
-            Some(_) => profile.inline_equations += 1,
+            Some(_) => match equation_context(node, inside_table, !blocks) {
+                super::EquationContext::Display => profile.display_equations += 1,
+                super::EquationContext::Inline => profile.inline_equations += 1,
+                super::EquationContext::TableCell => profile.table_equations += 1,
+            },
         }
     }
-    let child_inside_table = inside_table || blocks && node.kind == NodeKind::Table;
+    let child_inside_table =
+        inside_table || blocks && super::native_topology::is_table_container(node);
     let visible_rs = node.kind == NodeKind::Block
         && node.macro_token.as_deref() == Some("RS")
         && node_part_children(node, NodeKind::Body)
@@ -131,7 +120,6 @@ fn collect_ast_structure(
             child_indent_depth,
             profile,
             no_fill_lines,
-            head_payloads,
         );
     }
 }
