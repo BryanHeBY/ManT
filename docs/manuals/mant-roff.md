@@ -872,6 +872,9 @@ executed declaration after a separator uses its own evidence. Implicit
 enclosures can contain that separator, and glued `Fl` invocations cannot
 form one new option spelling. Operands stay in the readable form, and an
 edited or partial command word cannot prove a different name.
+An authored bracket can open at the boundary between accepted arguments,
+such as `Ar path[ Ns Ar index ]`. Invocation and comma-alias recognition
+use those same boundaries while testing whether a pipe is inside the group.
 Inside a command directory, one `Nm` can author a complete multiword name
 such as `zpool iostat`. A pipe between independent program invocations
 keeps their source form without adding a name for either invocation.
@@ -1440,6 +1443,12 @@ escaping is minimal but lossless: intraword underscores such as the one in
 Color, point size, vertical or non-literal motion, drawing, register, string, device, and postprocessor escape operands are consumed so control syntax cannot leak into prose. Their presentation effect is omitted. Overstrike `\o` retains surviving author glyphs, including bounded consecutive backspaces and the native trailing blank/tab trim. Link identity continues to follow the separate HTML-compatible source projection. A positive literal relative horizontal motion can contribute a reading space, including before a `\c` line join. If its only advance clears the pending native backstep, it adds no space. A short advance between glyphs in a proved native word can retain its width and annotation independently of the following glyph. A literal rewind can edit an earlier operand while the native cursor and affected slots are known, including when an interior word-end marker still awaits the native field flush. A raw space over an existing cell advances the input cursor without replacing the cell or adding another visible space. Motions into an unproved region preserve the authored reading text. Known zero-width spacing and formatter controls remain zero width. An otherwise undefined one-character escape follows roff's visible-trigger fallback after terminal-control filtering.
 
 Large device-only advances can be compressed for reading. The resolved suffix remains editable by a short rewind, including when another word follows the advance. Consecutive pending word-end markers remain in the same live field until acceptance. At a section transition, ending the previous section's final row consumes its separator without adding a hard line to the title. Search, link and definition ranges follow the accepted glyphs.
+
+A replayed separator contributes only when the native field prints its cells.
+A rewind into just the current word's automatic separator leaves previous word
+cells available for the final field pass. A man `.SH` whose final heading
+field fits without ending a row retains the section and its resolved paragraph
+distance. The unprinted tail itself adds no blank row.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 

@@ -45,11 +45,16 @@ that crate was not published for that change.
   Large device-only advances retain an editable suffix across later words.
   Consecutive word-end markers retain the earlier word's editable cells.
   A row closed at a subsection boundary stays with its original owner.
+  Replaying an omitted separator preserves the accepted glyphs and hard
+  rows on either side, including beside links and definition labels.
+  An empty man section heading retains its identity and only adds spacing
+  that the formatter actually produces.
 - Keep literal and macro-generated argument groups equivalent in mdoc
   command lists, including balanced brackets across text fragments of a
   single parameter.
   Native pipes between independent invocations still suppress standalone
-  names.
+  names. Adjacent native parameter fragments provide the same bracket
+  evidence to invocation and comma-alias recognition.
 - Resolve tbl word-end marks against the native accepted cell range.
   Horizontal advances retain exactly the part of a compressed run reached
   by the field scan, preventing both rejected text and extra empty rows.
@@ -310,6 +315,8 @@ that crate was not published for that change.
   included by a selected parent in an excerpt.
 - Preserve option styling and each reference's outline location when aligning
   the body of a definition with a padded label.
+- Display multiline entry forms on a single line in the terminal outline.
+  Structured outline results retain the complete form and its hard breaks.
 - The 0.15 `mant-render` Markdown option APIs accept the option types from
   `mant-codec` 0.15.
 
