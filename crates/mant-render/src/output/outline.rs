@@ -7,6 +7,7 @@ use mant_protocol::{OutlineNode, QueryOutline};
 pub(super) use metadata::entry_kind_label;
 use metadata::outline_summary;
 pub use metadata::{render_outline_entry_summary, render_outline_relationships};
+use std::borrow::Cow;
 
 /// Render a complete outline with full titles and separately labeled identities.
 #[must_use]
@@ -59,6 +60,14 @@ fn nodes(
             OutlineNode::DocumentEntry { entry_kind, .. } => TextRole::EntryLabel(*entry_kind),
             _ => TextRole::Heading,
         };
+        // Entry forms can span structural hard rows. A tree label uses a
+        // single visual row, while the original form stays in the outline.
+        let title = match node {
+            OutlineNode::DocumentEntry { .. } if node.title().contains('\n') => {
+                Cow::Owned(node.title().replace('\n', " "))
+            }
+            _ => Cow::Borrowed(node.title()),
+        };
         lines.push(format!(
             "{} {} {}{}",
             paint(
@@ -66,7 +75,7 @@ fn nodes(
                 &format!("{prefix}{}", if last { "└─" } else { "├─" })
             ),
             paint(TextRole::Path, node.path()),
-            paint(kind, node.title()),
+            paint(kind, &title),
             badges.get(node).map_or_else(String::new, |badge| format!(
                 " {}",
                 paint(TextRole::Reference, badge)
@@ -96,5 +105,44 @@ fn nodes(
             ));
         }
         nodes(node.children(), &child_prefix, paint, badges, lines);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mant_ir::{ContentReveal, EntryKind, NameCase};
+
+    #[test]
+    fn outline_entry_hard_rows_keep_terminal_controls_masked() {
+        let entry = OutlineNode::DocumentEntry {
+            owner: Box::new(ContentReveal::Owner {
+                sections: vec![0],
+                blocks: vec![],
+                item_index: 0,
+            }),
+            path: "1/e1".into(),
+            id: "term".into(),
+            title: "first\nsecond\u{001b}[31m\rend".into(),
+            entry_kind: EntryKind::Term,
+            case: NameCase::Sensitive,
+            names: vec![],
+            alias_groups: vec![],
+            alias_of: None,
+            forms: vec![],
+            document_targets: vec![],
+            value_domain: None,
+            entry_summary: None,
+            children: vec![],
+        };
+        let mut lines = Vec::new();
+        nodes(
+            &[entry],
+            "",
+            &|_, text| sanitize_terminal_text(text).into_owned(),
+            &references::Badges::default(),
+            &mut lines,
+        );
+        assert_eq!(lines[0], "└─ 1/e1 first second�[31m�end");
     }
 }

@@ -61,6 +61,55 @@ fn outline_reference_badges_survive_cli_color_policy() {
     }
 }
 
+#[cfg(feature = "roff")]
+#[test]
+fn multiline_native_entry_forms_remain_readable_in_the_outline() {
+    // CVS retains the explicit break within the extended It head.
+    let source = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Bl -tag -width 12n\n.It Xo\n.No zhack feature stat\n.br\n.No pool\n.Xc\nBODYWORD\n.El\n";
+    for color in ["never", "always"] {
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--outline",
+                "--outline-entries",
+                "all",
+                "--format",
+                "text",
+                "--color",
+                color,
+            ],
+            source,
+        );
+        assert!(output.status.success(), "{output:?}");
+        let text = super::execution_scopes::without_sgr(&String::from_utf8(output.stdout).unwrap());
+        assert!(text.contains("zhack feature stat pool\n"), "{text}");
+        assert!(!text.contains('\u{fffd}'), "{text}");
+    }
+    let json = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--outline",
+            "--outline-entries",
+            "all",
+            "--format",
+            "json",
+        ],
+        source,
+    );
+    assert!(json.status.success(), "{json:?}");
+    let outline: serde_json::Value = serde_json::from_slice(&json.stdout).unwrap();
+    assert_eq!(
+        outline["nodes"][1]["children"][0]["forms"][0],
+        "zhack feature stat\npool"
+    );
+}
+
 #[test]
 #[cfg(feature = "roff")]
 fn inline_roff_continuations_retain_indent_and_explicit_blank_lines() {
