@@ -204,7 +204,7 @@ target page's AST obligations. Its source identity owns only the redirect;
 the resolved target has its own fidelity/structure identity. Missing targets
 remain hard failures, so this rule does not hide incomplete manual trees.
 
-The v23 literal display check reserves ordinary rows within the same
+The literal display check reserves ordinary rows within the same
 mdoc column cell using the spacing mode at each field's first source
 node. Leading source spaces close filled rows. Explicit spacing, the
 automatic gap before a noncompact display and buffered invisible cells
@@ -217,10 +217,14 @@ possible ranges of loss for the cell and for each display. A single deletion
 has a linear check that covers long cells. Beyond the alignment budget,
 unresolved display candidates remain in review. An unclassified tail also
 stays in source review when its verified prefix matches. If that prefix
-diverges, later literal observations can still be possible witnesses. The
-audit preserves those candidates and their occurrence numbers, including
-distinct expansions that share a source coordinate. Bounded edits report
-the cell's total loss and each uncertain display's own range.
+diverges, later literal observations can still be possible witnesses. V24
+compares their multiplicity with the verified display rows to bound each
+owner's loss and the whole cell's loss independently. Bounded edits with a
+complete cell still report exact alignment ranges. Each
+`literalDisplaysForReview` record names its source coordinates and its
+one-based occurrence at those coordinates. A display inside a column cell
+also reports the enclosing table's coordinates and occurrence with the
+zero-based row and column.
 
 Build the profiler and scan the reproducible real fixtures:
 

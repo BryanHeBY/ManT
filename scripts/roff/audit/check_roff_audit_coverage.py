@@ -77,7 +77,7 @@ DEVIATION_FIELDS = [
     "note",
 ]
 
-CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v23"
+CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v24"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
 CURRENT_LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
 CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v4"

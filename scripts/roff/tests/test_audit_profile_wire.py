@@ -146,7 +146,6 @@ class AuditProfileWireTests(unittest.TestCase):
     def test_required_source_fields_distinguish_absent_from_empty_and_review(self):
         for audit, path, position in (
             (structure, ['ordinalCasesForReview'], [8, 2]),
-            (structure, ['literalDisplaysForReview'], [17, 2]),
             (semantic, ['ordinalCasesForReview'], [8, 2]),
             (structure, ['sourceLinkOrigins', 'sectionLabelsForReview'], [15, 2]),
         ):
@@ -168,6 +167,27 @@ class AuditProfileWireTests(unittest.TestCase):
                     result = self.finding(audit, response)
                     self.assertEqual(result.status, status)
                     self.assertEqual([[item.line, item.column] for item in result.source_review], positions)
+
+    def test_literal_reviews_keep_occurrence_and_cell_identity(self):
+        cell = {'tableLine': 8, 'tableColumn': 2, 'tableOccurrence': 1, 'row': 2, 'column': 1}
+        records = [
+            {'line': 17, 'column': 2, 'occurrence': 1, 'cell': cell},
+            {'line': 17, 'column': 2, 'occurrence': 2, 'cell': None},
+        ]
+        response = successful_page(structure)
+        response['literalDisplaysForReview'] = records
+        result = self.finding(structure, response)
+        self.assertEqual(result.status, 'review')
+        first, second = result.source_review
+        self.assertEqual((first.line, first.column, first.occurrence), (17, 2, 1))
+        self.assertEqual((first.cell.row, first.cell.column), (2, 1))
+        self.assertEqual(second.occurrence, 2)
+        self.assertIsNone(second.cell)
+        for invalid in (None, [[17, 2]], [{**records[0], 'occurrence': 0}],
+                        [{**records[0], 'cell': {**cell, 'row': True}}],
+                        [{'line': 17, 'column': 2, 'occurrence': 1}]):
+            response['literalDisplaysForReview'] = invalid
+            self.assertEqual(self.finding(structure, response).status, 'hard-failure')
 
     def test_missing_origins_is_a_protocol_error_even_with_other_violations(self):
         response = structure_page()

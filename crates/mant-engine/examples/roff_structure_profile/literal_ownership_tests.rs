@@ -716,6 +716,63 @@ fn an_unknown_column_tail_does_not_turn_an_ordinary_edit_into_display_loss() {
 }
 
 #[test]
+fn incomplete_cells_bound_literal_losses_without_reusing_identical_rows() {
+    // CVS termp_bd_pre/termp_it_post print both original rows in the
+    // cell. roff_term_pre_ta changes the tab stops after those rows.
+    let prefix = format!("{HEAD}.Bl -column aaa bbb\n.It A Ta B\n");
+    for (body, removed, expected) in [
+        (
+            ".Bd -literal -compact\nFIRST\nLAST\n.Ed\n",
+            "LAST",
+            "10:2 occurrence 1 (1..=2 missing row(s)); cell loss 1..=2 row(s)",
+        ),
+        (
+            ".Dl SAME\n.Dl SAME\n",
+            "SAME",
+            "10:2 occurrence 1 (0..=1 missing row(s)), 11:2 occurrence 1 (0..=1 missing row(s)); cell loss 1..=2 row(s)",
+        ),
+    ] {
+        let source = format!("{prefix}{body}.ta 3n\n.El\n{TAIL}");
+        let (native, topology, mut document) = parsed_structure(&source);
+        assert!(compare(&native, &topology, &document).is_empty());
+        replace_column_payload_at(
+            &mut document,
+            if removed == "LAST" { 2 } else { 1 },
+            removed,
+            "",
+        );
+        assert_eq!(
+            compare(&native, &topology, &document),
+            [format!(
+                "literal-displays: unresolved column slot alignment for candidates {expected}"
+            )]
+        );
+    }
+}
+
+#[test]
+fn expanded_display_reviews_identify_the_source_occurrence_and_column() {
+    // mdoc_term.c prints the Dl owners in different It BODY fields even
+    // if the roff macro expansion gives them the same source coordinates.
+    let source = format!(
+        "{HEAD}.Bl -column aaa bbb\n.de XX\n.It A Ta B\n.Dl FIRST\n.It A Ta B\n.Dl LAST\n.ta 3n\n..\n.XX\n.El\n{TAIL}"
+    );
+    let (native, topology, document) = parsed_structure(&source);
+    assert!(compare(&native, &topology, &document).is_empty());
+    let [review] = native.literal_display_reviews.as_slice() else {
+        panic!("{source}");
+    };
+    let cell = review.cell.expect("column cell");
+    assert_eq!(review.column, 2);
+    assert_eq!(review.occurrence, 2);
+    assert_eq!(
+        (cell.table_line, cell.table_column, cell.table_occurrence),
+        (8, 2, 1)
+    );
+    assert_eq!((cell.row, cell.column), (1, 1));
+}
+
+#[test]
 fn ambiguous_loss_reports_the_total_and_each_source_occurrence_range() {
     // termp_bd_pre and termp_d1_pre create three independent display
     // owners. Dropping two SAME rows leaves the multirow owner with a

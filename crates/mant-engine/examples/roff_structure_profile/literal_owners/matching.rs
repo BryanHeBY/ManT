@@ -3,8 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
-    LiteralOrigin, ObservedBlock, ObservedDisplays, Point, ScopeKind, ScopeOccurrence,
-    SourceDisplay, SourceDisplays, has_glyph,
+    LiteralOrigin, ObservedBlock, ObservedDisplays, ScopeKind, ScopeOccurrence, SourceDisplay,
+    SourceDisplays, has_glyph,
 };
 
 #[path = "cell_alignment.rs"]
@@ -21,14 +21,7 @@ pub(crate) fn compare(
     let mut witnesses = RowWitnesses::collect(&observations);
     let mut matched = vec![0; expected.owners.len()];
     let mut claimed_blocks = BTreeSet::new();
-    let occurrences = display_occurrences(&expected.owners);
-    let uncertain = claim_cells(
-        expected,
-        &occurrences,
-        &observations,
-        &mut matched,
-        violations,
-    );
+    let uncertain = claim_cells(expected, &observations, &mut matched, violations);
     let exact = row_witness_obligations(&expected.owners);
     // Resolve literal rows before claiming unsplit blocks. Two displays
     // in one column can claim different rows of the same block; no source
@@ -59,7 +52,7 @@ pub(crate) fn compare(
     let expected = &expected.owners;
     let mut claims = vec![None; expected.len()];
     for (index, owner) in expected.iter().enumerate() {
-        let occurrence = occurrences[index];
+        let occurrence = owner.occurrence;
         let covered = if cells
             .get(&owner.path)
             .is_some_and(|plan| !plan.verified.contains(&index))
@@ -85,21 +78,8 @@ pub(crate) fn compare(
     }
 }
 
-fn display_occurrences(owners: &[SourceDisplay]) -> Vec<usize> {
-    let mut counts = BTreeMap::<Point, usize>::new();
-    owners
-        .iter()
-        .map(|owner| {
-            let count = counts.entry(owner.opening).or_default();
-            *count += 1;
-            *count
-        })
-        .collect()
-}
-
 fn claim_cells(
     expected: &SourceDisplays,
-    occurrences: &[usize],
     observations: &[ObservedBlock<'_>],
     matched: &mut [usize],
     violations: &mut Vec<String>,
@@ -121,14 +101,7 @@ fn claim_cells(
         let physical = cells.get(path).map_or(&[][..], Vec::as_slice);
         if !plan.complete {
             if !claim_known_prefix(plan, physical, matched) {
-                review_partial_alignment(
-                    plan,
-                    physical,
-                    expected,
-                    occurrences,
-                    &mut uncertain,
-                    violations,
-                );
+                review_partial_alignment(plan, physical, expected, &mut uncertain, violations);
             }
         } else if physical.len() == plan.rows.len()
             && plan
@@ -145,20 +118,12 @@ fn claim_cells(
                 plan,
                 witnesses,
                 expected,
-                occurrences,
                 matched,
                 &mut uncertain,
                 violations,
             );
         } else {
-            review_unproved_alignment(
-                plan,
-                physical,
-                expected,
-                occurrences,
-                &mut uncertain,
-                violations,
-            );
+            review_unproved_alignment(plan, physical, expected, &mut uncertain, violations);
         }
     }
     // An unknown range is reported as source Review. An empty cell or a
@@ -201,29 +166,71 @@ fn review_partial_alignment(
     plan: &super::rows::CellPlan,
     physical: &[(&str, bool)],
     expected: &SourceDisplays,
-    occurrences: &[usize],
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
-    // A row after a divergence could be in the unknown suffix or in the
-    // shifted known prefix. Equal ink anywhere only proves possibility.
-    let literal: BTreeSet<_> = physical
-        .iter()
-        .filter_map(|&(text, literal)| literal.then_some(text))
-        .collect();
-    let candidates = plan
-        .rows
-        .iter()
-        .filter_map(|row| row.owner.filter(|_| literal.contains(row.text.as_str())))
-        .collect::<BTreeSet<_>>();
-    report_unresolved(candidates, expected, occurrences, uncertain, violations);
+    // A shifted known row can match anywhere in the unknown cell. Give
+    // each owner the entire cell's literal capacity to bound its loss,
+    // then bound the full cell separately without reusing a witness.
+    let mut literal = BTreeMap::new();
+    for &(text, literal_row) in physical {
+        if literal_row {
+            *literal.entry(text).or_insert(0usize) += 1;
+        }
+    }
+    let mut needs = BTreeMap::<_, BTreeMap<_, usize>>::new();
+    let mut cell_needs = BTreeMap::new();
+    for row in &plan.rows {
+        if let Some(owner) = row.owner.filter(|_| has_glyph(&row.text)) {
+            let text = row.text.as_str();
+            *needs.entry(owner).or_default().entry(text).or_default() += 1;
+            *cell_needs.entry(text).or_insert(0usize) += 1;
+        }
+    }
+    let loss = |needs: &BTreeMap<_, usize>| {
+        needs.iter().fold(
+            MissingRows { min: 0, max: 0 },
+            |mut loss, (text, &count)| {
+                loss.min += count.saturating_sub(literal.get(text).copied().unwrap_or(0));
+                loss.max += count;
+                loss
+            },
+        )
+    };
+    let cell = loss(&cell_needs);
+    let mut candidates = Vec::new();
+    for (owner, needs) in needs {
+        let missing = loss(&needs);
+        if missing.min == missing.max {
+            // No literal witness exists for this occurrence. The normal
+            // missing-owner path reports this proven loss.
+            continue;
+        }
+        uncertain.insert(owner);
+        let identity = display_identity(&expected.owners[owner]);
+        candidates.push(if missing.min == 0 && cell.min == 0 {
+            identity
+        } else {
+            format!("{identity} ({} missing row(s))", missing.label())
+        });
+    }
+    if !candidates.is_empty() {
+        let locations = candidates.join(", ");
+        let cell_bound = if cell.min > 0 {
+            format!("; cell loss {} row(s)", cell.label())
+        } else {
+            String::new()
+        };
+        violations.push(format!(
+            "literal-displays: unresolved column slot alignment for candidates {locations}{cell_bound}"
+        ));
+    }
 }
 
 fn claim_after_row_edits(
     plan: &super::rows::CellPlan,
     witnesses: EditWitnesses,
     expected: &SourceDisplays,
-    occurrences: &[usize],
     matched: &mut [usize],
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
@@ -241,7 +248,7 @@ fn claim_after_row_edits(
             uncertain.insert(owner);
             candidates.push(format!(
                 "{} ({} missing row(s))",
-                display_identity(owner, &expected.owners, occurrences),
+                display_identity(&expected.owners[owner]),
                 count.label(),
             ));
         }
@@ -264,7 +271,6 @@ fn review_unproved_alignment(
     plan: &super::rows::CellPlan,
     physical: &[(&str, bool)],
     expected: &SourceDisplays,
-    occurrences: &[usize],
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
@@ -279,13 +285,12 @@ fn review_unproved_alignment(
         .iter()
         .filter_map(|row| row.owner)
         .collect::<BTreeSet<_>>();
-    report_unresolved(candidates, expected, occurrences, uncertain, violations);
+    report_unresolved(candidates, expected, uncertain, violations);
 }
 
 fn report_unresolved(
     candidates: BTreeSet<usize>,
     expected: &SourceDisplays,
-    occurrences: &[usize],
     uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
@@ -293,7 +298,7 @@ fn report_unresolved(
         uncertain.extend(&candidates);
         let locations = candidates
             .into_iter()
-            .map(|id| display_identity(id, &expected.owners, occurrences))
+            .map(|id| display_identity(&expected.owners[id]))
             .collect::<Vec<_>>()
             .join(", ");
         violations.push(format!(
@@ -302,9 +307,9 @@ fn report_unresolved(
     }
 }
 
-fn display_identity(id: usize, owners: &[SourceDisplay], occurrences: &[usize]) -> String {
-    let (line, column) = owners[id].opening;
-    format!("{line}:{column} occurrence {}", occurrences[id])
+fn display_identity(owner: &SourceDisplay) -> String {
+    let (line, column) = owner.opening;
+    format!("{line}:{column} occurrence {}", owner.occurrence)
 }
 
 fn row_witness_obligations(owners: &[SourceDisplay]) -> Vec<bool> {

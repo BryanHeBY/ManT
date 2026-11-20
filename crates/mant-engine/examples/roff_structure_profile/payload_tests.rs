@@ -105,7 +105,14 @@ fn partially_rewound_source_is_reviewed_only_at_its_display_owner() {
         );
         let (expected, _, _) = parsed_structure(&source);
         assert_eq!(expected.literal_displays, 0, "{source}");
-        assert_eq!(expected.literal_display_reviews, [[line, 2]], "{source}");
+        let [review] = expected.literal_display_reviews.as_slice() else {
+            panic!("{source}");
+        };
+        assert_eq!(
+            (review.line, review.column, review.occurrence, review.cell),
+            (line, 2, 1, None),
+            "{source}"
+        );
     }
 }
 
@@ -131,7 +138,11 @@ fn default_slot_coverage_is_withheld_for_an_inherited_native_font() {
         let (expected, _, _) = parsed_structure(&source);
         assert_eq!(expected.literal_displays, 0, "{source}");
         assert_eq!(
-            expected.literal_display_reviews,
+            expected
+                .literal_display_reviews
+                .iter()
+                .map(|r| [r.line, r.column])
+                .collect::<Vec<_>>(),
             review.into_iter().collect::<Vec<_>>(),
             "{source}"
         );

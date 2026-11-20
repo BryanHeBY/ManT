@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v23"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v24"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -77,6 +77,21 @@ class AuditRecord:
     scan_status: str
     review_status: str
     note: str
+
+
+@dataclass(frozen=True)
+class LiteralReviewCell:
+    table_line: int
+    table_column: int
+    table_occurrence: int
+    row: int
+    column: int
+
+
+@dataclass(frozen=True)
+class LiteralDisplaySourceReview(SourceReview):
+    occurrence: int
+    cell: LiteralReviewCell | None
 
 
 @dataclass
@@ -491,13 +506,45 @@ def structure_source_reviews(response: dict[str, object]) -> list[SourceReview] 
         "section label depends on recovery of an invalid roff escape",
     )
     ordinal_reviews = ordinal_source_reviews(response)
-    display_reviews = source_reviews(
-        response.get("literalDisplaysForReview"),
-        "display has unproved native glyph placement",
-    )
+    display_reviews = literal_source_reviews(response.get("literalDisplaysForReview"))
     if section_reviews is None or ordinal_reviews is None or display_reviews is None:
         return None
     return [*section_reviews, *ordinal_reviews, *display_reviews]
+
+
+def literal_source_reviews(records: object) -> list[LiteralDisplaySourceReview] | None:
+    if not isinstance(records, list):
+        return None
+    reviews = []
+    for record in records:
+        if (not isinstance(record, dict)
+                or not all(is_nonnegative_integer(record.get(key))
+                           for key in ("line", "column", "occurrence"))
+                or record["occurrence"] == 0 or "cell" not in record):
+            return None
+        cell = record["cell"]
+        if cell is not None:
+            keys = ("tableLine", "tableColumn", "tableOccurrence", "row", "column")
+            if (not isinstance(cell, dict)
+                    or not all(is_nonnegative_integer(cell.get(key)) for key in keys)
+                    or cell["tableOccurrence"] == 0):
+                return None
+            cell = LiteralReviewCell(*(cell[key] for key in keys))
+        reviews.append(LiteralDisplaySourceReview(
+            record["line"], record["column"], "display has unproved native glyph placement",
+            record["occurrence"], cell,
+        ))
+    return reviews
+
+
+def source_review_label(review: SourceReview) -> str:
+    location = f"source {review.line}:{review.column}"
+    if isinstance(review, LiteralDisplaySourceReview):
+        location += f" occurrence {review.occurrence}"
+        if (cell := review.cell) is not None:
+            location += (f" in table {cell.table_line}:{cell.table_column}"
+                         f" occurrence {cell.table_occurrence}, row {cell.row}, column {cell.column}")
+    return f"{location}: {review.reason}"
 
 
 def valid_structure_counts(value: object) -> bool:
@@ -669,8 +716,7 @@ def main(argv: Sequence[str]) -> int:
             detail = f" — {finding.detail}" if finding.detail else ""
             observations = "; ".join([
                 *finding.violations,
-                *(f"source {review.line}:{review.column}: {review.reason}"
-                  for review in finding.source_review),
+                *(source_review_label(review) for review in finding.source_review),
             ])
             print(f"{finding.status.upper():12} {label}{detail}{': ' + observations if observations else ''}")
         if digest is not None:

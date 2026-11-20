@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v23";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v24";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,7 +67,7 @@ struct AstStructure {
     no_fill_lines: usize,
     literal_displays: usize,
     #[serde(skip)]
-    literal_display_reviews: Vec<[u32; 2]>,
+    literal_display_reviews: Vec<literal_owners::LiteralDisplayReview>,
     #[serde(skip)]
     literal_owners: literal_owners::SourceDisplays,
     #[serde(skip)]

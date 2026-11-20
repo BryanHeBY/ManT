@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use libmandoc_rs::{DisplayKind, Node, NodeKind, NormalizedListKind};
 use mant_ir::{Block, Document, Section, SourceSpan};
+use serde::Serialize;
 
 use super::{
     AstStructure,
@@ -60,6 +61,7 @@ struct LiteralOrigin {
 struct SourceDisplay {
     id: u32,
     opening: Point,
+    occurrence: usize,
     origins: BTreeSet<LiteralOrigin>,
     path: Vec<ScopeOccurrence>,
     rows: usize,
@@ -67,11 +69,56 @@ struct SourceDisplay {
     pending_rows: BTreeMap<u32, String>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct LiteralDisplayReview {
+    pub(super) line: u32,
+    pub(super) column: u32,
+    pub(super) occurrence: usize,
+    pub(super) cell: Option<LiteralReviewCell>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct LiteralReviewCell {
+    pub(super) table_line: u32,
+    pub(super) table_column: u32,
+    pub(super) table_occurrence: usize,
+    pub(super) row: usize,
+    pub(super) column: usize,
+}
+
+impl LiteralDisplayReview {
+    fn new((line, column): Point, occurrence: usize, path: &[ScopeOccurrence]) -> Self {
+        let cell = path.windows(2).rev().find_map(|pair| {
+            let ScopeKind::ColumnCell { row, cell } = pair[1].scope.kind else {
+                return None;
+            };
+            debug_assert!(matches!(pair[0].scope.kind, ScopeKind::ColumnTable));
+            let (table_line, table_column) = pair[0].scope.point;
+            Some(LiteralReviewCell {
+                table_line,
+                table_column,
+                table_occurrence: pair[0].occurrence,
+                row,
+                column: cell,
+            })
+        });
+        Self {
+            line,
+            column,
+            occurrence,
+            cell,
+        }
+    }
+}
+
 #[derive(Default)]
 pub(super) struct SourceDisplays {
     owners: Vec<SourceDisplay>,
     scopes: BTreeSet<Scope>,
     counts: ScopeCounts,
+    display_occurrences: BTreeMap<Point, usize>,
     cells: BTreeMap<Vec<ScopeOccurrence>, CellPlan>,
     source_rows: Vec<(usize, String)>,
 }
@@ -134,22 +181,35 @@ fn visit_native(
             )
         {
             let payload = description(node, false, &profile.source_context);
-            if payload.has_text() {
-                let pending_rows = display_rows(node, &profile.source_context).unwrap_or_default();
-                display = Some(profile.literal_owners.owners.len());
-                profile.literal_owners.owners.push(SourceDisplay {
-                    id: node.id,
-                    opening: point,
-                    origins: BTreeSet::new(),
-                    path: path.clone(),
-                    rows: pending_rows.len(),
-                    short: node.macro_token.as_deref() != Some("Bd"),
-                    pending_rows,
-                });
-            } else if payload.unproved_literal() {
-                profile
-                    .literal_display_reviews
-                    .push([node.line, node.column]);
+            let has_text = payload.has_text();
+            let unproved = payload.unproved_literal();
+            if has_text || unproved {
+                let occurrence = profile
+                    .literal_owners
+                    .display_occurrences
+                    .entry(point)
+                    .or_default();
+                *occurrence += 1;
+                let occurrence = *occurrence;
+                if has_text {
+                    let pending_rows =
+                        display_rows(node, &profile.source_context).unwrap_or_default();
+                    display = Some(profile.literal_owners.owners.len());
+                    profile.literal_owners.owners.push(SourceDisplay {
+                        id: node.id,
+                        opening: point,
+                        occurrence,
+                        origins: BTreeSet::new(),
+                        path: path.clone(),
+                        rows: pending_rows.len(),
+                        short: node.macro_token.as_deref() != Some("Bd"),
+                        pending_rows,
+                    });
+                } else {
+                    profile
+                        .literal_display_reviews
+                        .push(LiteralDisplayReview::new(point, occurrence, path));
+                }
             }
         }
     }
@@ -222,7 +282,11 @@ fn visit_column_list(node: &Node, path: &mut Vec<ScopeOccurrence>, profile: &mut
                     for owner in owners.iter().filter(|owner| &owner.path == path) {
                         profile
                             .literal_display_reviews
-                            .push([owner.opening.0, owner.opening.1]);
+                            .push(LiteralDisplayReview::new(
+                                owner.opening,
+                                owner.occurrence,
+                                &owner.path,
+                            ));
                     }
                 }
                 profile.literal_owners.cells.insert(path.clone(), plan);
