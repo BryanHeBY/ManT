@@ -47,6 +47,11 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep an earlier native glyph cover when replay repositions the surviving
+  styled suffix, including its printed separator and search range.
+- Validate native assignment connectors within the same argument group.
+  Recognize typed address and path fragments while keeping explanations
+  out of exact signatures.
 - Preserve accepted hard rows and surviving link labels across late roff
   rewinds, including boundaries with deferred blanks and font decoration.
 - Keep subsection whitespace and its references on an already published
@@ -350,6 +355,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Share item HEAD dispatch across native state and structure audits.
+  Check executed nested structures at their rendered definition term.
 - Keep native display and table audit numbers stable when mandoc skips a
   list item head retained only for diagnostics.
 - Count displays and column tables in extended mdoc definition headings

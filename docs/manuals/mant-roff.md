@@ -918,10 +918,15 @@ forms do not imply an explicit alias relationship.
 An mdoc `Fl` assignment can retain a pathname split across touching
 operands, such as `Fl a= Ns Pa / Ns Pa foo`. A real word separator ends the
 path. In a detached argument group, a typed argument can be joined to a
-literal `Li` alternative, as in `Ar opt | Li auto`. Native `Op` and `Oo`
-can also supply optional values such as `[host]`. A group describing a
-default or other explanatory text remains readable in the HEAD while
-excluded from exact option queries.
+literal `Li` alternative, as in `Ar opt | Li auto`. Connectors such as
+`|`, `=`, and a touching `@` join the operands at their own group level.
+Punctuation inside an `Ar` operand stays in that operand. A nested group
+must prove its own value before contributing to its parent. Native `Op`
+and `Oo` can also supply optional values such as `[host]`. An authored
+bracket in the assignment's `Fl` text can enclose later operands, as in
+`--skip=[-][sample|hh:mm:ss.ss]`. A group describing a default or other
+explanatory text remains readable in the HEAD while excluded from exact
+option queries.
 
 In an mdoc `Ev` declaration, accepted native operands delimit names, values
 and supplements. Commas and pipes within balanced templates or within the
