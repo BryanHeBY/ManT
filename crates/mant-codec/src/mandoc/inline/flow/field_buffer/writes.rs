@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use super::{
     FieldBuffer, FieldCell, FieldWrite, LeadingBlankRetreat, PassStop, TabStops, WordScanPolicy,
-    WordWriteReceipt,
+    WordWriteReceipt, WriteCursor,
 };
 
 #[cfg(test)]
@@ -179,7 +179,7 @@ impl FieldBuffer {
 
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
         // A source row only inserts TABREF after native buffer writes.
-        if !self.cells.is_empty() && self.cursor_retreat == 0 {
+        if !self.cells.is_empty() && self.write_cursor.retreat() == 0 {
             if let Some(tail) = &mut self.device_tail
                 && !tail.note_tab_reference()
             {
@@ -207,7 +207,7 @@ impl FieldBuffer {
         self.cells.clear();
         self.device_tail = None;
         self.raw_slot_fence = 0;
-        self.cursor_retreat = 0;
+        self.write_cursor = WriteCursor::End;
         self.raw_tail_font = None;
         self.raw_copy_aliases.clear();
         self.projection_prefix.clear();
@@ -261,11 +261,13 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
         self.word_first_content = None;
-        self.cursor_retreat = 0;
+        self.begin_word_writes(writes);
         self.device_tail = None;
         let mut first_graph = true;
         let mut leading_retreat = None;
-        let mut drawing_start = self.cells.len();
+        let entry = self.cells.len();
+        let mut drawing_start = entry;
+        let mut consumed_motion_padding = Vec::new();
         for write in writes {
             match write {
                 FieldWrite::Cell(FieldCell::Graph { text, width })
@@ -326,16 +328,16 @@ impl FieldBuffer {
                 | FieldWrite::ReplaceLivePrefix { .. }
                 | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
-                FieldWrite::DeferredBlanks { source, count } => {
-                    let start = self.cells.len();
-                    for _ in 0..*count {
-                        self.push_unprojected_blank();
+                FieldWrite::MotionPadding {
+                    consumed_by_backbefore,
+                } => {
+                    if self.write_motion_padding(*consumed_by_backbefore) {
+                        let offset = self.projection_length(entry, self.cells.len());
+                        consumed_motion_padding.push(offset + consumed_motion_padding.len());
                     }
-                    self.deferred_blanks.push(super::cells::DeferredBlankRun {
-                        start,
-                        end: self.cells.len(),
-                        source: *source,
-                    });
+                }
+                FieldWrite::DeferredBlanks { source, count } => {
+                    self.defer_source_blanks(*source, *count);
                 }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
@@ -356,12 +358,61 @@ impl FieldBuffer {
                 }
             }
         }
-        self.finish_word_writes(leading_retreat)
+        self.finish_word_writes(leading_retreat, consumed_motion_padding)
+    }
+
+    fn defer_source_blanks(&mut self, source: super::cells::DeferredSourceBlank, count: usize) {
+        let start = self.cells.len();
+        for _ in 0..count {
+            self.push_unprojected_blank();
+        }
+        self.deferred_blanks.push(super::cells::DeferredBlankRun {
+            start,
+            end: self.cells.len(),
+            source,
+        });
+    }
+
+    fn write_motion_padding(&mut self, consumed_by_backbefore: bool) -> bool {
+        // ESCAPE_HORIZ clears BACKAFTER without buffering an advance.
+        // Otherwise its first positive cell clears BACKBEFORE before
+        // the remaining cells are written (term.c:678-698).
+        if std::mem::take(&mut self.backafter_armed) {
+            return true;
+        }
+        let consumed = self.backbefore_armed && consumed_by_backbefore;
+        self.clear_backtracking();
+        if !consumed {
+            self.push_non_breaking_blank();
+        }
+        consumed
+    }
+
+    fn begin_word_writes(&mut self, writes: &[FieldWrite]) {
+        if matches!(
+            std::mem::take(&mut self.write_cursor),
+            WriteCursor::Retreated(1..)
+        ) && !matches!(
+            writes.first(),
+            Some(FieldWrite::ReplacePlacedTail { .. } | FieldWrite::ReplaceLivePrefix { .. })
+        ) {
+            self.word_scan = WordScanPolicy::UnmodeledRewind;
+            self.scan = None;
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retain_word_cursor(&mut self, retreat: usize) {
+        self.write_cursor = WriteCursor::Retreated(retreat);
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_retained_word_cursor(&self) -> bool {
+        self.write_cursor.retreat() > 0
     }
 
     fn finish_word_writes(
         &mut self,
         leading_retreat: Option<LeadingBlankRetreat>,
+        consumed_motion_padding: Vec<usize>,
     ) -> WordWriteReceipt {
         let end_cell = self.cells.len();
         let mut first_content_cell = self.word_first_content.take().unwrap_or(end_cell);
@@ -378,6 +429,7 @@ impl FieldBuffer {
             )
         });
         WordWriteReceipt {
+            consumed_motion_padding,
             first_content_cell,
             end_cell,
             prints_padding,

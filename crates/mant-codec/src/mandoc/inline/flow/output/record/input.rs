@@ -44,6 +44,9 @@ impl ExecutedWordEntry {
                 .map_or(start, |next| next.start.min(next.content))
         });
         let mut receipt = buffer.apply_writes(&writes);
+        if let EntryRewind::Positioned(retreat) = rewind {
+            buffer.retain_word_cursor(retreat);
+        }
         if let Some(first) = prefix.first_incoming().or(placed_first) {
             receipt.first_content_cell = first;
         }
@@ -51,7 +54,7 @@ impl ExecutedWordEntry {
             EntryRewind::Executed {
                 retired_separator, ..
             } => retired_separator,
-            EntryRewind::Absent | EntryRewind::Unmodeled => 0,
+            EntryRewind::Absent | EntryRewind::Positioned(_) | EntryRewind::Unmodeled => 0,
         };
         let surviving_separator = if prefix.first_incoming().is_some() {
             prefix.entry_blanks
@@ -88,19 +91,20 @@ impl ExecutedWordEntry {
         earlier: &[super::super::super::NativeWordAnchor],
     ) {
         self.prefix.project(nodes, incoming, owner, earlier);
+        remove_rewound_source_blanks(incoming, owner, &self.receipt.consumed_motion_padding);
         let EntryRewind::Executed {
             ref traversed_source_blanks,
-            ref overwritten_glyph,
+            ref overwritten_glyphs,
             ..
         } = self.rewind
         else {
             return;
         };
         remove_rewound_source_blanks(incoming, owner, traversed_source_blanks);
-        if let Some(glyph) = overwritten_glyph
-            && let Some(index) = earlier_word_after_cell(earlier, glyph.cell).checked_sub(1)
-        {
-            remove_rewound_glyph(nodes, incoming, &earlier[index].owner, glyph);
+        for glyph in overwritten_glyphs {
+            if let Some(index) = earlier_word_after_cell(earlier, glyph.cell).checked_sub(1) {
+                remove_rewound_glyph(nodes, incoming, &earlier[index].owner, glyph);
+            }
         }
     }
 

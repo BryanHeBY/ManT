@@ -54,8 +54,8 @@ fn rewind_treats_raw_and_deferred_spaces_as_the_same_native_write() {
             EntryRewind::Executed {
                 retired_separator: 0,
                 traversed_source_blanks,
-                overwritten_glyph: None,
-            } if traversed_source_blanks.len() == usize::from(projected)
+                overwritten_glyphs,
+            } if overwritten_glyphs.is_empty() && traversed_source_blanks.len() == usize::from(projected)
         ));
         let word = buffer.apply_writes(&second);
         assert_eq!(word.first_content_cell, 6);

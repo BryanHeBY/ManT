@@ -143,6 +143,11 @@ pub(in crate::mandoc) enum FieldWrite {
     /// A breakable source blank consumed by a marker's pass boundary. Its
     /// cell participates in acceptance, but has no authored output scalar.
     UnprojectedBlank,
+    /// A projected relative HORIZ advance. The native BACK register can
+    /// consume it before it writes any blank to the input buffer.
+    MotionPadding {
+        consumed_by_backbefore: bool,
+    },
     /// A delayed owner was provisionally projected at a break opportunity. Its
     /// original cell stays editable until a pass proves a cover.
     StageBacklineProjection,
@@ -242,6 +247,7 @@ impl FieldWrite {
 /// blank or a previous word's trailing blank, term.c:901-908).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(in crate::mandoc::inline::flow) struct WordWriteReceipt {
+    pub(in crate::mandoc::inline::flow) consumed_motion_padding: Vec<usize>,
     /// Index of the first cell this word's writes produced that survives
     /// execution with projection ownership. A leading `Backline` is a
     /// zero-width pairing cell, so the paired graph owns the content.

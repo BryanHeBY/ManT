@@ -115,7 +115,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
-                || relative_retreat && has_proved_overstrike_entry(context)
+                || relative_retreat && can_replay_relative_retreat(context, has_zero_advance)
                 || armed_overstrike
                 || replay_empty_overstrike
                 || tight_word_can_carry_glyph(events, context)
@@ -130,6 +130,12 @@ fn motion_columns(value: &str) -> Option<(bool, i32)> {
 
 fn has_prior_retreat(context: &TextExecutionContext<'_>) -> bool {
     context.zero_advance.has_buffered_glyph() || context.slot_entry.retreat_blanks > 0
+}
+
+fn can_replay_relative_retreat(context: &TextExecutionContext<'_>, local_advance: bool) -> bool {
+    // A local BACKBEFORE write can establish the cursor before the retreat
+    // even when the previous word defers its final blank (term.c::encode1).
+    has_proved_overstrike_entry(context) || local_advance && !has_prior_retreat(context)
 }
 
 fn replayable_device_tail(
@@ -794,7 +800,12 @@ fn execute_seed<'a>(
         .iter()
         .any(|event| matches!(event, RoffInlineEvent::LineBreak));
     let marker = has_marker.then(|| marker_replay(events, context)).flatten();
-    let retain_suffix = context.policy.field_authoritative && (!has_marker || marker.is_some());
+    // The bounded overlay knows both col and lastcol. A marker in this
+    // operand does not reset that cursor (term.c:659-660,678-714).
+    // Carry the exact cursor if the next word must still write there.
+    let live_cursor = seed.prefix_start > 0 && seed.placement.slots.extent_and_retreat().1 > 0;
+    let retain_suffix =
+        context.policy.field_authoritative && (!has_marker || marker.is_some() || live_cursor);
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()

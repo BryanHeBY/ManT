@@ -182,7 +182,24 @@ impl super::InlineExecutionState {
             } => true,
             _ => false,
         });
-        let leading_retreat = matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument, .. })
+        // Layout-only controls preceding a later rewind can still be
+        // represented by the bounded suffix. Revisit them when the live
+        // field has staged coverage that depends on their actual slots.
+        let rewind = if self.has_staged_backline_coverage() {
+            events.iter().find(|event| {
+                !matches!(
+                    event,
+                    RoffInlineEvent::LineBreak
+                        | RoffInlineEvent::Breakpoint
+                        | RoffInlineEvent::ZeroWidthGlyph
+                        | RoffInlineEvent::Font(_)
+                        | RoffInlineEvent::PreviousFont
+                )
+            })
+        } else {
+            events.first()
+        };
+        let leading_retreat = matches!(rewind, Some(RoffInlineEvent::HorizontalMotion { argument, .. })
             if negative_entry_columns(argument.as_deref()).is_some());
         let leading_marker = matches!(
             events.iter().find(|event| !matches!(

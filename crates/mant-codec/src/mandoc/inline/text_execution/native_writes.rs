@@ -6,13 +6,21 @@ pub(super) fn proved_decorated_tail(
     font: super::Font,
 ) -> Option<(usize, super::Font)> {
     use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
-    // A plain styled append proves the raw copies in its final ASCII
-    // run. Cursor edits and BACK registers need the full placement path.
+    // A styled append proves the raw copies in its final ASCII run.
+    // `term_word()` can buffer marker and BACKAFTER controls before
+    // that run. They do not change the decoration written by encode1.
+    // Actual cursor edits require the full placement path.
     if !has_native_decoration(font)
         || !events.iter().all(|event| {
             matches!(
                 event,
-                RoffInlineEvent::Text(_) | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+                RoffInlineEvent::Text(_)
+                    | RoffInlineEvent::Font(_)
+                    | RoffInlineEvent::PreviousFont
+                    | RoffInlineEvent::ZeroAdvance
+                    | RoffInlineEvent::LineBreak
+                    | RoffInlineEvent::ZeroWidthGlyph
+                    | RoffInlineEvent::Breakpoint
             )
         })
     {

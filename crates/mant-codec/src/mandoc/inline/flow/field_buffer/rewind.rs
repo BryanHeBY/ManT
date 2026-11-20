@@ -19,10 +19,11 @@ use super::{FieldBuffer, FieldCell, FieldWrite, WordScanPolicy};
 
 pub(in crate::mandoc::inline::flow) enum EntryRewind {
     Absent,
+    Positioned(usize),
     Executed {
         retired_separator: usize,
         traversed_source_blanks: Vec<usize>,
-        overwritten_glyph: Option<RewoundGlyph>,
+        overwritten_glyphs: Vec<RewoundGlyph>,
     },
     Unmodeled,
 }
@@ -38,12 +39,12 @@ struct EntryReplay {
     writes: Vec<FieldWrite>,
     retired_separator: usize,
     traversed_source_blanks: Vec<usize>,
-    overwritten_glyph: Option<(usize, char)>,
+    overwritten_glyphs: Vec<(usize, char)>,
 }
 
 enum EntryReplacement {
     ControlOrPadding,
-    PendingGlyph(char),
+    Projected(char),
     Protected,
 }
 
@@ -130,6 +131,7 @@ impl FieldWrite {
             Self::CancelBackafter => EntryWrite::CancelBackafter,
             Self::CancelBackbefore => EntryWrite::CancelBackbefore,
             Self::RewindWordEntry(_)
+            | Self::MotionPadding { .. }
             | Self::StageBacklineProjection
             | Self::DrawSpaces(_)
             | Self::MoveInDrawing { .. }
@@ -155,7 +157,7 @@ impl FieldBuffer {
         &mut self,
         writes: &mut Vec<FieldWrite>,
         word_start: usize,
-        owner_end: impl FnOnce(usize) -> usize,
+        owner_end: impl Fn(usize) -> usize,
     ) -> EntryRewind {
         let Some(FieldWrite::RewindWordEntry(columns)) = writes.first() else {
             return EntryRewind::Absent;
@@ -178,20 +180,16 @@ impl FieldBuffer {
                     ..
                 }
             )
-        }) && self.cursor_retreat == 0
-            && !self.backbefore_armed
-            && self.cells.len().checked_sub(count).is_some_and(|at| {
-                at >= word_start.max(self.resume)
-                    && self.cells[at..]
-                        .iter()
-                        .all(|cell| *cell == FieldCell::BreakableBlank)
-            })
+        }) && self.write_cursor.retreat() == 0
+            && self.cells.len().saturating_sub(count) >= self.resume
         {
-            // A motion into the freshly written entry gap changes col,
-            // not lastcol (term.c:678-714). No byte was overwritten.
-            self.cursor_retreat = count;
+            // HORIZ changes the write cursor without truncating lastcol
+            // (term.c:678-714). A flush still reads all the old cells.
+            // Keep their coverage receipts even if the next write needs
+            // to fall back because its cursor cannot be replayed.
             writes.clear();
-            return EntryRewind::Absent;
+            writes.extend([FieldWrite::CancelBackafter, FieldWrite::CancelBackbefore]);
+            return EntryRewind::Positioned(count.min(self.cells.len()));
         }
         let Some(replay) = self.plan_entry_rewind(&writes[1..], word_start, count) else {
             self.word_scan = WordScanPolicy::UnmodeledRewind;
@@ -203,13 +201,17 @@ impl FieldBuffer {
             writes: replay,
             retired_separator,
             traversed_source_blanks,
-            overwritten_glyph,
+            overwritten_glyphs,
         } = replay;
-        let overwritten_glyph = overwritten_glyph.map(|(cell, scalar)| RewoundGlyph {
-            cell,
-            scalar,
-            following_scalars: self.projection_length(cell + 1, owner_end(cell).min(word_start)),
-        });
+        let overwritten_glyphs = overwritten_glyphs
+            .into_iter()
+            .map(|(cell, scalar)| RewoundGlyph {
+                cell,
+                scalar,
+                following_scalars: self
+                    .projection_length(cell + 1, owner_end(cell).min(word_start)),
+            })
+            .collect();
         for index in (start..self.cells.len()).rev() {
             self.blank_positions.remove(&index);
             self.nonbreaking_positions.remove(&index);
@@ -238,7 +240,7 @@ impl FieldBuffer {
         EntryRewind::Executed {
             retired_separator,
             traversed_source_blanks,
-            overwritten_glyph,
+            overwritten_glyphs,
         }
     }
 
@@ -263,7 +265,7 @@ impl FieldBuffer {
         let mut traversed_source_blanks = Vec::new();
         let mut source_scalars = 0;
         let mut wrote_source = false;
-        let mut overwritten_glyph = None;
+        let mut overwritten_glyphs = Vec::new();
         let mut armed = false;
         let mut backbefore = false;
         for (index, write) in writes.iter().enumerate() {
@@ -334,8 +336,8 @@ impl FieldBuffer {
                     for cell in at..overwritten_end {
                         match self.entry_replacement(cell, word_start) {
                             EntryReplacement::Protected => return None,
-                            EntryReplacement::PendingGlyph(text) => {
-                                overwritten_glyph = Some((cell, text));
+                            EntryReplacement::Projected(text) => {
+                                overwritten_glyphs.push((cell, text));
                             }
                             EntryReplacement::ControlOrPadding => {}
                         }
@@ -356,24 +358,30 @@ impl FieldBuffer {
             writes: replay,
             retired_separator,
             traversed_source_blanks,
-            overwritten_glyph,
+            overwritten_glyphs,
         })
     }
 
     fn entry_replacement(&self, cell: usize, word_start: usize) -> EntryReplacement {
-        if cell >= word_start || matches!(self.cells[cell], FieldCell::TabReference) {
-            return EntryReplacement::ControlOrPadding;
-        }
-        if self.backbefore_graph == Some(cell)
-            && let FieldCell::Graph { text, .. } = self.cells[cell]
-        {
-            if self.projection_length(cell, cell + 1) > 0 {
-                EntryReplacement::PendingGlyph(text)
-            } else {
-                EntryReplacement::ControlOrPadding
+        let scalars = self.projection_length(cell, cell + 1);
+        let glyph = match self.cells[cell] {
+            _ if cell >= word_start => return EntryReplacement::ControlOrPadding,
+            FieldCell::TabReference | FieldCell::ZeroWidthGraph if scalars == 0 => {
+                return EntryReplacement::ControlOrPadding;
             }
-        } else {
-            EntryReplacement::Protected
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => ' ',
+            FieldCell::Tab => '\t',
+            FieldCell::Graph { text, .. }
+                if self.backbefore_graph == Some(cell) || text.is_whitespace() =>
+            {
+                text
+            }
+            _ => return EntryReplacement::Protected,
+        };
+        match scalars {
+            0 => EntryReplacement::ControlOrPadding,
+            1 => EntryReplacement::Projected(glyph),
+            _ => EntryReplacement::Protected,
         }
     }
 

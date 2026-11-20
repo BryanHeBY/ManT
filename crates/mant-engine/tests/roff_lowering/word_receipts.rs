@@ -8,6 +8,9 @@ use serde::Deserialize;
 
 use super::{case_failures::verify_cases, json_roundtrip::json_string_roundtrip};
 
+#[path = "word_receipts/accepted_coverage.rs"]
+mod accepted_coverage;
+
 #[derive(Deserialize)]
 struct Matrix {
     cases: Vec<Case>,

@@ -128,6 +128,55 @@ fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
 }
 
 #[test]
+fn zero_advance_links_follow_their_accepted_rows_in_paint_and_copy() {
+    // Exact CVS term_fill / term_field intervals print C in a closed
+    // row in the first source and let D overwrite C in the second.
+    let header = ".Dd November 19, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd example\n.Sh DESCRIPTION\n";
+    let target = LinkTarget::External(ExternalUri::parse("https://example.invalid/c").unwrap());
+    for (body, rows, hit_cell) in [
+        (
+            r#".No "\zB\p" No "\h'1n'\X'tty: link https://example.invalid/c'\zC\X'tty: link'\p" Ns No "\:D""#,
+            &["B", "C", "D"][..],
+            Some(&target),
+        ),
+        (
+            r#".No "\zA\p\:B\&" Ns No "\h'-1n'\X'tty: link https://example.invalid/c'\zC\X'tty: link'" Ns No "\:D""#,
+            &["A", "BD"],
+            None,
+        ),
+    ] {
+        let view = DocumentView::new(&restored(&format!("{header}{body}\n")));
+        for width in [24_u16, 78] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let start = rendered.search("DESCRIPTION")[0].row + 1;
+            let end = rendered.row_count - 1;
+            let actual: Vec<_> = (start..=end)
+                .map(|row| painted(&buffer, row, 0, width.into()).trim().to_owned())
+                .collect();
+            assert_eq!(actual, rows, "{body}: {width}");
+            let copy = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: start,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: end,
+                    column: usize::from(width) - 1,
+                },
+            });
+            assert_eq!(copy.lines().map(str::trim).collect::<Vec<_>>(), rows);
+            let ink = if hit_cell.is_some() { "C" } else { "BD" };
+            let hit = rendered.search(ink);
+            assert_eq!(hit.len(), 1, "{body}: {ink}");
+            for column in hit[0].start_column..hit[0].end_column {
+                assert_eq!(rendered.link_target_at(hit[0].row, column), hit_cell);
+            }
+        }
+    }
+}
+
+#[test]
 fn a_pending_link_label_moves_with_its_accepted_native_slot() {
     // term.c::bufferc()/encode1(): the second operand can replace M or
     // move T to its left without transferring M's link to either neighbor.

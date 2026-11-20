@@ -18,8 +18,8 @@
 use std::collections::BTreeSet;
 
 use super::{
-    EN, FieldBuffer, FieldCell, FillPass, FillTargets, FlushReceipt, advance_tab, cell_units,
-    columns, signed,
+    EN, FieldBuffer, FieldCell, FillPass, FillTargets, FlushReceipt, WriteCursor, advance_tab,
+    cell_units, columns, signed,
 };
 
 fn resolve_pending_tabs(
@@ -150,7 +150,7 @@ impl FieldBuffer {
             cells: self.cells.clone(),
             device_tail: None,
             raw_slot_fence: 0,
-            cursor_retreat: 0,
+            write_cursor: WriteCursor::End,
             raw_tail_font: None,
             raw_copy_aliases: Vec::new(),
             tabs: self.tabs.clone(),

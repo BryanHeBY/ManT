@@ -170,7 +170,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             pass_index += 1;
         }
     }
-    retire_unprinted_prefixes(anchors, passes, &printed_ends, &mut lengths);
+    retire_unprinted_prefixes(anchors, passes, &printed_ends, &covered, &mut lengths);
     lengths
 }
 
@@ -178,6 +178,7 @@ fn retire_unprinted_prefixes(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     printed_ends: &[(usize, bool, usize, bool)],
+    covered: &[usize],
     lengths: &mut BTreeMap<String, OwnerAcceptance>,
 ) {
     // A replay can move an earlier cell's representation to a prefix
@@ -189,7 +190,7 @@ fn retire_unprinted_prefixes(
             let printed = passes
                 .get(pass)
                 .is_some_and(|pass_row| pass_row.start <= gap && gap < printed_ends[pass].0);
-            if !printed {
+            if !printed || covered.binary_search(&gap).is_ok() {
                 lengths
                     .entry(anchor.owner.clone())
                     .or_default()

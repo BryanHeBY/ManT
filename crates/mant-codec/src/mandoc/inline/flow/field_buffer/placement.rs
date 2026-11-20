@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, ops::Range};
 
-use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary};
+use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 
 const MAX_REPLAY_PREFIX_CELLS: usize = 64;
 
@@ -31,7 +31,7 @@ impl FieldBuffer {
                     self.word_scan = super::WordScanPolicy::AwaitFlush;
                     self.scan = None;
                 }
-                self.cursor_retreat = *cursor_retreat;
+                self.write_cursor = WriteCursor::Placed(*cursor_retreat);
                 self.backbefore_armed = *backbefore;
                 self.raw_copy_aliases.clear();
                 self.raw_copy_aliases
@@ -88,16 +88,21 @@ impl FieldBuffer {
         &self,
         automatic: usize,
         kept: bool,
+        live_replay: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
-        if self.resume != 0
-            || matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
-            || !self.projected_pass_ends.is_empty()
-            || !self.deferred_blanks.is_empty()
+        if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
+            || self.resume == 0 && !self.projected_pass_ends.is_empty()
+            || !live_replay && (self.resume != 0 || !self.deferred_blanks.is_empty())
         {
             return None;
         }
+        // A proved landing may still edit the unread suffix. Never
+        // drive the slot machine over a committed pass or an authored
+        // blank whose separate owner has not been projected yet.
         let floor = self
             .raw_slot_fence
+            .max(self.resume)
+            .max(self.deferred_blanks.last().map_or(0, |run| run.end))
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         // A projection-only recovery spelling can fence its own native
         // position without hiding complete glyph slots appended after it.
@@ -114,7 +119,7 @@ impl FieldBuffer {
         let first_alias = self
             .raw_copy_aliases
             .partition_point(|&(copy, _)| copy < start);
-        if self.cursor_retreat > self.cells.len() - start
+        if self.write_cursor.retreat() > self.cells.len() - start
             || *self.cells.get(start)? == FieldCell::Backline
             || start != 0 && self.projection_length(start, self.cells.len()) == 0
             || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
@@ -125,7 +130,7 @@ impl FieldBuffer {
             || self
                 .pass_retreats
                 .get(first_retreat)
-                .is_some_and(|&(old, _)| old < start)
+                .is_some_and(|&(old, _)| (self.resume..start).contains(&old))
         {
             return None;
         }
@@ -144,7 +149,7 @@ impl FieldBuffer {
             start,
             cells,
             automatic,
-            cursor_retreat: self.cursor_retreat,
+            cursor_retreat: self.write_cursor.retreat(),
             kept,
             tail_font: self
                 .raw_tail_font

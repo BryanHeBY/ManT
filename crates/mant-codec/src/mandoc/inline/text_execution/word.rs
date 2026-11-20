@@ -181,7 +181,7 @@ impl WordExecution {
         argument: Option<&str>,
         context: &mut TextExecutionContext<'_>,
     ) {
-        use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+        use crate::mandoc::inline::flow::field_buffer::FieldWrite;
         if matches!(self.native_writes.last(), Some(FieldWrite::DrawSpaces(_)))
             && let Some(argument) = argument
         {
@@ -225,8 +225,11 @@ impl WordExecution {
                     self.native_writes.push(FieldWrite::CancelBackbefore);
                 }
                 if preserves_advance {
-                    self.native_writes
-                        .push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
+                    self.native_writes.push(FieldWrite::MotionPadding {
+                        consumed_by_backbefore: argument.is_some_and(|argument| {
+                            !libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input_after_backbefore(argument)
+                        }),
+                    });
                 }
             }
             if !rewind_entry {

@@ -600,7 +600,7 @@ impl super::InlineExecutionState {
         let automatic_blanks =
             usize::from(!tight) * (1 + usize::from(!kept_blanks && self.native_word_sentence));
         let device_tail = input.device_tail();
-        let live_edit = input.cursor_retreat > 0
+        let live_edit = input.has_retained_word_cursor()
             || input.ends_with_unresolved_backline()
             || device_tail
                 .as_ref()
@@ -637,9 +637,19 @@ impl super::InlineExecutionState {
                 || live_edit
                 || leading_retreat && !input.has_entry_retreat()
                 || extend)
-                .then(|| input.field_prefix(automatic_blanks, kept_blanks))
+                .then(|| {
+                    input.field_prefix(
+                        automatic_blanks,
+                        kept_blanks,
+                        leading_retreat || input.has_retained_word_cursor(),
+                    )
+                })
                 .flatten(),
         }
+    }
+
+    pub(in crate::mandoc::inline) fn has_staged_backline_coverage(&self) -> bool {
+        self.word_input().0.has_pass_retreats()
     }
 
     pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {

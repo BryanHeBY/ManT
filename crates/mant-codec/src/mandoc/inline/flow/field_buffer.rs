@@ -199,6 +199,23 @@ enum WordScanPolicy {
     UnmodeledRewind,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+enum WriteCursor {
+    #[default]
+    End,
+    Placed(usize),
+    Retreated(usize),
+}
+
+impl WriteCursor {
+    const fn retreat(self) -> usize {
+        match self {
+            Self::End => 0,
+            Self::Placed(retreat) | Self::Retreated(retreat) => retreat,
+        }
+    }
+}
+
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
 /// words of one native field.
 #[derive(Clone, Debug, Default)]
@@ -208,7 +225,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     // Earlier cells can stand for layout-equivalent rather than byte-exact
     // native input. Only the proved append suffix can be used for slot edits.
     raw_slot_fence: usize,
-    pub(super) cursor_retreat: usize,
+    write_cursor: WriteCursor,
     raw_tail_font: Option<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
     raw_copy_aliases: Vec<(usize, usize)>,
     tabs: Arc<TabStops>,
