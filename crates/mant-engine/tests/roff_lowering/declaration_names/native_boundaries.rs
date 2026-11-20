@@ -674,3 +674,152 @@ fn real_assignment_forms_keep_compound_and_literal_alternatives() {
         check(section, head, names, form, true, &["-p", "group1"]);
     }
 }
+
+const ASSIGNMENT_EVIDENCE_CASES: &[(&str, &str, bool)] = &[
+    (
+        "Fl a=application/vnd.api+json;charset=utf-8",
+        "-a=application/vnd.api+json;charset=utf-8",
+        true,
+    ),
+    ("Fl a= Ns Ar user@ Ns No host", "-a=user@host", true),
+    ("Fl a= Ns Pa key= Ns No value", "-a=key=value", true),
+    (
+        "Fl a=text/plain;charset=utf-8",
+        "-a=text/plain;charset=utf-8",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar text/plain;charset=utf-8",
+        "-a=text/plain;charset=utf-8",
+        true,
+    ),
+    ("Fl a=/", "-a=/", true),
+    ("Fl a= Ns Pa /", "-a=/", true),
+    ("Fl a=[0-9]*", "-a=[0-9]*", true),
+    ("Fl a= Ns Ar [0-9]*", "-a=[0-9]*", true),
+    ("Fl a= Ns Ar x Op Ar NAME=", "-a=x [NAME=]", true),
+    (
+        "Fl a= Ns Ar file Oo Ar login@ Oc Ar host",
+        "-a=file [login@] host",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Op Ar NAME= Ns Li auto",
+        "-a=x [NAME=auto]",
+        true,
+    ),
+    ("Fl a= Ns Ar x Op Pa /tmp/file@", "-a=x [/tmp/file@]", true),
+    (
+        "Fl a= Ns Ar x Oo Pa /tmp/file@ Oc",
+        "-a=x [/tmp/file@]",
+        true,
+    ),
+    ("Fl a= Ns Ar x Pq Pa /tmp/file@", "-a=x (/tmp/file@)", true),
+    ("Fl a= Ns Pa /tmp/file@", "-a=/tmp/file@", true),
+    (
+        "Fl a= Ns Ar x Op Pa /tmp/file@ Ns Pa main",
+        "-a=x [/tmp/file@main]",
+        true,
+    ),
+    ("Fl -require= Ns Ar pkg>=2", "--require=pkg>=2", true),
+    ("Fl -filter= Ns Ar size>1024", "--filter=size>1024", true),
+    ("Fl -filter= Ns Ar size<1024", "--filter=size<1024", true),
+    ("Fl -filter= Ns Ar size!=1024", "--filter=size!=1024", true),
+    (
+        "Fl -filter= Ns Ar size<limit>",
+        "--filter=size<limit>",
+        true,
+    ),
+    ("Fl a= Ns Ar path[ Ns Ar index ]", "-a=path[index]", true),
+    (
+        "Fl a= Ns Ar x Pq Li see Li /. Ns Pa dockerenv",
+        "-a=x (see /.dockerenv)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li see Li ./ Ns Pa notes",
+        "-a=x (see ./notes)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li see Pa ./notes",
+        "-a=x (see ./notes)",
+        false,
+    ),
+    ("Fl a= Ns Ar x Pq Li ./ Ns Pa notes", "-a=x (./notes)", true),
+    (
+        "Fl a= Ns Ar x Pq Li see Li ./ Ns Pa docs@ Ns Li main",
+        "-a=x (see ./docs@main)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li see Li ../ Ns Pa docs@ Ns Li main",
+        "-a=x (see ../docs@main)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li see Pa ./docs@main",
+        "-a=x (see ./docs@main)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li ./ Ns Pa docs@ Ns Li main",
+        "-a=x (./docs@main)",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Pa ./docs@main",
+        "-a=x (./docs@main)",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Li see Li ./ Ns Pa docs@ Ns No main",
+        "-a=x (see ./docs@main)",
+        false,
+    ),
+];
+
+#[test]
+fn assignment_evidence_stays_inside_the_word_and_its_native_operand() {
+    // CVS mdoc_term.c::termp_fl_pre and termp_ns_pre execute native words
+    // whose adjacency is independent from generated enclosure closers.
+    // All labels and owner boundaries were checked on the pinned devices.
+    for &(head, label, complete) in ASSIGNMENT_EVIDENCE_CASES {
+        let (name, _) = label.split_once('=').unwrap();
+        check(
+            "OPTIONS",
+            head,
+            &[name],
+            label,
+            complete,
+            &["see", "notes", "main"],
+        );
+    }
+}
+
+#[test]
+fn native_angle_spelling_cannot_swallow_an_independent_alias() {
+    // The pinned tree and HTML show two Fl operands after either an
+    // Ar comparison sign or an angle pair spanning two Ar operands.
+    for (head, label) in [
+        (
+            "Fl -filter= Ns Ar size<1024 , Fl b",
+            "--filter=size<1024, -b",
+        ),
+        (
+            "Fl -filter= Ns Ar size>1024 , Fl b",
+            "--filter=size>1024, -b",
+        ),
+        ("Fl a= Ns Ar x<o Ns Ar pt> , Fl b", "-a=x<opt>, -b"),
+    ] {
+        let (name, _) = label.split_once('=').unwrap();
+        check(
+            "OPTIONS",
+            head,
+            &[name, "-b"],
+            label,
+            true,
+            &["opt", "size"],
+        );
+    }
+}

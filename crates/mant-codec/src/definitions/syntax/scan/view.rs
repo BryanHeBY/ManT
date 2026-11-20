@@ -18,6 +18,8 @@ pub(in crate::definitions::syntax) struct HeadView<'a> {
     runs: Vec<Run>,
     operands: &'a [NativeOperand],
     literal_starts: Vec<usize>,
+    #[cfg(feature = "roff")]
+    assignment_angles: std::cell::OnceCell<Vec<usize>>,
 }
 
 impl<'a> HeadView<'a> {
@@ -30,6 +32,8 @@ impl<'a> HeadView<'a> {
             runs: Vec::new(),
             operands,
             literal_starts: Vec::new(),
+            #[cfg(feature = "roff")]
+            assignment_angles: std::cell::OnceCell::new(),
         };
         view.append(nodes, Style::default());
         // An authored leading blank belongs to the operand; its first name
@@ -120,6 +124,41 @@ impl<'a> HeadView<'a> {
 
     pub(super) fn operand(&self, offset: usize) -> Option<&NativeOperand> {
         operand_at(self.operands, offset)
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
+        self.assignment_angles
+            .get_or_init(|| {
+                // One authored word can span multiple native operands. A real
+                // word break fences its angle pairs from explanatory suffixes
+                // and later flags. Cache the sparse byte positions once.
+                let mut pairs = Vec::new();
+                let mut open = Vec::new();
+                let mut escaped = false;
+                for (offset, ch) in self.text.char_indices() {
+                    if ch.is_whitespace() {
+                        open.clear();
+                    }
+                    if std::mem::take(&mut escaped) {
+                        continue;
+                    }
+                    match ch {
+                        '\\' => escaped = true,
+                        '<' if open.len() < super::MAX_NESTING => open.push(offset),
+                        '>' => {
+                            if let Some(start) = open.pop() {
+                                pairs.extend([start, offset]);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                pairs.sort_unstable();
+                pairs
+            })
+            .binary_search(&offset)
+            .is_ok()
     }
 
     pub(super) fn is_parameter(&self, offset: usize) -> bool {

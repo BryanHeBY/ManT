@@ -586,7 +586,24 @@ impl<'a> Scanner<'a> {
             }
         }
         let top_level = self.lexical.is_top_level();
-        if self.lexical.observe(character) {
+        #[cfg(feature = "roff")]
+        let literal_angle = matches!(character, '<' | '>')
+            && role.is_some_and(|operand| {
+                matches!(
+                    operand.role,
+                    NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_)
+                )
+            })
+            && self.argument_start.as_ref().is_some_and(|argument| {
+                argument.attached_to_name && self.view.text[argument.bytes.start..].starts_with('=')
+            })
+            && !self.view.paired_assignment_angle(self.cursor);
+        #[cfg(not(feature = "roff"))]
+        let literal_angle = false;
+        if self
+            .lexical
+            .observe(if literal_angle { 'x' } else { character })
+        {
             self.structured_argument = true;
         } else if top_level && !character.is_whitespace() {
             self.structured_argument = false;

@@ -15,6 +15,14 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
     // term_word() can execute the operator, value and delimiters in
     // separate operands. The accepted character ranges give adjacency.
     let rhs = span.start + 1..span.end;
+    if view.operand(span.start).is_some_and(|operand| {
+        operand.role == Role::ExplicitOption
+            && operand.bytes.start < span.start
+            && operand.bytes.end >= rhs.end
+            && complete_flag_value(&view.text[rhs.clone()])
+    }) {
+        return true;
+    }
     let mut cursor = rhs.start;
     let mut syntax = AssignmentSyntax::default();
     let mut scopes = Vec::new();
@@ -52,61 +60,20 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             return false;
         }
         let value = &view.text[start..end];
-        let touches_next =
-            view.text[end..rhs.end].starts_with(|character: char| !character.is_whitespace());
-        let accepted = match operand.role {
-            Role::Placeholder { .. } | Role::SearchArgument(_) => {
-                syntax.operand(value, true, false, touches_next)
-            }
-            Role::PathOperand(_) => syntax.operand(value, true, true, touches_next),
-            Role::ExplicitOption if operand.bytes.start < span.start => {
-                // Fl can spell the start of its own assignment, including
-                // brackets that close in later operands: --skip=[-][sample|time].
-                syntax.literal(value, Literal::Assignment)
-            }
-            Role::ExplicitOption if syntax.lexical.within_group() => {
-                // An inner Fl proves its own spelling inside the optional
-                // group.
-                let optional = syntax.group().is_some_and(|group| group.bracketed);
-                syntax.operand(value, optional, false, touches_next)
-            }
-            Role::EnclosureStart {
-                body,
-                parent,
-                optional,
-            } if scopes.len() < MAX_NESTING
-                && scopes
-                    .last()
-                    .is_none_or(|&(scope, _)| Some(scope) == parent) =>
-            {
-                scopes.push((body, optional));
-                syntax.literal(value, Literal::Delimiter)
-            }
-            Role::EnclosureEnd(body) if scopes.pop().is_some_and(|(scope, _)| scope == body) => {
-                syntax.literal(value, Literal::Delimiter)
-            }
-            Role::EnclosureContent { body, bare }
-                if scopes.last().is_some_and(|&(scope, _)| scope == body) =>
-            {
-                // Actual Op/Oo can supply one bare value such as [host].
-                // A Bq with the same terminal glyphs makes no such claim.
-                syntax.literal(value, scoped_literal(scopes.last().filter(|_| bare)))
-            }
-            Role::Command => syntax.literal(value, scoped_literal(scopes.last())),
-            Role::LiteralValue => syntax.literal(value, Literal::Explicit),
-            Role::Literal | Role::LiteralContinuation(_) | Role::Description => {
-                syntax.literal(value, Literal::Unmarked)
-            }
-            Role::Argument
-            | Role::LiteralDelimiter { .. }
-            | Role::LiteralPunctuation
-            | Role::PipeDelimiter(_)
-            | Role::SearchSign
-            | Role::SearchOpen { .. }
-            | Role::SearchClose => syntax.literal(value, Literal::Delimiter),
-            _ => return false,
+        let touches_next = view.text[end..rhs.end].starts_with(|character: char| {
+            !character.is_whitespace() && !matches!(character, ']' | ')' | '}' | '>')
+        }) && view.operand(end).is_none_or(|next| {
+            next.bytes.start == end
+                && !matches!(next.role, Role::EnclosureEnd(_) | Role::ClippedEnclosure)
+        });
+        let piece = OperandPiece {
+            role: operand.role,
+            value,
+            owns_assignment_prefix: operand.bytes.start < span.start,
+            touches_next,
+            start,
         };
-        if accepted.is_err() {
+        if syntax.execute_operand(piece, view, &mut scopes).is_err() {
             return false;
         }
         cursor = end;
@@ -117,6 +84,20 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             .is_ok()
         && syntax.has_value
         && syntax.lexical.is_top_level()
+}
+
+/// A complete RHS inside its own Fl operand supplies its literal spelling.
+/// Keep grouped suffixes which extend into subsequent operands on the
+/// shared, scoped proof path below.
+fn complete_flag_value(value: &str) -> bool {
+    let mut lexical = LexicalState::default();
+    for ch in value.chars() {
+        if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.[](){}<>".contains(ch) {
+            return false;
+        }
+        lexical.observe(ch);
+    }
+    !value.is_empty() && lexical.is_top_level()
 }
 
 fn scoped_literal(scope: Option<&(u32, bool)>) -> Literal {
@@ -259,7 +240,91 @@ struct AssignmentSyntax {
     groups: Vec<Option<ArgumentGroup>>,
 }
 
+#[derive(Clone, Copy)]
+struct OperandPiece<'a> {
+    role: Role,
+    value: &'a str,
+    owns_assignment_prefix: bool,
+    touches_next: bool,
+    start: usize,
+}
+
 impl AssignmentSyntax {
+    fn execute_operand(
+        &mut self,
+        piece: OperandPiece<'_>,
+        view: &HeadView<'_>,
+        scopes: &mut Vec<(u32, bool)>,
+    ) -> Result<(), ()> {
+        let OperandPiece {
+            role,
+            value,
+            owns_assignment_prefix,
+            ..
+        } = piece;
+        match role {
+            Role::Placeholder { .. } | Role::SearchArgument(_) => {
+                self.operand(piece, view, ValueEvidence::Argument, false)
+            }
+            Role::PathOperand(_) => self.operand(piece, view, ValueEvidence::Argument, true),
+            Role::ExplicitOption if owns_assignment_prefix => {
+                // Fl can spell the start of its own assignment, including
+                // brackets that close in later operands: --skip=[-][sample|time].
+                self.literal(value, Literal::Assignment)
+            }
+            Role::ExplicitOption if self.lexical.within_group() => {
+                // An inner Fl proves its own spelling inside the optional
+                // group.
+                let optional = self.group().is_some_and(|group| group.bracketed);
+                self.operand(
+                    piece,
+                    view,
+                    if optional {
+                        ValueEvidence::Argument
+                    } else {
+                        ValueEvidence::Literal
+                    },
+                    false,
+                )
+            }
+            Role::EnclosureStart {
+                body,
+                parent,
+                optional,
+            } if scopes.len() < MAX_NESTING
+                && scopes
+                    .last()
+                    .is_none_or(|&(scope, _)| Some(scope) == parent) =>
+            {
+                scopes.push((body, optional));
+                self.literal(value, Literal::Delimiter)
+            }
+            Role::EnclosureEnd(body) if scopes.pop().is_some_and(|(scope, _)| scope == body) => {
+                self.literal(value, Literal::Delimiter)
+            }
+            Role::EnclosureContent { body, bare }
+                if scopes.last().is_some_and(|&(scope, _)| scope == body) =>
+            {
+                // Actual Op/Oo can supply one bare value such as [host].
+                // A Bq with the same terminal glyphs makes no such claim.
+                self.literal(value, scoped_literal(scopes.last().filter(|_| bare)))
+            }
+            Role::Command => self.literal(value, scoped_literal(scopes.last())),
+            Role::LiteralValue => self.literal(value, Literal::Explicit),
+            Role::Literal | Role::LiteralContinuation(_) | Role::Description => {
+                self.literal(value, Literal::Unmarked)
+            }
+            Role::Argument
+            | Role::LiteralDelimiter { .. }
+            | Role::LiteralPunctuation
+            | Role::PipeDelimiter(_)
+            | Role::SearchSign
+            | Role::SearchOpen { .. }
+            | Role::SearchClose => self.literal(value, Literal::Delimiter),
+            _ => Err(()),
+        }
+    }
+
     fn group(&self) -> Option<&ArgumentGroup> {
         self.groups.last().and_then(Option::as_ref)
     }
@@ -270,21 +335,30 @@ impl AssignmentSyntax {
 
     fn operand(
         &mut self,
-        value: &str,
-        proves_argument: bool,
+        piece: OperandPiece<'_>,
+        view: &HeadView<'_>,
+        evidence: ValueEvidence,
         is_path: bool,
-        touches_next: bool,
     ) -> Result<(), ()> {
+        let OperandPiece {
+            value,
+            touches_next,
+            start: value_start,
+            ..
+        } = piece;
         let trimmed = value.trim_start();
         self.literal(&value[..value.len() - trimmed.len()], Literal::Delimiter)?;
         let spelling = trimmed.trim_end();
-        let evidence = if proves_argument {
-            ValueEvidence::Argument
-        } else {
-            ValueEvidence::Literal
-        };
+        let spelling_start = value_start + (value.len() - trimmed.len());
         let mut start = 0;
         for (offset, bracket) in open_operand_edges(spelling)? {
+            // Comparison signs in a typed operand carry their own spelling.
+            // Export an unmatched angle only when it has a cross-operand mate.
+            if matches!(bracket, '<' | '>')
+                && !view.paired_assignment_angle(spelling_start + offset)
+            {
+                continue;
+            }
             self.operand_fragment(&spelling[start..offset], evidence, is_path, false)?;
             self.delimiter(bracket)?;
             self.after_space = false;
@@ -449,8 +523,12 @@ impl AssignmentSyntax {
             self.delimiter(ch)?;
         } else if matches!(ch, '=' | ',' | '/' | ':' | '@' | '|') {
             self.operator(ch)?;
-        } else if ch == '.' && !self.after_space && !matches!(self.atom, Atom::Expected) {
-            self.atom = Atom::AfterDot;
+        } else if ch == '.' {
+            if self.after_space {
+                self.start_path_value()?;
+            } else if !matches!(self.atom, Atom::Expected | Atom::PathContinuation) {
+                self.atom = Atom::AfterDot;
+            }
         } else if !(matches!(ch, '.' | '…') || ch == '+' && self.lexical.within_group()) {
             return Ok(false);
         }
@@ -492,11 +570,7 @@ impl AssignmentSyntax {
         if ch == '/' && !(left && adjacent) {
             // A unary slash starts a fresh value. Its suffix cannot prove
             // the earlier literal across a real word separation.
-            if let Some(group) = self.group_mut() {
-                group.finish_value()?;
-            }
-            self.atom = Atom::PathContinuation;
-            return Ok(());
+            return self.start_path_value();
         }
         let join = match ch {
             '|' | '=' | ',' => Some(Join::Word),
@@ -511,6 +585,14 @@ impl AssignmentSyntax {
             group.join = Some(join);
         }
         self.atom = Atom::Expected;
+        Ok(())
+    }
+
+    fn start_path_value(&mut self) -> Result<(), ()> {
+        if let Some(group) = self.group_mut() {
+            group.finish_value()?;
+        }
+        self.atom = Atom::PathContinuation;
         Ok(())
     }
 }
