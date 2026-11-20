@@ -49,6 +49,8 @@ that crate was not published for that change.
 
 - Keep an earlier native glyph cover when replay repositions the surviving
   styled suffix, including its printed separator and search range.
+- Preserve an accepted hard line before a replayed word whose native font
+  decoration precedes its first visible glyph.
 - Validate native assignment connectors within the same argument group.
   Recognize typed address and path fragments while keeping explanations
   out of exact signatures.

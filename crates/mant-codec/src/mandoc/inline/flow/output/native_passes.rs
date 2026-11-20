@@ -227,15 +227,22 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             continue;
         }
         let cell = next.start;
-        // A restarted pass can land on an invisible slot preceding the
-        // first projected glyph of the new word (for example tty's NBRZW).
-        // Its owner interval begins before its first source scalar.
+        // term_flushln() skips the separator and can restart at an
+        // invisible slot in the new word, including encode1()'s font
+        // decoration. Use that word's owner even when replay reused the
+        // separator and left no entry-gap receipt.
         let mut owner = anchors.partition_point(|anchor| anchor.content <= cell);
-        if anchors
-            .get(owner)
-            .is_some_and(|anchor| anchor.entry_gap_cell().is_some() && anchor.start <= cell)
-        {
-            owner += 1;
+        if let Some(anchor) = anchors.get(owner).filter(|anchor| anchor.start <= cell) {
+            let end = anchors
+                .get(owner + 1)
+                .map_or(buffer.cells().len(), |next| next.start.min(next.content));
+            // An overwritten word can still span the restart in its
+            // native coordinates without owning any remaining reading text.
+            let restart_before_payload = buffer.projection_length(cell, anchor.content) == 0
+                && buffer.projection_length(anchor.content, end) > 0;
+            if anchor.entry_gap_cell().is_some() || restart_before_payload {
+                owner += 1;
+            }
         }
         if let Some(index) = owner.checked_sub(1) {
             let anchor = &anchors[index];

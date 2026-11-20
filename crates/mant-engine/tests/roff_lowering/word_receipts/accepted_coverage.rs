@@ -81,6 +81,58 @@ fn replayed_cover_drops_only_the_replaced_glyphs_link() {
 }
 
 #[test]
+fn a_replayed_word_keeps_the_break_before_its_font_decoration() {
+    // Fixed term_flushln() skips the separator and restarts before H.
+    // encode1() may write font decoration before the first visible H.
+    for lead in ["No", "Sy", "Em"] {
+        for middle in ["No", "Sy", "Em", "Ns No", "Ns Sy"] {
+            for tail in ["No", "Sy", "Em"] {
+                for first in ["A", "AB"] {
+                    let source = format!(
+                        "{REPLAY_HEADER}{}\n",
+                        format_args!(
+                            r#".{lead} "{first}" {middle} "\zC\pD" No "\h'-1n'" {tail} "H""#
+                        )
+                    );
+                    let gap = if middle.starts_with("Ns ") { "" } else { " " };
+                    let expected = format!("{first}{gap}D");
+                    let native = json_string_roundtrip(
+                        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+                    );
+                    let markdown = mant_codec::encode::render_markdown(&native);
+                    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                    for content in [&native, &readback] {
+                        let rendered = mant_render::render_query_man(content);
+                        assert_eq!(
+                            description_rows(&rendered, &source),
+                            [&expected, "H"],
+                            "{source}"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_replaced_word_cannot_own_the_restart_of_an_accepted_pass() {
+    // Fixed term_field() prints the retained C before the break. The E
+    // word's range crosses the restart, but its projected glyph is gone.
+    let source = format!(
+        "{REPLAY_HEADER}{}\n",
+        r#".No "A \zB" Em "C\p\z D" Ns Em "\h'-2n'\:E" Ns Em "\h'-1n'H""#,
+    );
+    let native = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let markdown = mant_codec::encode::render_markdown(&native);
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for content in [&native, &readback] {
+        let rendered = mant_render::render_query_man(content);
+        assert_eq!(description_rows(&rendered, &source), ["A BC", "H"]);
+    }
+}
+
+#[test]
 fn deferred_native_passes_survive_replay_across_invisible_cells_and_style() {
     // Fixed ASCII and UTF-8 agree. term_word() writes an entry blank
     // before applying BACKBEFORE, and term_fill() later consumes the
