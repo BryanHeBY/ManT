@@ -144,3 +144,76 @@ fn the_flag_word_proves_its_own_value_without_proving_independent_operands() {
         check("OPTIONS", head, &["-q"], label, full, &["bogus"]);
     }
 }
+
+#[test]
+fn real_assignment_forms_keep_compound_and_literal_alternatives() {
+    // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
+    // and exports. CVS term_word(), termp_ns_pre() and quote pre/post
+    // give these tokens their boundaries. Both devices and the HTML
+    // and tree profiles were checked for each reduced declaration.
+    for (section, head, names, form) in [
+        (
+            "OPTIONS",
+            "Fl -inspect-publish-uid Ns = Ns Ar stderr,http",
+            &["--inspect-publish-uid"][..],
+            "--inspect-publish-uid=stderr,http",
+        ),
+        (
+            "OPTIONS",
+            "Fl -define-variable Ns = Ns Ar varname Ns = Ns Ar value",
+            &["--define-variable"],
+            "--define-variable=varname=value",
+        ),
+        (
+            "OPTIONS",
+            "Fl -raw-pcm= Ns Ar sr , Ns Ar bits Ns [f|s|u], Ns Ar chans , Ns [le|be]",
+            &["--raw-pcm"],
+            "--raw-pcm=sr,bits[f|s|u],chans,[le|be]",
+        ),
+        (
+            "OPTIONS",
+            "Fl Fl waitip Ns = Ns Op 4 | 6",
+            &["--waitip"],
+            "--waitip=[4 | 6]",
+        ),
+        (
+            "OPTIONS",
+            "Fl n Ar num , Fl -bytes= Ns num",
+            &["-n", "--bytes"],
+            "-n num, --bytes=num",
+        ),
+        ("OPTIONS", "Fl -icf Ns = Ns Cm all", &["--icf"], "--icf=all"),
+        (
+            "OPTIONS",
+            "Fl -debug Ns = Ns Oo Oo +|- Oc Ns Ar flags Oc",
+            &["--debug"],
+            "--debug=[[+|-]flags]",
+        ),
+        (
+            "OPTIONS",
+            "Fl e , -exported Ns = Ns Oo Fl p Ar path Oc Ns …",
+            &["-e", "--exported"],
+            "-e, --exported=[-p path]…",
+        ),
+        (
+            "OPTIONS",
+            "Fl -bin Ns = Ns ( Li lsize Ns | Ns Li psize Ns | Ns Li asize )",
+            &["--bin"],
+            "--bin=(lsize|psize|asize)",
+        ),
+        (
+            "OPTIONS\n.Sm off",
+            r"Fl maproot Li = Ar user\^ Li \&: Ar group1\^ Li \&: group2\^ Li \&: Ar ...",
+            &["-maproot"],
+            "-maproot=user:group1:group2:...",
+        ),
+        (
+            "OPTIONS\n.Sm off",
+            r"Fl maproot Li = Ar user\^ Li \&: Op Ar group1\^ Li \&: group2\^ Li \&: Ar ...",
+            &["-maproot"],
+            "-maproot=user:[group1:group2:...]",
+        ),
+    ] {
+        check(section, head, names, form, true, &["-p", "group1"]);
+    }
+}

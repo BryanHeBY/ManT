@@ -11,74 +11,128 @@ pub(super) fn proves_native_assignment(view: &HeadView<'_>, argument: &Argument)
     if !view.text[span.clone()].starts_with('=') {
         return true;
     }
-    // Fl, the exact assignment sign, and a native Ar wrapped by balanced
-    // delimiters can be separate term_word() calls. Validate the whole
-    // argument slice, including everything after its last Ar.
+    // term_word() can write the operator, each parameter component and
+    // the enclosing delimiters separately. Advance through their accepted
+    // ranges, including punctuation and literal choices between Ar words.
     let rhs = span.start + 1..span.end;
     let mut cursor = rhs.start;
-    let mut lexical = LexicalState::default();
-    let mut has_argument = false;
+    let mut syntax = AssignmentSyntax::new();
     let mut scopes = Vec::new();
     for operand in view.operands_in(rhs.clone()) {
         let start = operand.bytes.start.max(cursor);
         let end = operand.bytes.end.min(rhs.end);
-        if !observe_assignment_syntax(&mut lexical, &view.text[cursor..start]) {
+        if !syntax.literal(&view.text[cursor..start], true) {
             return false;
         }
         let value = &view.text[start..end];
-        let role = operand.role;
-        // An attached value of the same Fl word has an accepted spelling
-        // receipt even if an overstrike clipped part of the value.
-        let own_value = role == Role::ExplicitOption && operand.bytes.start < span.start;
-        if own_value || matches!(role, Role::Placeholder { .. } | Role::SearchArgument(_)) {
-            for ch in value.chars() {
-                lexical.observe(ch);
+        let literal_atom = match operand.role {
+            Role::Placeholder { .. } | Role::SearchArgument(_) => {
+                syntax.parameter(value);
+                cursor = end;
+                continue;
             }
-            has_argument |= !value.trim().is_empty();
-        } else {
-            match role {
-                Role::EnclosureStart { body, parent }
-                    if scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
-                {
-                    scopes.push(body);
-                }
-                Role::EnclosureEnd(body) if scopes.pop() == Some(body) => {}
-                Role::Literal
-                | Role::LiteralContinuation(_)
-                | Role::LiteralDelimiter { .. }
-                | Role::LiteralPunctuation
-                | Role::Description
-                | Role::SearchSign
-                | Role::SearchOpen { .. }
-                | Role::SearchClose
-                | Role::EnclosureContent(_) => {}
-                _ => return false,
+            Role::ExplicitOption
+                if operand.bytes.start < span.start || syntax.lexical.within_group() =>
+            {
+                // The same Fl can own its value. An enclosed Fl can also
+                // be argument syntax, as in an optional [-p path] operand.
+                syntax.parameter(value);
+                cursor = end;
+                continue;
             }
-            if !observe_assignment_syntax(&mut lexical, value) {
-                return false;
+            Role::EnclosureStart { body, parent }
+                if scopes.len() < super::MAX_NESTING
+                    && scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
+            {
+                scopes.push(body);
+                false
             }
+            Role::EnclosureEnd(body) if scopes.pop() == Some(body) => false,
+            Role::EnclosureContent(body) if scopes.last() == Some(&body) => true,
+            Role::Literal | Role::LiteralContinuation(_) | Role::Description | Role::Command => {
+                true
+            }
+            Role::Argument
+            | Role::LiteralDelimiter { .. }
+            | Role::LiteralPunctuation
+            | Role::PipeDelimiter(_)
+            | Role::SearchSign
+            | Role::SearchOpen { .. }
+            | Role::SearchClose => false,
+            _ => return false,
+        };
+        if !syntax.literal(value, literal_atom) {
+            return false;
         }
         cursor = end;
     }
-    has_argument
-        && scopes.is_empty()
-        && observe_assignment_syntax(&mut lexical, &view.text[cursor..rhs.end])
-        && lexical.is_top_level()
+    scopes.is_empty()
+        && syntax.literal(&view.text[cursor..rhs.end], true)
+        && syntax.has_value
+        && syntax.lexical.is_top_level()
 }
 
 #[cfg(feature = "roff")]
-fn observe_assignment_syntax(lexical: &mut LexicalState, text: &str) -> bool {
-    text.chars().all(|ch| {
-        lexical.observe(ch);
-        ch != '\n'
-            && (ch.is_whitespace()
-                || closing(ch).is_some()
-                || quote_closer(ch).is_some()
-                || matches!(
-                    ch,
-                    ']' | '}' | ')' | '>' | '”' | '’' | ',' | '/' | ':' | '@' | '|' | '.'
-                ))
-    })
+struct AssignmentSyntax {
+    lexical: LexicalState,
+    expects_atom: bool,
+    has_value: bool,
+}
+
+#[cfg(feature = "roff")]
+impl AssignmentSyntax {
+    fn new() -> Self {
+        Self {
+            lexical: LexicalState::default(),
+            expects_atom: true,
+            has_value: false,
+        }
+    }
+
+    fn parameter(&mut self, value: &str) {
+        for ch in value.chars() {
+            if !self.punctuation(ch) {
+                self.lexical.observe(ch);
+                self.expects_atom = false;
+                self.has_value = true;
+            }
+        }
+    }
+
+    fn literal(&mut self, value: &str, permits_atom: bool) -> bool {
+        let mut in_atom = false;
+        for ch in value.chars() {
+            if ch == '\n' {
+                return false;
+            }
+            if self.punctuation(ch) {
+                in_atom = false;
+            } else if permits_atom && (in_atom || self.expects_atom) && parameter_character(ch) {
+                self.lexical.observe(ch);
+                self.expects_atom = false;
+                self.has_value = true;
+                in_atom = true;
+            } else {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn punctuation(&mut self, ch: char) -> bool {
+        let opener = closing(ch).is_some() || quote_closer(ch).is_some();
+        let separator = matches!(ch, '=' | ',' | '/' | ':' | '@' | '|');
+        if opener || separator || matches!(ch, ']' | '}' | ')' | '>' | '”' | '’') {
+            let closed = self.lexical.observe(ch);
+            self.expects_atom = !closed && (opener || separator);
+        } else if !(ch.is_whitespace()
+            || matches!(ch, '.' | '…')
+            || ch == '+' && self.lexical.within_group())
+        {
+            return false;
+        }
+        true
+    }
 }
 
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {

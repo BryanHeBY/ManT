@@ -792,9 +792,11 @@ it, or remain open when several nested enclosures end. A comma on the
 outer level still separates independent declarations. For an explicit
 `Fl` assignment, the complete form requires a proved right-hand side.
 For example, `Fl a Ns Li \&= Ns Op Ar x` binds `-a` and publishes
-`-a=[x]`. Compound parameters retain their separators. A trailing prose
-operand or unrelated link remains readable with the definition and
-cannot extend the exact signature.
+`-a=[x]`. Compound parameters retain separators between typed arguments
+and literal alternatives, including combinations like `--waitip=[4 | 6]`
+and `-maproot=user:[group1:group2:...]`. A trailing prose operand or
+unrelated link remains readable with the definition and cannot extend
+the exact signature.
 
 A complete option group can expose up to 256 explicitly spelled names, including
 `-c --stdout --to-stdout`, `-a or --ascii`, and an authored numeric enumeration
