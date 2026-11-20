@@ -59,7 +59,9 @@ that crate was not published for that change.
   until a real device endline. A marker before a discretionary break can
   retain a pending zero-advance glyph across native word boundaries. The
   accepted row determines whether an overstrike covers the glyph and its
-  link. Subsection padding accepted on the preceding row adds no heading row.
+  link. A later operand can consume the last breakable blank before a
+  marker closes its pass. Subsection padding accepted on the preceding row
+  adds no heading row.
 - Keep literal and macro-generated argument groups equivalent in mdoc
   command lists, including balanced brackets across text fragments of a
   single parameter.

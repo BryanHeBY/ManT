@@ -59,6 +59,7 @@ impl FieldBuffer {
         passes: &[FillPass],
     ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
         let mut next = self.deferred_blanks.iter().peekable();
+        let covered = self.covered_pass_retreats(passes);
         let mut output = Vec::new();
         for pass in passes {
             // A pass's ordinary boundary SP is swept before the next
@@ -66,12 +67,17 @@ impl FieldBuffer {
             // an authored SP only in front of a real graph (389-427).
             let printed_end = self.printed_content_end(pass.start, pass.end);
             while let Some(run) = next.peek().filter(|run| run.start < pass.end) {
-                let count = run
-                    .end
-                    .min(printed_end)
-                    .saturating_sub(run.start.max(pass.start));
-                if count > 0 {
-                    output.push((run.source, count));
+                let start = run.start.max(pass.start);
+                let end = run.end.min(printed_end);
+                if start < end {
+                    // Some authored spaces have no provisional scalar but
+                    // can still be covered by an accepted backline.
+                    let overwritten = covered.partition_point(|&cell| cell < end)
+                        - covered.partition_point(|&cell| cell < start);
+                    let count = end - start - overwritten;
+                    if count > 0 {
+                        output.push((run.source, count));
+                    }
                 }
                 if run.end > pass.end {
                     break;
@@ -237,7 +243,11 @@ impl FieldBuffer {
         passes: &[FillPass],
     ) -> Vec<usize> {
         let mut covered = Vec::new();
-        self.visit_accepted_covers(passes, |target, _| covered.push(target));
+        self.visit_accepted_covers(passes, |target, _| {
+            if covered.last() != Some(&target) {
+                covered.push(target);
+            }
+        });
         covered
     }
 

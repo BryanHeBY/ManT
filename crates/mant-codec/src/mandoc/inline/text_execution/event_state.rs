@@ -99,12 +99,16 @@ pub(super) fn append_text_event(
                 // their source order. The next encode1() can consume
                 // the marker's raw blank, leaving the break pending
                 // (term.c:294-295,901-908).
-                destination.zero_advance.flush_with_held(
-                    destination.output,
-                    destination.buffer,
-                    font,
-                    link,
-                );
+                if let Some(writes) = native_writes.as_deref_mut() {
+                    destination.stage_backline_projection(writes);
+                } else {
+                    destination.zero_advance.flush_with_held(
+                        destination.output,
+                        destination.buffer,
+                        font,
+                        link,
+                    );
+                }
                 // The authored blank is not the automatic word separator.
                 // Only the field receipt can decide whether that separator
                 // survived the retreat and actually printed in its pass.
@@ -181,6 +185,19 @@ pub(super) fn append_text_event(
 }
 
 impl WordOutput<'_> {
+    pub(super) fn stage_backline_projection(&mut self, writes: &mut Vec<FieldWrite>) {
+        // Publish the provisional owner before the break opportunity.
+        // The native slot and accepted pass decide whether it is covered.
+        writes.push(FieldWrite::StageBacklineProjection);
+        self.zero_advance.commit_pending_projection(
+            self.output,
+            self.buffer,
+            self.font,
+            self.link,
+            true,
+        );
+    }
+
     fn append_chunk(&mut self, chunk: &str) {
         self.zero_advance
             .append_text(chunk, self.output, self.buffer, self.font, self.link);

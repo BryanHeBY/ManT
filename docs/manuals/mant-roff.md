@@ -1458,8 +1458,8 @@ When a subsection's padding shares the preceding text row, that padding
 adds no heading row. Later heading rows and the subsection identity are
 preserved. At a discretionary breakpoint the field scan retains the
 zero-advance glyph and its link if the covering glyph prints on another
-row. The same accepted positions carry a word-end break inside a tbl cell
-when a backstep consumes one of the following source spaces.
+row. The same accepted positions decide whether a backstep leaves enough
+following source spaces to end a word in a paragraph or a tbl cell.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 

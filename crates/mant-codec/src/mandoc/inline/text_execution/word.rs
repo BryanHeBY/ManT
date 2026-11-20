@@ -340,18 +340,14 @@ impl WordExecution {
         // An isolated tbl word uses the same local projection rule; live
         // paragraph/definition fields keep acceptance with their cell sink.
         if context.policy.field_authoritative && context.zero_advance.has_buffered_glyph() {
-            // Publish the provisional owner at a breakpoint. The native
-            // slot and accepted pass decide whether a later glyph covers it.
-            self.native_writes.push(
-                crate::mandoc::inline::flow::field_buffer::FieldWrite::StageBacklineProjection,
-            );
-            context.zero_advance.commit_pending_projection(
-                &mut self.output,
-                &mut self.buffer,
-                self.font,
-                self.link.as_deref(),
-                true,
-            );
+            WordOutput {
+                output: &mut self.output,
+                buffer: &mut self.buffer,
+                font: self.font,
+                link: self.link.as_deref(),
+                zero_advance: context.zero_advance,
+            }
+            .stage_backline_projection(&mut self.native_writes);
         } else if self.text_state.pending_word_end_break && !context.policy.field_authoritative {
             context.zero_advance.commit_pending_projection(
                 &mut self.output,

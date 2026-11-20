@@ -143,7 +143,7 @@ pub(in crate::mandoc) enum FieldWrite {
     /// A breakable source blank consumed by a marker's pass boundary. Its
     /// cell participates in acceptance, but has no authored output scalar.
     UnprojectedBlank,
-    /// A delayed owner was provisionally projected at a breakpoint. Its
+    /// A delayed owner was provisionally projected at a break opportunity. Its
     /// original cell stays editable until a pass proves a cover.
     StageBacklineProjection,
     /// An authored SP suppressed by the early word projection. The real

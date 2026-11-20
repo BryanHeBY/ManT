@@ -1701,6 +1701,31 @@ fn alternating_fonts_place_a_delayed_glyph_before_the_next_owners_break() {
 }
 
 #[test]
+fn a_later_operand_can_remove_the_blank_that_would_end_the_previous_pass() {
+    // term.c::encode1 retracts the last SP before writing the next graph.
+    // term_fill only sees a break opportunity if a separator survives.
+    for (next, expected) in [
+        (r"B\pC", "ABC"),
+        (r"\zBC", "AC"),
+        (r"\zB C", "ABC"),
+        (r"B\p\&C", "ABC"),
+        (r"\zB\&C", "AC"),
+        (r"\zB\:C", "AB\nC"),
+        (r"\zB\:\zC", "AB\nC"),
+        (r"\zB\p\:C", "AB\nC"),
+        (r"\o#BB#\p\:C", "AB\nC"),
+    ] {
+        let source = format!(r#"{EDITABLE_FIELD}.No "\zA\p " Ns No "{next}""#) + "\n";
+        assert_readbacks(&source, expected, None);
+        assert_eq!(
+            search_visible_word(&source, "AB"),
+            u64::from(expected.starts_with("AB\n")),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn consecutive_and_detached_man_fields_share_the_device_minimum() {
     // term_flushln assigns minbl from trailspace even when no glyph
     // reaches term_field. An endline consumes that minimum.
