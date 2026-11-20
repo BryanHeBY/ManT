@@ -551,11 +551,13 @@ impl<'node> crate::mandoc::containers::ContainerSink<'node> for InlineContainerS
                 mark,
                 scope,
                 opening,
+                optional,
             } => {
                 let role = if opening {
                     NativeOperandRole::EnclosureStart {
                         body: scope,
                         parent: None,
+                        optional,
                     }
                 } else {
                     NativeOperandRole::EnclosureEnd(scope)

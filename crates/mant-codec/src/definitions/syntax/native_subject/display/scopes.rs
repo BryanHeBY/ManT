@@ -223,7 +223,7 @@ impl<'a> ScopeScan<'a> {
                     | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::PipeDelimiter(_)
                     | NativeOperandRole::LiteralPunctuation
-                    | NativeOperandRole::EnclosureContent(_)
+                    | NativeOperandRole::EnclosureContent { .. }
             )
         {
             self.literal_marks(bytes);

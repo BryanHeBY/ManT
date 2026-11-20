@@ -116,6 +116,8 @@ pub(crate) enum NativeOperandRole {
     EnclosureStart {
         body: u32,
         parent: Option<u32>,
+        /// Op/Oo describe an optional operand; Bq/Bo only add brackets.
+        optional: bool,
     },
     #[cfg(feature = "roff")]
     EnclosureEnd(u32),
@@ -123,7 +125,10 @@ pub(crate) enum NativeOperandRole {
     #[cfg(feature = "roff")]
     ClippedEnclosure,
     #[cfg(feature = "roff")]
-    EnclosureContent(u32),
+    EnclosureContent {
+        body: u32,
+        bare: bool,
+    },
     /// A standalone, executed mdoc parenthesis or bracket from a TEXT node.
     #[cfg(feature = "roff")]
     LiteralDelimiter {
@@ -224,7 +229,10 @@ impl NativeOperandRole {
             Self::FlReopening {
                 pipe: false,
                 enclosure: Some(scope),
-            } => Self::EnclosureContent(scope),
+            } => Self::EnclosureContent {
+                body: scope,
+                bare: false,
+            },
             Self::FlReopening {
                 pipe: false,
                 enclosure: None,
@@ -258,9 +266,10 @@ impl NativeOperandRole {
                 invocation,
                 enclosure: enclosure(),
             },
-            Self::EnclosureStart { body, .. } => Self::EnclosureStart {
+            Self::EnclosureStart { body, optional, .. } => Self::EnclosureStart {
                 body,
                 parent: enclosure(),
+                optional,
             },
             Self::ReferenceText(_) => Self::ReferenceText(enclosure()),
             Self::PathOperand(_) => Self::PathOperand(enclosure()),

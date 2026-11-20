@@ -516,7 +516,7 @@ fn independent_groups<'a>(
                 !(role == NativeOperandRole::LiteralContinuation(enclosure)
                     || role == NativeOperandRole::PipeDelimiter(enclosure)
                     || enclosure
-                        .is_some_and(|body| role == NativeOperandRole::EnclosureContent(body)))
+                        .is_some_and(|body| matches!(role, NativeOperandRole::EnclosureContent { body: scope, .. } if body == scope)))
                     || operand.bytes.start < start
                     || head
                         .get(operand.bytes.start - start..operand.bytes.end - start)
@@ -541,7 +541,7 @@ fn independent_groups<'a>(
                             // words even though the middle pipe reopens Ic.
                             !matches!(head.as_bytes()[index], b'(' | b')')
                         }
-                        NativeOperandRole::EnclosureContent(scope) => enclosure != Some(scope),
+                        NativeOperandRole::EnclosureContent { body, .. } => enclosure != Some(body),
                         NativeOperandRole::PipeDelimiter(scope) => enclosure != scope,
                         NativeOperandRole::LiteralDelimiter {
                             enclosure: owner, ..

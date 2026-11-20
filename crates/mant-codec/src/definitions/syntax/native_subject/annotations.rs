@@ -237,7 +237,7 @@ pub(super) fn marker<'a>(text: &'a str, start: usize, operand: &NativeOperand) -
         return None;
     }
     match operand.role {
-        NativeOperandRole::EnclosureStart { body, parent } => {
+        NativeOperandRole::EnclosureStart { body, parent, .. } => {
             Some(Mark::Open(Boundary::Native(body, word), parent))
         }
         NativeOperandRole::EnclosureEnd(scope) => Some(Mark::Close(Boundary::Native(scope, word))),
@@ -274,7 +274,7 @@ fn native_delimiters_match(left: &str, right: &str) -> bool {
 
 pub(super) fn supplementary_body(role: NativeOperandRole) -> Option<u32> {
     match role.declaration_delimiter() {
-        NativeOperandRole::EnclosureContent(owner) => Some(owner),
+        NativeOperandRole::EnclosureContent { body, .. } => Some(body),
         NativeOperandRole::Environment { enclosure, .. }
         | NativeOperandRole::ReferenceText(enclosure)
         | NativeOperandRole::PathOperand(enclosure)
@@ -361,7 +361,7 @@ fn is_supplement(
         })
         || plain_text
             && match role.declaration_delimiter() {
-                NativeOperandRole::EnclosureContent(owner) => enclosure == Some(owner),
+                NativeOperandRole::EnclosureContent { body, .. } => enclosure == Some(body),
                 NativeOperandRole::ReferenceText(owner)
                 | NativeOperandRole::PathOperand(owner)
                 | NativeOperandRole::PipeDelimiter(owner)

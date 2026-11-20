@@ -28,7 +28,7 @@ pub(super) fn closed_child_enclosures(
         .take_while(|operand| operand.bytes.end <= span.end)
     {
         match operand.role {
-            NativeOperandRole::EnclosureStart { body, parent } if parent == scope => {
+            NativeOperandRole::EnclosureStart { body, parent, .. } if parent == scope => {
                 open = Some((body, operand.bytes.start));
             }
             NativeOperandRole::EnclosureEnd(body) => {

@@ -301,6 +301,10 @@ impl super::InlineBuilder {
                     captured_bare_delimiter(
                         text.and_then(|(node, _)| node.decoder_text()),
                         enclosure(),
+                        !matches!(
+                            capture.operand_role,
+                            Some(NativeOperandRole::LiteralContinuation(_))
+                        ),
                     )
                 })
                 .or_else(|| {
@@ -462,6 +466,7 @@ fn declaration_separator(decoded: &DecodedText) -> bool {
 fn captured_bare_delimiter(
     text: Option<&str>,
     enclosure: Option<u32>,
+    bare: bool,
 ) -> Option<NativeOperandRole> {
     // in_line() rewinds its element at a middle delimiter and emits a
     // sibling TEXT. In particular that pipe was not an explicit No operand.
@@ -470,7 +475,7 @@ fn captured_bare_delimiter(
         Some(NativeOperandRole::PipeDelimiter(enclosure))
     } else {
         enclosure
-            .map(NativeOperandRole::EnclosureContent)
+            .map(|body| NativeOperandRole::EnclosureContent { body, bare })
             .or((text == Some(",")).then_some(NativeOperandRole::LiteralContinuation(None)))
     }
 }

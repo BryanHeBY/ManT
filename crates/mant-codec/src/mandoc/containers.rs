@@ -38,6 +38,7 @@ pub(super) enum Event<'a> {
         mark: EnclosureMark<'a>,
         scope: u32,
         opening: bool,
+        optional: bool,
     },
     /// A quote BODY or ELEM can own punctuation even if its marks disappear.
     EnclosureContent(&'a [Node], u32),
@@ -318,6 +319,7 @@ fn emit_enclosure<'a>(
             mark: open,
             scope: node.id,
             opening: true,
+            optional: matches!(node.macro_token, Some(Mdoc(MdocMacro::Op | MdocMacro::Oo))),
         });
         emit(Event::Tight);
     }
@@ -507,6 +509,7 @@ fn emit_enclosure_post<'a>(
             mark: close,
             scope,
             opening: false,
+            optional: false,
         });
     } else {
         // mdoc_term.c releases NOSPACE after an absent `.En` closing mark.
@@ -587,6 +590,7 @@ fn authored_enclosure<'a>(
                         mark: EnclosureMark::Nodes(&child.children),
                         scope: body.id,
                         opening: child.kind == NodeKind::Head,
+                        optional: false,
                     });
                 } else {
                     emit(Event::Children(&child.children));

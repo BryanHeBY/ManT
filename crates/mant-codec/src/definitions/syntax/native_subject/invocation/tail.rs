@@ -105,7 +105,7 @@ impl ScopeScan {
             let role = operand.role;
             let word = text[start..end].trim();
             match role {
-                NativeOperandRole::EnclosureStart { body, parent } => {
+                NativeOperandRole::EnclosureStart { body, parent, .. } => {
                     state.malformed |= parent != state.native_body();
                     state.open(InvocationGroup::Native(body), word == "\"");
                     state.enter_leading_delimiters(body);
@@ -122,7 +122,7 @@ impl ScopeScan {
                 }
                 NativeOperandRole::Literal
                 | NativeOperandRole::LiteralContinuation(_)
-                | NativeOperandRole::EnclosureContent(_)
+                | NativeOperandRole::EnclosureContent { .. }
                     if is_bracket_text(word) =>
                 {
                     state.authored_text(&text[start..end], start);

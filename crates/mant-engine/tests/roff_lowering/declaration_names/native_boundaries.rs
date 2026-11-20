@@ -344,9 +344,12 @@ fn detached_groups_admit_literal_alternatives_with_actual_argument_evidence() {
             ("Ar opt Ns = Ns Li auto", "opt=auto", true),
             ("Ar opt , Li auto", "opt, auto", true),
             ("Ar opt Ns / Ns Li auto", "opt/auto", true),
+            ("Ar port Ns Li .local", "port.local", true),
             ("Ar opt | No deprecated", "opt | deprecated", false),
             ("Ar opt , No deprecated", "opt, deprecated", false),
             ("Ar opt Ns / Ns No deprecated", "opt/deprecated", false),
+            ("Ar port Li .local", "port .local", false),
+            ("Ar port Ns No .local", "port.local", false),
             ("Ar opt | Em auto", "opt | auto", false),
             ("No default : Pa /tmp", "default: /tmp", false),
             ("Ar opt Li tail", "opt tail", false),
@@ -371,6 +374,69 @@ fn detached_groups_admit_literal_alternatives_with_actual_argument_evidence() {
         ("Fl a= Ns Ar x [ default: none ]", "-a=x [default: none]"),
     ] {
         check("OPTIONS", head, &["-a"], label, false, &["none", "/tmp"]);
+    }
+}
+
+#[test]
+fn native_optional_arguments_keep_real_ntp_keygen_signatures() {
+    // FreeBSD ntp-keygen(8), reduced to two It declarations. Fixed CVS
+    // mdoc_macro.c executes Op/Oo bodies and their generated delimiters.
+    // An empty Ar before Oo supplies "file ..." from validation.
+    for (head, names, form) in [
+        (
+            r"Fl s Fl \-subject\-key Ns = Ar Oo host Oc Op @ Ar group",
+            &["-s", "--subject-key"][..],
+            "-s --subject-key= file ... [host] [@ group]",
+        ),
+        (
+            r"Fl S Fl \-sign\-key Ns = Op Cm RSA | DSA",
+            &["-S", "--sign-key"],
+            "-S --sign-key= [RSA | DSA]",
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            names,
+            form,
+            true,
+            &["host", "group", "RSA", "DSA"],
+        );
+    }
+}
+
+#[test]
+fn native_optionality_proves_a_value_without_admitting_explanatory_text() {
+    // Fixed CVS termp_quote_pre()/post() print [] for both Bq and Oo.
+    // The tree distinguishes the optional construct and the quoting macro.
+    for (head, label, full) in [
+        ("Fl a= Ns Ar x Bq host", "-a=x [host]", false),
+        ("Fl a= Ns Ar x Oo host Oc", "-a=x [host]", true),
+        (
+            "Fl a= Ns Ar x Oo No deprecated Oc",
+            "-a=x [deprecated]",
+            false,
+        ),
+        ("Fl a= Ns Ar x Op No deprecated", "-a=x [deprecated]", false),
+        (
+            r#"Fl a= Ns Ar x Oo "default:" Pa /tmp Oc"#,
+            "-a=x [default: /tmp]",
+            false,
+        ),
+        (
+            "Fl a= Ns Ar x Oo Ar opt | No deprecated Oc",
+            "-a=x [opt | deprecated]",
+            false,
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            &["-a"],
+            label,
+            full,
+            &["host", "/tmp", "deprecated"],
+        );
     }
 }
 

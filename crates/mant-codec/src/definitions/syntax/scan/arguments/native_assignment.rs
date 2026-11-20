@@ -41,21 +41,31 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
                     .is_some_and(|group| group.kind == GroupKind::Optional);
                 syntax.parameter(value, operand.bytes.start < span.start || optional)
             }
-            Role::EnclosureStart { body, parent }
-                if scopes.len() < MAX_NESTING
-                    && scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
+            Role::EnclosureStart {
+                body,
+                parent,
+                optional,
+            } if scopes.len() < MAX_NESTING
+                && scopes
+                    .last()
+                    .is_none_or(|&(scope, _)| Some(scope) == parent) =>
             {
-                scopes.push(body);
+                scopes.push((body, optional));
                 syntax.literal(value, Literal::Delimiter)
             }
-            Role::EnclosureEnd(body) if scopes.pop() == Some(body) => {
+            Role::EnclosureEnd(body) if scopes.pop().is_some_and(|(scope, _)| scope == body) => {
                 syntax.literal(value, Literal::Delimiter)
             }
-            Role::EnclosureContent(body) if scopes.last() == Some(&body) => {
-                syntax.literal(value, Literal::Unmarked)
+            Role::EnclosureContent { body, bare }
+                if scopes.last().is_some_and(|&(scope, _)| scope == body) =>
+            {
+                // Actual Op/Oo can supply one bare value such as [host].
+                // A Bq with the same terminal glyphs makes no such claim.
+                syntax.literal(value, scoped_literal(scopes.last().filter(|_| bare)))
             }
+            Role::Command => syntax.literal(value, scoped_literal(scopes.last())),
             Role::LiteralValue => syntax.literal(value, Literal::Explicit),
-            Role::Literal | Role::LiteralContinuation(_) | Role::Description | Role::Command => {
+            Role::Literal | Role::LiteralContinuation(_) | Role::Description => {
                 syntax.literal(value, Literal::Unmarked)
             }
             Role::Argument
@@ -78,6 +88,14 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             .is_ok()
         && syntax.has_value
         && syntax.lexical.is_top_level()
+}
+
+fn scoped_literal(scope: Option<&(u32, bool)>) -> Literal {
+    if scope.is_some_and(|&(_, optional)| optional) {
+        Literal::Explicit
+    } else {
+        Literal::Unmarked
+    }
 }
 
 #[derive(Clone, Copy, Default)]
@@ -215,6 +233,11 @@ impl AssignmentSyntax {
                 self.lexical.observe(ch);
                 if let Some(group) = &mut self.detached {
                     group.literal = true;
+                    // A real glyph after a touching path separator or
+                    // dot proves the continuation. A terminal dot or a
+                    // separator followed by whitespace cannot do that.
+                    group.connector |=
+                        !in_atom && matches!(self.atom, Atom::AfterDot | Atom::PathContinuation);
                 }
                 self.record_value(false);
                 in_atom = true;
