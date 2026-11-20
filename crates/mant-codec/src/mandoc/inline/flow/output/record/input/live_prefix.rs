@@ -9,6 +9,7 @@ pub(super) struct PrefixEdits {
     first_incoming: Option<usize>,
     pub(super) word_start: Option<usize>,
     pub(super) entry_blanks: usize,
+    pub(super) entry_gap: Option<usize>,
     moved: Vec<(usize, usize)>,
     edits: Vec<(usize, RewoundGlyph, Option<usize>)>,
     gaps: GapEdits,
@@ -25,6 +26,7 @@ impl PrefixEdits {
             positions,
             first_incoming,
             entry_blanks,
+            entry_gap,
             unpublished,
         }) = writes.first()
         else {
@@ -95,6 +97,7 @@ impl PrefixEdits {
                     .map_or(*start, |position| position + 1),
             ),
             entry_blanks: *entry_blanks,
+            entry_gap: *entry_gap,
             moved,
             edits,
             gaps,
@@ -278,10 +281,16 @@ fn projection_locations(
     // cannot identify it in the word's projected stream.
     let mut suffix = HashMap::new();
     let mut locations = vec![None; positions.len()];
+    let gaps: BTreeSet<_> = earlier[earlier.partition_point(|owner| owner.content < start)..]
+        .iter()
+        .filter_map(NativeWordAnchor::entry_gap_cell)
+        .collect();
     for (offset, position) in positions.iter().enumerate().rev() {
         let cell = start + offset;
         let count = buffer.projection_length(cell, cell + 1);
-        if count == 0 {
+        // Generated padding has a separate marker and is edited by GapEdits.
+        // It cannot take a scalar position in the preceding source owner.
+        if count == 0 || gaps.contains(&cell) {
             continue;
         }
         let Some(owner) = earlier_word_after_cell(earlier, cell).checked_sub(1) else {

@@ -3,6 +3,65 @@
 use super::{FormatterColumn, Inline, InlineBuilder, PendingBoundary, TrailingOutput, push_text};
 
 impl InlineBuilder {
+    pub(super) fn transfer_automatic_padding_to_empty_word(
+        &mut self,
+        empty_word: bool,
+        native_separator: usize,
+    ) -> bool {
+        use super::super::super::definition::PendingFieldGapOrigin;
+
+        // Plain MC reserves an advance for the next word. When an empty
+        // word buffers that blank, its cells own the gap, and the following
+        // word still obeys NOSPACE/NONOSPACE (roff_term.c:147-150).
+        let transferred = empty_word
+            && native_separator > 0
+            && self.execution.pending_field_gap_origin == PendingFieldGapOrigin::AutomaticWord
+            && self.execution.pending_field_spaces > 0;
+        if transferred {
+            let spaces = std::mem::take(&mut self.execution.pending_field_spaces);
+            self.defer_current_word_spaces(spaces);
+            self.execution.pending_field_gap_origin = PendingFieldGapOrigin::Other;
+        }
+        transferred
+    }
+
+    pub(super) fn locate_replayed_entry_gap(
+        &mut self,
+        projection: &super::super::record::WordPassProjection,
+        projects_word: bool,
+        projects_spacing: bool,
+    ) -> Option<usize> {
+        if !projects_word || projection.native_separator == 0 {
+            return None;
+        }
+        let replayed_gap = projection.replayed_entry_gap.filter(|_| projects_spacing);
+        if (!projects_spacing || replayed_gap.is_some())
+            && let Some(content) = projection.first_payload_cell
+        {
+            // An entry advance and a word's visible payload have different
+            // coordinates. If the advance has no projected scalar, or is
+            // projected under its own prefix marker after a cursor replay,
+            // it cannot shift a source glyph's accepted range.
+            let anchor = if self.in_definition_field() {
+                self.execution
+                    .definition
+                    .as_mut()
+                    .and_then(|field| field.field_word_anchors.last_mut())
+            } else {
+                self.execution.plain_input.anchors.last_mut()
+            };
+            if let Some(anchor) = anchor {
+                let ordinary_payload = anchor.start.saturating_add(projection.native_separator);
+                anchor.content = anchor.content.max(if replayed_gap.is_some() {
+                    content
+                } else {
+                    content.min(ordinary_payload)
+                });
+            }
+        }
+        replayed_gap
+    }
+
     pub(super) fn mark_native_field_prefix(&mut self, owner: &str, gap: Option<usize>) {
         let serial = owner
             .strip_prefix(super::super::INTERNAL_FIELD_WORD)

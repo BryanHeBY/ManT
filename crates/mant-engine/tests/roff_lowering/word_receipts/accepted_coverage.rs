@@ -145,3 +145,117 @@ fn retreat_within_the_next_word_keeps_its_earlier_annotation() {
         );
     }
 }
+
+#[test]
+fn motion_and_automatic_padding_do_not_spend_a_glyphs_accepted_range() {
+    // CVS term.c::term_fill and term_field accept the same rows on ASCII
+    // and UTF-8, including the leading NBRZW that comes with a link range.
+    // Relative forward motion traverses, rather than replacing, old slots.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
+    let uri = "https://one.test/c";
+    for (body, rows, linked) in [
+        (
+            r#".No "\zB" No "\h'2n'\zC" Ns No "\:E""#,
+            &["B E"][..],
+            false,
+        ),
+        (
+            r#".No "\zB" No "\h'2n'\z\X'tty: link https://one.test/c'C\X'tty: link'" Ns No "\:E""#,
+            &["B E"],
+            false,
+        ),
+        (r#".Sy "\zB" No "\h'1n'\h'-2n'\p C""#, &["B", "C"], false),
+        (
+            r#".Sy "\zB" No "\h'1n'\h'-2n'\p \X'tty: link https://one.test/c'C\X'tty: link'""#,
+            &["B", "C"],
+            true,
+        ),
+        (r#".Sy "A\&" Sy "\h'-2n'\h'1n'C""#, &["AC"], false),
+        (r#".Sy "\&" Sy "\h'-2n'\h'1n'\p C""#, &["", "C"], false),
+        (
+            r#".No "A\zB" Sy "\h'1n'\h'-2n'" Ns No "\:E""#,
+            &["AE"],
+            false,
+        ),
+        (
+            r#".No "A\zB" Sy "\h'1n'\h'-2n'" Ns No "\p E""#,
+            &["A", "E"],
+            false,
+        ),
+    ] {
+        let source = format!("{header}{body}\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &readback] {
+            let rendered = mant_render::render_query_man(content);
+            assert_eq!(description_rows(&rendered, &source), rows, "{body}");
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            let expected = if linked {
+                vec![(uri.into(), "C".into())]
+            } else {
+                Vec::new()
+            };
+            assert_eq!(labels.0, expected, "{body}");
+            for probe in ["C", "E", "CE", "AC", "A", "AE", "ABE"] {
+                let hits = mant_query::search_query(
+                    content,
+                    &SearchQuery {
+                        pattern: probe.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(
+                    hits.total,
+                    u32::from(
+                        rows.iter()
+                            .flat_map(|row| row.split_whitespace())
+                            .any(|word| word == probe)
+                    ),
+                    "{body}: {probe}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn consecutive_rewinds_remove_the_previous_projection_of_a_buffered_blank() {
+    // CVS term.c::term_word() rewrites the separator at Y's landing.
+    // One native slot may have projected both a word separator and a
+    // borrowed prefix. The rewrite must retire these two representations.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    for (body, linked) in [
+        (
+            r#".No "P\zQ" No "\p A\p\X'tty: link https://two.test'B\X'tty: link'" No "\h'-7n'T" Ns No "\h'-2n'Y""#,
+            true,
+        ),
+        (
+            r#".No "P \h'-1n'Q" No "\p\&\pA\zB" No "\h'-5n'T" Ns No "\h'-2n'Y""#,
+            false,
+        ),
+    ] {
+        let source = format!("{header}{body}\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &readback] {
+            let rendered = mant_render::render_query_man(content);
+            assert_eq!(description_rows(&rendered, &source), ["PQYTAB"], "{body}");
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            let expected = linked.then(|| ("https://two.test".into(), "B".into()));
+            assert_eq!(labels.0, expected.into_iter().collect::<Vec<_>>(), "{body}");
+        }
+    }
+}

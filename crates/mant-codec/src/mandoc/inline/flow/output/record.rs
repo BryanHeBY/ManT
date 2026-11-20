@@ -12,6 +12,8 @@ pub(super) struct WordPassProjection {
     pub(super) closes_before: Vec<std::ops::Range<usize>>,
     pub(super) leading_padding: RestartedPadding,
     pub(super) native_separator: usize,
+    pub(super) first_payload_cell: Option<usize>,
+    pub(super) replayed_entry_gap: Option<usize>,
     pub(super) separator: SeparatorDisposition,
     pub(super) prints_padding: bool,
     pub(super) authored_separator: Option<Inline>,

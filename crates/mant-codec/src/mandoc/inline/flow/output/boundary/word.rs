@@ -18,22 +18,8 @@ impl InlineBuilder {
         let accepted_row_break = !projection.closes_before.is_empty();
         let native_separator = projection.native_separator;
         let empty_word = empty_word && !self.pending_word_prints_device_gap(projection);
-        // Plain MC's one projected next-word blank is an advance reservation,
-        // unlike a definition field's minbl. Once an empty word actually
-        // buffers that blank, transfer ownership to the word cells. The
-        // following word then obeys its own NOSPACE/NONOSPACE registers
-        // (roff_term.c:147-150; term.c:573-589), including .Sm off.
-        let transferred_automatic = empty_word
-            && native_separator > 0
-            && self.execution.pending_field_gap_origin
-                == super::super::super::definition::PendingFieldGapOrigin::AutomaticWord
-            && self.execution.pending_field_spaces > 0;
-        if transferred_automatic {
-            let spaces = std::mem::take(&mut self.execution.pending_field_spaces);
-            self.defer_current_word_spaces(spaces);
-            self.execution.pending_field_gap_origin =
-                super::super::super::definition::PendingFieldGapOrigin::Other;
-        }
+        let transferred_automatic =
+            self.transfer_automatic_padding_to_empty_word(empty_word, native_separator);
         // Plain words anchor into the same native flush unit the field
         // path uses; the marker routes by session exactly like the cell
         // recording in `record_native_word`.
@@ -98,22 +84,30 @@ impl InlineBuilder {
             let field_padding =
                 self.execution.pending_field_spaces > 0 && projection.prints_padding;
             let add_space = add_space && (native_separator > 0 || earlier_spaces == 0);
-            let virtual_padding = !empty_word
-                && native_separator == 0
-                && self.projects_automatic_space(spacing_boundary, add_space);
+            let projects_spacing = self.projects_automatic_space(spacing_boundary, add_space);
+            let virtual_padding = !empty_word && native_separator == 0 && projects_spacing;
+            let replayed_gap = self.locate_replayed_entry_gap(
+                projection,
+                word && !empty_word && !field_padding,
+                projects_spacing,
+            );
             let authored_in_payload = native_separator > 0
                 && !field_padding
-                && self.projects_automatic_space(spacing_boundary, add_space)
+                && projects_spacing
+                && replayed_gap.is_none()
                 && reattach_authored_separator(
                     payload,
                     native_anchor_marker.as_deref(),
                     projection.authored_separator.take(),
                 );
             if word
-                && (field_padding || virtual_padding)
+                && (field_padding || virtual_padding || replayed_gap.is_some())
                 && let Some(marker) = native_anchor_marker.as_ref()
             {
-                self.mark_native_field_prefix(marker, projection.projected_gap(field_padding));
+                self.mark_native_field_prefix(
+                    marker,
+                    replayed_gap.or(projection.projected_gap(field_padding)),
+                );
             }
             if field_padding {
                 self.append_device_field_padding();
@@ -131,7 +125,7 @@ impl InlineBuilder {
                 );
             }
             if word
-                && (field_padding || virtual_padding)
+                && (field_padding || virtual_padding || replayed_gap.is_some())
                 && let Some(marker) = native_anchor_marker
             {
                 // Device minbl is field geometry, not a native buffer cell.

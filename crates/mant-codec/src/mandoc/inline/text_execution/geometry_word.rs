@@ -804,8 +804,12 @@ fn execute_seed<'a>(
     // operand does not reset that cursor (term.c:659-660,678-714).
     // Carry the exact cursor if the next word must still write there.
     let live_cursor = seed.prefix_start > 0 && seed.placement.slots.extent_and_retreat().1 > 0;
-    let retain_suffix =
-        context.policy.field_authoritative && (!has_marker || marker.is_some() || live_cursor);
+    // A placed glyph can still be waiting under BACKBEFORE after a marker.
+    // Keep its raw decoration and the invisible label slots around it, so
+    // the next word can revisit the same native suffix (term.c::encode1).
+    let pending_glyph = seed.placement.slots.pending_owner().is_some();
+    let retain_suffix = context.policy.field_authoritative
+        && (!has_marker || marker.is_some() || live_cursor || pending_glyph);
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()

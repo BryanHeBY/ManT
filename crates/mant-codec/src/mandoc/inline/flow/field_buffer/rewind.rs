@@ -68,7 +68,8 @@ enum EntryWrite {
 }
 
 impl FieldWrite {
-    fn entry_write(&self) -> EntryWrite {
+    fn entry_write(&self, motion_prefix: &mut bool) -> EntryWrite {
+        *motion_prefix &= matches!(self, Self::MotionPadding { .. });
         match self {
             Self::Cell(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank) => {
                 EntryWrite::Advance {
@@ -76,6 +77,12 @@ impl FieldWrite {
                     projected: true,
                 }
             }
+            // The entry retreat consumed BACKBEFORE. Before the first
+            // new write, bufferc() advances without replacing old cells.
+            Self::MotionPadding { .. } if *motion_prefix => EntryWrite::Advance {
+                count: 1,
+                projected: true,
+            },
             Self::UnprojectedBlank => EntryWrite::Advance {
                 count: 1,
                 projected: false,
@@ -268,12 +275,13 @@ impl FieldBuffer {
         let mut overwritten_glyphs = Vec::new();
         let mut armed = false;
         let mut backbefore = false;
+        let mut motion_prefix = true;
         for (index, write) in writes.iter().enumerate() {
             if at == end {
                 replay.extend_from_slice(&writes[index..]);
                 break;
             }
-            match write.entry_write() {
+            match write.entry_write(&mut motion_prefix) {
                 EntryWrite::Advance { count, projected } => {
                     let traversed = count.min(end - at);
                     for cell in at..at + traversed {

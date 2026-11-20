@@ -179,6 +179,94 @@ fn zero_advance_links_follow_their_accepted_rows_in_paint_and_copy() {
 }
 
 #[test]
+fn replayed_padding_keeps_rows_and_links_at_the_surviving_cells() {
+    // Both pinned term.c devices agree on which cells survive. Positive
+    // motion can traverse existing slots. Only a link's surviving glyph
+    // retains its target, even when another operand writes the same letter.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
+    let uri = |uri| LinkTarget::External(ExternalUri::parse(uri).unwrap());
+    let c = uri("https://one.test/c");
+    let first = uri("https://one.test");
+    for (body, rows, query, linked_row) in [
+        (
+            r#".No "\zB" No "\h'2n'\z\X'tty: link https://one.test/c'C\X'tty: link'" Ns No "\:E""#,
+            &["B E"][..],
+            "E",
+            None,
+        ),
+        (
+            r#".Sy "\zB" No "\h'1n'\h'-2n'\p \X'tty: link https://one.test/c'C\X'tty: link'""#,
+            &["B", "C"],
+            "C",
+            Some((1, &c)),
+        ),
+        (r#".Sy "A\&" Sy "\h'-2n'\h'1n'C""#, &["AC"], "AC", None),
+        (r#".Sy "\&" Sy "\h'-2n'\h'1n'\p C""#, &["", "C"], "C", None),
+        (
+            r#".No "\X'tty: link https://one.test'A\X'tty: link'\p\z \X'tty: link https://two.test'B\X'tty: link'" No "\zC\h'-2n'" Ns No "D""#,
+            &["A", "DC"],
+            "DC",
+            Some((0, &first)),
+        ),
+        (
+            r#".No "\X'tty: link https://one.test'Q\X'tty: link'\p\z \X'tty: link https://two.test'Q\X'tty: link'" No "\zQ\h'-2n'" Ns No "Q""#,
+            &["Q", "QQ"],
+            "QQ",
+            Some((0, &first)),
+        ),
+        (
+            r#".Sy "\X'tty: link https://one.test'A\X'tty: link'\p\z \X'tty: link https://two.test'B\X'tty: link'" No "\zC\h'-2n'" Ns No "D""#,
+            &["A", "DC"],
+            "DC",
+            Some((0, &first)),
+        ),
+        (
+            r#".Sy "\X'tty: link https://one.test'Q\X'tty: link'\p\z \X'tty: link https://two.test'Q\X'tty: link'" No "\zQ\h'-2n'" Ns No "Q""#,
+            &["Q", "QQ"],
+            "QQ",
+            Some((0, &first)),
+        ),
+    ] {
+        let view = DocumentView::new(&restored(&format!("{header}{body}\n")));
+        for width in [24_u16, 78] {
+            let rendered = view.render(width);
+            let buffer = paint(&rendered, width);
+            let start = rendered.search("DESCRIPTION")[0].row + 1;
+            let end = rendered.row_count - 1;
+            assert_eq!(end - start + 1, rows.len(), "{body}: {width}");
+            let copy = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: start,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: end,
+                    column: usize::from(width) - 1,
+                },
+            });
+            assert_eq!(copy.split('\n').map(str::trim).collect::<Vec<_>>(), rows);
+            let hits = rendered.search(query);
+            assert_eq!(hits.iter().filter(|hit| hit.row >= start).count(), 1);
+            for (line, row) in (start..=end).enumerate() {
+                let painted = painted(&buffer, row, 0, width.into());
+                assert_eq!(painted.trim(), rows[line], "{body}: {width}");
+                let ink_start = painted.len() - painted.trim_start().len();
+                for column in 0..usize::from(width) {
+                    let target = linked_row
+                        .filter(|&(target_row, _)| target_row == line && column == ink_start)
+                        .map(|(_, target)| target);
+                    assert_eq!(
+                        rendered.link_target_at(row, column),
+                        target,
+                        "{body}: {width} at {line}:{column}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn a_pending_link_label_moves_with_its_accepted_native_slot() {
     // term.c::bufferc()/encode1(): the second operand can replace M or
     // move T to its left without transferring M's link to either neighbor.

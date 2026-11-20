@@ -228,7 +228,16 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             continue;
         }
         let cell = next.start;
-        let owner = anchors.partition_point(|anchor| anchor.content <= cell);
+        // A restarted pass can land on an invisible slot preceding the
+        // first projected glyph of the new word (for example tty's NBRZW).
+        // Its owner interval begins before its first source scalar.
+        let mut owner = anchors.partition_point(|anchor| anchor.content <= cell);
+        if anchors
+            .get(owner)
+            .is_some_and(|anchor| anchor.entry_gap_cell().is_some() && anchor.start <= cell)
+        {
+            owner += 1;
+        }
         if let Some(index) = owner.checked_sub(1) {
             let anchor = &anchors[index];
             let section_seam = section.is_some_and(|section| {

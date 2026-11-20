@@ -127,6 +127,7 @@ pub(in crate::mandoc) enum FieldWrite {
         positions: Vec<Option<usize>>,
         first_incoming: usize,
         entry_blanks: usize,
+        entry_gap: Option<usize>,
         unpublished: Option<usize>,
     },
     /// These compact writes do not prove individual native byte slots.

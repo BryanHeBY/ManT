@@ -220,7 +220,25 @@ impl super::InlineExecutionState {
         } else {
             PrefixExtension::None
         };
-        self.native_slot_entry(capture_prefix || pending, extend, leading_retreat)
+        // The automatic entry blank can be overwritten by this word and
+        // then revisited by its own zero-advance retreat. On tight entry a
+        // prior BACKBEFORE remains live; the ordinary prefix proof applies.
+        let retreat_after_zero_advance_glyph = capture_prefix
+            && self
+                .native_word_boundary
+                .is_some_and(|boundary| !boundary.is_native_tight())
+            && events.windows(3).any(|window| {
+                matches!(window, [
+                    RoffInlineEvent::ZeroAdvance,
+                    RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_),
+                    RoffInlineEvent::HorizontalMotion { argument, .. },
+                ] if negative_entry_columns(argument.as_deref()).is_some())
+            });
+        self.native_slot_entry(
+            capture_prefix || pending,
+            extend,
+            leading_retreat || retreat_after_zero_advance_glyph,
+        )
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {

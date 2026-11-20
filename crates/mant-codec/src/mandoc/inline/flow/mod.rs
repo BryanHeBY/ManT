@@ -75,6 +75,13 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     projection: WordProjectionPolicy,
 }
 
+impl NativeWordAnchor {
+    fn entry_gap_cell(&self) -> Option<usize> {
+        self.projected_gap_cell
+            .filter(|&gap| (self.start..self.content).contains(&gap))
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct DeferredWordSpace {
     owner: u64,
@@ -397,7 +404,7 @@ impl PendingBoundary {
         matches!(self, Self::Tight | Self::PrefixJoin | Self::CommittedField)
     }
 
-    const fn is_native_tight(self) -> bool {
+    pub(super) const fn is_native_tight(self) -> bool {
         matches!(self, Self::Tight | Self::PrefixJoin)
     }
 

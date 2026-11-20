@@ -419,6 +419,7 @@ fn replay_prefix(
     let mut positions = vec![None; earlier];
     let mut first_incoming = slots.len();
     let mut entry_blanks = 0;
+    let mut entry_gap = None;
     for (position, slot) in slots.iter().enumerate() {
         let Some(owner) = slot.owner else { continue };
         if owner < earlier {
@@ -426,6 +427,7 @@ fn replay_prefix(
         } else if matches!(reading[owner].glyph, ReadingGlyph::EntryBlank) {
             if position < first_incoming {
                 entry_blanks += 1;
+                entry_gap = Some(start + position);
             }
         } else {
             first_incoming = first_incoming.min(position);
@@ -436,6 +438,7 @@ fn replay_prefix(
         positions,
         first_incoming: start + first_incoming,
         entry_blanks,
+        entry_gap: entry_gap.filter(|_| entry_blanks == 1),
         unpublished: unpublished.map(|index| start + index),
     }
 }

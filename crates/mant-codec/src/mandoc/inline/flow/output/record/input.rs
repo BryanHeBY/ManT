@@ -109,6 +109,11 @@ impl ExecutedWordEntry {
     }
 
     pub(super) fn record_projection(&self, projection: &mut WordPassProjection) {
+        projection.first_payload_cell = Some(self.receipt.first_content_cell);
+        projection.replayed_entry_gap = self
+            .prefix
+            .entry_gap
+            .filter(|&gap| self.prefix.word_start.is_some_and(|start| start < gap));
         if self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some() {
             projection.native_separator = self.surviving_separator;
             projection.separator = if self.surviving_separator > 0 {
