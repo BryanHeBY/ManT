@@ -136,8 +136,7 @@ fn lower_before_heading(
                     context,
                     formatter,
                     MdocSectionContext::Other,
-                    previous,
-                    literal,
+                    Some((previous, literal)),
                 )
             },
         )
@@ -157,8 +156,7 @@ fn prepare_heading(
     context: &LoweringContext<'_>,
     formatter: &mut FormatterState,
     section_context: MdocSectionContext,
-    previous: &mut Vec<mant_ir::Inline>,
-    previous_literal: bool,
+    previous: Option<(&mut Vec<mant_ir::Inline>, bool)>,
 ) -> PreparedHeading {
     let head = first_part_children(node, NodeKind::Head);
     // SH/Sh and SS/Ss assign their heading origin in pre, and BODY's
@@ -183,7 +181,6 @@ fn prepare_heading(
         formatter,
         section_context == MdocSectionContext::Authors,
         previous,
-        previous_literal,
     )
 }
 
@@ -201,16 +198,8 @@ fn lower_section(
     } else {
         context.active_mdoc_section()
     };
-    let (mut heading, blank_heading_rows) = prepared.unwrap_or_else(|| {
-        prepare_heading(
-            node,
-            context,
-            formatter,
-            section_context,
-            &mut Vec::new(),
-            false,
-        )
-    });
+    let (mut heading, blank_heading_rows) = prepared
+        .unwrap_or_else(|| prepare_heading(node, context, formatter, section_context, None));
     let fragment_aliases = context.record_section_identity(node);
     let body = first_part_children(node, NodeKind::Body);
     formatter.row_presentation.offset_shift = 0;

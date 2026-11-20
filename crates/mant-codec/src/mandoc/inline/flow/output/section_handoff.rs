@@ -402,8 +402,10 @@ fn take_shared_heading_padding(
                 if value.chars().all(char::is_whitespace) =>
             {
                 let deferred_blank = std::mem::take(&mut state.deferred_blank);
-                if !value.is_empty() && (deferred_blank || inside_label || value.contains('\u{a0}'))
-                {
+                // Unicode whitespace here is an accepted glyph. Device
+                // padding uses ASCII cells; deferred runs carry an
+                // explicit source witness for authored ASCII blanks.
+                if !value.is_empty() && (deferred_blank || inside_label || !value.is_ascii()) {
                     padding.push(node.clone());
                 }
                 false

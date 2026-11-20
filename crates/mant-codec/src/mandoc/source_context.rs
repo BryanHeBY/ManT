@@ -310,9 +310,11 @@ impl<'a> LoweringContext<'a> {
         nodes: HeadNodes<'_>,
         formatter: &mut formatter::FormatterState,
         authors_section: bool,
-        previous_output: &mut Vec<mant_ir::Inline>,
-        previous_literal: bool,
+        previous: Option<(&mut Vec<mant_ir::Inline>, bool)>,
     ) -> (Vec<mant_ir::Inline>, u16) {
+        let has_previous_owner = previous.is_some();
+        let mut isolated = Vec::new();
+        let (previous_output, previous_literal) = previous.unwrap_or((&mut isolated, false));
         let live_previous_output = !previous_output.is_empty();
         let mut builder = formatter.begin_inline_session_on(
             previous_output,
@@ -330,8 +332,8 @@ impl<'a> LoweringContext<'a> {
         // It cannot transfer that interval's blank pass to the HEAD.
         let subsection =
             block.macro_token == Some(libmandoc_rs::MacroToken::Man(libmandoc_rs::ManMacro::Ss));
-        let shared =
-            builder.mark_section_handoff(live_previous_output, previous_literal, subsection);
+        let shared = has_previous_owner
+            && builder.mark_section_handoff(live_previous_output, previous_literal, subsection);
         builder.scope_posts = self.scope_posts.clone();
         inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         match self.macro_set {

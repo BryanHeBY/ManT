@@ -128,6 +128,46 @@ fn a_shared_subsection_row_keeps_both_blank_link_hit_cells() {
 }
 
 #[test]
+fn a_published_hanging_row_owns_the_clickable_subsection_prefix() {
+    // Pinned UTF-8 term_field() writes the subsection NBSP after HP's
+    // X. Its \p starts Z on the next row without moving the link.
+    let source = concat!(
+        ".TH PROBE 1 2026-11-19\n.SH NAME\nprobe \\- example\n.SH FIRST\n.PD 0\nAA\n.HP 4n\nX\n",
+        ".SS \"\\X'tty: link https://two.test'\\~\\X'tty: link'\\p Z\"\nDD\n",
+    );
+    let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let wire = serde_json::to_string(&QueryBundle::from(&content)).unwrap();
+    let input = ResolvedContent::from(serde_json::from_str::<QueryBundle>(&wire).unwrap());
+    let mut app = App::new(&input);
+    key(&mut app, KeyCode::Char('B'));
+    let mut terminal = Terminal::new(TestBackend::new(82, 24)).unwrap();
+    for width in [24, 78] {
+        terminal.backend_mut().resize(width + 4, 24);
+        draw(&mut app, &mut terminal);
+        let rendered = &app.session.rendered_cache[&width];
+        let row = rendered.search("AA")[0].row + 1;
+        assert_eq!(rendered.search("Z")[0].row, row + 1);
+        let (left, y) = viewport_cell(&app, row, 0);
+        let buffer = terminal.backend().buffer();
+        let column = (left..app.geometry.content.right())
+            .find(|&x| buffer[(x, y)].symbol() == "X")
+            .unwrap();
+        assert_eq!(buffer[(column + 1, y)].symbol(), "\u{a0}");
+        click_document_cell(&mut app, usize::from(column + 1 - left), row);
+        assert_eq!(
+            app.take_external_request()
+                .as_ref()
+                .map(crate::ExternalUri::as_str),
+            Some("https://two.test")
+        );
+        assert_eq!(
+            copy_label(&mut app, (column, y), (column + 1, y)),
+            "X\u{a0}"
+        );
+    }
+}
+
+#[test]
 fn an_old_link_does_not_acquire_the_reading_tail_or_new_heading() {
     // The exact old UR example ran pristine first. post_UR prints
     // its own target; neither the later source rows nor HEAD are labels.

@@ -68,6 +68,68 @@ fn assert_one_label(query: &ResolvedContent, expected: &str, target: &LinkTarget
     assert_eq!(mant_ir::inline_plain_text(children), expected);
 }
 
+#[test]
+fn published_hanging_paragraphs_keep_the_subsection_prefix_and_its_reference() {
+    // Pinned man_term.c::post_HP can leave the device row open at PD=0.
+    // term_field() prints the listed Unicode glyphs after X, before \p
+    // finishes that row. The UTF-8 oracle preserves their precise codepoints.
+    const HEADER: &str =
+        ".TH PROBE 1 2026-11-19\n.SH NAME\nprobe \\- example\n.SH FIRST\n.PD 0\nAA\n";
+    let uri = "https://two.test";
+    let target = LinkTarget::External { uri: uri.into() };
+    for previous in [".HP\nX\n", ".HP 4n\nX\n", ".HP 9n\nX\n", ".br\nX\n"] {
+        for (word, glyph) in [
+            (r"\~", '\u{a0}'),
+            (r"\[u2003]", '\u{2003}'),
+            (r"\[u2009]", '\u{2009}'),
+            (r"\[u3000]", '\u{3000}'),
+        ] {
+            for linked in [false, true] {
+                let word = if linked {
+                    format!(r"\X'tty: link {uri}'{word}\X'tty: link'")
+                } else {
+                    word.to_owned()
+                };
+                let source = format!("{HEADER}{previous}.SS \"{word}\\p Z\"\nDD\n");
+                let content = load_round_trip(&source);
+                let rendered = mant_render::render_query_man(&content);
+                let (_, body) = rendered.split_once("\nFIRST\n").unwrap();
+                let rows: Vec<_> = body
+                    .lines()
+                    .map(|row| row.trim_start_matches(' '))
+                    .collect();
+                assert_eq!(rows, ["AA", &format!("X{glyph}"), "Z", "DD"], "{source}");
+                let section = &content.document.as_ref().unwrap().sections[1];
+                assert_eq!(section.children[0].heading.plain_text(), "Z");
+                if linked {
+                    assert_one_label(&content, &glyph.to_string(), &target);
+                    let mut links = Vec::new();
+                    for block in &section.blocks {
+                        visit::walk_block(&mut SharedLabelCollector(&mut links), block);
+                    }
+                    assert_eq!(links, [glyph.to_string()], "{source}");
+                } else {
+                    assert_eq!(
+                        references(&content).references.occurrences,
+                        ReferenceCount::Exact { value: 0 }
+                    );
+                }
+            }
+        }
+    }
+}
+
+struct SharedLabelCollector<'a>(&'a mut Vec<String>);
+
+impl<'a> Visit<'a> for SharedLabelCollector<'_> {
+    fn visit_inline(&mut self, node: &'a Inline) {
+        if let Inline::Link { children, .. } = node {
+            self.0.push(mant_ir::inline_plain_text(children));
+        }
+        visit::walk_inline(self, node);
+    }
+}
+
 fn portable_owner_roots(query: &ResolvedContent) -> Vec<(&'static str, String)> {
     let mut roots = Vec::new();
     for block in &query.document.as_ref().unwrap().sections[0].blocks {

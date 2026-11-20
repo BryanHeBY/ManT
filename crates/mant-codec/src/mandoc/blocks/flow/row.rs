@@ -97,16 +97,8 @@ impl BlockState {
         };
         // A filled HP post can publish a paragraph before ending its
         // native device row (man_term.c::post_HP, term.c:244-253).
-        // Lend only the padding-only projection of that open row.
-        let mut fixed_padding = false;
-        let mut only_padding = true;
-        mant_ir::visit_inline_plain_text(children, |text| {
-            fixed_padding |= text.contains('\u{a0}');
-            only_padding &= !text.contains('\n') && text.chars().all(char::is_whitespace);
-        });
-        if !fixed_padding || !only_padding {
-            return None;
-        }
+        // Lend its projection, including any already printed glyphs on
+        // that row. The handoff decides which endline and padding to move.
         let result = run(&mut self.formatter, children, false);
         if children.is_empty() {
             let (lines, source) = (layout.spacing_before_lines, *source);
