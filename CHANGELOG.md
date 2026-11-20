@@ -47,6 +47,14 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep the space before a surviving glyph when the original word is
+  overprinted. Keep editable word breaks live through tight entry and
+  font-only escapes, preserving the surviving link's source.
+- Accept balanced option suffixes with complete argument evidence across
+  literal and native delimiters. Require touching fragments for dotted
+  values and accept punctuation-only native paths.
+- Keep both authored blank labels when a man subsection closes the
+  preceding body's row, including when the heading has no other text.
 - Keep accepted glyphs, hard rows and link ranges when roff horizontal motion
   crosses an earlier slot or generated word separator. Retain styled,
   linked subsection padding on its accepted row after terminal overprinting.
@@ -334,6 +342,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Count displays and column tables in extended mdoc definition headings
+  when assigning native audit occurrences.
 - Number literal displays in structure audits by native source occurrence,
   including preceding displays with no visible text at the same coordinates.
 - The 0.15 resolver and query error APIs use the loading types from
