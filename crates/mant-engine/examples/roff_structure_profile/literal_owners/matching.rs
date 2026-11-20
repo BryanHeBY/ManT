@@ -7,6 +7,11 @@ use super::{
     SourceDisplay, SourceDisplays, has_glyph,
 };
 
+#[path = "cell_alignment.rs"]
+mod cell_alignment;
+
+use cell_alignment::{DeletionWitnesses, MissingRows, deletion_witnesses, same_slot};
+
 pub(crate) fn compare(
     expected: &SourceDisplays,
     observed: &ObservedDisplays,
@@ -62,8 +67,14 @@ pub(crate) fn compare(
         };
         if !covered && !uncertain.contains(&index) {
             let (line, column) = owner.opening;
+            let missing = owner.rows.saturating_sub(matched[index]);
+            let detail = if in_column_cell(owner) && missing > 1 {
+                format!(" ({missing} missing rows)")
+            } else {
+                String::new()
+            };
             violations.push(format!(
-                "literal-displays: missing sourced block for {line}:{column} occurrence {occurrence}"
+                "literal-displays: missing sourced block for {line}:{column} occurrence {occurrence}{detail}"
             ));
         }
     }
@@ -90,77 +101,37 @@ fn claim_cells(
     let mut uncertain = BTreeSet::new();
     for (path, plan) in &expected.cells {
         let physical = cells.get(path).map_or(&[][..], Vec::as_slice);
-        if !plan.complete || physical.len() == plan.rows.len() {
-            // When later source is unproved, only the exact initial rows
-            // can be claimed. Later equal ink cannot replace that prefix.
-            let observed = physical
-                .iter()
-                .filter(|(text, _)| plan.complete || has_glyph(text));
-            let expected_rows = plan
-                .rows
-                .iter()
-                .filter(|row| plan.complete || has_glyph(&row.text));
-            for (want, &(text, literal)) in expected_rows.zip(observed) {
-                if want.owner.is_none() && text != want.text {
-                    break;
-                }
-                if literal
-                    && text == want.text
-                    && let Some(id) = want.owner
+        if !plan.complete {
+            claim_known_prefix(plan, physical, matched);
+        } else if physical.len() == plan.rows.len() {
+            // A replacement leaves the slot in place. A damaged ordinary
+            // row does not invalidate an unchanged display after it.
+            for (row, &observed) in plan.rows.iter().zip(physical) {
+                if let Some(owner) = row.owner
+                    && same_slot(row, observed)
                 {
-                    matched[id] += 1;
+                    matched[owner] += 1;
                 }
             }
-            continue;
+        } else if let Some(witnesses) = deletion_witnesses(&plan.rows, physical) {
+            claim_after_row_deletions(
+                plan,
+                witnesses,
+                expected,
+                matched,
+                &mut uncertain,
+                violations,
+            );
+        } else {
+            review_unproved_alignment(
+                plan,
+                physical,
+                expected,
+                matched,
+                &mut uncertain,
+                violations,
+            );
         }
-        if let Some(possible) = single_deleted_row(&plan.rows, physical) {
-            claim_after_row_deletion(plan, &possible, matched);
-            if possible.len() > 1 {
-                uncertain.extend(&possible);
-                report_row_candidates(&possible, 1, &expected.owners, violations);
-            }
-            continue;
-        }
-        let rows = physical
-            .iter()
-            .copied()
-            .filter(|(text, _)| has_glyph(text))
-            .collect::<Vec<_>>();
-        let mut positions = BTreeMap::<_, Vec<_>>::new();
-        for (i, &(text, _)) in rows.iter().enumerate() {
-            positions.entry(text).or_default().push(i);
-        }
-        let mut bounds = vec![rows.len(); plan.rows.len()];
-        let mut end = rows.len();
-        for (i, want) in plan.rows.iter().enumerate().rev() {
-            bounds[i] = end;
-            if want.owner.is_none()
-                && let Some(xs) = positions.get(want.text.as_str())
-            {
-                let stop = xs.partition_point(|&x| x < end);
-                if let Some(last) = xs[..stop].last() {
-                    end = *last;
-                }
-            }
-        }
-        let mut start = 0;
-        for (want, bound) in plan.rows.iter().zip(bounds) {
-            let Some(xs) = positions.get(want.text.as_str()) else {
-                continue;
-            };
-            let from = xs.partition_point(|&x| x < start);
-            if let Some(&i) = xs[from..]
-                .iter()
-                .take_while(|&&x| x < bound)
-                .find(|&&x| want.owner.is_none() || rows[x].1)
-            {
-                start = i + 1;
-                if let Some(id) = want.owner {
-                    matched[id] += 1;
-                }
-            }
-        }
-        report_ambiguous_rows(plan, &expected.owners, matched, &mut uncertain, violations);
     }
     // An unknown range is reported as source Review. An empty cell or a
     // projection to ordinary paragraphs still proves the literal is absent.
@@ -179,97 +150,126 @@ fn claim_cells(
     uncertain
 }
 
-fn claim_after_row_deletion(
+fn claim_known_prefix(
     plan: &super::rows::CellPlan,
-    candidates: &BTreeSet<usize>,
+    physical: &[(&str, bool)],
     matched: &mut [usize],
 ) {
-    for id in plan.rows.iter().filter_map(|row| row.owner) {
-        matched[id] += 1;
-    }
-    if candidates.len() == 1
-        && let Some(&id) = candidates.first()
+    // Later equal ink cannot pay for a row after an unclassified boundary.
+    for (want, &observed) in plan
+        .rows
+        .iter()
+        .filter(|row| has_glyph(&row.text))
+        .zip(physical.iter().filter(|(text, _)| has_glyph(text)))
     {
-        matched[id] -= 1;
+        if want.owner.is_none() && want.text != observed.0 {
+            break;
+        }
+        if let Some(owner) = want.owner
+            && same_slot(want, observed)
+        {
+            matched[owner] += 1;
+        }
     }
 }
 
-/// Find every possible position of one missing physical row. Prefix and
-/// suffix both include retained blanks and ordinary rows, so equal labels
-/// separated by a proved boundary cannot borrow each other's evidence.
-fn single_deleted_row(
-    expected: &[super::rows::CellRow],
-    actual: &[(&str, bool)],
-) -> Option<BTreeSet<usize>> {
-    if expected.len() != actual.len() + 1 {
-        return None;
-    }
-    let matches = |(row, &(text, literal)): (&super::rows::CellRow, &(&str, bool))| {
-        row.text == text && (row.owner.is_none() || literal)
-    };
-    let prefix = expected
-        .iter()
-        .zip(actual)
-        .take_while(|&pair| matches(pair))
-        .count();
-    let suffix = expected
-        .iter()
-        .rev()
-        .zip(actual.iter().rev())
-        .take_while(|&pair| matches(pair))
-        .count();
-    let first = actual.len() - suffix;
-    (first <= prefix).then(|| {
-        expected[first..=prefix]
-            .iter()
-            .filter_map(|row| row.owner)
-            .collect()
-    })
-}
-
-fn report_row_candidates<'a>(
-    candidates: impl IntoIterator<Item = &'a usize>,
-    missing: usize,
-    owners: &[SourceDisplay],
+fn claim_after_row_deletions(
+    plan: &super::rows::CellPlan,
+    witnesses: DeletionWitnesses,
+    expected: &SourceDisplays,
+    matched: &mut [usize],
+    uncertain: &mut BTreeSet<usize>,
     violations: &mut Vec<String>,
 ) {
-    let locations = candidates
+    for owner in plan.rows.iter().filter_map(|row| row.owner) {
+        matched[owner] += 1;
+    }
+    let mut exact = 0;
+    let mut candidates = Vec::new();
+    for (owner, count) in witnesses.displays {
+        if count.min == count.max {
+            matched[owner] -= count.min;
+            exact += count.min;
+        } else {
+            uncertain.insert(owner);
+            candidates.push(owner);
+        }
+    }
+    if !candidates.is_empty() {
+        let count = MissingRows {
+            min: witnesses.total.min - exact,
+            max: witnesses.total.max - exact,
+        };
+        let count = if count.min == count.max {
+            count.min.to_string()
+        } else {
+            format!("{}..={}", count.min, count.max)
+        };
+        let locations = cell_locations(candidates, &expected.owners);
+        violations.push(format!(
+            "literal-displays: {count} missing row(s) among column display candidates {locations}"
+        ));
+    }
+}
+
+fn review_unproved_alignment(
+    plan: &super::rows::CellPlan,
+    physical: &[(&str, bool)],
+    expected: &SourceDisplays,
+    matched: &mut [usize],
+    uncertain: &mut BTreeSet<usize>,
+    violations: &mut Vec<String>,
+) {
+    let prefix = plan
+        .rows
+        .iter()
+        .zip(physical)
+        .take_while(|(row, actual)| same_slot(row, **actual))
+        .count();
+    let suffix = plan.rows[prefix..]
+        .iter()
+        .rev()
+        .zip(physical[prefix..].iter().rev())
+        .take_while(|(row, actual)| same_slot(row, **actual))
+        .count();
+    let end = plan.rows.len() - suffix;
+    for owner in plan.rows[..prefix]
+        .iter()
+        .chain(&plan.rows[end..])
+        .filter_map(|row| row.owner)
+    {
+        matched[owner] += 1;
+    }
+    if physical[prefix..physical.len() - suffix]
+        .iter()
+        .all(|(_, literal)| !literal)
+    {
+        // An empty observation or a nonliteral replacement cannot
+        // witness any of the unmatched displays.
+        return;
+    }
+    let candidates = plan.rows[prefix..end]
+        .iter()
+        .filter_map(|row| row.owner)
+        .collect::<BTreeSet<_>>();
+    if !candidates.is_empty() {
+        uncertain.extend(&candidates);
+        let locations = cell_locations(candidates, &expected.owners);
+        violations.push(format!(
+            "literal-displays: unresolved column slot alignment for candidates {locations}"
+        ));
+    }
+}
+
+fn cell_locations(candidates: impl IntoIterator<Item = usize>, owners: &[SourceDisplay]) -> String {
+    candidates
         .into_iter()
-        .map(|&id| {
+        .map(|id| {
             let (line, column) = owners[id].opening;
             format!("{line}:{column}")
         })
         .collect::<Vec<_>>()
-        .join(", ");
-    violations.push(format!(
-        "literal-displays: {missing} missing row(s) among column display candidates {locations}"
-    ));
-}
-
-fn report_ambiguous_rows(
-    plan: &super::rows::CellPlan,
-    owners: &[SourceDisplay],
-    matched: &[usize],
-    uncertain: &mut BTreeSet<usize>,
-    violations: &mut Vec<String>,
-) {
-    // A missing physical slot destroys correspondence between equal
-    // display rows. Report the count and candidate intervals; the
-    // order of equal strings cannot identify a damaged owner.
-    let mut by_text = BTreeMap::<_, Vec<_>>::new();
-    for row in &plan.rows {
-        if let Some(id) = row.owner.filter(|&id| owners[id].rows == 1) {
-            by_text.entry(row.text.as_str()).or_default().push(id);
-        }
-    }
-    for candidates in by_text.values() {
-        let missing = candidates.iter().filter(|&&id| matched[id] == 0).count();
-        if missing == 0 || missing == candidates.len() {
-            continue;
-        }
-        uncertain.extend(candidates);
-        report_row_candidates(candidates, missing, owners, violations);
-    }
+        .join(", ")
 }
 
 fn row_witness_obligations(owners: &[SourceDisplay]) -> Vec<bool> {

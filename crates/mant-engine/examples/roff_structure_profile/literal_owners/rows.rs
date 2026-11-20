@@ -88,8 +88,10 @@ fn lexical_rows(nodes: &[Node], source: &SourceContext) -> Option<Vec<(u32, Stri
                 // termp_sm_pre changes NONOSPACE at its execution
                 // point, including inside a preceding display. Start
                 // with the state at this field's first node.
-                let text = lexical_row(field, &field[0], source)?;
-                if !text.is_empty() {
+                let (text, buffered) = lexical_row(field, &field[0], source)?;
+                // mdoc_term.c::print_mdoc_node ends a buffered no-fill
+                // source row even when its only cell is ASCII_NBRZW.
+                if !text.is_empty() || field[0].flags.no_fill && buffered {
                     rows.push((field[0].id, text));
                 }
             }
@@ -126,15 +128,15 @@ fn starts_source_row(node: &Node) -> bool {
                     .is_some_and(|text| text.starts_with(' ')))
 }
 
-fn lexical_row(nodes: &[Node], origin: &Node, source: &SourceContext) -> Option<String> {
-    use mant_codec::RoffWordEffect::{EmittedBreak, Unclassified, WordEndBreak};
+fn lexical_row(nodes: &[Node], origin: &Node, source: &SourceContext) -> Option<(String, bool)> {
+    use mant_codec::RoffWordEffect::{Buffered, EmittedBreak, Unclassified, WordEndBreak};
     let (prefix, word) = source_evidence(nodes, origin, false, source, true);
     let word = word?;
     (prefix.absent()
         && !word.has(Unclassified)
         && !word.has(WordEndBreak)
         && !word.has(EmittedBreak))
-    .then(|| normalized_row(&word.text))
+    .then(|| (normalized_row(&word.text), word.has(Buffered)))
 }
 
 pub(super) fn display_rows(node: &Node, source: &SourceContext) -> Option<BTreeMap<u32, String>> {
@@ -156,7 +158,7 @@ fn display_row_slots(node: &Node, source: &SourceContext) -> Option<Vec<(u32, St
         }) {
             return None;
         }
-        let text = lexical_row(&node.children, node, source)?;
+        let (text, _) = lexical_row(&node.children, node, source)?;
         return Some(
             (!text.is_empty())
                 .then_some((node.id, text))

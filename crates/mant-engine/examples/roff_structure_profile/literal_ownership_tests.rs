@@ -494,6 +494,74 @@ fn multiline_display_slots_constrain_equal_rows_across_native_spacing() {
     }
 }
 
+#[test]
+fn column_row_damage_preserves_ordinary_and_invisible_slot_alternatives() {
+    // CVS mdoc_term.c::print_mdoc_node closes the no-fill row containing
+    // ASCII_NBRZW. The automatic Bd gap and the ordinary PIN are also
+    // separate physical slots in the executed field.
+    let head = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Bl -column aaa bbb\n.It A Ta B\n";
+    for (body, losses, expected) in [
+        (
+            ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.Dl SAME\n",
+            &[(4, "PIN", "WRONG")][..],
+            &[][..],
+        ),
+        (
+            ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.Dl SAME\n",
+            &[(4, "PIN", " ")][..],
+            &[][..],
+        ),
+        (
+            ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.Dl SAME\n",
+            &[(3, "SAME", ""), (2, "FIRST", "")][..],
+            &["missing sourced block for 10:2 occurrence 1 (2 missing rows)"][..],
+        ),
+        (
+            ".Dl SAME\nSAME\n.D1 SAME\n",
+            &[(2, "SAME", "")][..],
+            &["0..=1 missing row(s) among column display candidates 10:2, 12:2"][..],
+        ),
+        (
+            ".Dl SAME\nSAME\n.D1 SAME\n",
+            &[(3, "SAME", ""), (2, "SAME", "")][..],
+            &["1..=2 missing row(s) among column display candidates 10:2, 12:2"][..],
+        ),
+        (
+            ".Bd -literal -compact\n\\&\nFIRST\nSAME\n.Ed\n.Dl SAME\n",
+            &[(3, "SAME", "WRONG")][..],
+            &["missing sourced block for 10:2 occurrence 1"][..],
+        ),
+        (
+            ".Bd -literal\nFIRST\nSAME\n.Ed\nPIN\n.D1 SAME\n.Dl LAST\n",
+            &[(6, "LAST", ""), (3, "SAME", "")][..],
+            &[
+                "missing sourced block for 10:2 occurrence 1",
+                "missing sourced block for 16:2 occurrence 1",
+            ][..],
+        ),
+    ] {
+        let source = format!("{head}{body}.El\n");
+        let (native, topology, mut document) = parsed_structure(&source);
+        assert!(native.literal_display_reviews.is_empty(), "{source}");
+        assert!(
+            compare(&native, &topology, &document).is_empty(),
+            "{source}"
+        );
+        for &(at, word, replacement) in losses {
+            replace_column_payload_at(&mut document, at, word, replacement);
+        }
+        let errors = compare(&native, &topology, &document);
+        assert_eq!(errors.len(), expected.len(), "{source}: {errors:?}");
+        for (got, want) in errors.iter().zip(expected) {
+            assert_eq!(
+                got.strip_prefix("literal-displays: "),
+                Some(*want),
+                "{source}"
+            );
+        }
+    }
+}
+
 fn replace_column_payload_at(
     document: &mut Document,
     at: usize,

@@ -204,15 +204,16 @@ target page's AST obligations. Its source identity owns only the redirect;
 the resolved target has its own fidelity/structure identity. Missing targets
 remain hard failures, so this rule does not hide incomplete manual trees.
 
-The v20 literal display check reserves ordinary rows within the same
+The v21 literal display check reserves ordinary rows within the same
 mdoc column cell using the spacing mode at each field's first source
-node. A leading source space closes a filled row. Explicit spacing and
-the automatic gap before a noncompact display contribute physical row
-slots. For a single deleted row, both retained prefixes and suffixes
-constrain the source match. When several display rows can account for
-the same deletion, the finding includes the feasible openings and the
-missing count. An unclassified cell tail keeps the observation in source
-review even if its verified prefix matches.
+node. Leading source spaces close filled rows. Explicit spacing, the
+automatic gap before a noncompact display and buffered invisible cells
+on no-fill lines contribute physical row slots. Replacements preserve
+the original slot. For short deletion sequences, feasible alignments
+determine the missing count or range and include ordinary rows as
+possible losses. Beyond the alignment budget, unresolved display
+candidates remain in review. An unclassified tail also stays in source
+review when its verified prefix matches.
 
 Build the profiler and scan the reproducible real fixtures:
 
