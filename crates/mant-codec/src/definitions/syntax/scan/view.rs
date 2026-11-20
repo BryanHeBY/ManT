@@ -202,7 +202,10 @@ impl<'a> HeadView<'a> {
     }
 
     #[cfg(feature = "roff")]
-    pub(super) fn operands_in(&self, range: Range<usize>) -> impl Iterator<Item = &NativeOperand> {
+    pub(super) fn operands_in(
+        &self,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = &NativeOperand> + Clone {
         let start = self
             .operands
             .partition_point(|item| item.bytes.end <= range.start);

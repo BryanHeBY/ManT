@@ -18,9 +18,33 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
     let mut cursor = rhs.start;
     let mut syntax = AssignmentSyntax::default();
     let mut scopes = Vec::new();
-    for operand in view.operands_in(rhs.clone()) {
+    let mut operands = view.operands_in(rhs.clone());
+    while let Some(operand) = operands.next() {
         let start = operand.bytes.start.max(cursor);
-        let end = operand.bytes.end.min(rhs.end);
+        let mut end = operand.bytes.end.min(rhs.end);
+        if matches!(
+            operand.role,
+            Role::Placeholder { .. } | Role::PathOperand(_)
+        ) {
+            // The head index exposes an alternative pipe separately.
+            // Matching typed node IDs on both sides still prove that
+            // the complete spelling belongs to one authored operand.
+            loop {
+                let mut lookahead = operands.clone();
+                let (Some(separator), Some(rest)) = (lookahead.next(), lookahead.next()) else {
+                    break;
+                };
+                if separator.role != Role::Argument
+                    || separator.bytes.start != end
+                    || rest.bytes.start != separator.bytes.end
+                    || rest.role != operand.role
+                {
+                    break;
+                }
+                end = rest.bytes.end.min(rhs.end);
+                operands = lookahead;
+            }
+        }
         if syntax
             .literal(&view.text[cursor..start], Literal::Unmarked)
             .is_err()
@@ -28,19 +52,23 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             return false;
         }
         let value = &view.text[start..end];
+        let touches_next =
+            view.text[end..rhs.end].starts_with(|character: char| !character.is_whitespace());
         let accepted = match operand.role {
-            Role::Placeholder { .. } | Role::SearchArgument(_) => syntax.parameter(value, true),
-            Role::PathOperand(_) => syntax.path(value),
+            Role::Placeholder { .. } | Role::SearchArgument(_) => {
+                syntax.operand(value, true, false, touches_next)
+            }
+            Role::PathOperand(_) => syntax.operand(value, true, true, touches_next),
             Role::ExplicitOption if operand.bytes.start < span.start => {
                 // Fl can spell the start of its own assignment, including
                 // brackets that close in later operands: --skip=[-][sample|time].
-                syntax.literal(value, Literal::Explicit)
+                syntax.literal(value, Literal::Assignment)
             }
             Role::ExplicitOption if syntax.lexical.within_group() => {
                 // An inner Fl proves its own spelling inside the optional
                 // group.
                 let optional = syntax.group().is_some_and(|group| group.bracketed);
-                syntax.parameter(value, optional)
+                syntax.operand(value, optional, false, touches_next)
             }
             Role::EnclosureStart {
                 body,
@@ -120,6 +148,40 @@ enum Literal {
     Delimiter,
     Unmarked,
     Explicit,
+    Assignment,
+}
+
+/// A pair contained in one typed operand is its author's spelling. An
+/// unmatched bracket can instead continue through other native operands.
+fn open_operand_edges(value: &str) -> Result<Vec<(usize, char)>, ()> {
+    let mut edges = Vec::new();
+    let mut quote = None;
+    let mut escaped = false;
+    for (offset, character) in value.char_indices() {
+        if std::mem::take(&mut escaped) {
+            continue;
+        }
+        if character == '\\' {
+            escaped = true;
+        } else if let Some(end) = quote {
+            if character == end {
+                quote = None;
+            }
+        } else if let Some(end) = quote_closer(character) {
+            quote = Some(end);
+        } else if edges
+            .last()
+            .is_some_and(|&(_, open)| closing(open) == Some(character))
+        {
+            edges.pop();
+        } else if closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>') {
+            if edges.len() == MAX_NESTING {
+                return Err(());
+            }
+            edges.push((offset, character));
+        }
+    }
+    Ok(edges)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -206,25 +268,77 @@ impl AssignmentSyntax {
         self.groups.last_mut().and_then(Option::as_mut)
     }
 
-    fn parameter(&mut self, value: &str, proves_argument: bool) -> Result<(), ()> {
-        self.operand(value, proves_argument, false)
-    }
-
-    fn path(&mut self, value: &str) -> Result<(), ()> {
-        self.operand(value, true, true)
-    }
-
-    fn operand(&mut self, value: &str, proves_argument: bool, is_path: bool) -> Result<(), ()> {
+    fn operand(
+        &mut self,
+        value: &str,
+        proves_argument: bool,
+        is_path: bool,
+        touches_next: bool,
+    ) -> Result<(), ()> {
         let trimmed = value.trim_start();
         self.literal(&value[..value.len() - trimmed.len()], Literal::Delimiter)?;
-        let operand = trimmed.trim_end();
+        let spelling = trimmed.trim_end();
+        let evidence = if proves_argument {
+            ValueEvidence::Argument
+        } else {
+            ValueEvidence::Literal
+        };
+        let mut start = 0;
+        for (offset, bracket) in open_operand_edges(spelling)? {
+            self.operand_fragment(&spelling[start..offset], evidence, is_path, false)?;
+            self.delimiter(bracket)?;
+            self.after_space = false;
+            start = offset + bracket.len_utf8();
+        }
+        self.operand_fragment(
+            &spelling[start..],
+            evidence,
+            is_path,
+            touches_next && spelling.len() == trimmed.len(),
+        )?;
+        self.literal(&trimmed[spelling.len()..], Literal::Delimiter)
+    }
+
+    fn operand_fragment(
+        &mut self,
+        value: &str,
+        evidence: ValueEvidence,
+        is_path: bool,
+        touches_next: bool,
+    ) -> Result<(), ()> {
+        let mut operand = value.trim();
+        self.literal(
+            &value[..value.len() - value.trim_start().len()],
+            Literal::Delimiter,
+        )?;
+        if !self.after_space
+            && !matches!(self.atom, Atom::Expected)
+            && let Some(edge) = operand
+                .chars()
+                .next()
+                .filter(|&ch| is_operand_connector(ch))
+        {
+            self.operator(edge)?;
+            operand = &operand[edge.len_utf8()..];
+        }
+        let trailing_connector = touches_next
+            .then(|| {
+                operand
+                    .chars()
+                    .next_back()
+                    .filter(|&ch| is_operand_connector(ch))
+            })
+            .flatten();
+        if let Some(edge) = trailing_connector {
+            operand = &operand[..operand.len() - edge.len_utf8()];
+        }
         if operand.is_empty() {
             return Ok(());
         }
         let joined_path = is_path
             && !self.after_space
             && matches!(self.atom, Atom::Path)
-            && operand.starts_with('/');
+            && (operand.starts_with('/') || self.lexical.within_group());
         if is_path && !self.atom.accepts_new_fragment() && !joined_path {
             return Err(());
         }
@@ -244,14 +358,7 @@ impl AssignmentSyntax {
         // spelling cannot connect unrelated operands at this level.
         let continuation = !self.after_space
             && (joined_path || matches!(self.atom, Atom::PathContinuation | Atom::AfterDot));
-        self.record_value(
-            if proves_argument {
-                ValueEvidence::Argument
-            } else {
-                ValueEvidence::Literal
-            },
-            continuation,
-        )?;
+        self.record_value(evidence, continuation)?;
         self.atom = if operand.ends_with('/') || is_path && operand.ends_with('.') {
             Atom::PathContinuation
         } else if is_path {
@@ -261,13 +368,12 @@ impl AssignmentSyntax {
         };
         // A colon at the end of a typed word can introduce an adjacent
         // fragment, but a spaced explanatory label does not prove a form.
-        if operand.ends_with(':')
-            && let Some(group) = self.group_mut()
-        {
-            group.join = Some(Join::Adjacent);
-            self.atom = Atom::Expected;
+        if let Some(edge) = trailing_connector {
+            self.operator(edge)?;
+        } else if operand.ends_with(':') && self.group().is_some() {
+            self.operator(':')?;
         }
-        self.literal(&trimmed[operand.len()..], Literal::Delimiter)
+        self.literal(&value[value.trim_end().len()..], Literal::Delimiter)
     }
 
     fn record_value(&mut self, evidence: ValueEvidence, adjacent: bool) -> Result<(), ()> {
@@ -290,12 +396,20 @@ impl AssignmentSyntax {
                 self.atom = Atom::AfterDot;
                 continue;
             }
-            if self.punctuation(ch)? {
+            // A single explicit Fl can supply a complete value spelling
+            // like c++17, %s or *.conf. Group punctuation still executes.
+            let fl_value = literal == Literal::Assignment
+                && matches!(
+                    ch,
+                    '+' | '%' | '*' | '?' | '#' | '~' | '&' | '!' | '^' | '$'
+                );
+            if !fl_value && self.punctuation(ch)? {
                 in_atom = false;
             } else if literal != Literal::Delimiter
-                && (self.group().is_none() || literal == Literal::Explicit)
+                && (self.group().is_none()
+                    || matches!(literal, Literal::Explicit | Literal::Assignment))
                 && (in_atom || self.atom.accepts_new_fragment())
-                && parameter_character(ch)
+                && (parameter_character(ch) || fl_value)
             {
                 self.lexical.observe(ch);
                 if in_atom {
@@ -335,7 +449,7 @@ impl AssignmentSyntax {
             self.delimiter(ch)?;
         } else if matches!(ch, '=' | ',' | '/' | ':' | '@' | '|') {
             self.operator(ch)?;
-        } else if ch == '.' && !self.after_space && self.has_value {
+        } else if ch == '.' && !self.after_space && !matches!(self.atom, Atom::Expected) {
             self.atom = Atom::AfterDot;
         } else if !(matches!(ch, '.' | '…') || ch == '+' && self.lexical.within_group()) {
             return Ok(false);
@@ -375,6 +489,15 @@ impl AssignmentSyntax {
         }
         let left = !matches!(self.atom, Atom::Expected);
         let adjacent = !self.after_space;
+        if ch == '/' && !(left && adjacent) {
+            // A unary slash starts a fresh value. Its suffix cannot prove
+            // the earlier literal across a real word separation.
+            if let Some(group) = self.group_mut() {
+                group.finish_value()?;
+            }
+            self.atom = Atom::PathContinuation;
+            return Ok(());
+        }
         let join = match ch {
             '|' | '=' | ',' => Some(Join::Word),
             ':' => Some(Join::Adjacent),
@@ -390,4 +513,8 @@ impl AssignmentSyntax {
         self.atom = Atom::Expected;
         Ok(())
     }
+}
+
+fn is_operand_connector(character: char) -> bool {
+    matches!(character, '=' | '|' | ',' | ':' | '@')
 }

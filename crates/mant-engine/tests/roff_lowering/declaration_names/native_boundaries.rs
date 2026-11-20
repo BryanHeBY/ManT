@@ -504,6 +504,91 @@ fn pathname_separators_can_begin_the_touching_operand() {
 }
 
 #[test]
+fn complete_native_flag_values_keep_their_authored_symbols() {
+    // termp_fl_pre() adds one dash and executes the full Fl operand.
+    // Both fixed terminals and HTML keep the same spelling as typed Ar.
+    for head in ["Fl std=c++17", "Fl std= Ns Ar c++17"] {
+        check("OPTIONS", head, &["-std"], "-std=c++17", true, &["c++17"]);
+    }
+    for value in [
+        "+1",
+        "%s",
+        "*.conf",
+        "C++",
+        "[+]",
+        "x?y",
+        "foo%20bar",
+        "A#B",
+    ] {
+        let head = format!("Fl a={value}");
+        let label = format!("-a={value}");
+        check("OPTIONS", &head, &["-a"], &label, true, &[value]);
+    }
+}
+
+#[test]
+fn an_index_with_an_internal_pipe_remains_one_typed_parameter() {
+    // In fixed CVS's tree the complete bracket spelling is one TEXT
+    // child of Ar or Pa, even though the head index also exposes a pipe.
+    for role in ["Ar", "Pa"] {
+        for value in ["sample[old|new]", "[+|-]"] {
+            let head = format!("Fl a= Ns {role} {value}");
+            let label = format!("-a={value}");
+            check("OPTIONS", &head, &["-a"], &label, true, &["old", "new"]);
+        }
+    }
+}
+
+#[test]
+fn native_operand_edges_keep_connectors_inside_their_own_value() {
+    // Fixed Fl, Ar, Pa and Ns execute these parts in source order.
+    // Adjacent split forms retain the same exact query as whole operands.
+    for (head, label, complete) in [
+        ("Ar key= Ns Li auto", "-a=key=auto", true),
+        (r"Ar key Ns Li \&= Ns Li auto", "-a=key=auto", true),
+        ("Pa /tmp/build@ Ns Pa 2", "-a=/tmp/build@2", true),
+        ("Pa /tmp/build@2", "-a=/tmp/build@2", true),
+        ("Pa /tmp/build@ Pa 2", "-a=/tmp/build@ 2", false),
+        ("Pa /tmp/key= Ns Pa value", "-a=/tmp/key=value", true),
+        ("Ar path[ Ns Ar index ]", "-a=path[index]", true),
+        ("Ar path[index]", "-a=path[index]", true),
+        ("Ar x{m Ns Ar ode}", "-a=x{mode}", true),
+        ("Pa x{mode Ns Ar }", "-a=x{mode}", true),
+        ("Ar [dir Ns Ar /]", "-a=[dir/]", true),
+        ("Pa [dir Ns Pa /]", "-a=[dir/]", true),
+        ("Ar x<o Ns Ar pt>", "-a=x<opt>", true),
+        ("Pa x<opt Ns Ar >", "-a=x<opt>", true),
+        ("Ar x Op Ar path[ Ns Ar index ]", "-a=x [path[index]]", true),
+        ("Ar x Op Ar path[index]", "-a=x [path[index]]", true),
+        ("Ar x Op Ar key= Ns Li auto", "-a=x [key=auto]", true),
+        (r"Ar x Op Li auto Ns Ar \&=mode", "-a=x [auto=mode]", true),
+        (
+            "Ar x Pq Li see Li /. Ns Pa dockerenv",
+            "-a=x (see /.dockerenv)",
+            false,
+        ),
+        (
+            "Ar x Pq Li see Pa /.dockerenv",
+            "-a=x (see /.dockerenv)",
+            false,
+        ),
+        ("Ar x Pq Li /. Ns Pa dockerenv", "-a=x (/.dockerenv)", true),
+        ("Ar x Pq Pa /.dockerenv", "-a=x (/.dockerenv)", true),
+        ("Ar x Pq Li see Li / Ns Pa tmp", "-a=x (see /tmp)", false),
+    ] {
+        let head = format!("Fl a= Ns {head}");
+        check(
+            "OPTIONS",
+            &head,
+            &["-a"],
+            label,
+            complete,
+            &["index", "see", "auto", "dockerenv"],
+        );
+    }
+}
+
+#[test]
 fn real_assignment_forms_keep_compound_and_literal_alternatives() {
     // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
     // and exports. CVS term_word(), termp_ns_pre() and quote pre/post
