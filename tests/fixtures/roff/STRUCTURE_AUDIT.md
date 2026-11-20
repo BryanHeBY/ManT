@@ -231,9 +231,14 @@ across parent scopes. Native displays and tables in executed extended
 definition headings also occupy their source occurrences. When the native
 list handler skips an item HEAD, arguments retained in the AST for source
 diagnostics do not change formatting state or advance an occurrence. An
-executed HEAD contributes its nested lists, column rows and equations to
-the term's witness. Standalone block and row obligations apply in the
-BODY. Review records may skip occurrences and may be in any order.
+executed HEAD contributes its nested lists, column rows, literal rows and
+equations to one ordered term witness. The witness consumes each word
+occurrence once and keeps non-ASCII spaces in the authored token. Proven
+ordinal recovery does not occupy any definition-term occurrence. Partial
+source evidence and ambiguous owner positions are reported for review.
+Standalone block and row obligations apply in the BODY. An inline
+equation in a column item is checked at its table cell. Review records
+may skip occurrences and may be in any order.
 A repeated display coordinate and occurrence is invalid.
 
 Build the profiler and scan the reproducible real fixtures:

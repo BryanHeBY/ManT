@@ -47,6 +47,10 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Carry a proved native cursor across an invisible control tail. Automatic
+  spacing that traverses that tail can no longer introduce a hard line.
+- Preserve complete native flag spellings such as `-std=c++17` and recognize
+  connectors on adjacent typed operands without absorbing explanatory words.
 - Keep an earlier native glyph cover when replay repositions the surviving
   styled suffix, including its printed separator and search range.
 - Preserve an accepted hard line before a replayed word whose native font
@@ -357,6 +361,9 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Check mixed definition terms in execution order, with independent evidence
+  for repeated words, Unicode spacing, literal rows and column equations.
+  Report partial term evidence and ambiguous owners separately.
 - Share item HEAD dispatch across native state and structure audits.
   Check executed nested structures at their rendered definition term.
 - Keep native display and table audit numbers stable when mandoc skips a
