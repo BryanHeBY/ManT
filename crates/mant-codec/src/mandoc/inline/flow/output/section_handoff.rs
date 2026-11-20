@@ -15,7 +15,13 @@ pub(in crate::mandoc::inline::flow) struct SectionHandoff {
     previous_empty_passes: u16,
     previous_literal: bool,
     projection_start: usize,
-    last_pass_shares_unprinted_row: bool,
+    shared_tail: Option<SharedTail>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SharedTail {
+    Printed,
+    Unprinted,
 }
 
 impl SectionHandoff {
@@ -59,9 +65,16 @@ impl SectionHandoff {
         covered: &mut &[usize],
     ) -> bool {
         let closes_previous = ends_line && self.owns_loop_end(buffer, pass.clone());
-        if !ends_line && !printed_row {
-            self.last_pass_shares_unprinted_row = pass.start < self.previous_cell_end
-                && buffer.projection_length(pass.start, pass.end.min(self.previous_cell_end)) > 0;
+        if !ends_line {
+            let old_end = pass.end.min(self.previous_cell_end);
+            self.shared_tail = if pass.start >= old_end {
+                None
+            } else if printed_row {
+                (buffer.printed_content_end(pass.start, old_end) > pass.start)
+                    .then_some(SharedTail::Printed)
+            } else {
+                (buffer.projection_length(pass.start, old_end) > 0).then_some(SharedTail::Unprinted)
+            };
         }
         if self.previous_empty_passes > 0
             && self.has_surviving_previous_glyph(buffer, pass, covered)
@@ -122,7 +135,7 @@ impl InlineBuilder {
             previous_empty_passes: 0,
             previous_literal,
             projection_start: 0,
-            last_pass_shares_unprinted_row: false,
+            shared_tail: None,
         });
         self.nodes.push(Inline::anchor(BOUNDARY));
     }
@@ -191,11 +204,17 @@ impl InlineBuilder {
             projection::split_output_scope_prefix(std::mem::take(&mut self.nodes), BOUNDARY);
         assert!(found, "section owner boundary survives native acceptance");
         let mut rows = handoff.previous_empty_passes;
-        if handoff.previous_literal && (rows > 0 || handoff.last_pass_shares_unprinted_row) {
+        if handoff.shared_tail == Some(SharedTail::Printed) && heading_has_only_padding(&head) {
+            // A blank-only man SS tail can print with the preceding BODY.
+            // Keep its navigation identity without replaying a second row.
+            projection::retain_inline_identities(&mut head);
+        }
+        let shares_literal_tail = handoff.shared_tail == Some(SharedTail::Unprinted);
+        if handoff.previous_literal && (rows > 0 || shares_literal_tail) {
             let start = handoff.projection_start.min(previous.len());
             let projected = super::ProjectedTail::of(&previous[start..]);
             rows = rows.saturating_sub(projected.literal_owned_rows());
-            if handoff.last_pass_shares_unprinted_row && projected.has_open_reading_row() {
+            if shares_literal_tail && projected.has_open_reading_row() {
                 // The last accepted empty pass still spans the seam.
                 // The old literal's retained payload already supplies
                 // this final row; HEAD's endline is not another blank.
@@ -217,4 +236,12 @@ impl InlineBuilder {
         self.nodes = head;
         previous
     }
+}
+
+fn heading_has_only_padding(head: &[Inline]) -> bool {
+    let mut only_padding = true;
+    mant_ir::visit_inline_plain_text(head, |text| {
+        only_padding &= text.chars().all(char::is_whitespace);
+    });
+    only_padding
 }

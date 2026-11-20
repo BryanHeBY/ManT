@@ -199,15 +199,15 @@ impl InlineExecutionState {
                 field.row.retire_row_origin();
             }
         } else if let Some(field) = self.definition.take() {
-            self.detached_device_row =
-                field
-                    .hang_row
-                    .native_row_occupied()
-                    .then_some(DetachedDeviceRow {
-                        viscol: field.hang_row.viscol,
-                        minbl: field.hang_row.minbl,
-                        page_origin_printed: field.hang_row.page_origin_printed,
-                    });
+            // man post_IP/post_TP can leave trailspace in minbl without
+            // printing a glyph. BODY's empty term_newln does not consume it.
+            self.detached_device_row = (field.hang_row.native_row_occupied()
+                || self.macro_set == MacroSet::Man && field.hang_row.minbl > 0)
+                .then_some(DetachedDeviceRow {
+                    viscol: field.hang_row.viscol,
+                    minbl: field.hang_row.minbl,
+                    page_origin_printed: field.hang_row.page_origin_printed,
+                });
         }
     }
 

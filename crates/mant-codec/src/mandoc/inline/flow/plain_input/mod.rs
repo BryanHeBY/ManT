@@ -56,13 +56,16 @@ impl PlainFlushBoundary {
         self,
         accepted: super::field_buffer::AcceptedPasses<'_>,
         inherited_printed_row: bool,
+        inherited_minbl: usize,
     ) -> bool {
         // pre_SH uses zero offset and trailspace equal to the first
-        // field's width. A glyphless final term_fill therefore fits;
-        // NOBREAK suppresses only that tail endline (term.c:239–253).
+        // field's width. Nonzero minbl consumes at least one cell of
+        // its capacity. Without it, a glyphless final term_fill fits
+        // within the half-cell tolerance (term.c:113–135,239–253).
         // A rejected final pass returns zero vbr even after earlier ink.
         matches!(self, Self::ManSectionHeading)
             && !inherited_printed_row
+            && inherited_minbl == 0
             && (accepted.rejected() || accepted.all().last().is_none_or(|pass| pass.width == 0))
     }
 }
@@ -160,15 +163,22 @@ impl PlainFlushOutcome {
     }
 }
 
-fn plain_unit_inherits_printed_row(execution: &super::InlineExecutionState) -> bool {
-    execution
-        .definition
-        .as_ref()
-        .is_some_and(|state| state.hang_row.native_row_occupied())
-        || execution
-            .detached_device_row
-            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
+fn inherited_plain_field(execution: &super::InlineExecutionState) -> (bool, usize) {
+    if let Some(state) = &execution.definition {
+        (state.hang_row.native_row_occupied(), state.hang_row.minbl)
+    } else {
+        execution.detached_device_row.map_or((false, 0), |row| {
+            (row.page_origin_printed || row.viscol > 0, row.minbl)
+        })
+    }
 }
+
+// BRNEVER-shaped (term.c:134,143-144). Responsive reflow owns page width.
+const PLAIN_FIELD_TARGETS: super::field_buffer::FillTargets = super::field_buffer::FillTargets {
+    first: usize::MAX / 2,
+    rest: usize::MAX / 2,
+    unbounded: true,
+};
 
 impl InlineBuilder {
     /// The plain-flow analogue of `project_definition_field_receipt()`
@@ -229,17 +239,10 @@ impl InlineBuilder {
         mut handoff: Option<&mut SectionHandoff>,
         operands: Option<&std::cell::RefCell<super::HeadOperandCapture>>,
     ) -> Option<PlainRetirement> {
-        use super::field_buffer::{FillTargets, FlushReceipt};
-        let inherited_printed_row = plain_unit_inherits_printed_row(execution);
+        use super::field_buffer::FlushReceipt;
+        let (inherited_printed_row, inherited_minbl) = inherited_plain_field(execution);
         let (authorless_definition, unit) = Self::take_plain_flush_unit(execution, nodes)?;
-        // BRNEVER-shaped (term.c:134,143-144): responsive reflow owns the
-        // device width, so a plain pass only ever ends at authored markers.
-        let targets = FillTargets {
-            first: usize::MAX / 2,
-            rest: usize::MAX / 2,
-            unbounded: true,
-        };
-        let receipt = unit.buffer.flush_receipt(targets, false);
+        let receipt = unit.buffer.flush_receipt(PLAIN_FIELD_TARGETS, false);
         let Some(accepted) = receipt.accepted_passes() else {
             Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
             return Some(PlainRetirement::UNMODELED);
@@ -336,8 +339,11 @@ impl InlineBuilder {
         Some(PlainRetirement {
             outcome,
             projection: Some(edits),
-            fitting_heading_tail: boundary
-                .fits_without_ending_heading_row(accepted, inherited_printed_row),
+            fitting_heading_tail: boundary.fits_without_ending_heading_row(
+                accepted,
+                inherited_printed_row,
+                inherited_minbl,
+            ),
         })
     }
 

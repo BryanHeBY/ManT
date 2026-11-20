@@ -1580,6 +1580,128 @@ fn section_transitions_publish_only_rows_completed_by_the_device() {
 }
 
 #[test]
+fn an_inherited_marker_keeps_the_pending_glyph_before_a_discretionary_break() {
+    // CVS term_fill reads both words in one field. ASCII_BREAK ends the
+    // pending \p pass, while NBRZW leaves the overstrike on the same row.
+    for (word, expected, link) in [
+        (r#".No "\zA\p" Ns No "\:C""#, "A\nC", false),
+        (r#".No "\zA\p\:C""#, "A\nC", false),
+        (r#".No "\zA\p" Ns No "\&C""#, "C", false),
+        (r#".No "\zA\p" No "\:C""#, "A\nC", false),
+        (
+            r#".No "\X'tty: link https://one.test'\zA\p\X'tty: link'" Ns No "\:C""#,
+            "A\nC",
+            true,
+        ),
+        (
+            r#".Sy "\X'tty: link https://one.test'\zA\p\X'tty: link'" Ns No "\:C""#,
+            "A\nC",
+            true,
+        ),
+    ] {
+        let source = format!("{EDITABLE_FIELD}{word}\n");
+        assert_readbacks(&source, expected, None);
+        let markdown = render(&source, "roff", "markdown", "never", false);
+        for (input, format) in [(source.as_str(), "roff"), (markdown.as_str(), "markdown")] {
+            assert_eq!(
+                search_visible_word_with_format(input, format, "A"),
+                u64::from(expected.starts_with('A'))
+            );
+            assert_eq!(search_visible_word_with_format(input, format, "AC"), 0);
+            let targets = document_links(input, format);
+            if link {
+                assert_eq!(
+                    targets,
+                    [(
+                        LinkTarget::External {
+                            uri: "https://one.test".into()
+                        },
+                        "A".into()
+                    )]
+                );
+            } else {
+                assert_eq!(targets, Vec::<(LinkTarget, String)>::new());
+            }
+        }
+    }
+}
+
+#[test]
+fn a_breakpoint_keeps_the_pending_link_in_its_definition_owner() {
+    let word = r#".No "\X'tty: link https://one.test'\zA\p\X'tty: link'" Ns No "\:C""#;
+    for kind in ["tag", "hang"] {
+        let head = format!(
+            "{EDITABLE_FIELD}.Bl -{kind} -width 12n\n.It {}\nBODYWORD\n.El\n",
+            &word[1..]
+        );
+        let body = format!("{EDITABLE_FIELD}.Bl -{kind} -width 12n\n.It alpha\n{word}\n.El\n");
+        for (source, id, term, description) in [
+            (&head, "term-a-c", "A\nC", "BODYWORD"),
+            (&body, "term-alpha", "alpha", "A\nC"),
+        ] {
+            let bundle: mant_protocol::QueryBundle =
+                serde_json::from_str(&render(source, "roff", "json", "never", false)).unwrap();
+            let document = bundle.document.unwrap();
+            let mant_ir::Block::DefinitionList { items, .. } = &document.sections[1].blocks[0]
+            else {
+                panic!("{source}");
+            };
+            let item = &items[0];
+            let mant_ir::Block::Paragraph { children, .. } = &item.description[0] else {
+                panic!("{source}");
+            };
+            assert_eq!(item.entry.as_ref().unwrap().id.as_str(), id, "{source}");
+            assert_eq!(mant_ir::inline_plain_text(&item.terms[0]), term, "{source}");
+            assert_eq!(
+                mant_ir::inline_plain_text(children),
+                description,
+                "{source}"
+            );
+            assert_eq!(
+                document_links(source, "roff"),
+                [(
+                    LinkTarget::External {
+                        uri: "https://one.test".into()
+                    },
+                    "A".into()
+                )]
+            );
+        }
+    }
+}
+
+#[test]
+fn consecutive_and_detached_man_fields_share_the_device_minimum() {
+    // term_flushln assigns minbl from trailspace even when no glyph
+    // reaches term_field. An endline consumes that minimum.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n";
+    for (pd, predecessor, heading, count, gap) in [
+        (0, "", r".SH \&", 1, 0),
+        (0, "", r".SH \&", 2, 1),
+        (0, "", r".SH \&", 3, 1),
+        (0, ".IP \\&\n", r".SH \&", 1, 1),
+        (0, ".TP\n\\&\n", r".SH \&", 1, 1),
+        (0, ".HP\n\\&\n", r".SH \&", 1, 1),
+        (1, ".IP \\&\n", r".SH \&", 1, 2),
+        (0, ".sp 1\n", r".SH \&", 1, 1),
+        (0, "", r".SS \~", 1, 0),
+        (0, "", r".SS \0", 1, 0),
+        (0, "", r".SH \0", 1, 1),
+        (0, "", r".SS \p DD", 1, 1),
+    ] {
+        let headings = format!("{heading}\n").repeat(count);
+        let source =
+            format!("{head}.PD {pd}\nAA\n{predecessor}{headings}.PD 0\nDD\n.SH ENDTEST\nZZ\n");
+        let full = render(&source, "roff", "text", "never", false);
+        let actual = full.split_once("\nFIRST\n").unwrap().1;
+        let actual = actual.split_once("\nENDTEST").unwrap().0.trim_end();
+        let rows: Vec<_> = actual.lines().map(str::trim).collect();
+        let expected = format!("AA\n{}DD", "\n".repeat(gap));
+        assert_eq!(rows, expected.lines().collect::<Vec<_>>(), "{source}");
+    }
+}
+
+#[test]
 fn subsection_excerpts_keep_only_the_heading_owned_hard_rows() {
     // man_term.c::pre_SS with PD=0 leaves the old field live. A pass
     // ending the old owner's row must consume its padding without

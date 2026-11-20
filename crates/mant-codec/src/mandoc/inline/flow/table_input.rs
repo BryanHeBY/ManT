@@ -185,6 +185,7 @@ impl InlineExecutionState {
                 font: &mut font,
                 zero_advance: &mut zero_advance,
                 defer_leading_blanks: false,
+                prior_word_end_marker: false,
                 line_width_units: cell_width,
                 slot_entry: SlotEntry::default(),
                 table_field_units: None,

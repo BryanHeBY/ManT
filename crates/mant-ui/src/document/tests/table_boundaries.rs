@@ -189,6 +189,24 @@ fn accepted_field_rows_keep_their_glyphs_and_link_ranges() {
 }
 
 #[test]
+fn a_discretionary_break_keeps_the_previous_words_pending_glyph_and_link() {
+    // term_fill stops the marker pass at ASCII_BREAK, including after Ns.
+    let head = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    for (word, rows, label) in [
+        (r#".No "\zA\p" Ns No "\:C""#, &["A", "C"][..], None),
+        (r#".No "\zA\p" Ns No "\&C""#, &["C"][..], None),
+        (
+            r#".No "\X'tty: link https://one.test'\zA\p\X'tty: link'" Ns No "\:C""#,
+            &["A", "C"][..],
+            Some("A"),
+        ),
+    ] {
+        assert_native_word_appearance(&format!("{head}{word}\n"), rows, label, &link);
+    }
+}
+
+#[test]
 fn empty_section_heading_does_not_add_an_unprinted_row() {
     // CVS pre_SH gives the heading a no-break field. A fitting zero-width
     // tail does not end a device row, unlike the corresponding SS field.
@@ -228,6 +246,46 @@ fn empty_section_heading_does_not_add_an_unprinted_row() {
                     &["AA", "", "GG"][..]
                 }
             );
+        }
+    }
+}
+
+#[test]
+fn man_section_copy_observes_the_device_row_across_empty_fields() {
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n.PD 0\nAA\n";
+    let tail = ".PD 0\nDD\n.SH ENDTEST\nZZ\n";
+    // CVS term_flushln retains trailspace as minbl until the device ends
+    // a row. An SS blank on the preceding text's row stays on that row.
+    for (seam, expected) in [
+        (".SH \\&\n", &["AA", "DD"][..]),
+        (".IP \\&\n.SH \\&\n", &["AA", "", "DD"][..]),
+        (".SH \\&\n.SH \\&\n", &["AA", "", "DD"][..]),
+        (".SS \\~\n", &["AA", "DD"][..]),
+    ] {
+        let view = DocumentView::new(&restored(&format!("{head}{seam}{tail}")));
+        for width in [24, 78] {
+            let rendered = view.render(width);
+            let first = rendered.search("AA")[0].row;
+            let last = rendered.search("DD")[0].row;
+            let buffer = paint(&rendered, width);
+            assert_eq!(last - first + 1, expected.len(), "{seam}");
+            for (offset, row) in expected.iter().enumerate() {
+                assert_eq!(
+                    painted(&buffer, first + offset, 0, width.into()).trim(),
+                    *row
+                );
+            }
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: first,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: last,
+                    column: usize::from(width) - 1,
+                },
+            });
+            assert_eq!(copied.lines().map(str::trim).collect::<Vec<_>>(), expected);
         }
     }
 }

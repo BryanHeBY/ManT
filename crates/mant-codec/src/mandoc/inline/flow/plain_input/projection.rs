@@ -167,11 +167,10 @@ pub(super) fn completed_empty_plain_passes(
     mut interval_printed: impl FnMut(usize, usize) -> bool,
     mut handoff: Option<&mut super::super::output::SectionHandoff>,
 ) -> u16 {
-    // One accepted pass never reaches loop endline (term.c:200-217).
-    // Its possibly empty final row remains with retain_accepted_unit_output;
-    // there are no completed empty loop rows to classify or print.
+    // One accepted pass never reaches loop endline (term.c:200-217),
+    // but its final row can be shared with a man subsection heading.
     let loop_ends = accepted.with_remaining_field().len();
-    if loop_ends == 0 {
+    if loop_ends == 0 && handoff.is_none() {
         return 0;
     }
     let passes = accepted.all();

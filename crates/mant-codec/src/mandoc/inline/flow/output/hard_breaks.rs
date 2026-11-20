@@ -16,7 +16,15 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn finish_man_section_heading(&mut self) {
         self.tighten_next_boundary();
-        self.hard_break_using_field(None, false, CompletedRowOrigin::Layout, true);
+        if self.hard_break_using_field(None, false, CompletedRowOrigin::Layout, true) {
+            // pre_SH assigns the page's five-cell default indent to
+            // trailspace. term_flushln restores it even without endline.
+            self.execution.detached_device_row = Some(super::super::DetachedDeviceRow {
+                viscol: 0,
+                minbl: 5,
+                page_origin_printed: false,
+            });
+        }
         self.tighten_next_boundary();
     }
 
@@ -97,7 +105,7 @@ impl InlineBuilder {
         projected: bool,
         origin: CompletedRowOrigin,
         man_section_heading: bool,
-    ) {
+    ) -> bool {
         let had_native_buffer = self.has_unconsumed_field_cells();
         let unprinted_field_tail = had_native_buffer
             && if projected {
@@ -107,27 +115,7 @@ impl InlineBuilder {
                 self.native_field_closes_unprinted_row()
             };
         let exited_discarded_buffer = self.discarded_exited_definition_buffer();
-        let exited_definition_row = self
-            .execution
-            .detached_device_row
-            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
-            || self
-                .execution
-                .definition
-                .as_ref()
-                .is_some_and(|definition| {
-                    definition.hang_row.native_row_occupied()
-                        && self
-                            .execution
-                            .author_execution
-                            .as_ref()
-                            .is_some_and(|execution| {
-                                matches!(
-                                    execution.break_effect,
-                                    super::super::AuthorBreakEffect::Line
-                                )
-                            })
-                });
+        let exited_definition_row = self.has_open_exited_definition_row();
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
         let (plain_flush, fitting_heading_tail) =
@@ -158,7 +146,7 @@ impl InlineBuilder {
                 self.external_head_row_pending = false;
             }
             self.reset_native_tab_origin();
-            return;
+            return false;
         }
         // term.c:143-146 with 233-237: a definitively rejected unit dies
         // whole - including a `\z`-generated glyph still pending in the
@@ -227,6 +215,30 @@ impl InlineBuilder {
         self.note_native_input_retired();
         self.finish_hard_break_projection(project_delimiter);
         // term_newln() does not clear TERMP_NONEWLINE; the next word does.
+        fitting_heading_tail
+    }
+
+    fn has_open_exited_definition_row(&self) -> bool {
+        self.execution
+            .detached_device_row
+            .is_some_and(|row| row.page_origin_printed || row.viscol > 0)
+            || self
+                .execution
+                .definition
+                .as_ref()
+                .is_some_and(|definition| {
+                    definition.hang_row.native_row_occupied()
+                        && self
+                            .execution
+                            .author_execution
+                            .as_ref()
+                            .is_some_and(|execution| {
+                                matches!(
+                                    execution.break_effect,
+                                    super::super::AuthorBreakEffect::Line
+                                )
+                            })
+                })
     }
 
     fn has_unconsumed_field_cells(&self) -> bool {

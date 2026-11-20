@@ -339,7 +339,9 @@ impl WordExecution {
         // not ASCII_NBRZW: it clears graph and can stop a pending \p pass.
         // An isolated tbl word uses the same local projection rule; live
         // paragraph/definition fields keep acceptance with their cell sink.
-        if self.text_state.pending_word_end_break {
+        if self.text_state.pending_word_end_break
+            || context.prior_word_end_marker && !self.text_state.saw_source_cell
+        {
             context.zero_advance.commit_pending_projection(
                 &mut self.output,
                 &mut self.buffer,
@@ -347,6 +349,8 @@ impl WordExecution {
                 self.link.as_deref(),
                 context.policy.field_authoritative,
             );
+        }
+        if self.text_state.pending_word_end_break {
             let state = &mut self.text_state;
             if !context.policy.field_authoritative {
                 if state.graph_since_blank || state.graph_seen {

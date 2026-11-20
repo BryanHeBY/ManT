@@ -17,6 +17,11 @@ pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
 }
 
 impl InlineBuilder {
+    pub(in crate::mandoc::inline) fn carries_word_end_marker_for_glyph(&self) -> bool {
+        let (buffer, _) = self.execution.word_input();
+        self.execution.zero_advance.has_buffered_glyph() && buffer.has_pending_break_markers()
+    }
+
     pub(in crate::mandoc::inline) fn defers_blanks_after_prior_breakpoint(&self) -> bool {
         let (buffer, _) = self.execution.word_input();
         // term_flushln()205-207 skips SP at the restart but stops at
