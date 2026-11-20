@@ -161,9 +161,10 @@ fn selection_context(selection: &ExcerptSelection) -> String {
     // CommonMark cannot close emphasis after whitespace, even NBSP.
     // Encode the trailing characters outside the delimiter so document
     // assembly and Markdown line trimming cannot consume them either.
-    let label = breadcrumb.trim_end();
-    let mut context = format!("*Outline {}: {label}*", code_span(trail.path()));
-    for ch in breadcrumb[label.len()..].chars() {
+    let label = format!("Outline {}: {breadcrumb}", code_span(trail.path()));
+    let emphasis = label.trim_end();
+    let mut context = format!("*{emphasis}*");
+    for ch in label[emphasis.len()..].chars() {
         write!(context, "&#{};", u32::from(ch)).expect("writing to a String");
     }
     context

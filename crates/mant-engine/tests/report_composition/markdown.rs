@@ -83,6 +83,50 @@ fn excerpt_breadcrumb_closes_emphasis_before_authored_terminal_padding() {
 }
 
 #[test]
+fn excerpt_breadcrumb_emphasizes_the_path_for_empty_headings() {
+    use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+
+    fn check(content: &ResolvedContent, path: &str, trailing: &str) {
+        let excerpt =
+            select_excerpt(content, &[mant_protocol::ContentSelector::path(path)]).unwrap();
+        let markdown = render_excerpt_markdown(&excerpt);
+        let mut events = Parser::new(&markdown)
+            .skip_while(|event| !matches!(event, Event::Start(Tag::Emphasis)));
+        assert_eq!(
+            events.next(),
+            Some(Event::Start(Tag::Emphasis)),
+            "{markdown}"
+        );
+        assert!(matches!(events.next(), Some(Event::Text(text)) if text.as_ref() == "Outline "));
+        assert!(matches!(events.next(), Some(Event::Code(code)) if code.as_ref() == path));
+        assert!(matches!(events.next(), Some(Event::Text(text)) if text.as_ref() == ":"));
+        assert_eq!(events.next(), Some(Event::End(TagEnd::Emphasis)));
+        let mut padding = String::new();
+        for event in events {
+            match event {
+                Event::Text(text) => padding.push_str(&text),
+                Event::End(TagEnd::Paragraph) => break,
+                other => panic!("unexpected breadcrumb event {other:?}: {markdown}"),
+            }
+        }
+        assert_eq!(padding, trailing);
+    }
+
+    let source = "# Document\n\n## &#160;\n\nBODY\n";
+    let document = mant_loader::load_markdown_text(source, None).unwrap();
+    check(&document, "1", " ");
+
+    #[cfg(feature = "roff")]
+    {
+        // man_term.c leaves the authored section open while \& supplies
+        // no printed title. The selected section still owns BODY.
+        let source = ".TH DEMO 1\n.SH NAME\ndemo \\- example\n.SH \\&\nBODY\n";
+        let document = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        check(&document, "2", " ");
+    }
+}
+
+#[test]
 fn renders_tldr_before_manual_and_resolves_placeholders() {
     let query = ResolvedContent {
         address: None,
