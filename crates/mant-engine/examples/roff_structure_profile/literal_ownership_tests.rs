@@ -828,6 +828,58 @@ fn expanded_tables_have_page_wide_occurrences_across_parent_scopes() {
 }
 
 #[test]
+fn filtered_displays_keep_their_source_occurrence() {
+    // CVS tree retains every at-call-site BLOCK. mdoc_html.c emits its
+    // display BODY even when it contains only a zero-width character.
+    let head = ".Dd November 19, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd example\n.Sh DESCRIPTION\n";
+    let column = ".Bl -column aa bb\n.It A Ta B\n";
+    for prefix in [
+        ".Dl \\&\n",
+        ".D1 \\&\n",
+        ".Bd -literal -compact\n\\&\n.Ed\n",
+        ".Bd -unfilled -compact\n\\&\n.Ed\n",
+        ".Dl FIRST\n",
+    ] {
+        for count in [1, 2] {
+            let first = prefix.repeat(count);
+            for tail in [
+                ".Dl LAST\n",
+                ".D1 LAST\n",
+                ".Bd -literal -compact\nLAST\n.Ed\n",
+            ] {
+                for same_cell in [false, true] {
+                    let body = if same_cell {
+                        format!("{column}{first}{tail}")
+                    } else {
+                        format!("{first}{column}{tail}")
+                    };
+                    let source =
+                        format!("{head}.de XX\n{body}.ta 3n\n.El\n..\n.XX\n.Sh ENDPROBE\nDone.\n");
+                    let call = source.lines().position(|line| line == ".XX").unwrap() as u32 + 1;
+                    let (native, topology, document) = parsed_structure(&source);
+                    assert_eq!(
+                        native.literal_displays,
+                        1 + count * usize::from(prefix.starts_with(".Dl FIRST"))
+                    );
+                    assert_eq!(missing(&native, &topology, &document), 0, "{source}");
+                    let last = native.literal_display_reviews.last().unwrap();
+                    let cell = last.cell.unwrap();
+                    assert_eq!(
+                        (last.line, last.column, last.occurrence),
+                        (call, 2, count + 1)
+                    );
+                    assert_eq!(
+                        (cell.table_line, cell.table_column, cell.table_occurrence),
+                        (call, 2, 1)
+                    );
+                    assert_eq!((cell.row, cell.column), (0, 1));
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn complete_and_partial_cells_keep_loss_bounds_at_both_edit_limits() {
     // CVS termp_it_pre and termp_bd_pre put B and all the literal rows
     // in the same cell. The terminal, tree and HTML keep the same rows

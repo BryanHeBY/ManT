@@ -222,7 +222,9 @@ partial cell whose known prefix diverges. An unclassified tail stays in
 source review when its verified prefix matches. Bounded edits with a
 complete cell still report exact alignment ranges. Each
 `literalDisplaysForReview` record names its source coordinates and its
-one-based occurrence at those coordinates. A display inside a column cell
+one-based occurrence at those coordinates. Empty native displays and
+displays with no exported review record still occupy their source
+occurrences. A display inside a column cell
 also reports the enclosing column table's coordinates and page-wide
 occurrence with the zero-based row and column. Occurrences count tables
 across parent scopes. Review records may skip occurrences and may be in

@@ -169,37 +169,34 @@ fn visit_native(
                 Some(DisplayKind::Literal | DisplayKind::Unfilled)
             )
         {
+            // The CVS display BODY exists even when its projected payload
+            // has no ink (mdoc_html.c::mdoc_d1_pre and mdoc_bd_pre).
+            let occurrence = profile
+                .literal_owners
+                .display_occurrences
+                .entry(point)
+                .or_default();
+            *occurrence += 1;
+            let occurrence = *occurrence;
             let payload = description(node, false, &profile.source_context);
-            let has_text = payload.has_text();
-            let unproved = payload.unproved_literal();
-            if has_text || unproved {
-                let occurrence = profile
-                    .literal_owners
-                    .display_occurrences
-                    .entry(point)
-                    .or_default();
-                *occurrence += 1;
-                let occurrence = *occurrence;
-                if has_text {
-                    let pending_rows =
-                        display_rows(node, &profile.source_context).unwrap_or_default();
-                    display = Some(profile.literal_owners.owners.len());
-                    profile.literal_owners.owners.push(SourceDisplay {
-                        id: node.id,
-                        opening: point,
-                        occurrence,
-                        origins: BTreeSet::new(),
-                        path: path.clone(),
-                        cell,
-                        rows: pending_rows.len(),
-                        short: node.macro_token.as_deref() != Some("Bd"),
-                        pending_rows,
-                    });
-                } else {
-                    profile
-                        .literal_display_reviews
-                        .push(LiteralDisplayReview::new(point, occurrence, cell));
-                }
+            if payload.has_text() {
+                let pending_rows = display_rows(node, &profile.source_context).unwrap_or_default();
+                display = Some(profile.literal_owners.owners.len());
+                profile.literal_owners.owners.push(SourceDisplay {
+                    id: node.id,
+                    opening: point,
+                    occurrence,
+                    origins: BTreeSet::new(),
+                    path: path.clone(),
+                    cell,
+                    rows: pending_rows.len(),
+                    short: node.macro_token.as_deref() != Some("Bd"),
+                    pending_rows,
+                });
+            } else if payload.unproved_literal() {
+                profile
+                    .literal_display_reviews
+                    .push(LiteralDisplayReview::new(point, occurrence, cell));
             }
         }
     }
