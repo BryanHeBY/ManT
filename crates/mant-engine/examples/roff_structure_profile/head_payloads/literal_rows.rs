@@ -80,7 +80,14 @@ fn simple_width(width: &str) -> Option<usize> {
 }
 
 pub(super) fn record_short(node: &Node, source: &SourceContext, payload: &mut TermPayload) {
-    let mut rows = Rows::begin(payload);
+    let mut rows = payload
+        .short_rows
+        .take()
+        .unwrap_or_else(|| Rows::begin(payload));
+    // termp_d1_pre calls term_newln at the enclosing origin before
+    // setting the display's offset. Even an empty input field may end a
+    // row that the previous tag field left open with minbl = trailspace.
+    rows.flush_empty_field(payload.field, 0);
     // termp_d1_pre adds defindent + 1 to offset for this short display.
     // A field longer than the entire tag width must close regardless of
     // previously printed columns. A fitting field may share its row.
@@ -90,6 +97,7 @@ pub(super) fn record_short(node: &Node, source: &SourceContext, payload: &mut Te
         0
     };
     rows.record(&node.children, source, payload, offset);
+    payload.short_rows = Some(rows);
 }
 
 pub(super) fn record(
@@ -137,6 +145,10 @@ pub(super) fn record(
             // print_mdoc_node() uses term_vspace() for empty TEXT, except
             // after NONEWLINE, in which case it only flushes the field.
             if !continues {
+                // NODE_LINE flushed the preceding input above. The empty
+                // TEXT's term_vspace calls term_newln again before emitting
+                // an independent vertical row (term.c:474–496).
+                rows.flush_empty_field(payload.field, 0);
                 rows.end_line();
             }
             start = index + 1;
@@ -164,7 +176,7 @@ fn simple_node(node: &Node) -> bool {
                 .all(|child| child.kind == NodeKind::Text)
 }
 
-struct Rows {
+pub(super) struct Rows {
     row: DisplayRow,
     columns: Option<usize>,
 }
@@ -198,6 +210,15 @@ impl Rows {
     fn end_line(&mut self) {
         self.columns = Some(0);
         self.row.within += 1;
+    }
+
+    fn flush_empty_field(&mut self, field: Field, origin: usize) {
+        if self
+            .columns
+            .is_some_and(|columns| columns > 0 && field.closes(columns, 0, origin) == Some(true))
+        {
+            self.end_line();
+        }
     }
 
     fn record(

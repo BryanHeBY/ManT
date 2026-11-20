@@ -2,10 +2,14 @@
 use std::collections::{HashMap, VecDeque};
 
 use super::{
-    AstEquationTopology, AstListTopology, AstStructure, AstTableRowTopology, AstTopology, BTreeMap,
-    EquationContext, IrEquationTopology, IrListTopology, IrStructure, IrTableRowTopology,
-    IrTopology,
+    AstListTopology, AstStructure, AstTableRowTopology, AstTopology, BTreeMap, IrListTopology,
+    IrStructure, IrTableRowTopology, IrTopology,
 };
+
+#[path = "comparison/equations.rs"]
+mod equations;
+
+use equations::compare_equation_topology;
 
 pub(super) fn compare_structure(
     expected: &AstStructure,
@@ -141,122 +145,6 @@ fn compare_link_obligations(
     expected
         .section_outcomes
         .compare(&observed.section_outcomes, violations);
-}
-
-fn compare_equation_topology(
-    violations: &mut Vec<String>,
-    expected: &[AstEquationTopology],
-    observed: &[IrEquationTopology],
-) {
-    fn signature(
-        context: EquationContext,
-        value: &str,
-        line: u32,
-    ) -> (EquationContext, &str, Option<u32>) {
-        (
-            context,
-            value,
-            (context == EquationContext::Display).then_some(line),
-        )
-    }
-    let mut known = HashMap::<_, VecDeque<_>>::new();
-    for (index, equation) in observed.iter().enumerate() {
-        known
-            .entry((
-                equation.cell,
-                signature(
-                    equation.context,
-                    equation.value.as_str(),
-                    equation.source_line,
-                ),
-            ))
-            .or_default()
-            .push_back(index);
-    }
-    let mut used = vec![false; observed.len()];
-    let mut last = HashMap::new();
-    // Reserve exact owner occurrences before comparing source equations
-    // whose AST proves they belong to a table without an exact address.
-    let known_equations = expected.iter().filter(|eq| !eq.unproved_cell);
-    let uncertain_equations = expected.iter().filter(|eq| eq.unproved_cell);
-    let mut uncertain = None;
-    for equation in known_equations.chain(uncertain_equations) {
-        let key = signature(
-            equation.context,
-            equation.value.as_str(),
-            equation.source_line,
-        );
-        let candidate = if equation.unproved_cell {
-            let unmatched = uncertain.get_or_insert_with(|| {
-                let mut unmatched = HashMap::<_, VecDeque<_>>::new();
-                for (index, candidate) in observed.iter().enumerate() {
-                    if !used[index] && candidate.cell.is_some() {
-                        unmatched
-                            .entry(signature(
-                                candidate.context,
-                                candidate.value.as_str(),
-                                candidate.source_line,
-                            ))
-                            .or_default()
-                            .push_back(index);
-                    }
-                }
-                unmatched
-            });
-            unmatched.get_mut(&key).and_then(VecDeque::pop_front)
-        } else {
-            known
-                .get_mut(&(equation.cell, key))
-                .and_then(VecDeque::pop_front)
-        };
-        if let Some(index) = candidate {
-            used[index] = true;
-            if !equation.unproved_cell {
-                let previous = last.entry(equation.cell).or_insert(index);
-                if index < *previous {
-                    violations.push(format!(
-                        "{}-equation at line {}: {:?} is out of order in its owner",
-                        equation.context.as_str(),
-                        equation.source_line,
-                        equation.value,
-                    ));
-                }
-                *previous = (*previous).max(index);
-            }
-            continue;
-        }
-        report_missing_equation(violations, equation);
-    }
-    for (index, equation) in observed.iter().enumerate() {
-        if !used[index] {
-            violations.push(format!(
-                "{}-equation at line {}: unexpected occurrence of {:?} in {:?}",
-                equation.context.as_str(),
-                equation.source_line,
-                equation.value,
-                equation.cell,
-            ));
-        }
-    }
-}
-
-fn report_missing_equation(violations: &mut Vec<String>, equation: &AstEquationTopology) {
-    let owner = equation.cell.map_or_else(String::new, |cell| {
-        format!(
-            " in table {}:{}, occurrence {}, row {}, cell {}",
-            cell.table_source_line,
-            cell.table_source_column,
-            cell.table_occurrence,
-            cell.row_index + 1,
-            cell.cell_index + 1,
-        )
-    });
-    violations.push(format!(
-        "{}-equation at line {}{owner}: expected normalized value {:?}, observed no matching IR value",
-        equation.context.as_str(),
-        equation.source_line,
-        equation.value,
-    ));
 }
 
 fn exact(violations: &mut Vec<String>, label: &str, expected: usize, observed: usize) {

@@ -44,7 +44,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v26"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v27"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -429,6 +429,41 @@ def write_structure_database(path: Path, entries: Iterable[AuditRecord]) -> None
     temporary.replace(path)
 
 
+RetryIdentity = tuple[str, str, str | None]
+
+
+def read_retry_order(path: Path) -> dict[RetryIdentity, None]:
+    if not path.exists():
+        return {}
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or not isinstance(document.get("attempted"), list):
+        raise ValueError(f"invalid retry state in {path}")
+    if document.get("schema") != PROFILE_SCHEMA:
+        return {}
+    attempts = {}
+    for item in document["attempted"]:
+        if (not isinstance(item, list) or len(item) != 3
+                or not all(isinstance(value, str) and value for value in item[:2])
+                or (item[2] is not None and (not isinstance(item[2], str)
+                                            or not re.fullmatch(r"[a-f0-9]{64}", item[2])))):
+            raise ValueError(f"invalid retry identity in {path}")
+        attempts[tuple(item)] = None
+    return attempts
+
+
+def write_retry_order(path: Path, attempts: dict[RetryIdentity, None]) -> None:
+    if not attempts:
+        path.unlink(missing_ok=True)
+        return
+    temporary = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary.write_text(json.dumps({"schema": PROFILE_SCHEMA, "attempted": list(attempts)}) + "\n",
+                             encoding="utf-8")
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def merge_review_status(previous: AuditRecord | None, status: str) -> str:
     if previous is None:
         return "pending" if status in {"review", "hard-failure"} else "not-required"
@@ -599,15 +634,19 @@ def valid_structure_topology(value: object) -> bool:
             if not isinstance(records, list) or not all(validate(record) for record in records):
                 return False
         address = ("tableSourceLine", "tableSourceColumn", "tableOccurrence", "rowIndex")
-        cells = {
-            tuple(row[key] for key in address): len(row["cells"])
+        rows = {
+            tuple(row[key] for key in address): row
             for row in topology["tableRows"]
         }
-        if len(cells) != len(topology["tableRows"]):
+        if len(rows) != len(topology["tableRows"]):
             return False
         for equation in topology["equations"]:
             if (cell := equation["cell"]) is not None:
-                if cell["cellIndex"] >= cells.get(tuple(cell[key] for key in address), 0):
+                row = rows.get(tuple(cell[key] for key in address))
+                index = cell["cellIndex"]
+                if row is None or row["kind"] != "data" or index >= len(row["cells"]):
+                    return False
+                if side == "observed" and row["cells"][index]["empty"]:
                     return False
     return True
 
@@ -719,6 +758,8 @@ def main(argv: Sequence[str]) -> int:
             page: (relative_label(page, roots), source_digest(page)) for page in all_pages
         }
         database = read_structure_database(arguments.audit_db)
+        retry_path = arguments.audit_db.with_suffix(arguments.audit_db.suffix + ".retries.json")
+        retries = read_retry_order(retry_path)
         pages = list(all_pages)
         if arguments.replay_fidelity_records:
             identities = read_fidelity_identities(arguments.fidelity_db, corpus)
@@ -743,17 +784,19 @@ def main(argv: Sequence[str]) -> int:
                 or previous.scan_status == "hard-failure"
             ]
             if arguments.max_pages or arguments.max_pages_per_section:
-                # Give each unattempted identity a turn before a same-schema
-                # failure can spend another limited scan slot.
-                def is_retry(page: Path) -> bool:
-                    previous = database.get((corpus, *records[page]))
-                    return (
-                        previous is not None
-                        and previous.profile_schema == PROFILE_SCHEMA
-                        and previous.scan_status == "hard-failure"
-                    )
+                # New identities first, then old failures in attempt order.
+                # An unreadable file participates in scheduling without ever
+                # being stamped with a decoded source identity in the ledger.
+                order = {key: number for number, key in enumerate(retries, start=2)}
 
-                pages.sort(key=is_retry)
+                def priority(page: Path) -> int:
+                    key = (corpus, *records[page])
+                    previous = database.get(key)
+                    legacy_retry = (previous is not None and previous.profile_schema == PROFILE_SCHEMA
+                                    and previous.scan_status == "hard-failure")
+                    return order.get(key, int(legacy_retry))
+
+                pages.sort(key=priority)
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section
@@ -788,9 +831,13 @@ def main(argv: Sequence[str]) -> int:
     summary = Counter(finding.status for finding in findings)
     source_review_count = sum(len(finding.source_review) for finding in findings)
     by_label = {finding.path: finding for finding in findings}
+    selected_labels = {(corpus, records[path][0]) for path in pages}
+    retries = {key: None for key in retries if key[:2] not in selected_labels}
     for path in pages:
         label, digest = records[path]
         finding = by_label[label]
+        if finding.status == "hard-failure" or digest is None:
+            retries[(corpus, label, digest)] = None
         if not arguments.findings_only or finding.status != "clean":
             detail = f" — {finding.detail}" if finding.detail else ""
             observations = "; ".join([
@@ -819,6 +866,7 @@ def main(argv: Sequence[str]) -> int:
     )
     print("REVIEW is an AST-to-IR candidate, not a regression until source and IR are inspected.")
     write_structure_database(arguments.audit_db, database.values())
+    write_retry_order(retry_path, retries)
     print(f"structure database: {arguments.audit_db}")
     if arguments.json:
         arguments.json.parent.mkdir(parents=True, exist_ok=True)

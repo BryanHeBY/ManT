@@ -16,6 +16,7 @@ pub(super) fn collect(root: &Node, spacing: &ordinal_labels::SourceContext) -> A
         root,
         false,
         None,
+        (0, None),
         &mut topology,
         spacing,
         &mut ColumnBodies::default(),
@@ -133,10 +134,56 @@ impl ColumnBodies {
     }
 }
 
+/// Local provenance for simple prose directly inside a section.
+struct ParagraphWitness {
+    section_body: bool,
+    simple: bool,
+    first_text: Option<u32>,
+}
+
+impl ParagraphWitness {
+    fn observe(&mut self, child: &Node) -> Option<u32> {
+        // roff_eqndelim() replays a source line as TEXT, EQ, TEXT.
+        // Direct section text after entry or Pp proves the IR owner start.
+        // Other producers (e.g. a list or display) keep only section proof.
+        if child.macro_token.as_deref() == Some("Pp") && self.section_body {
+            self.simple = true;
+            self.first_text = None;
+        } else if self.simple {
+            match child.kind {
+                NodeKind::Text
+                    if child.flags.line_start
+                        && !child.flags.no_fill
+                        && child
+                            .text
+                            .as_deref()
+                            .is_some_and(|text| text.starts_with(char::is_alphanumeric)) =>
+                {
+                    self.first_text.get_or_insert(child.line);
+                }
+                NodeKind::Equation
+                    if child.equation_inline == Some(false)
+                        && child.equation.as_ref().is_some_and(equation_has_payload) =>
+                {
+                    self.first_text = None;
+                }
+                NodeKind::Equation => {}
+                NodeKind::Text if !child.flags.line_start => {}
+                _ => {
+                    self.simple = false;
+                    self.first_text = None;
+                }
+            }
+        }
+        self.first_text
+    }
+}
+
 fn collect_ast_topology(
     node: &Node,
     inside_table: bool,
     cell: Option<EquationCell>,
+    (section_line, paragraph_line): (u32, Option<u32>),
     topology: &mut AstTopology,
     spacing: &ordinal_labels::SourceContext,
     column_bodies: &mut ColumnBodies,
@@ -146,48 +193,33 @@ fn collect_ast_topology(
     };
     let blocks = destination == SourceDestination::Blocks;
     let cell = column_bodies.addresses.remove(&node.id).or(cell);
-    record_equation(node, inside_table, blocks, cell, &mut topology.equations);
-    if blocks
-        && node.kind == NodeKind::Block
-        && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
-        && node.line > 0
-    {
-        let occurrence = column_bodies.observe_table(node);
-        topology
-            .table_rows
-            .extend(mdoc_column_rows(node, occurrence));
-    } else if blocks
-        && node.kind == NodeKind::Block
-        && let Some(kind) = mdoc_list_topology_kind(node)
-        && node.line > 0
-    {
-        let ordinal_disposition = if kind == MdocContainerKind::Definition
-            && node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
-        {
-            ordinal_labels::observe(mdoc_list_items(node), spacing)
-                .map(|labels| labels.disposition())
-        } else {
-            None
-        };
-        let kind = match (kind, ordinal_disposition) {
-            (_, Some(OrdinalDisposition::Recovered)) | (MdocContainerKind::Generic, _) => {
-                ListTopologyKind::Generic
-            }
-            (MdocContainerKind::Definition, _) => ListTopologyKind::Definition,
-            (MdocContainerKind::Table, _) => unreachable!("column lists are tables"),
-        };
-        topology.lists.push(AstListTopology {
-            source_line: node.line,
-            source_column: node.column,
-            kind,
-            items: mdoc_list_items(node).count(),
-            ordinal_uncertain: ordinal_disposition == Some(OrdinalDisposition::Uncertain),
-        });
+    let section = matches!(node.macro_token.as_deref(), Some("Sh" | "Ss" | "SH" | "SS"));
+    let section_line = if section && node.kind == NodeKind::Block {
+        node.line
+    } else {
+        section_line
+    };
+    record_equation(
+        node,
+        inside_table,
+        blocks,
+        cell,
+        (section_line, paragraph_line),
+        &mut topology.equations,
+    );
+    if blocks && node.kind == NodeKind::Block && node.line > 0 {
+        record_block_shape(node, topology, spacing, column_bodies);
     }
 
     let mut table_origin = None;
     let mut row_index = 0;
+    let mut paragraph = ParagraphWitness {
+        section_body: section && node.kind == NodeKind::Body && blocks,
+        simple: section && node.kind == NodeKind::Body && blocks,
+        first_text: None,
+    };
     for child in &node.children {
+        let first_text = paragraph.observe(child);
         if blocks
             && child.kind == NodeKind::Table
             && spacing.destination(child) == Some(SourceDestination::Blocks)
@@ -218,17 +250,66 @@ fn collect_ast_topology(
                     .collect(),
             });
             row_index += 1;
-            collect_ast_topology(child, true, cell, topology, spacing, column_bodies);
+            collect_ast_topology(
+                child,
+                true,
+                cell,
+                (section_line, None),
+                topology,
+                spacing,
+                column_bodies,
+            );
             continue;
         }
         collect_ast_topology(
             child,
             inside_table || blocks && is_table_container(node),
             cell,
+            (
+                section_line,
+                first_text.filter(|_| child.equation_inline == Some(true)),
+            ),
             topology,
             spacing,
             column_bodies,
         );
+    }
+}
+
+fn record_block_shape(
+    node: &Node,
+    topology: &mut AstTopology,
+    spacing: &ordinal_labels::SourceContext,
+    column_bodies: &mut ColumnBodies,
+) {
+    if mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table) {
+        let occurrence = column_bodies.observe_table(node);
+        topology
+            .table_rows
+            .extend(mdoc_column_rows(node, occurrence));
+    } else if let Some(kind) = mdoc_list_topology_kind(node) {
+        let ordinal_disposition = if kind == MdocContainerKind::Definition
+            && node.definition_list_style == Some(libmandoc_rs::DefinitionListStyle::Tag)
+        {
+            ordinal_labels::observe(mdoc_list_items(node), spacing)
+                .map(|labels| labels.disposition())
+        } else {
+            None
+        };
+        let kind = match (kind, ordinal_disposition) {
+            (_, Some(OrdinalDisposition::Recovered)) | (MdocContainerKind::Generic, _) => {
+                ListTopologyKind::Generic
+            }
+            (MdocContainerKind::Definition, _) => ListTopologyKind::Definition,
+            (MdocContainerKind::Table, _) => unreachable!("column lists are tables"),
+        };
+        topology.lists.push(AstListTopology {
+            source_line: node.line,
+            source_column: node.column,
+            kind,
+            items: mdoc_list_items(node).count(),
+            ordinal_uncertain: ordinal_disposition == Some(OrdinalDisposition::Uncertain),
+        });
     }
 }
 
@@ -237,6 +318,7 @@ fn record_equation(
     inside_table: bool,
     blocks: bool,
     cell: Option<EquationCell>,
+    (section_line, paragraph_line): (u32, Option<u32>),
     equations: &mut Vec<AstEquationTopology>,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
@@ -253,6 +335,8 @@ fn record_equation(
             value: equation_visible_text(&equation.readable_text()),
             cell,
             unproved_cell: inside_table && cell.is_none(),
+            section_line,
+            paragraph_line,
         });
     }
 }

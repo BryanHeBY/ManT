@@ -152,6 +152,132 @@ fn exact_hard_rows_distinguish_blanks_separate_displays_and_separate_terms() {
 }
 
 #[test]
+fn tagged_display_rows_include_empty_field_retirement() {
+    // CVS termp_d1_pre and print_mdoc_node can retire an empty field
+    // with the previous tag's displayed columns and trailing spacing.
+    for (width, body, breaks) in [
+        ("a", ".Bd -literal\nA\n\nB\n.Ed\n", 2),
+        ("6n", ".D1 A\n.D1 B\n", 1),
+        ("8n", ".D1 A\n.D1 BRAVO\n", 1),
+        ("10n", ".D1 A\n.D1 BRAVO\n", 0),
+    ] {
+        let source = structured_term(body).replace("-width a", &format!("-width {width}"));
+        let (_, native, document) = parsed(&source);
+        assert!(
+            violations(&native, &document).is_empty(),
+            "{width}: {:?}",
+            violations(&native, &document)
+        );
+        let mut edited = document.clone();
+        let nodes = first_term(&mut edited);
+        let right = if body.contains("BRAVO") { "BRAVO" } else { "B" };
+        let index = nodes
+            .iter()
+            .position(|node| mant_ir::inline_plain_text(std::slice::from_ref(node)).trim() == right)
+            .unwrap();
+        nodes.insert(index, Inline::line_break());
+        assert!(
+            violations(&native, &edited)[0].contains("unexpected hard line"),
+            "{width}"
+        );
+        if breaks > 0 {
+            let mut edited = document.clone();
+            let nodes = first_term(&mut edited);
+            let before = nodes[..index]
+                .iter()
+                .rposition(|node| matches!(node, Inline::LineBreak {}))
+                .unwrap();
+            nodes[before] = Inline::Text { value: " ".into() };
+            assert!(
+                violations(&native, &edited)[0].contains("missing hard line"),
+                "{width}"
+            );
+        }
+    }
+}
+
+#[test]
+fn function_opening_can_join_two_required_authored_words() {
+    // CVS termp_fo_pre writes '(' with NOSPACE on either side.
+    fn erase(nodes: &mut [Inline], word: &str) {
+        for node in nodes {
+            match node {
+                Inline::Text { value } | Inline::Code { value } => *value = value.replace(word, ""),
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => erase(children, word),
+                _ => {}
+            }
+        }
+    }
+    for (body, argument) in [
+        (".Fo out\n.No ALPHA\n.Dl PROBE\n.Fc\n", "ALPHA"),
+        (".Fo out\n.Oo\n.Dl PROBE\n.Oc\n.Fc\n", "PROBE"),
+        (".Oo\n.Fo out\n.No ALPHA\n.Dl PROBE\n.Fc\n.Oc\n", "ALPHA"),
+    ] {
+        let (_, native, document) = parsed(&structured_term(body));
+        assert!(
+            violations(&native, &document).is_empty(),
+            "{body}: {:?}",
+            violations(&native, &document)
+        );
+        for word in ["out", argument] {
+            let mut edited = document.clone();
+            erase(first_term(&mut edited), word);
+            assert!(!violations(&native, &edited).is_empty(), "{body}: {word}");
+        }
+    }
+}
+
+#[test]
+fn equations_remain_in_their_proved_outer_owners() {
+    // roff_eqndelim emits a local equation node between source text
+    // fragments. Sh and Pp supply distinct enclosing owners.
+    for (body, inline) in [
+        ("BEFORE\n.EQ\nx\n.EN\n.Sh NEXT\nLATER\n.EQ\ny\n.EN\n", false),
+        (".EQ\ndelim $$\n.EN\nA $x$\n.Pp\nB $y$\n", true),
+    ] {
+        let source = format!("{DISPATCH_HEADER}{body}.Sh ENDPROBE\nDone.\n");
+        let (expected, native, mut document) = parsed(&source);
+        let check = |observed: &Document| {
+            let (structure, topology) = ir_profile(observed);
+            compare_structure(&expected, &structure, &native, &topology)
+        };
+        assert!(check(&document).is_empty(), "{:?}", check(&document));
+        if inline {
+            let [first, _, last] = document.sections[1].blocks.as_mut_slice() else {
+                panic!("paragraphs and Pp")
+            };
+            let (
+                Block::Paragraph {
+                    children: source, ..
+                },
+                Block::Paragraph {
+                    children: target, ..
+                },
+            ) = (first, last)
+            else {
+                panic!("two paragraphs")
+            };
+            let index = source
+                .iter()
+                .position(|node| matches!(node, Inline::Equation { .. }))
+                .unwrap();
+            target.insert(0, source.remove(index));
+        } else {
+            let block = document.sections[1].blocks.pop().unwrap();
+            document.sections[2].blocks.insert(0, block);
+        }
+        let issues = check(&document);
+        let expected = if inline { "in paragraph" } else { "in section" };
+        assert!(
+            issues.iter().any(|issue| issue.contains(expected)),
+            "{issues:?}"
+        );
+    }
+}
+
+#[test]
 fn partially_proved_wrappers_still_owe_their_table_words_and_equations() {
     // Oo and Bk still descend into native child blocks. A Review on the
     // wrapper's boundary is independent from the proof of its descendants.

@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v26";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v27";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,6 +159,8 @@ struct IrTopology {
     table_rows: Vec<IrTableRowTopology>,
     equations: Vec<IrEquationTopology>,
     #[serde(skip)]
+    section_line: u32,
+    #[serde(skip)]
     table_occurrences: BTreeMap<(u32, u32), usize>,
 }
 
@@ -188,6 +190,10 @@ struct AstEquationTopology {
     value: String,
     cell: Option<EquationCell>,
     unproved_cell: bool,
+    #[serde(skip)]
+    section_line: u32,
+    #[serde(skip)]
+    paragraph_line: Option<u32>,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -197,6 +203,8 @@ struct IrEquationTopology {
     context: EquationContext,
     value: String,
     cell: Option<EquationCell>,
+    #[serde(skip)]
+    section_line: u32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]

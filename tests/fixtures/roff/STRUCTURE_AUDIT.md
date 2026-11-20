@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v26` successful page response requires
+The `mant.roff-structure-profile/v27` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -133,14 +133,18 @@ List, equation and table topology records are validated on both sides. Native
 coordinates, item counts, row indexes and spans require nonboolean integers.
 Known enum values and table-cell flags retain the distinct AST and IR shapes.
 A table address includes its occurrence at the same source coordinates.
-Equation checks preserve order and multiplicity in each known owner. Each
-referenced cell must exist in the same observation stream. A source equation
+Equation checks preserve order and multiplicity in each known owner, including
+sections and simple source-proven paragraphs. Each referenced cell must belong
+to a data row in the same observation stream and an observed cell must contain
+blocks. A source equation
 known to be inside a table without an exact cell address is recorded for
 review. A known table-external equation has no cell address.
 
 Limited incremental scans allocate the quota to unattempted or stale source
-identities before retrying failures already recorded with the current profile
-version. Per-section limits follow the same order within each section.
+identities first. Failed paths then rotate in least-recently-attempted order.
+The adjacent `.retries.json` file preserves this order across invocations and
+keeps an unreadable path's attempt without assigning it a decoded-source hash.
+Per-section limits follow the same order within each section.
 The source ordinal observer retains overwrite evidence across node boundaries,
 including styled pieces and source continuations, and records an uncertain
 owner with its original coordinates instead of inventing a definite shape.
@@ -154,7 +158,10 @@ exact spelling uncertain. A rewind can revoke that proof, and an empty
 initial pass can reject later glyphs. A glyphless completed row can use
 vertical space. A separate display equation supplies its own visible owner.
 Short display witnesses include delimiter words executed beside the native
-BODY, using the same spacing rules as its content. A known prefix of a
+BODY, using the same spacing rules as its content. An empty field flush can
+close a tag's open device row before the next display or before an explicit
+vertical row. Function names and the first BODY word can share a single
+observed token when a generated opening parenthesis joins them. A known prefix of a
 table cell keeps its exact row obligations when a later source range needs
 review.
 Definition HEAD witnesses keep provable neighboring rows inside mixed

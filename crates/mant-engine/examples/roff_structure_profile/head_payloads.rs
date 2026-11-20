@@ -87,6 +87,8 @@ struct TermPayload {
     opaque_words: bool,
     displays: usize,
     field: literal_rows::Field,
+    short_rows: Option<literal_rows::Rows>,
+    function_joins: HashSet<usize>,
 }
 
 impl TermPayload {
@@ -119,6 +121,28 @@ impl TermPayload {
         self.opaque_words = true;
     }
 
+    fn compound_spellings(&self) -> Vec<Option<Vec<String>>> {
+        self.atoms
+            .windows(2)
+            .enumerate()
+            .map(|(index, atoms)| {
+                self.function_joins.contains(&index).then(|| {
+                    let [name, argument] = atoms else {
+                        unreachable!("two atoms")
+                    };
+                    name.spellings()
+                        .filter(|word| word.ends_with('('))
+                        .flat_map(|name| {
+                            argument
+                                .spellings()
+                                .map(move |value| format!("{name}{value}"))
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect()
+    }
+
     fn compare(
         &self,
         terms: &[DefinitionTerm],
@@ -129,11 +153,13 @@ impl TermPayload {
         // On complete coverage, compare all occurrences of the proved
         // vocabulary. Other words can be generated list decorations.
         // Partial coverage still proves a monotonic subsequence.
+        let compound = self.compound_spellings();
         let vocabulary: HashSet<_> = self
             .atoms
             .iter()
             .filter(|item| !matches!(item.origin, Origin::Equation))
             .flat_map(ExpectedAtom::spellings)
+            .chain(compound.iter().flatten().flatten().cloned())
             .collect();
         let mut observation = TermObservation::default();
         for (index, term) in terms.iter().enumerate() {
@@ -147,10 +173,19 @@ impl TermPayload {
             .iter()
             .filter(|item| item.equation || vocabulary.contains(item.value.as_str()));
         let mut previous_row = None;
-        for expected in &self.atoms {
+        let mut witnesses = self.atoms.iter().enumerate();
+        while let Some((index, expected)) = witnesses.next() {
+            let joined = |item: &ObservedAtom| {
+                !item.equation
+                    && compound
+                        .get(index)
+                        .and_then(Option::as_ref)
+                        .is_some_and(|spellings| spellings.contains(&item.value))
+            };
             let matches = |item: &ObservedAtom| {
                 item.equation == matches!(expected.origin, Origin::Equation)
                     && expected.spellings().any(|word| word == item.value)
+                    || joined(item)
             };
             let found = if self.opaque_words {
                 observed.find(|item| matches(item))
@@ -164,6 +199,9 @@ impl TermPayload {
                 ));
                 return;
             };
+            if joined(found) {
+                witnesses.next();
+            }
             if let Some(row) = expected.row {
                 if let Some((source, projected, term)) = previous_row {
                     let source: DisplayRow = source;
@@ -208,8 +246,10 @@ impl ExpectedAtom {
     fn spellings(&self) -> impl Iterator<Item = String> + '_ {
         let (left, right) = &self.wrappers;
         ["", left.as_str()].into_iter().flat_map(move |left| {
-            ["", right.as_str()]
-                .into_iter()
+            right
+                .char_indices()
+                .map(|(end, _)| &right[..end])
+                .chain(std::iter::once(right.as_str()))
                 .map(move |right| format!("{left}{}{right}", self.value))
         })
     }
@@ -363,12 +403,20 @@ impl HeadPayloads {
                         | SourceControl::AlignedRows
                 )
             );
+            let short_display = child.kind == NodeKind::Block
+                && matches!(child.macro_token.as_deref(), Some("D1" | "Dl"));
+            if !short_display {
+                payload.short_rows = None;
+            }
             if structural || closes_field || child.flags.no_fill && child.flags.line_start {
                 record_words(&children[start..index], source, origin, None, payload);
                 start = index;
             }
             if structural {
                 Self::collect_structure(child, source, origin, payload);
+                if !short_display {
+                    payload.short_rows = None;
+                }
             } else if control == Some(SourceControl::AlignedRows) {
                 // The generated rows have their own field retirement.
                 // Retain both neighbors and disclose the unproved interval.
@@ -523,6 +571,25 @@ impl HeadPayloads {
                 // macros write theirs before executing BODY.
                 if node.macro_token.as_deref() == Some("Fo") && from > start {
                     payload.atoms[from - 1].wrappers.1.push_str(&left);
+                    if let Some(first) = payload.atoms.get(from)
+                        && first.row.is_some()
+                        && !first.wrappers.0.is_empty()
+                    {
+                        // A nested enclosure can emit its opener before
+                        // the display flushes the function-name row.
+                        let opener = first.wrappers.0.clone();
+                        payload.atoms[from - 1].wrappers.1.push_str(&opener);
+                    }
+                    // termp_fo_pre() writes '(' then suppresses the next
+                    // word's separator. A compound spelling must still
+                    // prove both independently authored words.
+                    if !part.flags.no_fill
+                        && payload.atoms.get(from).is_some_and(|first| {
+                            first.row.is_none() && !matches!(first.origin, Origin::Equation)
+                        })
+                    {
+                        payload.function_joins.insert(from - 1);
+                    }
                 } else if let Some(first) = payload.atoms.get_mut(from) {
                     first.wrappers.0.insert_str(0, &left);
                 }

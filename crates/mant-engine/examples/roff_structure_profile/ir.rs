@@ -28,6 +28,7 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
 }
 
 fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
+    topology.section_line = section.source.map_or(0, |source| source.line);
     profile.section_outcomes.record_heading(section);
     collect_inlines(
         &section.heading.content,
@@ -75,6 +76,7 @@ fn collect_blocks(
                         context: EquationContext::Display,
                         value: value.clone(),
                         cell,
+                        section_line: topology.section_line,
                     });
                 }
             }
@@ -213,6 +215,7 @@ fn collect_inlines(
                     },
                     value: value.clone(),
                     cell,
+                    section_line: topology.section_line,
                 });
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}

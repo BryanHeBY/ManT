@@ -384,6 +384,15 @@ class AuditProfileWireTests(unittest.TestCase):
                 equation['unprovedCell'] = False
             topology['equations'] = [equation]
             self.assertEqual(self.finding(structure, response).status, 'clean')
+            for kind in ('horizontal-rule', 'double-horizontal-rule',
+                         {'layout-rule': {'cells': ['horizontal']}}):
+                broken = deepcopy(response)
+                broken['topology'][side]['tableRows'][0]['kind'] = kind
+                self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
+            if side == 'observed':
+                broken = deepcopy(response)
+                broken['topology'][side]['tableRows'][0]['cells'][0]['empty'] = True
+                self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
             for key, wrong in (
                 ('tableSourceLine', 99), ('tableSourceColumn', 9), ('tableOccurrence', 2),
                 ('rowIndex', 2), ('cellIndex', 1), ('cellIndex', False),

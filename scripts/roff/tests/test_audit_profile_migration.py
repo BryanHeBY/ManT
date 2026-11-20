@@ -1,6 +1,7 @@
 """Exercise stale ledger selection without changing human review ownership."""
 
 import contextlib
+import gzip
 import io
 import json
 from pathlib import Path
@@ -13,6 +14,55 @@ from scripts.roff.audit import audit_roff_structure as structure
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_structure_retry_rotation_survives_a_permanent_failure(self):
+        for quota in ('--max-pages', '--max-pages-per-section'):
+            for undecodable in (False, True):
+                with self.subTest(quota=quota, undecodable=undecodable), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    man = root / 'man1'
+                    man.mkdir()
+                    a = man / ('a.1.gz' if undecodable else 'a.1')
+                    b, c = man / 'b.1', man / 'c.1'
+                    source = b'.TH TEST 1\n.SH DESCRIPTION\nOwner\n'
+                    a.write_bytes(source)
+                    b.write_bytes(source)
+                    c.write_bytes(source)
+                    profiler = root / 'profiler'
+                    profiler.touch()
+                    ledger = root / 'audit.csv'
+                    args = ['--manpath', str(root), '--profiler', str(profiler), '--audit-db', str(ledger)]
+                    failed = {a, b}
+                    visits = []
+
+                    def probe(selected, *_args):
+                        for page in selected:
+                            visits.append(page)
+                            status = 'hard-failure' if page in failed else 'clean'
+                            yield structure.Finding(structure.relative_label(page, [root]), status, [])
+
+                    def scan(*options):
+                        return structure.main([*args, *options])
+
+                    with (patch.object(structure, 'profile_findings', side_effect=probe),
+                          contextlib.redirect_stdout(io.StringIO())):
+                        for _ in range(3):
+                            scan(quota, '1')
+                        self.assertEqual(visits, [a, b, c])
+                        self.assertEqual(len(structure.read_structure_database(ledger)), 2 if undecodable else 3)
+                        failed.remove(b)
+                        self.assertEqual(scan(quota, '1'), 1)
+                        self.assertEqual(scan(quota, '1'), 0)
+                        self.assertEqual(visits[-2:], [a, b])
+                        if undecodable:
+                            a.write_bytes(gzip.compress(source))
+                        failed.clear()
+                        self.assertEqual(scan(), 0)
+                        self.assertEqual(visits[-1], a)
+                        records = structure.read_structure_database(ledger).values()
+                        self.assertEqual(len(records), 3)
+                        self.assertTrue(all(record.scan_status == 'clean' for record in records))
+                        self.assertFalse(ledger.with_suffix('.csv.retries.json').exists())
+
     def test_structure_limited_scans_cover_new_pages_before_retrying_persistent_failures(self):
         for quota in ('--max-pages', '--max-pages-per-section'):
             with self.subTest(quota=quota), tempfile.TemporaryDirectory() as directory:
