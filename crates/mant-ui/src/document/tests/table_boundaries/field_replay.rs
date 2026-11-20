@@ -81,6 +81,16 @@ fn accepted_mdoc_writes_keep_the_same_body_in_paint_copy_and_search() {
         (r#".No PM No "\h'-3n'T""#, "TM", "PMT"),
         (r#".No "P\zM" No "\h'-4n'\zT""#, "TM", "PMT"),
         (r#".No "P\zM" Ns No "\h'-3n'T""#, "TM", "PMT"),
+        (
+            r#".No "\zA" Sy "\zC\:D" No "\h'-1n'" No "H""#,
+            "AD H",
+            "ACD",
+        ),
+        (
+            r#".No "\zA" Em "\zC\:D" No "\h'-1n'" No "H""#,
+            "AD H",
+            "ACD",
+        ),
         (r#".No "P\fBM\h'-2n'\o' T'""#, "TM", "PMT"),
         (r#".Sy PM Ns No "\h'-4n'T""#, "TM", "PMT"),
         (r#".Em PM Ns No "\h'-4n'T""#, "TM", "PMT"),

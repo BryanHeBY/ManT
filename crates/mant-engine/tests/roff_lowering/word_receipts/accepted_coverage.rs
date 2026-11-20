@@ -7,6 +7,80 @@ const REPLAY_HEADER: &str =
     ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
 
 #[test]
+fn a_replayed_styled_suffix_keeps_the_earlier_cover() {
+    // Pinned term.c::encode1() paints D over C, then ESCAPE_HORIZ moves
+    // the cursor without truncating the stored copies. The fixed ASCII
+    // and UTF-8 devices both put a single space between D and a later H.
+    let cases = ["No", "Sy", "Em"].into_iter().flat_map(|style| {
+        ["", r"\&", r"\:"].into_iter().flat_map(move |control| {
+            ["", r#" No "H""#]
+                .into_iter()
+                .map(move |tail| (style, control, tail))
+        })
+    });
+    for (style, control, tail) in cases {
+        let source =
+            format!(r#"{REPLAY_HEADER}.No "\zA" {style} "\zC{control}D" No "\h'-1n'"{tail}"#);
+        let loaded = mant_loader::load_roff_bytes(format!("{source}\n").as_bytes()).unwrap();
+        let native = json_string_roundtrip(&loaded);
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &reloaded] {
+            let rendered = mant_render::render_query_man(content);
+            let expected = if tail.is_empty() { "AD" } else { "AD H" };
+            assert_eq!(description_rows(&rendered, &source), [expected], "{source}");
+            for (word, total) in [("AD", 1), ("ACD", 0), ("C", 0)] {
+                let hits = mant_query::search_query(
+                    content,
+                    &SearchQuery {
+                        pattern: word.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(hits.total, total, "{source} {word}");
+            }
+        }
+    }
+}
+
+#[test]
+fn replayed_cover_drops_only_the_replaced_glyphs_link() {
+    // Fixed terminal devices agree on D's bold overstrike and on AD H.
+    // The tty annotations mark each source glyph independently.
+    let source = format!(
+        "{REPLAY_HEADER}{}\n",
+        r#".No "\z\X'tty: link https://a.test'A\X'tty: link'" Sy "\z\X'tty: link https://c.test'C\X'tty: link'\:\X'tty: link https://d.test'D\X'tty: link'" No "\h'-1n'" No "\X'tty: link https://h.test'H\X'tty: link'""#,
+    );
+    let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let native = json_string_roundtrip(&loaded);
+    let markdown = mant_codec::encode::render_markdown(&native);
+    let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for content in [&native, &reloaded] {
+        let rendered = mant_render::render_query_man(content);
+        assert_eq!(description_rows(&rendered, &source), ["AD H"]);
+        let mut labels = Labels::default();
+        labels.visit_document(content.document.as_ref().unwrap());
+        assert_eq!(
+            labels.0,
+            [
+                ("https://a.test".into(), "A".into()),
+                ("https://d.test".into(), "D".into()),
+                ("https://h.test".into(), "H".into()),
+            ]
+        );
+        let export = mant_codec::encode::render_markdown(content);
+        assert!(export.contains("[**D**](https://d.test)"), "{export}");
+    }
+}
+
+#[test]
 fn deferred_native_passes_survive_replay_across_invisible_cells_and_style() {
     // Fixed ASCII and UTF-8 agree. term_word() writes an entry blank
     // before applying BACKBEFORE, and term_fill() later consumes the

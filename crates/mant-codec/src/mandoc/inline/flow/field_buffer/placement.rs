@@ -140,11 +140,6 @@ impl FieldBuffer {
         while self.cells.get(start) == Some(&FieldCell::Backline) {
             start += 1;
         }
-        // A covered glyph outside this suffix still needs the later
-        // overstrike on the same accepted pass. Do not cut through it.
-        let first_retreat = self
-            .pass_retreats
-            .partition_point(|&(_, mark)| mark < start);
         // Both copies of a bold glyph must lie in the replayable suffix.
         let first_alias = self
             .raw_copy_aliases
@@ -157,10 +152,6 @@ impl FieldBuffer {
                 .raw_copy_aliases
                 .get(first_alias)
                 .is_some_and(|&(_, owner)| owner < start)
-            || self
-                .pass_retreats
-                .get(first_retreat)
-                .is_some_and(|&(old, _)| (self.resume..start).contains(&old))
         {
             return None;
         }
@@ -214,6 +205,17 @@ impl FieldBuffer {
     fn replace_live_prefix(&mut self, start: usize, positions: &[Option<usize>]) {
         use super::cells::DeferredBlankRun;
 
+        // encode1() can decorate the covering glyph after a backline
+        // whose target is outside this suffix. Keep that dependency
+        // while its marker survives at a proved slot in the overlay.
+        let first_retreat = self
+            .pass_retreats
+            .partition_point(|&(_, mark)| mark < start);
+        let crossing: Vec<_> = self.pass_retreats[first_retreat..]
+            .iter()
+            .filter(|&&(old, _)| old < start)
+            .filter_map(|&(old, mark)| positions.get(mark - start)?.map(|new| (old, new)))
+            .collect();
         let first = self.deferred_blanks.partition_point(|run| run.end <= start);
         let mut surviving = Vec::new();
         for run in self.deferred_blanks.drain(first..) {
@@ -239,6 +241,7 @@ impl FieldBuffer {
         } else {
             self.replace_placed_tail(self.cells.len() - start);
         }
+        self.pass_retreats.extend(crossing);
         surviving.sort_unstable_by_key(|run| run.start);
         self.deferred_blanks.extend(surviving);
     }
