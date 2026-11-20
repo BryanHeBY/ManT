@@ -21,15 +21,11 @@ impl FieldBuffer {
                 editable_marker,
             } => {
                 self.raw_slot_fence = self.cells.len() - count;
-                if *editable_marker
-                    && self.resume == 0
-                    && matches!(self.word_scan, super::WordScanPolicy::Incremental)
-                {
+                if *editable_marker {
                     // An interior \p has only marked the raw word.
                     // term.c::term_fill runs when a real flush accepts
                     // the field. A later operand can still edit this pass.
-                    self.word_scan = super::WordScanPolicy::AwaitFlush;
-                    self.scan = None;
+                    self.hold_editable_passes();
                 }
                 self.write_cursor = WriteCursor::Placed(*cursor_retreat);
                 self.backbefore_armed = *backbefore;
@@ -43,16 +39,9 @@ impl FieldBuffer {
                 styled_suffix,
                 keeps_prior_slots,
             } => self.record_raw_tail_font(*styled_suffix, *keeps_prior_slots),
-            FieldWrite::ReplaceLivePrefix { start: 0, .. } => {
-                let await_flush = matches!(self.word_scan, super::WordScanPolicy::AwaitFlush);
-                self.clear();
-                if await_flush {
-                    self.word_scan = super::WordScanPolicy::AwaitFlush;
-                }
-            }
-            FieldWrite::ReplaceLivePrefix { start, .. } => {
-                self.replace_placed_tail(self.cells.len() - start);
-            }
+            FieldWrite::ReplaceLivePrefix {
+                start, positions, ..
+            } => self.replace_live_prefix(*start, positions),
             FieldWrite::PlacedZeroWidthRetreat {
                 target_from_end,
                 mark_from_end,
@@ -62,6 +51,42 @@ impl FieldBuffer {
                     .push((end - target_from_end, end - mark_from_end));
             }
             _ => unreachable!("only resolved slot writes reach this path"),
+        }
+    }
+
+    fn hold_editable_passes(&mut self) {
+        if self.resume == 0 && matches!(self.word_scan, super::WordScanPolicy::Incremental) {
+            self.word_scan = super::WordScanPolicy::AwaitFlush;
+            self.scan = None;
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn hold_pending_glyph_passes(
+        &mut self,
+        writes: &[FieldWrite],
+    ) {
+        if self.backbefore_graph.is_none() || !self.has_pending_break_markers() {
+            return;
+        }
+        let Some(marker) = writes.iter().position(FieldWrite::is_break_marker) else {
+            return;
+        };
+        // A completed word followed by \p and an authored blank under
+        // BACKAFTER can still be overwritten from the pending glyph's
+        // cursor. Keep that one boundary live until term_flushln().
+        if writes[..marker].iter().any(|write| {
+            matches!(
+                write,
+                FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen)
+            )
+        }) && let [
+            FieldWrite::ArmBackafter,
+            FieldWrite::DeferredBlanks { .. },
+            tail @ ..,
+        ] = &writes[marker + 1..]
+            && !tail.iter().any(FieldWrite::is_break_marker)
+        {
+            self.hold_editable_passes();
         }
     }
 
@@ -96,13 +121,12 @@ impl FieldBuffer {
         {
             return None;
         }
-        // A proved landing may still edit the unread suffix. Never
-        // drive the slot machine over a committed pass or an authored
-        // blank whose separate owner has not been projected yet.
+        // A proved landing may still edit the unread suffix. The ordinary
+        // spaces immediately before a retained raw cursor are proved slots
+        // too. Preserve their deferred source ownership through replay.
         let floor = self
-            .raw_slot_fence
+            .replay_fence()
             .max(self.resume)
-            .max(self.deferred_blanks.last().map_or(0, |run| run.end))
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         // A projection-only recovery spelling can fence its own native
         // position without hiding complete glyph slots appended after it.
@@ -166,6 +190,49 @@ impl FieldBuffer {
                 .backbefore_graph
                 .and_then(|index| index.checked_sub(start)),
         })
+    }
+
+    fn replay_fence(&self) -> usize {
+        let Some(deferred) = self.deferred_blanks.last() else {
+            return self.raw_slot_fence;
+        };
+        if self.has_retained_word_cursor() && deferred.end == self.raw_slot_fence {
+            deferred.start
+        } else {
+            self.raw_slot_fence.max(deferred.end)
+        }
+    }
+
+    fn replace_live_prefix(&mut self, start: usize, positions: &[Option<usize>]) {
+        use super::cells::DeferredBlankRun;
+
+        let first = self.deferred_blanks.partition_point(|run| run.end <= start);
+        let mut surviving = Vec::new();
+        for run in self.deferred_blanks.drain(first..) {
+            if run.start < start {
+                surviving.push(DeferredBlankRun { end: start, ..run });
+            }
+            for cell in run.start.max(start)..run.end {
+                if let Some(&Some(new)) = positions.get(cell - start) {
+                    surviving.push(DeferredBlankRun {
+                        start: new,
+                        end: new + 1,
+                        source: run.source,
+                    });
+                }
+            }
+        }
+        if start == 0 {
+            let scan = self.word_scan;
+            self.clear();
+            if matches!(scan, super::WordScanPolicy::AwaitFlush) {
+                self.word_scan = scan;
+            }
+        } else {
+            self.replace_placed_tail(self.cells.len() - start);
+        }
+        surviving.sort_unstable_by_key(|run| run.start);
+        self.deferred_blanks.extend(surviving);
     }
 
     fn has_replayable_projection(&self, index: usize) -> bool {

@@ -44,6 +44,7 @@ impl ExecutedWordEntry {
                 .map_or(start, |next| next.start.min(next.content))
         });
         let mut receipt = buffer.apply_writes(&writes);
+        buffer.hold_pending_glyph_passes(&writes);
         if let EntryRewind::Positioned(retreat) = rewind {
             buffer.retain_word_cursor(retreat);
         }

@@ -170,32 +170,31 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             pass_index += 1;
         }
     }
-    retire_unprinted_prefixes(anchors, passes, &printed_ends, &covered, &mut lengths);
+    resolve_buffered_prefixes(anchors, passes, &printed_ends, &covered, &mut lengths);
     lengths
 }
 
-fn retire_unprinted_prefixes(
+fn resolve_buffered_prefixes(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     printed_ends: &[(usize, bool, usize, bool)],
     covered: &[usize],
     lengths: &mut BTreeMap<String, OwnerAcceptance>,
 ) {
-    // A replay can move an earlier cell's representation to a prefix
-    // under a later owner. Its local graph does not re-authorize a gap
-    // consumed between native passes.
+    // term_field() releases a buffered gap at the next printing cell in
+    // the same pass. That cell can belong to a later word after the gap's
+    // original glyph was overwritten. Gaps skipped between passes never
+    // reach term_field(), even if the original owner still has ink.
     for anchor in anchors {
         if let Some(gap) = anchor.projected_gap_cell {
             let pass = passes.partition_point(|pass| pass.end <= gap);
             let printed = passes
                 .get(pass)
                 .is_some_and(|pass_row| pass_row.start <= gap && gap < printed_ends[pass].0);
-            if !printed || covered.binary_search(&gap).is_ok() {
-                lengths
-                    .entry(anchor.owner.clone())
-                    .or_default()
-                    .prefix_printed = false;
-            }
+            lengths
+                .entry(anchor.owner.clone())
+                .or_default()
+                .prefix_printed = printed && covered.binary_search(&gap).is_err();
         }
     }
 }

@@ -259,3 +259,156 @@ fn consecutive_rewinds_remove_the_previous_projection_of_a_buffered_blank() {
         }
     }
 }
+
+#[test]
+fn a_buffered_gap_can_print_with_a_later_words_glyph() {
+    // CVS term_field() releases the gap at the next printing cell on
+    // that pass. Closing the pass or reaching its end does not print it.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    for (body, rows, target) in [
+        (
+            r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\h'-1n'E""#,
+            &["A E"][..],
+            None,
+        ),
+        (
+            r#".Sy "AB" No "\h'-2n'\:\h'1n'C" Ns No "\h'-1n'E""#,
+            &["A E"],
+            None,
+        ),
+        (
+            r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\h'-1n'\X'tty: link https://two.test'E\X'tty: link'""#,
+            &["A E"],
+            Some(("https://two.test", "E")),
+        ),
+        (
+            r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\h'-1n'\&""#,
+            &["AB"],
+            None,
+        ),
+        (
+            r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\p E""#,
+            &["A C", "E"],
+            None,
+        ),
+        (
+            r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\h'-1n'E" Ns No "\h'-1n'F""#,
+            &["A F"],
+            None,
+        ),
+    ] {
+        let source = format!("{header}{body}\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &readback] {
+            let rendered = mant_render::render_query_man(content);
+            assert_eq!(description_rows(&rendered, &source), rows, "{body}");
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            let expected: Vec<_> = target
+                .into_iter()
+                .map(|(uri, label)| (uri.into(), label.into()))
+                .collect();
+            assert_eq!(labels.0, expected, "{body}");
+            for probe in ["AE", "E", "F"] {
+                let result = mant_query::search_query(
+                    content,
+                    &SearchQuery {
+                        pattern: probe.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                let expected = rows
+                    .iter()
+                    .flat_map(|row| row.split_whitespace())
+                    .any(|word| word == probe);
+                assert_eq!(result.total, u32::from(expected), "{body}: {probe}");
+            }
+        }
+    }
+}
+
+#[test]
+fn font_register_events_do_not_sever_the_live_cursor() {
+    // The CVS font cases in term_word() update only registers. Each
+    // input below preserves the same bytes at the two accepted passes.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    for operand in [
+        r"\zC\h'-2n'",
+        r"\zC\fI\fP\h'-2n'",
+        r"\z\fI\fPC\h'-2n'",
+        r"\fI\fP\zC\h'-2n'",
+        r"\zC\h'-2n'\fI\fP",
+    ] {
+        let source = format!("{header}.Sy \"A\\p\\z B\" No \"{operand}\" No \"\\p E\"\n");
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&native);
+        assert_eq!(
+            description_rows(&rendered, &source),
+            ["A", "CE"],
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn tight_replay_preserves_a_surviving_prior_link_owner() {
+    // tty annotations write invisible slots. With both given targets
+    // and a tight entry, term_field() prints the previous B and the
+    // following D; C at its attempted slot never owns visible ink.
+    let header = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    for (a, b, c, d) in [('A', 'B', 'C', 'D'), ('Q', 'Q', 'Q', 'Q')] {
+        let source = format!(
+            "{header}.No \"\\X'tty: link https://one.test'{a}\\X'tty: link'\\p\\z \\X'tty: link https://two.test'{b}\\X'tty: link'\" Ns No \"\\z{c}\\h'-2n'\" No \"\\:{d}\"\n"
+        );
+        let native =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&native);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        for content in [&native, &readback] {
+            let rendered = mant_render::render_query_man(content);
+            assert_eq!(
+                description_rows(&rendered, &source),
+                [a.to_string(), format!("{b}{d}")]
+            );
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            assert_eq!(
+                labels.0,
+                [
+                    ("https://one.test".into(), a.to_string()),
+                    ("https://two.test".into(), b.to_string())
+                ]
+            );
+        }
+    }
+}
+
+#[test]
+fn a_retreat_can_replace_the_blank_after_an_unflushed_marker() {
+    // term_fill() walks the final input buffer. D replaces the ordinary
+    // separator before it can trigger the earlier \p; C overprints B.
+    let source = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n",
+        r#".No "\X'tty: link https://one.test'A\X'tty: link'\p\z \X'tty: link https://two.test'B\X'tty: link'" Ns No "\zC\h'-2n'" Ns No "\h'-3n'D""#,
+        "\n",
+    );
+    let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let native = json_string_roundtrip(&content);
+    let rendered = mant_render::render_query_man(&native);
+    assert_eq!(description_rows(&rendered, source), ["ADC"]);
+    let mut labels = Labels::default();
+    labels.visit_document(native.document.as_ref().unwrap());
+    labels.0.retain(|(_, label)| !label.is_empty());
+    assert_eq!(labels.0, [("https://one.test".into(), "A".into())]);
+}

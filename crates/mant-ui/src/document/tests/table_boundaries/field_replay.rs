@@ -267,6 +267,37 @@ fn replayed_padding_keeps_rows_and_links_at_the_surviving_cells() {
 }
 
 #[test]
+fn the_accepted_cross_word_gap_keeps_the_links_screen_column() {
+    // The fixed CVS devices emit a space before E after its write
+    // replaces the prior glyph. Only the E cell owns the link.
+    let source = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n",
+        r#".Sy "AB" No "\h'-2n'\&\h'1n'C" Ns No "\h'-1n'\X'tty: link https://two.test'E\X'tty: link'""#,
+        "\n",
+    );
+    let view = DocumentView::new(&restored(source));
+    let target = LinkTarget::External(ExternalUri::parse("https://two.test").unwrap());
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let buffer = paint(&rendered, width);
+        let row = rendered.search("DESCRIPTION")[0].row + 1;
+        let text = painted(&buffer, row, 0, width.into());
+        let start = text.find("A E").expect("native word boundary");
+        assert_eq!(text.trim(), "A E");
+        assert_eq!(rendered.link_target_at(row, start + 1), None);
+        assert_eq!(rendered.link_target_at(row, start + 2), Some(&target));
+        let selection = RenderedSelection {
+            anchor: TextPosition { row, column: start },
+            focus: TextPosition {
+                row,
+                column: start + 2,
+            },
+        };
+        assert_eq!(rendered.selected_text(selection), "A E");
+    }
+}
+
+#[test]
 fn a_pending_link_label_moves_with_its_accepted_native_slot() {
     // term.c::bufferc()/encode1(): the second operand can replace M or
     // move T to its left without transferring M's link to either neighbor.

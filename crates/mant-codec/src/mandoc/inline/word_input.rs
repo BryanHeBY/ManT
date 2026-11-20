@@ -220,20 +220,10 @@ impl super::InlineExecutionState {
         } else {
             PrefixExtension::None
         };
-        // The automatic entry blank can be overwritten by this word and
-        // then revisited by its own zero-advance retreat. On tight entry a
-        // prior BACKBEFORE remains live; the ordinary prefix proof applies.
-        let retreat_after_zero_advance_glyph = capture_prefix
-            && self
-                .native_word_boundary
-                .is_some_and(|boundary| !boundary.is_native_tight())
-            && events.windows(3).any(|window| {
-                matches!(window, [
-                    RoffInlineEvent::ZeroAdvance,
-                    RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_),
-                    RoffInlineEvent::HorizontalMotion { argument, .. },
-                ] if negative_entry_columns(argument.as_deref()).is_some())
-            });
+        // A local glyph can complete BACKBEFORE and then reposition the
+        // cursor within the unread suffix. The entry may also carry the
+        // preceding word's BACKBEFORE, even without an automatic blank.
+        let retreat_after_zero_advance_glyph = capture_prefix && has_zero_advance_retreat(events);
         self.native_slot_entry(
             capture_prefix || pending,
             extend,
@@ -251,6 +241,33 @@ impl super::InlineExecutionState {
         let (offset, margin) = self.table_source_bounds(0);
         margin.saturating_sub(offset)
     }
+}
+
+fn has_zero_advance_retreat(events: &[RoffInlineEvent]) -> bool {
+    // term_word() applies font selections without writing a slot. The
+    // geometry executor still sees them and uses that font for each glyph.
+    let mut preceding: Option<&RoffInlineEvent> = None;
+    let mut last: Option<&RoffInlineEvent> = None;
+    for event in events.iter().filter(|event| {
+        !matches!(
+            event,
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+        )
+    }) {
+        if matches!(
+            (preceding, last, event),
+            (
+                Some(RoffInlineEvent::ZeroAdvance),
+                Some(RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_)),
+                RoffInlineEvent::HorizontalMotion { argument, .. },
+            ) if negative_entry_columns(argument.as_deref()).is_some()
+        ) {
+            return true;
+        }
+        preceding = last;
+        last = Some(event);
+    }
+    false
 }
 
 /// Whether a leading motion or marker needs the live BACKBEFORE glyph.
