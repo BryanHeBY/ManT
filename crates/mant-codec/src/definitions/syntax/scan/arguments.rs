@@ -16,10 +16,18 @@ pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool 
     let mut opaque = false;
     while offset < range.end {
         let character = view.text[offset..].chars().next().expect("argument scalar");
+        #[cfg(feature = "roff")]
+        let lexical_character = if view.literal_assignment_angle(argument, offset, character) {
+            'x'
+        } else {
+            character
+        };
+        #[cfg(not(feature = "roff"))]
+        let lexical_character = character;
         let nested = lexical.within_group();
         let opening = lexical.is_top_level()
-            && (closing(character).is_some() || quote_closer(character).is_some());
-        lexical.observe(character);
+            && (closing(lexical_character).is_some() || quote_closer(lexical_character).is_some());
+        lexical.observe(lexical_character);
         if opening {
             if !opaque {
                 literal.push('\0');

@@ -532,8 +532,15 @@ impl<'a> Scanner<'a> {
             // supply this proof, nor can a multiword styled prose suffix.
             let complete_parameter = self.complete_parameter_token(parameter)
                 || separator && self.complete_bare_parameter(following);
+            let independent_assignment_alias = separator
+                && self.view.explicit_option(following)
+                && self.argument_start.as_ref().is_some_and(|argument| {
+                    argument.attached_to_name
+                        && self.view.text[argument.bytes.start..].starts_with('=')
+                });
             let boundary = separator
                 && (self.styled_argument || self.structured_argument || complete_parameter)
+                || independent_assignment_alias
                 || (self.view.literal_operand_starts(self.cursor)
                     || self.view.literal_operand_starts(following))
                     && self.separator.is_some()
@@ -556,6 +563,7 @@ impl<'a> Scanner<'a> {
                 && !self.structured_argument
                 && !complete_parameter
                 && !self.view.literal_operand_starts(restart)
+                && !independent_assignment_alias
             {
                 // A literal receipt prevents a false name inside one word;
                 // it cannot make that unfinished parameter prove an owner.
@@ -567,6 +575,7 @@ impl<'a> Scanner<'a> {
                 && (role.is_none()
                     || self.structured_argument
                     || complete_parameter
+                    || independent_assignment_alias
                     || self.view.literal_operand_starts(restart))
             {
                 self.finish_argument();
@@ -587,17 +596,10 @@ impl<'a> Scanner<'a> {
         }
         let top_level = self.lexical.is_top_level();
         #[cfg(feature = "roff")]
-        let literal_angle = matches!(character, '<' | '>')
-            && role.is_some_and(|operand| {
-                matches!(
-                    operand.role,
-                    NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_)
-                )
-            })
-            && self.argument_start.as_ref().is_some_and(|argument| {
-                argument.attached_to_name && self.view.text[argument.bytes.start..].starts_with('=')
-            })
-            && !self.view.paired_assignment_angle(self.cursor);
+        let literal_angle = self.argument_start.as_ref().is_some_and(|argument| {
+            self.view
+                .literal_assignment_angle(argument, self.cursor, character)
+        });
         #[cfg(not(feature = "roff"))]
         let literal_angle = false;
         if self

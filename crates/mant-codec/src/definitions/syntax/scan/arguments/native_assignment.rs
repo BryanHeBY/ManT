@@ -14,12 +14,14 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
     }
     // term_word() can execute the operator, value and delimiters in
     // separate operands. The accepted character ranges give adjacency.
-    let rhs = span.start + 1..span.end;
+    let start = span.start + 1;
+    let spelling = view.text[start..span.end].trim_end();
+    let rhs = start..start + spelling.len();
     if view.operand(span.start).is_some_and(|operand| {
         operand.role == Role::ExplicitOption
             && operand.bytes.start < span.start
             && operand.bytes.end >= rhs.end
-            && complete_flag_value(&view.text[rhs.clone()])
+            && complete_flag_value(view, rhs.clone())
     }) {
         return true;
     }
@@ -70,7 +72,16 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             role: operand.role,
             value,
             owns_assignment_prefix: operand.bytes.start < span.start,
-            touches_next,
+            tail: if touches_next {
+                OperandTail::Joined
+            } else if view
+                .operand(end)
+                .is_some_and(|next| matches!(next.role, Role::EnclosureEnd(_)))
+            {
+                OperandTail::EnclosureEnd
+            } else {
+                OperandTail::Separate
+            },
             start,
         };
         if syntax.execute_operand(piece, view, &mut scopes).is_err() {
@@ -89,15 +100,21 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
 /// A complete RHS inside its own Fl operand supplies its literal spelling.
 /// Keep grouped suffixes which extend into subsequent operands on the
 /// shared, scoped proof path below.
-fn complete_flag_value(value: &str) -> bool {
+fn complete_flag_value(view: &HeadView<'_>, rhs: std::ops::Range<usize>) -> bool {
     let mut lexical = LexicalState::default();
-    for ch in value.chars() {
+    for (offset, ch) in view.text[rhs.clone()].char_indices() {
         if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.[](){}<>".contains(ch) {
             return false;
         }
-        lexical.observe(ch);
+        if !matches!(ch, '<' | '>')
+            || view.paired_assignment_angle(rhs.start + offset)
+            || offset == 0
+            || offset + 1 == rhs.len()
+        {
+            lexical.observe(ch);
+        }
     }
-    !value.is_empty() && lexical.is_top_level()
+    !rhs.is_empty() && lexical.is_top_level()
 }
 
 fn scoped_literal(scope: Option<&(u32, bool)>) -> Literal {
@@ -245,8 +262,15 @@ struct OperandPiece<'a> {
     role: Role,
     value: &'a str,
     owns_assignment_prefix: bool,
-    touches_next: bool,
+    tail: OperandTail,
     start: usize,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OperandTail {
+    Joined,
+    EnclosureEnd,
+    Separate,
 }
 
 impl AssignmentSyntax {
@@ -342,7 +366,7 @@ impl AssignmentSyntax {
     ) -> Result<(), ()> {
         let OperandPiece {
             value,
-            touches_next,
+            tail,
             start: value_start,
             ..
         } = piece;
@@ -359,7 +383,12 @@ impl AssignmentSyntax {
             {
                 continue;
             }
-            self.operand_fragment(&spelling[start..offset], evidence, is_path, false)?;
+            self.operand_fragment(
+                &spelling[start..offset],
+                evidence,
+                is_path,
+                OperandTail::Separate,
+            )?;
             self.delimiter(bracket)?;
             self.after_space = false;
             start = offset + bracket.len_utf8();
@@ -368,7 +397,11 @@ impl AssignmentSyntax {
             &spelling[start..],
             evidence,
             is_path,
-            touches_next && spelling.len() == trimmed.len(),
+            if tail == OperandTail::Joined && spelling.len() != trimmed.len() {
+                OperandTail::Separate
+            } else {
+                tail
+            },
         )?;
         self.literal(&trimmed[spelling.len()..], Literal::Delimiter)
     }
@@ -378,7 +411,7 @@ impl AssignmentSyntax {
         value: &str,
         evidence: ValueEvidence,
         is_path: bool,
-        touches_next: bool,
+        tail: OperandTail,
     ) -> Result<(), ()> {
         let mut operand = value.trim();
         self.literal(
@@ -395,7 +428,7 @@ impl AssignmentSyntax {
             self.operator(edge)?;
             operand = &operand[edge.len_utf8()..];
         }
-        let trailing_connector = touches_next
+        let trailing_connector = (tail == OperandTail::Joined)
             .then(|| {
                 operand
                     .chars()
@@ -444,7 +477,10 @@ impl AssignmentSyntax {
         // fragment, but a spaced explanatory label does not prove a form.
         if let Some(edge) = trailing_connector {
             self.operator(edge)?;
-        } else if operand.ends_with(':') && self.group().is_some() {
+        } else if operand.ends_with(':')
+            && self.group().is_some()
+            && tail != OperandTail::EnclosureEnd
+        {
             self.operator(':')?;
         }
         self.literal(&value[value.trim_end().len()..], Literal::Delimiter)
@@ -477,6 +513,9 @@ impl AssignmentSyntax {
                     ch,
                     '+' | '%' | '*' | '?' | '#' | '~' | '&' | '!' | '^' | '$'
                 );
+            if ch == '.' && self.after_space && literal == Literal::Unmarked {
+                return Err(());
+            }
             if !fl_value && self.punctuation(ch)? {
                 in_atom = false;
             } else if literal != Literal::Delimiter
@@ -589,7 +628,9 @@ impl AssignmentSyntax {
     }
 
     fn start_path_value(&mut self) -> Result<(), ()> {
-        if let Some(group) = self.group_mut() {
+        if let Some(group) = self.group_mut()
+            && group.join.is_none()
+        {
             group.finish_value()?;
         }
         self.atom = Atom::PathContinuation;

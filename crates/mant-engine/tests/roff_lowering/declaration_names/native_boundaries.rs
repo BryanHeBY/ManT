@@ -823,3 +823,83 @@ fn native_angle_spelling_cannot_swallow_an_independent_alias() {
         );
     }
 }
+
+#[test]
+fn native_assignment_boundaries_respect_angle_pairs_and_independent_aliases() {
+    // CVS mdoc_macro.c::in_line keeps Fl and Ar as native operands; its
+    // terminal and HTML output agree on these HEAD spellings and BODY.
+    for (head, label) in [
+        (
+            "Fl a=< Ns Ar length Ar value> , Fl b",
+            "-a=<length value>, -b",
+        ),
+        (
+            r#"Fl a=< Ns Ar "length value>" , Fl b"#,
+            "-a=<length value>, -b",
+        ),
+        (
+            r#"Fl a=< Ns Ar "length value" Ns Li > , Fl b"#,
+            "-a=<length value>, -b",
+        ),
+        ("Fl a= Ns Ar size<1024 , Fl b", "-a=size<1024, -b"),
+        ("Fl a=size<1024 , Fl b", "-a=size<1024, -b"),
+        ("Fl a=/ , Fl b", "-a=/, -b"),
+        ("Fl a= Ns Pa / , Fl b", "-a=/, -b"),
+        ("Fl a=[0-9]* , Fl b", "-a=[0-9]*, -b"),
+        (
+            "Fl a=text/plain;charset=utf-8 , Fl b",
+            "-a=text/plain;charset=utf-8, -b",
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            &["-a", "-b"],
+            label,
+            true,
+            &["value", "length"],
+        );
+    }
+}
+
+#[test]
+fn dotted_values_require_a_native_join_and_a_typed_terminal_operand() {
+    // termp_quote_pre/post and termp_fl_pre preserve these spellings. A
+    // detached dot word is not authored as either half of the assignment.
+    for (head, label, complete) in [
+        (
+            r"Fl a= Ns Ar x Pq Li auto | Li \&. Ns Pa config",
+            "-a=x (auto | .config)",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x Pq Li auto | Pa .config",
+            "-a=x (auto | .config)",
+            true,
+        ),
+        (
+            r"Fl a= Ns Ar x Pq Li auto Li \&. Ns Pa config",
+            "-a=x (auto .config)",
+            false,
+        ),
+        ("Fl a= Ns Pa file No .bak .old", "-a=file .bak .old", false),
+        ("Fl a= Ns Pa file No .bak", "-a=file .bak", false),
+        ("Fl a= Ns Pa file Pa .bak", "-a=file .bak", false),
+        ("Fl a= Ns Pa file Ns No .bak", "-a=file.bak", true),
+        (r"Fl a= Ns Ar x Op Ar key\&:", "-a=x [key:]", true),
+        (
+            r"Fl a= Ns Ar x Op Ar key\&: Ns Li auto",
+            "-a=x [key:auto]",
+            true,
+        ),
+    ] {
+        check(
+            "OPTIONS",
+            head,
+            &["-a"],
+            label,
+            complete,
+            &["config", "auto", ".bak", "-b"],
+        );
+    }
+}

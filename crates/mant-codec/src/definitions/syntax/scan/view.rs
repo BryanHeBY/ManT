@@ -130,15 +130,26 @@ impl<'a> HeadView<'a> {
     pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
         self.assignment_angles
             .get_or_init(|| {
-                // One authored word can span multiple native operands. A real
-                // word break fences its angle pairs from explanatory suffixes
-                // and later flags. Cache the sparse byte positions once.
+                // An assignment can contain several native operands inside
+                // its angles. An independently owned Fl after a separator
+                // starts a new declaration; it cannot close the old pair.
                 let mut pairs = Vec::new();
                 let mut open = Vec::new();
                 let mut escaped = false;
+                let mut previous = None;
                 for (offset, ch) in self.text.char_indices() {
-                    if ch.is_whitespace() {
+                    if ch == '\n'
+                        || ch == '-'
+                            && matches!(previous, Some(',' | '|'))
+                            && self.operand(offset).is_some_and(|operand| {
+                                operand.role == NativeOperandRole::ExplicitOption
+                                    && operand.bytes.start == offset
+                            })
+                    {
                         open.clear();
+                    }
+                    if !ch.is_whitespace() {
+                        previous = Some(ch);
                     }
                     if std::mem::take(&mut escaped) {
                         continue;
@@ -159,6 +170,31 @@ impl<'a> HeadView<'a> {
             })
             .binary_search(&offset)
             .is_ok()
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn literal_assignment_angle(
+        &self,
+        argument: &super::Argument,
+        offset: usize,
+        character: char,
+    ) -> bool {
+        matches!(character, '<' | '>')
+            && argument.attached_to_name
+            && self.text[argument.bytes.start..].starts_with('=')
+            && self
+                .operand(offset)
+                .is_some_and(|operand| match operand.role {
+                    NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_) => {
+                        true
+                    }
+                    NativeOperandRole::ExplicitOption => {
+                        let rhs_start = argument.bytes.start + 1;
+                        offset > rhs_start && offset + 1 < operand.bytes.end
+                    }
+                    _ => false,
+                })
+            && !self.paired_assignment_angle(offset)
     }
 
     pub(super) fn is_parameter(&self, offset: usize) -> bool {
