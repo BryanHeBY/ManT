@@ -121,10 +121,9 @@ impl InlineBuilder {
         let (plain_flush, fitting_heading_tail) =
             self.consume_hard_break_buffer(projected, origin, man_section_heading);
         let closes_preceding_printed_row = captured
-            .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
-        self.observe_hard_break_boundary(
-            closes_preceding_printed_row || plain_flush.closes_represented_row(),
-        );
+            .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row)
+            || plain_flush.closes_represented_row();
+        self.observe_hard_break_boundary(closes_preceding_printed_row);
         // term_newln() flushes only an occupied terminal cell. A completed
         // `\zX` glyph and a buffered `\p` both advanced the native buffer;
         // a bare armed `\z` did not and remains ordered before the next word.
@@ -285,6 +284,7 @@ impl InlineBuilder {
             PlainFlushOutcome::Rejected {
                 from: None,
                 after_printed_pass: false,
+                closes_represented_row: false,
             }
         } else {
             PlainFlushOutcome::Ordinary

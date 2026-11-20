@@ -94,6 +94,7 @@ pub(in crate::mandoc::inline::flow) enum PlainFlushOutcome {
     Rejected {
         from: Option<usize>,
         after_printed_pass: bool,
+        closes_represented_row: bool,
     },
 }
 
@@ -108,7 +109,21 @@ impl PlainFlushOutcome {
             after_printed_pass: passes
                 .last()
                 .is_some_and(|pass| buffer.printed_content_end(0, pass.end) > 0),
+            closes_represented_row: false,
         }
+    }
+
+    fn with_printed_predecessor(mut self, preceding_row: bool) -> Self {
+        // Without an accepted pass, the final term_flushln() endline
+        // can still close the preceding field's printed device row.
+        if let Self::Rejected {
+            closes_represented_row,
+            ..
+        } = &mut self
+        {
+            *closes_represented_row = preceding_row;
+        }
+        self
     }
 
     const fn from_unprinted_tail(unprinted: bool, inherited: bool) -> Self {
@@ -159,17 +174,31 @@ impl PlainFlushOutcome {
     }
 
     pub(in crate::mandoc::inline::flow) const fn closes_represented_row(self) -> bool {
-        matches!(self, Self::RepresentedTail)
+        matches!(
+            self,
+            Self::RepresentedTail
+                | Self::Rejected {
+                    closes_represented_row: true,
+                    ..
+                }
+        )
     }
 }
 
-fn inherited_plain_field(execution: &super::InlineExecutionState) -> (bool, usize) {
+fn inherited_plain_field(
+    execution: &super::InlineExecutionState,
+    handoff: Option<&SectionHandoff>,
+) -> (bool, usize) {
     if let Some(state) = &execution.definition {
         (state.hang_row.native_row_occupied(), state.hang_row.minbl)
     } else {
-        execution.detached_device_row.map_or((false, 0), |row| {
+        let (printed, minimum) = execution.detached_device_row.map_or((false, 0), |row| {
             (row.page_origin_printed || row.viscol > 0, row.minbl)
-        })
+        });
+        (
+            printed || handoff.is_some_and(SectionHandoff::continues_printed_row),
+            minimum,
+        )
     }
 }
 
@@ -240,7 +269,8 @@ impl InlineBuilder {
         operands: Option<&std::cell::RefCell<super::HeadOperandCapture>>,
     ) -> Option<PlainRetirement> {
         use super::field_buffer::FlushReceipt;
-        let (inherited_printed_row, inherited_minbl) = inherited_plain_field(execution);
+        let (inherited_printed_row, inherited_minbl) =
+            inherited_plain_field(execution, handoff.as_deref());
         let (authorless_definition, unit) = Self::take_plain_flush_unit(execution, nodes)?;
         let receipt = unit.buffer.flush_receipt(PLAIN_FIELD_TARGETS, false);
         let Some(accepted) = receipt.accepted_passes() else {
@@ -327,7 +357,8 @@ impl InlineBuilder {
                 PlainFlushOutcome::from_unprinted_tail(true, inherited_printed_row)
             }
             FlushReceipt::UnmodeledRewind => unreachable!("modeled plain pass receipt"),
-        };
+        }
+        .with_printed_predecessor(inherited_printed_row && passes.is_empty());
         if accepted.rejected() {
             // term_flushln() clears both backtracking flags even when
             // term_field() printed nothing (term.c:233–237).

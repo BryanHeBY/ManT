@@ -1796,6 +1796,82 @@ fn subsection_excerpts_keep_only_the_heading_owned_hard_rows() {
 }
 
 #[test]
+fn subsection_padding_shared_with_the_previous_row_is_not_a_heading_row() {
+    // man_term.c::pre_SS and term.c::term_flushln share the still open
+    // row with the heading's first accepted padding pass at PD=0.
+    // A new SH executes separately, and a later blank pass remains.
+    let head = ".TH TOOL 1\n.SH DESCRIPTION\n.PD 0\nAA\n";
+    for (request, tail, expected) in [
+        ("SS", "B", &["AA", "B", "DD"][..]),
+        ("SS", r"\0", &["AA", "", "DD"][..]),
+        ("SH", "B", &["AA", "", "B", "DD"][..]),
+        ("SH", r"\0", &["AA", "", "", "DD"][..]),
+    ] {
+        let source = format!("{head}.{request} \\~\\p {tail}\nDD\n.SH ENDPROBE\nzz\n");
+        let text = render(&source, "roff", "text", "never", false);
+        let body = text
+            .split_once("DESCRIPTION\n")
+            .unwrap()
+            .1
+            .split_once("\nENDPROBE")
+            .unwrap()
+            .0;
+        assert_eq!(
+            body.trim_end_matches('\n')
+                .lines()
+                .map(str::trim)
+                .collect::<Vec<_>>(),
+            expected,
+            "{source}"
+        );
+        if request == "SS" {
+            let bundle: mant_protocol::QueryBundle =
+                serde_json::from_str(&render(&source, "roff", "json", "never", false)).unwrap();
+            let document = bundle.document.unwrap();
+            let heading = &document.sections[0].children[0].heading;
+            assert_eq!(
+                heading.plain_text(),
+                if tail == "B" { "B" } else { "\u{a0}" }
+            );
+        }
+    }
+}
+
+#[test]
+fn subsection_padding_can_share_a_row_already_presented_by_a_hanging_body() {
+    // CVS post_HP(BODY) calls term_newln with NOBREAK still active.
+    // A fitting field prints its cells and leaves viscol open for pre_SS.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH CASE0CASE\n.PD 0\nAA\n.HP 4n\n\\&\n\\~\n";
+    let tail = "\nDD\n.PD 0\n.SH ENDTEST\nZZ\n";
+    for (heading, gaps) in [
+        (r".SS \0", 1),
+        (r".SS \~", 1),
+        (r".SS \p \~", 1),
+        (r".SS \&\p \~", 2),
+        (r".SS \~\p \0", 2),
+        (r".SS \~\p\:\0", 2),
+        (".SS \\~\n.SH \\&", 1),
+    ] {
+        let source = format!("{head}{heading}{tail}");
+        let text = render(&source, "roff", "text", "never", false);
+        let between = text
+            .split_once("CASE0CASE\n")
+            .unwrap()
+            .1
+            .split_once("\nENDTEST")
+            .unwrap()
+            .0
+            .trim_end_matches('\n');
+        let expected = format!("AA\n{}DD", "\n".repeat(gaps));
+        assert_eq!(
+            between.lines().map(str::trim).collect::<Vec<_>>(),
+            expected.lines().collect::<Vec<_>>(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn table_word_end_breaks_reach_their_accepted_interior_row() {
     // tbl_term.c::tbl_word buffers the word before term_fill. BACKBEFORE
     // consumes one SP; two SPs leave the first one to end the current pass.

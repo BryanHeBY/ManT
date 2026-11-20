@@ -313,7 +313,7 @@ impl<'a> LoweringContext<'a> {
         previous_output: &mut Vec<mant_ir::Inline>,
         previous_literal: bool,
     ) -> (Vec<mant_ir::Inline>, u16) {
-        let shared = !previous_output.is_empty();
+        let live_previous_output = !previous_output.is_empty();
         let mut builder = formatter.begin_inline_session_on(
             previous_output,
             formatter.spacing_enabled(),
@@ -326,11 +326,12 @@ impl<'a> LoweringContext<'a> {
             // (man_term.c:921–932; term.c::term_tab_ref).
             builder.begin_executed_node(block);
         }
-        if shared {
-            // The reference is a control in the still-live old interval;
-            // it cannot transfer that interval's blank pass to the HEAD.
-            builder.mark_section_handoff(previous_literal);
-        }
+        // The source reference is a control in a still-live old interval.
+        // It cannot transfer that interval's blank pass to the HEAD.
+        let subsection =
+            block.macro_token == Some(libmandoc_rs::MacroToken::Man(libmandoc_rs::ManMacro::Ss));
+        let shared =
+            builder.mark_section_handoff(live_previous_output, previous_literal, subsection);
         builder.scope_posts = self.scope_posts.clone();
         inline::append_inline_nodes(&mut builder, nodes.before, self.default_name);
         match self.macro_set {

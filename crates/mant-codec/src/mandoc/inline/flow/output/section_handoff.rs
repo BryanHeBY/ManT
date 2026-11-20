@@ -15,16 +15,22 @@ pub(in crate::mandoc::inline::flow) struct SectionHandoff {
     previous_empty_passes: u16,
     previous_literal: bool,
     projection_start: usize,
-    shared_tail: Option<SharedTail>,
+    shared_row: Option<SharedRow>,
+    preceding_row_already_printed: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum SharedTail {
-    Printed,
-    Unprinted,
+enum SharedRow {
+    PrintedTail,
+    UnprintedTail,
+    HeadingPrefix,
 }
 
 impl SectionHandoff {
+    pub(in crate::mandoc::inline::flow) const fn continues_printed_row(&self) -> bool {
+        self.preceding_row_already_printed
+    }
+
     pub(in crate::mandoc::inline::flow) fn note_projection_start(&mut self, start: usize) {
         self.projection_start = start;
     }
@@ -65,15 +71,37 @@ impl SectionHandoff {
         covered: &mut &[usize],
     ) -> bool {
         let closes_previous = ends_line && self.owns_loop_end(buffer, pass.clone());
-        if !ends_line {
-            let old_end = pass.end.min(self.previous_cell_end);
-            self.shared_tail = if pass.start >= old_end {
+        let old_end = pass.end.min(self.previous_cell_end);
+        let continues_previous = (pass.start < old_end
+            && buffer.printed_content_end(pass.start, old_end) > pass.start)
+            || std::mem::take(&mut self.preceding_row_already_printed);
+        if !closes_previous
+            && continues_previous
+            && pass.end > self.previous_cell_end
+            && !buffer.cells()[self.previous_cell_end..pass.end]
+                .iter()
+                .any(|cell| {
+                    matches!(cell, FieldCell::Hyphen)
+                        || matches!(cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+                })
+        {
+            // term_field() printed the heading's fixed padding on the
+            // preceding owner's row. A later pass may carry heading ink
+            // or another independent blank row.
+            self.shared_row = Some(if ends_line {
+                SharedRow::HeadingPrefix
+            } else {
+                SharedRow::PrintedTail
+            });
+        } else if !ends_line && self.shared_row != Some(SharedRow::HeadingPrefix) {
+            self.shared_row = if pass.start >= old_end {
                 None
             } else if printed_row {
                 (buffer.printed_content_end(pass.start, old_end) > pass.start)
-                    .then_some(SharedTail::Printed)
+                    .then_some(SharedRow::PrintedTail)
             } else {
-                (buffer.projection_length(pass.start, old_end) > 0).then_some(SharedTail::Unprinted)
+                (buffer.projection_length(pass.start, old_end) > 0)
+                    .then_some(SharedRow::UnprintedTail)
             };
         }
         if self.previous_empty_passes > 0
@@ -127,17 +155,37 @@ impl InlineBuilder {
             ) || execution.zero_advance.has_buffered_glyph())
     }
 
-    pub(in crate::mandoc) fn mark_section_handoff(&mut self, previous_literal: bool) {
+    pub(in crate::mandoc) fn mark_section_handoff(
+        &mut self,
+        previous_output: bool,
+        previous_literal: bool,
+        subsection: bool,
+    ) -> bool {
+        let previous_cell_end = self.execution.plain_input.buffer.cells().len();
+        let preceding_row_already_printed = subsection
+            && previous_cell_end == 0
+            && self
+                .execution
+                .detached_device_row
+                .is_some_and(|row| row.page_origin_printed || row.viscol > 0);
+        if !previous_output && !preceding_row_already_printed {
+            return false;
+        }
+        // post_HP can drain its BODY buffer under NOBREAK while leaving
+        // viscol live. An SS at PD=0 can finish that already projected row
+        // as well as one whose earlier words are still in the input buffer.
         self.section_handoff = Some(SectionHandoff {
-            previous_cell_end: self.execution.plain_input.buffer.cells().len(),
+            previous_cell_end,
             previous_word_serial: self.execution.native_owner_serial,
             rejected_previous: false,
             previous_empty_passes: 0,
             previous_literal,
             projection_start: 0,
-            shared_tail: None,
+            shared_row: None,
+            preceding_row_already_printed,
         });
         self.nodes.push(Inline::anchor(BOUNDARY));
+        true
     }
 
     pub(super) fn route_section_loop_end(&mut self, pass: Range<usize>, indent: u16) -> bool {
@@ -204,12 +252,15 @@ impl InlineBuilder {
             projection::split_output_scope_prefix(std::mem::take(&mut self.nodes), BOUNDARY);
         assert!(found, "section owner boundary survives native acceptance");
         let mut rows = handoff.previous_empty_passes;
-        if handoff.shared_tail == Some(SharedTail::Printed) && heading_has_only_padding(&head) {
+        if handoff.shared_row == Some(SharedRow::HeadingPrefix) {
+            discard_shared_heading_row(&mut head, &mut false);
+        }
+        if handoff.shared_row == Some(SharedRow::PrintedTail) && heading_has_only_padding(&head) {
             // A blank-only man SS tail can print with the preceding BODY.
             // Keep its navigation identity without replaying a second row.
             projection::retain_inline_identities(&mut head);
         }
-        let shares_literal_tail = handoff.shared_tail == Some(SharedTail::Unprinted);
+        let shares_literal_tail = handoff.shared_row == Some(SharedRow::UnprintedTail);
         if handoff.previous_literal && (rows > 0 || shares_literal_tail) {
             let start = handoff.projection_start.min(previous.len());
             let projected = super::ProjectedTail::of(&previous[start..]);
@@ -236,6 +287,42 @@ impl InlineBuilder {
         self.nodes = head;
         previous
     }
+}
+
+/// Consume the projection of the first accepted heading row. Transparent
+/// style and link wrappers do not delimit that row.
+fn discard_shared_heading_row(nodes: &mut Vec<Inline>, ended: &mut bool) {
+    nodes.retain_mut(|node| {
+        if *ended {
+            return true;
+        }
+        match node {
+            Inline::LineBreak { .. } => {
+                *ended = true;
+                false
+            }
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                discard_shared_heading_row(children, ended);
+                !children.is_empty()
+            }
+            Inline::Link { children, .. } => {
+                discard_shared_heading_row(children, ended);
+                true
+            }
+            Inline::Anchor { .. } => !super::is_private_output_marker(node),
+            Inline::Text { value } | Inline::Code { value }
+                if value.chars().all(char::is_whitespace) =>
+            {
+                false
+            }
+            _ => {
+                // A source recovery spelling may carry reading content
+                // without native ink. Leave its projection intact.
+                *ended = true;
+                true
+            }
+        }
+    });
 }
 
 fn heading_has_only_padding(head: &[Inline]) -> bool {
