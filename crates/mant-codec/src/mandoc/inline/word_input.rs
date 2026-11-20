@@ -244,30 +244,17 @@ impl super::InlineExecutionState {
 }
 
 fn has_zero_advance_retreat(events: &[RoffInlineEvent]) -> bool {
-    // term_word() applies font selections without writing a slot. The
-    // geometry executor still sees them and uses that font for each glyph.
-    let mut preceding: Option<&RoffInlineEvent> = None;
-    let mut last: Option<&RoffInlineEvent> = None;
-    for event in events.iter().filter(|event| {
-        !matches!(
-            event,
-            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
-        )
-    }) {
-        if matches!(
-            (preceding, last, event),
-            (
-                Some(RoffInlineEvent::ZeroAdvance),
-                Some(RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_)),
-                RoffInlineEvent::HorizontalMotion { argument, .. },
-            ) if negative_entry_columns(argument.as_deref()).is_some()
-        ) {
-            return true;
-        }
-        preceding = last;
-        last = Some(event);
-    }
-    false
+    // Select the bounded raw suffix for a possible write under BACKBEFORE.
+    // term_word() can buffer other cells or change registers between the
+    // glyph and HORIZ. The placement path proves the actual landing.
+    events
+        .iter()
+        .skip_while(|event| !matches!(event, RoffInlineEvent::ZeroAdvance))
+        .skip_while(|event| !matches!(event, RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_)))
+        .any(|event| {
+            matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
+                if negative_entry_columns(argument.as_deref()).is_some())
+        })
 }
 
 /// Whether a leading motion or marker needs the live BACKBEFORE glyph.

@@ -3,6 +3,124 @@
 use super::{Labels, Visit, description_rows, json_string_roundtrip};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
+const REPLAY_HEADER: &str =
+    ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n";
+
+#[test]
+fn deferred_native_passes_survive_replay_across_invisible_cells_and_style() {
+    // Fixed ASCII and UTF-8 agree. term_word() writes an entry blank
+    // before applying BACKBEFORE, and term_fill() later consumes the
+    // authored marker. Zero-width controls also participate in the replay.
+    for lead in [r"A\p\z B", r"A\p\z  B"] {
+        for control in ["", r"\&", r"\:", r"\h'0n'", r"\fI\fP"] {
+            let source = format!(r#"{REPLAY_HEADER}.No "{lead}" No "\zC{control}\h'-2n'""#);
+            let loaded = mant_loader::load_roff_bytes(format!("{source}\n").as_bytes()).unwrap();
+            let native = json_string_roundtrip(&loaded);
+            let markdown = mant_codec::encode::render_markdown(&native);
+            let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            for content in [&native, &reloaded] {
+                let rendered = mant_render::render_query_man(content);
+                assert_eq!(
+                    description_rows(&rendered, &source),
+                    ["A", "BC"],
+                    "{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn repeated_rewinds_keep_accepted_rows_in_each_structural_owner() {
+    // Fixed term_flushln() accepts all three rows for each of these
+    // containers. Its final write replaces E in the first case, while
+    // the styled D survives the raw decoration writes in the second.
+    for (body, expected) in [
+        (
+            r#".Sy "A\p\z B\&" Ns No "\zC\p D" No "\:E" Ns No "\h'-1n'H""#,
+            ["A", "CD", "H"],
+        ),
+        (
+            r#".No "A\p\z B" Sy "C\p\z  D" No "\h'-2n'E" Ns No "H""#,
+            ["A", "BC", "DEH"],
+        ),
+    ] {
+        for (prefix, suffix) in [
+            ("", ""),
+            (".Bd -literal -compact\n", ".Ed\n"),
+            (".Bd -unfilled -compact\n", ".Ed\n"),
+            (".Bl -tag -width aa -compact\n.It ITEM\n", ".El\n"),
+        ] {
+            let source = format!("{REPLAY_HEADER}{prefix}{body}\n{suffix}");
+            let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let native = json_string_roundtrip(&loaded);
+            let markdown = mant_codec::encode::render_markdown(&native);
+            let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            for content in [&native, &reloaded] {
+                let rendered = mant_render::render_query_man(content);
+                let rows = description_rows(&rendered, &source);
+                let rows = if prefix.starts_with(".Bl") {
+                    let (label, rows) = rows.split_first().unwrap();
+                    assert!(label.ends_with("ITEM"), "{source}: {label}");
+                    rows
+                } else {
+                    &rows
+                };
+                assert_eq!(
+                    rows.iter().map(|row| row.trim()).collect::<Vec<_>>(),
+                    expected,
+                    "{source}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn repainted_final_glyph_keeps_its_link_and_its_own_search_word() {
+    // The fixed devices agree on A, CD and H. H overwrites E in
+    // term_word(), and its separate tty annotation does not own A.
+    let source = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n",
+        r#".Sy "\X'tty: link https://one.test'A\X'tty: link'\p\z B\&" Ns No "\zC\p D" No "\:E" Ns No "\h'-1n'\X'tty: link https://two.test'H\X'tty: link'""#,
+        "\n",
+    );
+    let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let native = json_string_roundtrip(&loaded);
+    let markdown = mant_codec::encode::render_markdown(&native);
+    let reloaded = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    for content in [&native, &reloaded] {
+        let rendered = mant_render::render_query_man(content);
+        assert_eq!(description_rows(&rendered, source), ["A", "CD", "H"]);
+        let mut labels = Labels::default();
+        labels.visit_document(content.document.as_ref().unwrap());
+        assert_eq!(
+            labels.0,
+            [
+                ("https://one.test".into(), "A".into()),
+                ("https://two.test".into(), "H".into()),
+            ]
+        );
+        for (probe, total) in [("A", 1), ("CD", 1), ("H", 1), ("E", 0), ("EH", 0)] {
+            let hits = mant_query::search_query(
+                content,
+                &SearchQuery {
+                    pattern: probe.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(hits.total, total, "{probe}: {markdown}");
+        }
+    }
+}
+
 #[test]
 fn coverage_uses_the_same_printed_row_and_keeps_the_surviving_link() {
     // The fixed ASCII and UTF-8 devices agree on these exact operands.

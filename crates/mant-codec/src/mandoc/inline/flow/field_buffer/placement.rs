@@ -125,15 +125,21 @@ impl FieldBuffer {
         // spaces immediately before a retained raw cursor are proved slots
         // too. Preserve their deferred source ownership through replay.
         let floor = self
-            .replay_fence()
+            .replay_fence(live_replay)
             .max(self.resume)
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         // A projection-only recovery spelling can fence its own native
         // position without hiding complete glyph slots appended after it.
-        let start = (floor..self.cells.len())
+        let mut start = (floor..self.cells.len())
             .rev()
             .find(|&index| !self.has_replayable_projection(index))
             .map_or(floor, |index| index + 1);
+        // A suffix can start after a backspace dependency even when the
+        // slots before it are not replayable. Geometry rejects a motion
+        // that actually reaches back through this fence.
+        while self.cells.get(start) == Some(&FieldCell::Backline) {
+            start += 1;
+        }
         // A covered glyph outside this suffix still needs the later
         // overstrike on the same accepted pass. Do not cut through it.
         let first_retreat = self
@@ -143,8 +149,8 @@ impl FieldBuffer {
         let first_alias = self
             .raw_copy_aliases
             .partition_point(|&(copy, _)| copy < start);
-        if self.write_cursor.retreat() > self.cells.len() - start
-            || *self.cells.get(start)? == FieldCell::Backline
+        if start == self.cells.len()
+            || self.write_cursor.retreat() > self.cells.len() - start
             || start != 0 && self.projection_length(start, self.cells.len()) == 0
             || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
             || self
@@ -192,12 +198,14 @@ impl FieldBuffer {
         })
     }
 
-    fn replay_fence(&self) -> usize {
+    fn replay_fence(&self, live_replay: bool) -> usize {
         let Some(deferred) = self.deferred_blanks.last() else {
             return self.raw_slot_fence;
         };
         if self.has_retained_word_cursor() && deferred.end == self.raw_slot_fence {
             deferred.start
+        } else if live_replay {
+            self.raw_slot_fence.max(deferred.start)
         } else {
             self.raw_slot_fence.max(deferred.end)
         }

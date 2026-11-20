@@ -284,7 +284,11 @@ fn execute_formatter_word_events(
     }
     if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
         let styled_suffix = last_font.and_then(|(font, start)| {
-            can_record_last_font
+            // A preceding pending glyph can change the leading bytes,
+            // but encode1 still writes exact copies of the final styled
+            // glyphs. Fence those copies separately from the older slots.
+            prior_edit
+                .is_none()
                 .then(|| {
                     native_writes::proved_decorated_tail(events, &word.native_writes[start..], font)
                 })
@@ -292,7 +296,7 @@ fn execute_formatter_word_events(
         });
         word.native_writes.push(FieldWrite::OpaqueRawSlots {
             styled_suffix,
-            keeps_prior_slots: decorated_writes == 1,
+            keeps_prior_slots: can_record_last_font && decorated_writes == 1,
         });
     }
     word.finish_content_prefix();

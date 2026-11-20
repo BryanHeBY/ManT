@@ -332,6 +332,56 @@ fn a_pending_link_label_moves_with_its_accepted_native_slot() {
 }
 
 #[test]
+fn replayed_hard_rows_keep_the_first_and_last_link_hit_cells() {
+    // Fixed ASCII/UTF-8 print A and H on separate rows after term_word()
+    // overwrites E. Only the two surviving glyphs carry tty links.
+    let source = concat!(
+        ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd example\n.Sh DESCRIPTION\n",
+        r#".Sy "\X'tty: link https://one.test'A\X'tty: link'\p\z B\&" Ns No "\zC\p D" No "\:E" Ns No "\h'-1n'\X'tty: link https://two.test'H\X'tty: link'""#,
+        "\n",
+    );
+    let view = DocumentView::new(&restored(source));
+    let one = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    let two = LinkTarget::External(ExternalUri::parse("https://two.test").unwrap());
+    for width in [24, 78] {
+        let rendered = view.render(width);
+        let buffer = paint(&rendered, width);
+        let start = rendered.search("DESCRIPTION")[0].row + 1;
+        let end = rendered.row_count - 1;
+        assert_eq!(end, start + 2);
+        for (offset, expected, link) in
+            [(0, "A", Some(&one)), (1, "CD", None), (2, "H", Some(&two))]
+        {
+            let row = start + offset;
+            let text = painted(&buffer, row, 0, width.into());
+            assert_eq!(text.trim(), expected);
+            let hit = rendered
+                .search(expected)
+                .into_iter()
+                .find(|hit| hit.row == row)
+                .unwrap();
+            assert_eq!(rendered.link_target_at(row, hit.start_column), link);
+            assert_eq!(rendered.link_target_at(row, hit.end_column), None);
+        }
+        let copy = rendered.selected_text(RenderedSelection {
+            anchor: TextPosition {
+                row: start,
+                column: 0,
+            },
+            focus: TextPosition {
+                row: end,
+                column: usize::from(width) - 1,
+            },
+        });
+        assert_eq!(
+            copy.lines().map(str::trim).collect::<Vec<_>>(),
+            ["A", "CD", "H"]
+        );
+        assert_eq!(rendered.search("EH"), []);
+    }
+}
+
+#[test]
 fn raw_overstrike_spelling_keeps_the_tbl_word_searchable_at_both_widths() {
     // Fixed CVS term_strlen() sees the raw & in the overstrike on both
     // devices. With a preceding \z, that slot measures but is covered.
