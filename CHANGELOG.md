@@ -189,7 +189,8 @@ that crate was not published for that change.
   annotations with matching visible marks and native bodies.
 - Preserve overwritten glyph and link ownership when another roff word
   appends an editable break marker. Keep the hard rows accepted by the same
-  field in text, Markdown readback, search and the reader.
+  field in text, Markdown readback, search and the reader. Resolve coverage
+  from consecutive backspaces across invisible controls on a proved pass.
 - Keep complete mdoc flag assignments with comparison signs, literal
   connectors before enclosure closers, path roots, MIME parameters and
   globs. Keep relative paths after explanatory text from extending the

@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, ops::Range};
 
 use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 
-const MAX_REPLAY_PREFIX_CELLS: usize = 64;
+pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 64;
 
 impl FieldBuffer {
     pub(super) fn apply_slot_placement(&mut self, write: &FieldWrite) {

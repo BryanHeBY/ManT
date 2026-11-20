@@ -22,6 +22,8 @@ use super::{
     cell_units, columns, signed,
 };
 
+mod overstrikes;
+
 fn resolve_pending_tabs(
     tabs: &mut Option<&mut Vec<(usize, usize)>>,
     pending: &mut usize,
@@ -256,10 +258,25 @@ impl FieldBuffer {
         passes: &[FillPass],
         mut accept: impl FnMut(usize, usize),
     ) {
+        if !self.has_pass_retreats() {
+            return;
+        }
         let mut retreats = self.pass_retreats.iter().peekable();
         for pass in passes {
+            if let Some(covers) = self.prove_repeated_device_covers(pass.start, pass.end) {
+                for (target, by) in covers {
+                    accept(target, by);
+                }
+                while retreats
+                    .peek()
+                    .is_some_and(|&&(target, _)| target < pass.end)
+                {
+                    retreats.next();
+                }
+                continue;
+            }
             let Some(&&(target, _)) = retreats.peek() else {
-                break;
+                continue;
             };
             if target < pass.end {
                 let start = pass.start;

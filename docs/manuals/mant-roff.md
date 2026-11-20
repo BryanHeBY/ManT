@@ -267,8 +267,10 @@ makes the blank print. That gap can move or disappear with its native
 slot while the field stays live. A
 generated `Fl` dash follows the same device writes and can survive when
 either bold copy remains. An empty overstrike can leave a pending retreat
-active across words. A surviving blank still separates the next accepted
-word even when the current operand's entry blank was trimmed. If
+active across words. Consecutive backspaces can cover earlier glyphs across
+invisible fill controls within the same accepted pass. A surviving blank still
+separates the next accepted word even when the current operand's entry blank
+was trimmed. If
 the suffix would split an active overstrike, it cannot authorize an edit
 to the earlier owner. Raw table columns use native measurement before
 executing the cell words. Inside an overstrike, measurement and execution

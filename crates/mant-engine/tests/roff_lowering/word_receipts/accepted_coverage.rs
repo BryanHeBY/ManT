@@ -72,6 +72,54 @@ fn appending_a_marker_keeps_earlier_slot_owners_available_to_the_next_word() {
 }
 
 #[test]
+fn consecutive_backspaces_cover_glyphs_across_invisible_fill_controls() {
+    // term_field() emits both backspaces on the accepted pass across
+    // NBRZW and the marker. Both pinned devices paint HX. A tty label
+    // on F changes the native writes, and DFHX survives in that control.
+    for (f, retained) in [
+        ("F", false),
+        (r"\X'tty: link https://covered.test'F\X'tty: link'", true),
+    ] {
+        for (x, linked) in [
+            ("X", false),
+            (r"\X'tty: link https://kept.test'X\X'tty: link'", true),
+        ] {
+            let source = format!(
+                "{REPLAY_HEADER}{}\n",
+                format_args!(
+                    r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\z{f}" Em "H\p" Ns No "\h'-1n'{x}""#
+                )
+            );
+            let native =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let markdown = mant_codec::encode::render_markdown(&native);
+            let restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            let links: Vec<_> = retained
+                .then_some(("https://covered.test", "F"))
+                .into_iter()
+                .chain(linked.then_some(("https://kept.test", "X")))
+                .collect();
+            let row = if retained { "DFHX" } else { "HX" };
+            for content in [&native, &restored] {
+                assert_eq!(
+                    description_rows(&mant_render::render_query_man(content), &source),
+                    [row],
+                    "{source}"
+                );
+                let mut labels = Labels::default();
+                labels.visit_document(content.document.as_ref().unwrap());
+                let actual: Vec<_> = labels
+                    .0
+                    .iter()
+                    .map(|(uri, label)| (uri.as_str(), label.as_str()))
+                    .collect();
+                assert_eq!(actual, links, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
 fn replayed_automatic_spacing_traverses_the_existing_native_slot() {
     // term.c::bufferc() advances over an occupied cell without replacing
     // it with SP. Both fixed devices accept one pass and print DFX.
