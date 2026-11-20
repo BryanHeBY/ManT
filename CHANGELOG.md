@@ -47,6 +47,14 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Preserve accepted hard rows and surviving link labels across late roff
+  rewinds, including boundaries with deferred blanks and font decoration.
+- Keep subsection whitespace and its references on an already published
+  hanging paragraph's row. Preserve Unicode whitespace accepted by the
+  formatter.
+- Recognize touching native path fragments and literal alternatives in
+  complete option signatures. Keep detached explanatory notes out of
+  exact entry queries.
 - Keep the space before a surviving glyph when the original word is
   overprinted. Keep editable word breaks live through tight entry and
   font-only escapes, preserving the surviving link's source.
@@ -342,6 +350,8 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Keep native display and table audit numbers stable when mandoc skips a
+  list item head retained only for diagnostics.
 - Count displays and column tables in extended mdoc definition headings
   when assigning native audit occurrences.
 - Number literal displays in structure audits by native source occurrence,

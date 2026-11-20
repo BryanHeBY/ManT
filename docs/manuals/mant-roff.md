@@ -915,6 +915,13 @@ explicit `TQ` adds a tag only to the immediately preceding empty definition;
 several such tags retain their source order under one owner. Multiple names or
 forms do not imply an explicit alias relationship.
 
+An mdoc `Fl` assignment can retain a pathname split across touching
+operands, such as `Fl a= Ns Pa / Ns Pa foo`. A real word separator ends the
+path. In a detached argument group, a typed argument can be joined to a
+literal `Li` alternative, as in `Ar opt | Li auto`. A group describing
+a default or other explanatory text remains readable in the HEAD and
+does not become an exact option signature.
+
 In an mdoc `Ev` declaration, accepted native operands delimit names, values
 and supplements. Commas and pipes within balanced templates or within the
 same assignment value do not introduce aliases. A separator followed by
@@ -1474,17 +1481,22 @@ Large device-only advances can be compressed for reading. The resolved suffix re
 
 A replayed separator contributes only when the native field prints its cells.
 A rewind into just the current word's automatic separator leaves previous word
-cells available for the final field pass. A man `.SH` whose final heading
-field fits without ending a row retains the section and its resolved paragraph
-distance. The unprinted tail itself adds no blank row.
+cells available for the final field pass. A proved suffix can include source
+spaces and the decorated copies of its last glyphs. Earlier field slots remain
+available to resolve hard rows and surviving labels.
+A man `.SH` whose final heading field fits without ending a row retains
+the section and its resolved paragraph distance. The unprinted tail
+itself adds no blank row.
 An empty tag or earlier heading can leave a minimum device separation for
 the next field. A subsequent heading can consume it and end a real row.
 When a subsection's padding shares the preceding text row, that padding
-adds no heading row. Later heading rows and the subsection identity are
-preserved. At a discretionary breakpoint the field scan retains the
-zero-advance glyph and its link if the covering glyph prints on another
-row. The same accepted positions decide whether a backstep leaves enough
-following source spaces to end a word in a paragraph or a tbl cell.
+belongs to that text row, including authored Unicode spaces and their
+links when a man `HP` paragraph has already been published. Later heading
+rows and the subsection identity are preserved. At a discretionary
+breakpoint the field scan retains the zero-advance glyph and its link if
+the covering glyph prints on another row. The same accepted positions
+decide whether a backstep leaves enough following source spaces to end a
+word in a paragraph or a tbl cell.
 
 The zero-advance `\z` escape consumes complete control operands and never exposes a partial glyph spelling. Its two formatter stages—waiting for a glyph and waiting for a later glyph to overstrike the completed glyph—are retained independently across adjacent source text, style operands, inline macro arguments, and formatter-generated syntax such as `OP` brackets. An ordinary filled-word boundary consumes the latter backtracking position without adding a visible blank; real line and cell boundaries settle any remaining glyph. Following the pinned mandoc CVS formatter, a following `\c` cancels only a still-unconsumed `\z`; after a zero-advance glyph has already been produced, a trailing `\c` remains a valid source-line continuation and the next glyph may overstrike it. GNU troff diagnoses or projects some of these non-portable `\z`/`\c` combinations differently. A final literal glyph remains visible when no later glyph can overstrike it; otherwise the linear projection omits the overstruck glyph.
 
