@@ -43,8 +43,11 @@ that crate was not published for that change.
   A later overwrite can reveal earlier glyphs through backspaces, word-end
   markers and horizontal advances while preserving link ranges and names.
   Large device-only advances retain an editable suffix across later words.
+  Consecutive word-end markers retain the earlier word's editable cells.
+  A row closed at a subsection boundary stays with its original owner.
 - Keep literal and macro-generated argument groups equivalent in mdoc
-  command lists, including balanced brackets within a single parameter.
+  command lists, including balanced brackets across text fragments of a
+  single parameter.
   Native pipes between independent invocations still suppress standalone
   names.
 - Resolve tbl word-end marks against the native accepted cell range.
