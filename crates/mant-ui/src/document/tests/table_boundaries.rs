@@ -162,6 +162,77 @@ fn marker_rewinds_keep_painted_words_and_remove_overwritten_link_hits() {
 }
 
 #[test]
+fn accepted_field_rows_keep_their_glyphs_and_link_ranges() {
+    // Pinned CVS term_fill accepts the glyphs after the replayed
+    // separators. Rewinding the entry gap alone leaves the previous rows.
+    let head = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    let link = LinkTarget::External(ExternalUri::parse("https://one.test").unwrap());
+    for (word, rows, label) in [
+        (
+            r#".No "\zQ\p" Ns No A No "\pT" Ns No "\h'-2n'Y""#,
+            &["A", "YT"][..],
+            None,
+        ),
+        (
+            r#".No "\X'tty: link https://one.test'P\X'tty: link' \pQ" No "\h'2n'\p B""#,
+            &["P Q", "", "B"][..],
+            Some("P"),
+        ),
+        (
+            r#".No "\X'tty: link https://one.test'P\X'tty: link'\p Q" No "\p " No "\h'-1n'""#,
+            &["P", "Q"][..],
+            Some("P"),
+        ),
+    ] {
+        assert_native_word_appearance(&format!("{head}{word}\n"), rows, label, &link);
+    }
+}
+
+#[test]
+fn empty_section_heading_does_not_add_an_unprinted_row() {
+    // CVS pre_SH gives the heading a no-break field. A fitting zero-width
+    // tail does not end a device row, unlike the corresponding SS field.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n";
+    let tail = "\nGG\n.PD 1\n.SH ENDTEST\nZZ\n";
+    for (request, mode, pd, heading, gap) in [
+        ("SH", "", 0, r"\&", 0),
+        ("SH", "", 0, r"\p DD", 0),
+        ("SH", ".nf\n", 0, r"\p\:\&\p DD", 0),
+        ("SH", "", 1, r"\p DD", 1),
+        ("SS", "", 0, r"\p DD", 1),
+    ] {
+        let source = format!("{head}.PD {pd}\n{mode}AA\n.{request} {heading}{tail}");
+        let view = DocumentView::new(&restored(&source));
+        for width in [24, 78] {
+            let rendered = view.render(width);
+            let first = rendered.search("AA")[0].row;
+            let last = rendered.search("GG")[0].row;
+            assert_eq!(last - first, 1 + gap, "{source}");
+            assert!(rendered.search("DD").is_empty(), "{source}");
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: first,
+                    column: 0,
+                },
+                focus: TextPosition {
+                    row: last,
+                    column: usize::from(width) - 1,
+                },
+            });
+            let rows: Vec<_> = copied.lines().map(str::trim).collect();
+            assert_eq!(
+                rows,
+                if gap == 0 {
+                    &["AA", "GG"][..]
+                } else {
+                    &["AA", "", "GG"][..]
+                }
+            );
+        }
+    }
+}
+
+#[test]
 fn live_subsection_rows_preserve_only_the_real_gap_when_painted_and_copied() {
     // pre_SS with PD=0 and post_SH::term_newln share the old field.
     // The exact source forms distinguish its end from an empty HEAD pass.
@@ -227,11 +298,13 @@ fn assert_native_word_appearance(
                 row,
                 "{source}: {width}"
             );
-            let hits = rendered.search(row);
-            assert!(
-                hits.iter().any(|hit| hit.row == first + offset),
-                "{source}: {row}"
-            );
+            if !row.is_empty() {
+                let hits = rendered.search(row);
+                assert!(
+                    hits.iter().any(|hit| hit.row == first + offset),
+                    "{source}: {row}"
+                );
+            }
         }
         let selected = rendered.selected_text(RenderedSelection {
             anchor: TextPosition {

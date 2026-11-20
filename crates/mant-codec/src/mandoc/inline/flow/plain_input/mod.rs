@@ -37,6 +37,7 @@ pub(super) use unit::PlainInputUnit;
 #[derive(Clone, Copy)]
 pub(super) enum PlainFlushBoundary {
     Layout,
+    ManSectionHeading,
     LiteralLineEnd,
     LiteralSourceRow,
 }
@@ -44,15 +45,40 @@ pub(super) enum PlainFlushBoundary {
 impl PlainFlushBoundary {
     const fn row_origin(self) -> CompletedRowOrigin {
         match self {
-            Self::Layout | Self::LiteralLineEnd => CompletedRowOrigin::Layout,
+            Self::Layout | Self::ManSectionHeading | Self::LiteralLineEnd => {
+                CompletedRowOrigin::Layout
+            }
             Self::LiteralSourceRow => CompletedRowOrigin::LiteralText,
         }
+    }
+
+    fn fits_without_ending_heading_row(
+        self,
+        accepted: super::field_buffer::AcceptedPasses<'_>,
+        inherited_printed_row: bool,
+    ) -> bool {
+        // pre_SH uses zero offset and trailspace equal to the first
+        // field's width. A glyphless final term_fill therefore fits;
+        // NOBREAK suppresses only that tail endline (term.c:239–253).
+        // A rejected final pass returns zero vbr even after earlier ink.
+        matches!(self, Self::ManSectionHeading)
+            && !inherited_printed_row
+            && (accepted.rejected() || accepted.all().last().is_none_or(|pass| pass.width == 0))
     }
 }
 
 struct PlainRetirement {
     outcome: PlainFlushOutcome,
     projection: Option<OutputNodeEdits>,
+    fitting_heading_tail: bool,
+}
+
+impl PlainRetirement {
+    const UNMODELED: Self = Self {
+        outcome: PlainFlushOutcome::Ordinary,
+        projection: None,
+        fitting_heading_tail: false,
+    };
 }
 
 /// The exceptional row fact of this consumed plain flush, never history.
@@ -154,6 +180,13 @@ impl InlineBuilder {
         &mut self,
         boundary: PlainFlushBoundary,
     ) -> PlainFlushOutcome {
+        self.retire_plain_row(boundary).0
+    }
+
+    pub(super) fn retire_plain_row(
+        &mut self,
+        boundary: PlainFlushBoundary,
+    ) -> (PlainFlushOutcome, bool) {
         let Some(retired) = Self::consume_plain_flush_unit(
             &mut self.execution,
             &mut self.nodes,
@@ -161,7 +194,7 @@ impl InlineBuilder {
             self.section_handoff.as_mut(),
             self.head_operand_capture.as_deref(),
         ) else {
-            return PlainFlushOutcome::Ordinary;
+            return (PlainFlushOutcome::Ordinary, false);
         };
         // Execution indices were mapped at the actual projection, before
         // retirement reset their cursors. Only live builder checkpoints
@@ -170,7 +203,7 @@ impl InlineBuilder {
             self.remap_output_projection_checkpoints(&edits);
         }
         self.note_native_input_retired();
-        retired.outcome
+        (retired.outcome, retired.fitting_heading_tail)
     }
 
     /// Execution-state form shared with the no-fill row finisher, which
@@ -209,10 +242,7 @@ impl InlineBuilder {
         let receipt = unit.buffer.flush_receipt(targets, false);
         let Some(accepted) = receipt.accepted_passes() else {
             Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
-            return Some(PlainRetirement {
-                outcome: PlainFlushOutcome::Ordinary,
-                projection: None,
-            });
+            return Some(PlainRetirement::UNMODELED);
         };
         let PlainInputUnit {
             mut buffer,
@@ -306,6 +336,8 @@ impl InlineBuilder {
         Some(PlainRetirement {
             outcome,
             projection: Some(edits),
+            fitting_heading_tail: boundary
+                .fits_without_ending_heading_row(accepted, inherited_printed_row),
         })
     }
 

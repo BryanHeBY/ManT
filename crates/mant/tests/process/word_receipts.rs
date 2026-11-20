@@ -1166,12 +1166,16 @@ fn empty_overstrike_uses_the_live_entry_slots_across_words() {
 }
 
 fn search_visible_word(source: &str, word: &str) -> u64 {
+    search_visible_word_with_format(source, "roff", word)
+}
+
+fn search_visible_word_with_format(source: &str, format: &str, word: &str) -> u64 {
     let result = run_text_input(
         &[
             "--input",
             "-",
             "--input-format",
-            "roff",
+            format,
             "--format",
             "json",
             "--display",
@@ -1303,6 +1307,117 @@ fn relative_word_rewind_needs_no_overstrike_or_line_break_escape() {
 const EDITABLE_FIELD: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
 
 #[test]
+fn accepted_cells_keep_their_glyphs_across_replayed_separators() {
+    // CVS term.c::term_flushln and term_field consume gaps separately
+    // from visible glyphs. The last motion-only input changes col, not
+    // lastcol, so it cannot erase a previously buffered row end.
+    for (word, reading, hit, miss, labels) in [
+        (
+            r#".No "\zQ\p" Ns No A No "\pT" Ns No "\h'-2n'Y""#,
+            "A\nYT",
+            "YT",
+            "Q",
+            &[][..],
+        ),
+        (
+            r#".No "\X'tty: link https://one.test'P\X'tty: link' \pQ" No "\h'2n'\p B""#,
+            "P Q\n\nB",
+            "B",
+            "QB",
+            &["P"][..],
+        ),
+        (
+            r#".No "\X'tty: link https://one.test'P\X'tty: link'\p Q" No "\p " No "\h'-1n'""#,
+            "P\nQ",
+            "Q",
+            "P Q",
+            &["P"][..],
+        ),
+    ] {
+        let source = format!("{EDITABLE_FIELD}{word}\n");
+        assert_readbacks(&source, reading, None);
+        for (input, format) in [
+            (source.clone(), "roff"),
+            (
+                render(&source, "roff", "markdown", "never", false),
+                "markdown",
+            ),
+        ] {
+            let found: Vec<_> = document_links(&input, format)
+                .into_iter()
+                .map(|(target, label)| {
+                    assert_eq!(
+                        target,
+                        LinkTarget::External {
+                            uri: "https://one.test".into()
+                        }
+                    );
+                    label
+                })
+                .collect();
+            assert_eq!(found, labels, "{source}");
+            assert_eq!(
+                search_visible_word_with_format(&input, format, hit),
+                1,
+                "{source}"
+            );
+            assert_eq!(
+                search_visible_word_with_format(&input, format, miss),
+                0,
+                "{source}"
+            );
+        }
+    }
+}
+
+#[test]
+fn retained_cell_receipts_survive_both_definition_owners() {
+    // The It HEAD and BODY flush separately. Both accept the restored T
+    // after A's word-end break (mdoc_term.c::termp_it_post, term.c::term_field).
+    let word = r#"No "\zQ\p" Ns No A No "\pT" Ns No "\h'-2n'Y""#;
+    for kind in ["tag", "hang"] {
+        let head = format!("{EDITABLE_FIELD}.Bl -{kind} -width 12n\n.It {word}\nBODYWORD\n.El\n");
+        let body = format!("{EDITABLE_FIELD}.Bl -{kind} -width 12n\n.It alpha\n.{word}\n.El\n");
+        let header_tail = if kind == "tag" {
+            "A\nYT\nBODYWORD"
+        } else {
+            "A\nYT BODYWORD"
+        };
+        for (source, id, expected) in [
+            (&head, "term-a-yt", header_tail),
+            (&body, "term-alpha", "alpha         A\nYT"),
+        ] {
+            let json = render(source, "roff", "json", "never", false);
+            let document: serde_json::Value = serde_json::from_str(&json).unwrap();
+            assert_eq!(
+                document["document"]["sections"][1]["blocks"][0]["items"][0]["entry"]["id"],
+                id
+            );
+            let reading = render(source, "roff", "text", "never", false);
+            let rows: Vec<_> = description(&reading).lines().map(str::trim_start).collect();
+            assert_eq!(rows, expected.lines().collect::<Vec<_>>(), "{source}");
+        }
+        let explanation = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "json",
+                "--explain",
+                "alpha",
+            ],
+            &body,
+        );
+        assert!(explanation.status.success(), "{explanation:?}");
+        let result: serde_json::Value = serde_json::from_slice(&explanation.stdout).unwrap();
+        assert_eq!(result["counts"]["directEntry"]["total"], 1);
+        assert_eq!(search_visible_word(&body, "YT"), 1);
+    }
+}
+
+#[test]
 fn live_markers_and_backspaces_commit_the_same_text_and_link_owners() {
     // CVS term_word writes \p into the buffer. term_fill reads the
     // marker after all writes, including writes reaching a preceding word.
@@ -1398,6 +1513,70 @@ fn word_end_markers_preserve_the_cells_and_owners_of_inner_separators() {
     }
     let source = format!(r#"{EDITABLE_FIELD}.No "A\p\h'2n'B" No "\h'-2n'T""#) + "\n";
     assert_readbacks(&source, "A  T", None);
+}
+
+#[test]
+fn section_transitions_publish_only_rows_completed_by_the_device() {
+    // pre_SH uses TERMP_NOBREAK with trailspace equal to the field width.
+    // A zero-width tail that fits never reaches endline in term_flushln.
+    let head = ".TH CHECK 1 \"2026-11-10\"\n.SH NAME\ncheck \\- audit\n.SH FIRST\n";
+    let tail = "\nGG\n.PD 1\n.SH ENDTEST\nZZ\n";
+    for (request, id, heading, compiled_gap) in [
+        ("SH", "section", r"\&", 0),
+        ("SH", "p-dd", r"\p DD", 0),
+        ("SH", "p-p-dd", r"\p\:\&\p DD", 0),
+        ("SS", "p-dd", r"\p DD", 1),
+    ] {
+        for (pd, mode) in [(0, ""), (0, ".nf\n"), (1, "")] {
+            let source = format!("{head}.PD {pd}\n{mode}AA\n.{request} {heading}{tail}");
+            let bundle: mant_protocol::QueryBundle =
+                serde_json::from_str(&render(&source, "roff", "json", "never", false)).unwrap();
+            let document = bundle.document.unwrap();
+            let section = if request == "SH" {
+                &document.sections[2]
+            } else {
+                &document.sections[1].children[0]
+            };
+            let gap = pd + compiled_gap;
+            assert_eq!(section.id.as_str(), id, "{source}");
+            assert_eq!(section.heading.plain_text(), "", "{source}");
+            assert_eq!(usize::from(section.spacing_before_lines), gap, "{source}");
+            let output = render(&source, "roff", "text", "never", false);
+            let between = output.split_once("\nFIRST\n").unwrap().1;
+            let rows = between.split_once("\nENDTEST").unwrap().0.trim_end();
+            let rows: Vec<_> = rows.lines().map(str::trim_start).collect();
+            let expected = format!("AA\n{}GG", "\n".repeat(gap));
+            assert_eq!(rows, expected.lines().collect::<Vec<_>>(), "{source}");
+            let selector = format!("id:{id}");
+            let excerpt = run_text_input(
+                &[
+                    "--input",
+                    "-",
+                    "--input-format",
+                    "roff",
+                    "--format",
+                    "json",
+                    "--node",
+                    &selector,
+                ],
+                &source,
+            );
+            assert!(excerpt.status.success(), "{excerpt:?}");
+            let excerpt: mant_protocol::QueryExcerpt =
+                serde_json::from_slice(&excerpt.stdout).unwrap();
+            let [
+                mant_protocol::ExcerptSelection::DocumentSection {
+                    section: selected, ..
+                },
+            ] = excerpt.selections.as_slice()
+            else {
+                panic!("expected one selected section for {source}");
+            };
+            assert_eq!(selected.id, section.id);
+            assert_eq!(selected.heading, section.heading);
+            assert_eq!(selected.spacing_before_lines, section.spacing_before_lines);
+        }
+    }
 }
 
 #[test]

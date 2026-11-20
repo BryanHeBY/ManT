@@ -14,6 +14,12 @@ impl InlineBuilder {
         self.hard_break_with_origin(CompletedRowOrigin::Layout);
     }
 
+    pub(in crate::mandoc) fn finish_man_section_heading(&mut self) {
+        self.tighten_next_boundary();
+        self.hard_break_using_field(None, false, CompletedRowOrigin::Layout, true);
+        self.tighten_next_boundary();
+    }
+
     pub(in crate::mandoc::inline::flow) fn hard_break_with_origin(
         &mut self,
         origin: CompletedRowOrigin,
@@ -51,7 +57,7 @@ impl InlineBuilder {
             for edits in self.project_consumed_row_layout(&native) {
                 native.remap_output_projection(&edits);
             }
-            self.hard_break_using_field(Some(&native), true, origin);
+            self.hard_break_using_field(Some(&native), true, origin, false);
             // This standalone term_newln() has no later field-retirement
             // caller. Its row reset already consumed the live buffer, so
             // deliver the captured text receipt without re-running the tail
@@ -67,7 +73,7 @@ impl InlineBuilder {
                 receiver.accept_tabs(tabs);
             }
         } else {
-            self.hard_break_using_field(None, false, origin);
+            self.hard_break_using_field(None, false, origin, false);
         }
         // The separator that caused this projected row end belongs to the
         // consumed row, not to the new IR line. This is a projection join;
@@ -82,7 +88,7 @@ impl InlineBuilder {
         native: Option<&super::super::definition::NativeFieldDevice>,
         origin: CompletedRowOrigin,
     ) {
-        self.hard_break_using_field(native, true, origin);
+        self.hard_break_using_field(native, true, origin, false);
     }
 
     fn hard_break_using_field(
@@ -90,6 +96,7 @@ impl InlineBuilder {
         captured: Option<&super::super::definition::NativeFieldDevice>,
         projected: bool,
         origin: CompletedRowOrigin,
+        man_section_heading: bool,
     ) {
         let had_native_buffer = self.has_unconsumed_field_cells();
         let unprinted_field_tail = had_native_buffer
@@ -123,8 +130,8 @@ impl InlineBuilder {
                 });
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let plain_flush = self.consume_hard_break_buffer(projected, origin);
-        let plain_flush_rejection = plain_flush.rejected();
+        let (plain_flush, fitting_heading_tail) =
+            self.consume_hard_break_buffer(projected, origin, man_section_heading);
         let closes_preceding_printed_row = captured
             .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row);
         self.observe_hard_break_boundary(
@@ -137,7 +144,7 @@ impl InlineBuilder {
         // buffer: term_newln() flushed it (lastcol > 0), term_flushln()
         // reset the buffer (term.c:233-237), and the nbr == 0 pass ended
         // its own row (term.c:250-253). The rejection must retire here.
-        let retiring_rejection = self.execution.wipe_remainder || plain_flush_rejection;
+        let retiring_rejection = self.execution.wipe_remainder || plain_flush.rejected();
         if !self.has_formatter_cell()
             && !had_native_buffer
             && !exited_definition_row
@@ -161,7 +168,7 @@ impl InlineBuilder {
         self.flush_zero_advance();
         self.external_head_row_pending = false;
         let completed_unprinted_row = !closes_preceding_printed_row
-            && (plain_flush_rejection
+            && (plain_flush.rejected()
                 || unprinted_field_tail
                 || plain_flush.closes_unprinted_row()
                 || !self.in_definition_field()
@@ -194,6 +201,7 @@ impl InlineBuilder {
             });
         }
         if completed_unprinted_row
+            && !fitting_heading_tail
             && (origin != CompletedRowOrigin::LiteralText || !current_row_has_printable)
         {
             // term_field() can accept only deferred padding without printing
@@ -234,7 +242,8 @@ impl InlineBuilder {
         &mut self,
         projected: bool,
         origin: CompletedRowOrigin,
-    ) -> super::super::plain_input::PlainFlushOutcome {
+        man_section_heading: bool,
+    ) -> (super::super::plain_input::PlainFlushOutcome, bool) {
         use super::super::plain_input::{PlainFlushBoundary, PlainFlushOutcome};
         let rejected = if projected {
             self.execution
@@ -248,25 +257,27 @@ impl InlineBuilder {
             self.discard_unprinted_definition_field_output()
         } else {
             let boundary = match origin {
+                _ if man_section_heading => PlainFlushBoundary::ManSectionHeading,
                 CompletedRowOrigin::LiteralText => PlainFlushBoundary::LiteralLineEnd,
                 CompletedRowOrigin::Layout | CompletedRowOrigin::HardLine => {
                     PlainFlushBoundary::Layout
                 }
             };
-            let outcome = self.retire_plain_flush_unit(boundary);
+            let (outcome, fitting_heading_tail) = self.retire_plain_row(boundary);
             if let Some(from) = outcome.rejection_start() {
                 self.note_section_rejection(from);
             }
-            return outcome;
+            return (outcome, fitting_heading_tail);
         };
-        if rejected {
+        let outcome = if rejected {
             PlainFlushOutcome::Rejected {
                 from: None,
                 after_printed_pass: false,
             }
         } else {
             PlainFlushOutcome::Ordinary
-        }
+        };
+        (outcome, false)
     }
 
     fn observe_hard_break_boundary(&mut self, closes_preceding_printed_row: bool) {

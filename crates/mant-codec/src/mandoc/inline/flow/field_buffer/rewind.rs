@@ -169,6 +169,29 @@ impl FieldBuffer {
             return EntryRewind::Unmodeled;
         }
         let count = columns.saturating_add(usize::from(self.backbefore_armed));
+        if writes[1..].iter().all(|write| {
+            matches!(
+                write,
+                FieldWrite::OpaqueRawSlots {
+                    styled_suffix: None,
+                    ..
+                }
+            )
+        }) && self.cursor_retreat == 0
+            && !self.backbefore_armed
+            && self.cells.len().checked_sub(count).is_some_and(|at| {
+                at >= word_start.max(self.resume)
+                    && self.cells[at..]
+                        .iter()
+                        .all(|cell| *cell == FieldCell::BreakableBlank)
+            })
+        {
+            // A motion into the freshly written entry gap changes col,
+            // not lastcol (term.c:678-714). No byte was overwritten.
+            self.cursor_retreat = count;
+            writes.clear();
+            return EntryRewind::Absent;
+        }
         let Some(replay) = self.plan_entry_rewind(&writes[1..], word_start, count) else {
             self.word_scan = WordScanPolicy::UnmodeledRewind;
             self.scan = None;

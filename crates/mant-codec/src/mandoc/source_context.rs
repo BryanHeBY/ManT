@@ -348,7 +348,11 @@ impl<'a> LoweringContext<'a> {
         // mdoc_term.c::termp_sh_post()/termp_ss_post() execute term_newln
         // at the HEAD post. Consume the live native receipt before draining
         // this semantic owner; a rejected later pass still ended its row.
-        builder.hard_break();
+        if block.macro_token == Some(libmandoc_rs::MacroToken::Man(libmandoc_rs::ManMacro::Sh)) {
+            builder.finish_man_section_heading();
+        } else {
+            builder.hard_break();
+        }
         if shared {
             *previous_output = builder.take_section_handoff_prefix();
         }

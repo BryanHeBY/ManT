@@ -75,8 +75,10 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             if projected {
                 while projected_end > printed_end {
                     let cell = projected_end - 1;
-                    if !matches!(buffer.cells()[cell], FieldCell::BreakableBlank)
-                        && buffer.projection_length(cell, projected_end) != 0
+                    if !matches!(
+                        buffer.cells()[cell],
+                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                    ) && buffer.projection_length(cell, projected_end) != 0
                     {
                         break;
                     }
@@ -168,7 +170,33 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             pass_index += 1;
         }
     }
+    retire_unprinted_prefixes(anchors, passes, &printed_ends, &mut lengths);
     lengths
+}
+
+fn retire_unprinted_prefixes(
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+    printed_ends: &[(usize, bool, usize, bool)],
+    lengths: &mut BTreeMap<String, OwnerAcceptance>,
+) {
+    // A replay can move an earlier cell's representation to a prefix
+    // under a later owner. Its local graph does not re-authorize a gap
+    // consumed between native passes.
+    for anchor in anchors {
+        if let Some(gap) = anchor.projected_gap_cell {
+            let pass = passes.partition_point(|pass| pass.end <= gap);
+            let printed = passes
+                .get(pass)
+                .is_some_and(|pass_row| pass_row.start <= gap && gap < printed_ends[pass].0);
+            if !printed {
+                lengths
+                    .entry(anchor.owner.clone())
+                    .or_default()
+                    .prefix_printed = false;
+            }
+        }
+    }
 }
 
 /// Consume accepted `term_flushln()` passes at their real retirement point.
@@ -549,6 +577,12 @@ pub(super) fn trim_native_breakable_tail(nodes: &mut Vec<Inline>) -> bool {
     let mut exhausted = true;
     while let Some(mut node) = nodes.pop() {
         if native_word_marker(&node).is_some() || matches!(node, Inline::Anchor { .. }) {
+            metadata.push(node);
+            continue;
+        }
+        if matches!(&node, Inline::Text { value } if value.is_empty()) {
+            // An empty provisional word can still carry a cell witness.
+            // It does not shield padding from the accepted row end.
             metadata.push(node);
             continue;
         }
