@@ -87,15 +87,15 @@ impl SectionHandoff {
             && continues_previous
             && pass.end > self.previous_cell_end
         {
-            let heading = &buffer.cells()[self.previous_cell_end..pass.end];
             // man_term.c::pre_SS can leave the previous field live at
             // PD=0. If only its fixed padding shares a later heading's
             // accepted pass, the heading supplies the reading row.
-            heading.iter().any(ink)
+            has_accepted_ink(buffer, self.previous_cell_end..pass.end, covered)
                 && (continues_detached
                     || pass.start < old_end && {
                         let previous = &buffer.cells()[pass.start..old_end];
-                        !previous.iter().any(ink) && previous.iter().any(fixed_padding)
+                        !has_accepted_ink(buffer, pass.start..old_end, covered)
+                            && previous.iter().any(fixed_padding)
                     })
         } else {
             false
@@ -105,9 +105,7 @@ impl SectionHandoff {
         } else if !closes_previous
             && continues_previous
             && pass.end > self.previous_cell_end
-            && !buffer.cells()[self.previous_cell_end..pass.end]
-                .iter()
-                .any(ink)
+            && !has_accepted_ink(buffer, self.previous_cell_end..pass.end, covered)
         {
             // term_field() printed the heading's fixed padding on the
             // preceding owner's row. A later pass may carry heading ink
@@ -383,6 +381,28 @@ fn heading_has_only_padding(head: &[Inline]) -> bool {
 fn ink(cell: &FieldCell) -> bool {
     matches!(cell, FieldCell::Hyphen)
         || matches!(cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+}
+
+fn has_accepted_ink(buffer: &FieldBuffer, cells: Range<usize>, covered: &[usize]) -> bool {
+    let end = cells.end;
+    cells.into_iter().any(|index| {
+        let cell = &buffer.cells()[index];
+        if !ink(cell) || covered.binary_search(&index).is_ok() {
+            return false;
+        }
+        // encode1() writes font decorations as extra native bytes. A
+        // decoration without an author scalar that is followed by its
+        // backspace and a replacement graph cannot supply visible ink.
+        if index + 2 < end
+            && buffer.projection_length(index, index + 1) == 0
+            && matches!(buffer.cells()[index + 1], FieldCell::Backline)
+            && let (FieldCell::Graph { width: paint, .. }, FieldCell::Graph { width: next, .. }) =
+                (cell, &buffer.cells()[index + 2])
+        {
+            return next < paint;
+        }
+        true
+    })
 }
 
 fn fixed_padding(cell: &FieldCell) -> bool {

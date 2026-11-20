@@ -166,3 +166,75 @@ fn subsection_reads_padding_only_on_the_accepted_live_row() {
         assert_eq!(section.id.as_str(), "b");
     }
 }
+
+#[test]
+fn styled_linked_padding_is_one_accepted_subsection_row() {
+    use mant_ir::Inline;
+
+    // Pinned term.c::encode1 writes underline paint, backspace, and the
+    // NBSP. Both devices put that fixed space on Y's row after AA.
+    let header =
+        ".TH DEMO 1 \"2026-11-20\"\n.SH NAME\ndemo \\- example\n.SH FIRST\n.PD 0\nAA\n.br\n";
+    let target = "https://one.test";
+    for (padding, ink, linked) in [
+        (r"\~", false, false),
+        (r"\fI\~\fP", false, false),
+        (
+            r"\X'tty: link https://one.test'\~\X'tty: link'",
+            false,
+            true,
+        ),
+        (
+            r"\X'tty: link https://one.test'\fI\~\fP\X'tty: link'",
+            false,
+            true,
+        ),
+        (
+            r"\X'tty: link https://one.test'\fIX\fP\X'tty: link'",
+            true,
+            true,
+        ),
+    ] {
+        let source = format!("{header}{padding}\n.SS Y\nDD\n");
+        let native = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = mant_render::render_query_json(&native, false).unwrap();
+        let decoded = serde_json::from_str::<mant_protocol::QueryBundle>(&json)
+            .unwrap()
+            .into();
+        let rendered = mant_render::render_query_man(&decoded);
+        let rows = rendered
+            .split_once("\nFIRST\n")
+            .unwrap()
+            .1
+            .lines()
+            .map(str::trim);
+        // Real ink retains its own paragraph; a pure spacing prefix can
+        // join the accepted heading row without creating a paragraph.
+        let expected = if ink {
+            &["AA", "X", "Y", "DD"][..]
+        } else {
+            &["AA", "Y", "DD"]
+        };
+        assert_eq!(rows.collect::<Vec<_>>(), expected, "{source}");
+        let head = &decoded.document.as_ref().unwrap().sections[1].children[0].heading;
+        assert_eq!(head.plain_text().contains('\u{a0}'), !ink, "{source}");
+        let link = head.content.iter().find_map(|node| match node {
+            Inline::Link {
+                target: mant_ir::LinkTarget::External { uri },
+                children,
+                ..
+            } => Some((uri.as_str(), children)),
+            _ => None,
+        });
+        if linked && !ink {
+            let (uri, children) = link.expect("link stays with accepted fixed spacing");
+            assert_eq!(uri, target);
+            assert_eq!(mant_ir::inline_plain_text(children), "\u{a0}");
+            if padding.contains(r"\fI") {
+                assert!(matches!(children.as_slice(), [Inline::Emphasis { .. }]));
+            }
+        } else {
+            assert!(link.is_none(), "{source}");
+        }
+    }
+}
