@@ -237,28 +237,16 @@ fn nested_ordinal_source_findings_keep_their_original_owner() {
         std::fs::remove_file(&path).unwrap();
         let profile = profile.unwrap();
         let uncertain = case.disposition == OrdinalDisposition::Uncertain;
-        let positions = if uncertain {
+        // The fixed native displays include both nested items. A HEAD
+        // owns their reading as part of its term; only independent block
+        // lists produce an ordinal classification obligation.
+        let positions = if uncertain && !case.name.starts_with("head-") {
             json!([[case.source_line, 2]])
         } else {
             json!([])
         };
         assert_eq!(profile["ordinalCasesForReview"], positions, "{}", case.name);
-        if case.name.starts_with("head-") {
-            // A parent HEAD's flattened output cannot satisfy its native
-            // nested list owner's separate occurrence, even at the same text.
-            let prefix = format!("list-topology at line {}:2:", case.source_line);
-            assert!(
-                profile["violations"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|issue| { issue.as_str().unwrap().starts_with(&prefix) }),
-                "{}\n{profile}",
-                case.name
-            );
-        } else {
-            assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
-        }
+        assert_eq!(profile["violations"], json!([]), "{}\n{profile}", case.name);
     }
 }
 

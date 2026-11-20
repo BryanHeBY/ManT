@@ -153,7 +153,7 @@ impl DescriptionProbe<'_> {
     }
 
     fn visit_node(&mut self, node: &Node) -> Payload {
-        if super::skips_source_children(node) {
+        if self.source.destination(node).is_none() {
             return Payload::ABSENT;
         }
         if let Some(control) = source_control(node) {

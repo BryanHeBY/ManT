@@ -8,7 +8,7 @@ use super::{
         mdoc_list_topology_kind,
     },
     ordinal_labels::{
-        SourceContext,
+        SourceContext, SourceDestination,
         controls::{SourceControl, source_control},
         description::word_payload,
         skips_source_children,
@@ -24,7 +24,7 @@ pub(super) fn ast_profile(report: &libmandoc_rs::ParseReport) -> (AstStructure, 
     };
     let mut no_fill_lines = BTreeMap::new();
     super::literal_owners::record_source_displays(root, &mut profile);
-    let head_payloads = HeadPayloads::collect(root);
+    let head_payloads = HeadPayloads::collect(root, &profile.source_context);
     collect_ast_structure(
         root,
         false,
@@ -51,12 +51,15 @@ fn collect_ast_structure(
     no_fill_lines: &mut BTreeMap<u32, NoFillSourceLine>,
     head_payloads: &HeadPayloads,
 ) {
-    let nonprinting =
-        inherited_nonprinting || skips_source_children(node) || is_stateful_request(node);
+    let Some(destination) = profile.source_context.destination(node) else {
+        return;
+    };
+    let blocks = destination == SourceDestination::Blocks;
+    let nonprinting = inherited_nonprinting || is_stateful_request(node);
     if !nonprinting {
         record_no_fill_line(node, no_fill_lines);
     }
-    if node.kind == NodeKind::Block {
+    if blocks && node.kind == NodeKind::Block {
         match node.macro_token.as_deref() {
             Some("PP" | "P" | "LP" | "HP") if has_visible_flow_text(node) => {
                 profile.paragraph_boundaries += 1;
@@ -84,7 +87,8 @@ fn collect_ast_structure(
     if node.macro_token.as_deref() == Some("br") && node.kind == NodeKind::Element {
         profile.hard_breaks += 1;
     }
-    if node.kind == NodeKind::Table
+    if blocks
+        && node.kind == NodeKind::Table
         && node.table_row_kind.is_some()
         && !head_payloads.row_ids.contains(&node.id)
     {
@@ -107,7 +111,7 @@ fn collect_ast_structure(
             Some(_) => profile.inline_equations += 1,
         }
     }
-    let child_inside_table = inside_table || node.kind == NodeKind::Table;
+    let child_inside_table = inside_table || blocks && node.kind == NodeKind::Table;
     let visible_rs = node.kind == NodeKind::Block
         && node.macro_token.as_deref() == Some("RS")
         && node_part_children(node, NodeKind::Body)

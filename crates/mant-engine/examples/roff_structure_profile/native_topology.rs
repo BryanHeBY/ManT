@@ -8,7 +8,7 @@ use super::{
     native::{equation_has_payload, equation_visible_text},
     ordinal_labels,
 };
-use ordinal_labels::OrdinalDisposition;
+use ordinal_labels::{OrdinalDisposition, SourceDestination};
 
 pub(super) fn collect(
     root: &Node,
@@ -105,6 +105,10 @@ fn collect_ast_topology(
     head_payloads: &HeadPayloads,
     spacing: &ordinal_labels::SourceContext,
 ) {
+    let Some(destination) = spacing.destination(node) else {
+        return;
+    };
+    let blocks = destination == SourceDestination::Blocks;
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
     // cell. Only an owned Equation node establishes an obligation.
     if node.kind == NodeKind::Equation
@@ -125,12 +129,14 @@ fn collect_ast_topology(
             value: equation_visible_text(&equation.readable_text()),
         });
     }
-    if node.kind == NodeKind::Block
+    if blocks
+        && node.kind == NodeKind::Block
         && mdoc_list_topology_kind(node) == Some(MdocContainerKind::Table)
         && node.line > 0
     {
         topology.table_rows.extend(mdoc_column_rows(node));
-    } else if node.kind == NodeKind::Block
+    } else if blocks
+        && node.kind == NodeKind::Block
         && let Some(kind) = mdoc_list_topology_kind(node)
         && node.line > 0
     {
@@ -161,7 +167,9 @@ fn collect_ast_topology(
     let mut table_origin = None;
     let mut row_index = 0;
     for child in &node.children {
-        if child.kind == NodeKind::Table
+        if blocks
+            && child.kind == NodeKind::Table
+            && spacing.destination(child) == Some(SourceDestination::Blocks)
             && !head_payloads.row_ids.contains(&child.id)
             && let Some(kind) = native_table_kind(child)
         {
@@ -191,7 +199,7 @@ fn collect_ast_topology(
         }
         collect_ast_topology(
             child,
-            inside_table || node.kind == NodeKind::Table,
+            inside_table || blocks && node.kind == NodeKind::Table,
             topology,
             head_payloads,
             spacing,

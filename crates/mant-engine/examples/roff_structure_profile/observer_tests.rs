@@ -54,6 +54,117 @@ fn parsed(source: &str) -> (AstStructure, AstTopology, Document) {
     (expected, topology, document)
 }
 
+const DISPATCH_HEADER: &str =
+    ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh DESCRIPTION\n";
+
+#[test]
+fn only_executed_item_heads_change_later_display_spacing() {
+    // mdoc_term.c::termp_it_pre() skips the arguments of -item/-bullet.
+    // Fixed ASCII and UTF-8 keep the space after a skipped Sm off.
+    for list in ["item", "bullet", "tag -width a"] {
+        for state in ["off", "on"] {
+            let source = format!(
+                "{DISPATCH_HEADER}.Bl -{list}\n.It Xo\n.Sm {state}\n.Xc\nBODY\n.El\n.Bl -column a b\n.It C Ta D\n.Dl Em FIRST Sy SECOND\n.El\n"
+            );
+            let (expected, native, mut document) = parsed(&source);
+            let (observed, topology) = super::ir_profile(&document);
+            assert_eq!(
+                super::compare_structure(&expected, &observed, &native, &topology),
+                [] as [String; 0],
+                "{source}"
+            );
+            let Block::Table { rows, .. } = document.sections[1].blocks.last_mut().unwrap() else {
+                panic!("expected outer column table");
+            };
+            let Block::Preformatted { children, .. } = &mut rows[0].cells[1].blocks[0] else {
+                panic!("expected literal");
+            };
+            let visible = mant_ir::inline_plain_text(children);
+            let first = if list.starts_with("tag") && state == "off" {
+                "D\nFIRSTSECOND"
+            } else {
+                "D\nFIRST SECOND"
+            };
+            assert_eq!(visible, first, "{source}");
+            if first.contains(' ') {
+                let space = children
+                    .iter_mut()
+                    .find_map(|inline| match inline {
+                        Inline::Text { value } if value == " " => Some(value),
+                        _ => None,
+                    })
+                    .unwrap();
+                space.clear();
+                let (observed, topology) = super::ir_profile(&document);
+                let issues = super::compare_structure(&expected, &observed, &native, &topology);
+                assert!(
+                    issues
+                        .iter()
+                        .any(|issue| issue.starts_with("literal-displays:")),
+                    "{source}: {issues:?}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn structures_inside_executed_heads_are_checked_at_the_term() {
+    // Fixed tree retains both forms. The terminal and HTML visit the
+    // tag HEAD, and skip the same children in a marker list's HEAD.
+    for list in ["item", "tag -width a"] {
+        for (payload, kind) in [
+            (".Bl -column a b\n.It FIRST Ta SECOND\n.El\n", "table"),
+            (".Bl -tag -width a\n.It ONE\nSECOND\n.El\n", "list"),
+            (".EQ\nalpha\n.EN\n", "equation"),
+        ] {
+            let source = format!("{DISPATCH_HEADER}.Bl -{list}\n.It Xo\n{payload}.Xc\nBODY\n.El\n");
+            let (expected, native, mut document) = parsed(&source);
+            let (observed, topology) = super::ir_profile(&document);
+            assert_eq!(
+                super::compare_structure(&expected, &observed, &native, &topology),
+                [] as [String; 0],
+                "{source}"
+            );
+            assert_eq!(expected.table_rows, 0);
+            assert_eq!(expected.display_equations, 0);
+            let skipped = list == "item";
+            assert_eq!(
+                expected.inline_equations,
+                usize::from(kind == "equation" && !skipped)
+            );
+            assert_eq!(
+                document
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.message.contains("skipping all arguments")),
+                skipped
+            );
+            if skipped {
+                continue;
+            }
+            let Block::DefinitionList { items, .. } = &mut document.sections[1].blocks[0] else {
+                panic!("expected definition list");
+            };
+            let term = &mut items[0].terms[0].content;
+            term.retain(|inline| !matches!(inline, Inline::Equation { .. }));
+            for inline in term {
+                if let Inline::Text { value } = inline {
+                    *value = value.replace("SECOND", "");
+                }
+            }
+            let mut issues = Vec::new();
+            native.head_payloads.compare(&document, &mut issues);
+            assert!(
+                issues
+                    .iter()
+                    .any(|issue| issue.starts_with(&format!("definition-head-{kind}"))),
+                "{source}: {issues:?}"
+            );
+        }
+    }
+}
+
 #[test]
 fn missing_table_cell_in_a_head_cannot_be_replaced_by_the_same_word_in_body() {
     // Pinned HTML prints XYZ and SECOND as separate td elements of the

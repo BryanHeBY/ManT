@@ -10,9 +10,8 @@ use super::{
     AstStructure,
     native_topology::column_data_items,
     ordinal_labels::{
-        SourceContext,
+        SourceContext, SourceDestination,
         description::{description, source_evidence},
-        skips_source_children,
     },
 };
 
@@ -122,7 +121,12 @@ fn enter_scope(path: &mut Vec<ScopeOccurrence>, scope: Scope, counts: &mut Scope
 
 pub(super) fn record_source_displays(root: &Node, profile: &mut AstStructure) {
     let mut occurrences = BTreeMap::new();
-    number_native_occurrences(root, None, &mut BTreeMap::new(), &mut occurrences);
+    number_native_occurrences(
+        root,
+        &profile.source_context,
+        &mut BTreeMap::new(),
+        &mut occurrences,
+    );
     visit_native(root, &mut Vec::new(), None, None, profile, &occurrences);
     profile.literal_displays = profile.literal_owners.owners.len();
 }
@@ -156,17 +160,11 @@ fn occurrence_kind(node: &Node) -> Option<OccurrenceKind> {
 
 fn number_native_occurrences(
     node: &Node,
-    list: Option<NormalizedListKind>,
+    source: &SourceContext,
     counts: &mut BTreeMap<(OccurrenceKind, Point), usize>,
     occurrences: &mut BTreeMap<u32, usize>,
 ) {
-    // termp_it_pre() skips the HEAD of marker and column lists. The
-    // validator can retain skipped arguments in the tree for diagnostics.
-    if skips_source_children(node)
-        || node.kind == NodeKind::Head
-            && node.macro_token.as_deref() == Some("It")
-            && list != Some(NormalizedListKind::Definition)
-    {
+    if source.destination(node).is_none() {
         return;
     }
     // mdoc_term.c::termp_it_pre() also walks an extended definition HEAD.
@@ -178,9 +176,8 @@ fn number_native_occurrences(
         occurrences.insert(node.id, *occurrence);
     }
     if node.kind != NodeKind::Table {
-        let list = node.list_kind.or(list);
         for child in &node.children {
-            number_native_occurrences(child, list, counts, occurrences);
+            number_native_occurrences(child, source, counts, occurrences);
         }
     }
 }
@@ -193,9 +190,7 @@ fn visit_native(
     profile: &mut AstStructure,
     occurrences: &BTreeMap<u32, usize>,
 ) {
-    if skips_source_children(node)
-        || node.kind == NodeKind::Head && node.macro_token.as_deref() == Some("It")
-    {
+    if profile.source_context.destination(node) != Some(SourceDestination::Blocks) {
         // Definition terms project as their own inline roots rather than literal BODYs.
         return;
     }

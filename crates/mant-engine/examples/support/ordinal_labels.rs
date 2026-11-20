@@ -1,8 +1,8 @@
 //! Independent source-side witness for the mdoc ordinal recovery audit.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use libmandoc_rs::{Node, NodeKind, TableCellKind};
+use libmandoc_rs::{Node, NodeKind, NormalizedListKind, TableCellKind};
 
 #[path = "ordinal_labels/controls.rs"]
 pub(crate) mod controls;
@@ -55,9 +55,16 @@ pub(crate) enum FontEvidence {
 
 #[derive(Default)]
 pub(crate) struct SourceContext {
+    destinations: HashMap<u32, SourceDestination>,
     no_space_nodes: HashSet<u32>,
     unproved_font_owners: HashSet<u32>,
     joined_flag_dashes: HashSet<u32>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SourceDestination {
+    Blocks,
+    Term,
 }
 
 #[derive(Default)]
@@ -69,12 +76,21 @@ struct SourceState {
 impl SourceContext {
     pub(crate) fn collect(root: &Node) -> Self {
         let mut spacing = Self::default();
-        spacing.walk(root, &mut SourceState::default());
+        spacing.walk(
+            root,
+            &mut SourceState::default(),
+            None,
+            SourceDestination::Blocks,
+        );
         spacing
     }
 
     pub(crate) fn no_space_at(&self, node: &Node) -> bool {
         self.no_space_nodes.contains(&node.id)
+    }
+
+    pub(crate) fn destination(&self, node: &Node) -> Option<SourceDestination> {
+        self.destinations.get(&node.id).copied()
     }
 
     pub(crate) fn font_at(&self, node: &Node) -> FontEvidence {
@@ -89,10 +105,25 @@ impl SourceContext {
         self.joined_flag_dashes.contains(&node.id)
     }
 
-    fn walk(&mut self, node: &Node, state: &mut SourceState) {
+    fn walk(
+        &mut self,
+        node: &Node,
+        state: &mut SourceState,
+        list: Option<NormalizedListKind>,
+        mut destination: SourceDestination,
+    ) {
         if skips_source_children(node) {
             return;
         }
+        // mdoc_term.c::termp_it_pre() walks only definition HEADs. Other
+        // lists can retain skipped HEAD arguments for validator messages.
+        if node.kind == NodeKind::Head && node.macro_token.as_deref() == Some("It") {
+            if list != Some(NormalizedListKind::Definition) {
+                return;
+            }
+            destination = SourceDestination::Term;
+        }
+        self.destinations.insert(node.id, destination);
         if state.no_space {
             self.no_space_nodes.insert(node.id);
         }
@@ -132,8 +163,9 @@ impl SourceContext {
             state.font = FontEvidence::Unproved;
         }
         self.observe_flag_spacing(&node.children);
+        let list = node.list_kind.or(list);
         for child in &node.children {
-            self.walk(child, state);
+            self.walk(child, state, list, destination);
         }
         // print_mdoc_node() restores the font stack depth after a macro
         // push. An ordinary word or roff ft can replace the active slot.
