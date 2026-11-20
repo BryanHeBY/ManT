@@ -581,6 +581,142 @@ fn accepted_parameter_edges_keep_comma_aliases_and_reject_top_level_pipes() {
 }
 
 #[test]
+fn nested_parameter_delimiters_leave_outer_aliases_addressable() {
+    // CVS in_line() may split Ar at quote and macro boundaries. Its
+    // native enclosure BODY owns the inner bracket and the detached close.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (start, end, left, right) in [
+            ("", "", "", ""),
+            (" Oo", " Oc", "[", "]"),
+            (" Po", " Pc", "(", ")"),
+            (" Bro", " Brc", "{", "}"),
+            (" Oo Po", " Pc Oc", "[(", ")]"),
+        ] {
+            for (arg, reading) in [
+                ("Ar path[ Ns Em index ]", "path[index]"),
+                ("Ar path[ Ns No index ]", "path[index]"),
+                ("Ar path[ index ]", "path[ index]"),
+                (r#"Ar "path[ index" ]"#, "path[ index]"),
+            ] {
+                for (role, alias) in [
+                    ("Nm", "gamma"),
+                    ("Va", "var_b"),
+                    ("Er", "EINVAL"),
+                    ("Dv", "CONST_B"),
+                ] {
+                    let invocation = format!("Nm alpha{start} {arg}{end}");
+                    let form = format!("alpha {left}{reading}{right}");
+                    for (head, form, names) in [
+                        (
+                            format!("{invocation} , {role} {alias}"),
+                            format!("{form}, {alias}"),
+                            ["alpha", alias],
+                        ),
+                        (
+                            format!("{role} {alias} , {invocation}"),
+                            format!("{alias}, {form}"),
+                            [alias, "alpha"],
+                        ),
+                    ] {
+                        assert_program_group(section, &head, &form, &names, &["index"]);
+                        assert_program_group(
+                            section,
+                            &format!("Xo\n.{head}\n.Xc"),
+                            &form,
+                            &names,
+                            &["index"],
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn nested_commands_do_not_turn_an_outer_pipe_into_an_alias_separator() {
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (head, form, names) in [
+            (
+                "Nm alpha Ar file | Nm beta Oo [ Ar sub] target Oc , Nm gamma",
+                "alpha file | beta [[sub] target], gamma",
+                &["gamma"][..],
+            ),
+            (
+                "Nm alpha Oo Ar path[ Ns Ar index ] Oc | Nm beta Ar x",
+                "alpha [path[index]] | beta x",
+                &[][..],
+            ),
+            (
+                "Nm alpha Oo Po Ar path[ Ns Em index ] Pc Oc | Nm beta Ar x , Nm gamma",
+                "alpha [(path[index])] | beta x, gamma",
+                &["gamma"][..],
+            ),
+            (
+                "Nm alpha Oo Po Ar path[ Ns Em index ] Pc | Nm beta Oc , Nm gamma",
+                "alpha [(path[index]) | beta], gamma",
+                &["alpha", "gamma"][..],
+            ),
+        ] {
+            let rejected = if names.contains(&"alpha") {
+                &["beta"][..]
+            } else {
+                &["alpha", "beta"][..]
+            };
+            assert_program_group(section, head, form, names, rejected);
+            assert_program_group(section, &format!("Xo\n.{head}\n.Xc"), form, names, rejected);
+        }
+    }
+}
+
+#[test]
+fn a_detached_parameter_closer_can_finish_the_same_display_word() {
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for head in [
+            "Nm alpha Ar path[index ]",
+            "Xo\n.Nm alpha Ar path[index ]\n.Xc",
+        ] {
+            assert_program_group(section, head, "alpha path[index]", &["alpha"], &["index"]);
+        }
+    }
+}
+
+#[test]
+fn native_environment_aliases_ignore_arguments_in_another_scope() {
+    // The original BODY retains its own Ar/Em text. An adjacent Ev
+    // outside the BODY has independent evidence on either comma side.
+    for section in ["DESCRIPTION", "COMMANDS"] {
+        for (head, form) in [
+            (
+                "Ev ENV_A Oo Ar path[ Ns Em index ] Oc , Ev ENV_B",
+                "ENV_A [path[index]], ENV_B",
+            ),
+            (
+                "Ev ENV_B , Ev ENV_A Oo Ar path[ Ns Em index ] Oc",
+                "ENV_B, ENV_A [path[index]]",
+            ),
+            (
+                "Ev ENV_A Po Ar path[ Ns Em index ] Pc , Ev ENV_B",
+                "ENV_A (path[index]), ENV_B",
+            ),
+            (
+                "Ev ENV_A Oo Ar path[ Ns Ar index ] Oc , Ev ENV_B",
+                "ENV_A [path[index]], ENV_B",
+            ),
+        ] {
+            assert_program_group(section, head, form, &["ENV_B"], &["index"]);
+            assert_program_group(
+                section,
+                &format!("Xo\n.{head}\n.Xc"),
+                form,
+                &["ENV_B"],
+                &["index"],
+            );
+        }
+    }
+}
+
+#[test]
 fn quoted_arguments_and_reopened_flags_keep_their_invocation_owner() {
     // mdoc_macro.c::in_line reopens Fl after its comma. The reopened
     // operand looks identical to a second authored Fl in the terminal.

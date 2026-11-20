@@ -32,6 +32,7 @@ enum ArgumentProof {
 #[derive(Default)]
 struct ScopeScan {
     groups: Vec<Group>,
+    leading_delimiters: Vec<(u32, char)>,
     malformed: bool,
     arguments: ArgumentProof,
     top_level_pipe: bool,
@@ -67,9 +68,14 @@ impl InvocationTail {
                 NativeOperandRole::EnclosureStart { body, parent } => {
                     state.malformed |= parent != state.native_body();
                     state.open(InvocationGroup::Native(body), word == "\"");
+                    state.enter_leading_delimiters(body);
                 }
                 NativeOperandRole::EnclosureEnd(body) => state.close(InvocationGroup::Native(body)),
-                NativeOperandRole::LiteralDelimiter { glyph, .. } => state.bracket(glyph),
+                NativeOperandRole::LiteralDelimiter { glyph, enclosure } => {
+                    if !edges.absorbs(start) {
+                        state.authored_delimiter(glyph, enclosure);
+                    }
+                }
                 NativeOperandRole::Literal
                 | NativeOperandRole::LiteralContinuation(_)
                 | NativeOperandRole::EnclosureContent(_)
@@ -77,14 +83,14 @@ impl InvocationTail {
                 {
                     state.authored_text(word);
                 }
-                NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder(_) => {
+                NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder { .. } => {
                     state.argument();
                     // A bracket attached to Ar's spelling did not go
                     // through mdoc_isdelim(). Accepted edge glyphs can
                     // still enclose arguments in the visible invocation.
-                    if matches!(role, NativeOperandRole::Placeholder(_)) {
+                    if matches!(role, NativeOperandRole::Placeholder { .. }) {
                         for (offset, glyph) in edges.within(start..end) {
-                            if edges.exposes(offset, state.authored_closer()) {
+                            if edges.exposes(offset, state.native_body(), state.authored_closer()) {
                                 state.bracket(glyph);
                             }
                         }
@@ -115,7 +121,7 @@ impl InvocationTail {
             cursor = end;
         }
         state.authored_text(&text[cursor..span.end]);
-        state.malformed |= !state.groups.is_empty();
+        state.malformed |= !state.groups.is_empty() || !state.leading_delimiters.is_empty();
         // A damaged group cannot establish a pipe's scope, but it is not
         // itself a pipe. A contiguous Nm/Cm name can still be complete.
         let arguments = if state.malformed
@@ -141,6 +147,27 @@ impl InvocationTail {
 }
 
 impl ScopeScan {
+    fn authored_delimiter(&mut self, glyph: char, enclosure: Option<u32>) {
+        if let Some(body) = enclosure
+            && Some(body) != self.native_body()
+            && matches!(glyph, '(' | '[')
+        {
+            self.leading_delimiters.push((body, glyph));
+        } else {
+            self.bracket(glyph);
+        }
+    }
+
+    fn enter_leading_delimiters(&mut self, body: u32) {
+        for (scope, glyph) in std::mem::take(&mut self.leading_delimiters) {
+            if scope == body {
+                self.bracket(glyph);
+            } else {
+                self.malformed = true;
+            }
+        }
+    }
+
     fn unproved_prose(&mut self) {
         if self.groups.is_empty() && self.arguments == ArgumentProof::Bare {
             self.arguments = ArgumentProof::Unproved;

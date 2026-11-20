@@ -11,6 +11,36 @@ mod tail;
 pub(super) use brackets::ParameterEdges;
 use tail::{InvocationTail, starts_program};
 
+/// Native children that have both accepted delimiters are opaque to their
+/// parent's punctuation scan. Individual TEXT roles need not restate the
+/// enclosing scope when the interval already proves it.
+pub(super) fn closed_child_enclosures(
+    span: Range<usize>,
+    operands: &[NativeOperand],
+    scope: Option<u32>,
+) -> Vec<Range<usize>> {
+    let mut ranges = Vec::new();
+    let mut open = None;
+    for operand in operands
+        .iter()
+        .skip_while(|operand| operand.bytes.start < span.start)
+        .take_while(|operand| operand.bytes.end <= span.end)
+    {
+        match operand.role {
+            NativeOperandRole::EnclosureStart { body, parent } if parent == scope => {
+                open = Some((body, operand.bytes.start));
+            }
+            NativeOperandRole::EnclosureEnd(body) => {
+                if let Some((_, start)) = open.take_if(|(expected, _)| *expected == body) {
+                    ranges.push(start..operand.bytes.end);
+                }
+            }
+            _ => {}
+        }
+    }
+    ranges
+}
+
 /// Read the leading Nm and any consecutive Cm/Ic words in one visible
 /// prefix, stopping before arguments or a new physical line.
 pub(super) fn program_name(

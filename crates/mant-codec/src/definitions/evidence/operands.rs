@@ -30,7 +30,10 @@ pub(crate) enum NativeOperandRole {
     /// An `Ar` spelling may name an authored operand definition directly.
     /// Its node ID also groups accepted text fragments of the same parameter.
     #[cfg(feature = "roff")]
-    Placeholder(u32),
+    Placeholder {
+        node: u32,
+        enclosure: Option<u32>,
+    },
     /// Recovery or clipping retained part of an Ar without proving its name.
     #[cfg(feature = "roff")]
     IncompletePlaceholder,
@@ -154,7 +157,7 @@ impl NativeOperandRole {
             #[cfg(feature = "roff")]
             Self::DisplayOnly
             | Self::ClippedOption
-            | Self::Placeholder(_)
+            | Self::Placeholder { .. }
             | Self::IncompletePlaceholder
             | Self::SearchArgument(_)
             | Self::OptionalKey
@@ -184,7 +187,7 @@ impl NativeOperandRole {
 
     #[cfg(feature = "roff")]
     pub(crate) fn is_operand_label(self) -> bool {
-        matches!(self, Self::Placeholder(_) | Self::IncompletePlaceholder)
+        matches!(self, Self::Placeholder { .. } | Self::IncompletePlaceholder)
     }
 
     #[cfg(feature = "roff")]
@@ -236,6 +239,10 @@ impl NativeOperandRole {
     #[cfg(feature = "roff")]
     pub(crate) fn record_enclosure(self, enclosure: impl FnOnce() -> Option<u32>) -> Self {
         match self {
+            Self::Placeholder { node, .. } => Self::Placeholder {
+                node,
+                enclosure: enclosure(),
+            },
             Self::Subject(mut subject) => {
                 subject.enclosure = enclosure();
                 Self::Subject(subject)

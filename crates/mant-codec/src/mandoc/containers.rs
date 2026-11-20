@@ -291,7 +291,23 @@ fn emit_enclosure<'a>(
     // children are a complete source-ordered stream: punctuation may sit
     // before its HEAD or after its BODY without DELIMO/DELIMC flags.
     if !matches!(node.kind, NodeKind::Body | NodeKind::Element) {
-        emit(Event::Children(&node.children));
+        let first_part = node
+            .children
+            .iter()
+            .position(|child| child.kind == NodeKind::Head);
+        let body = node
+            .children
+            .iter()
+            .find(|child| child.kind == NodeKind::Body && child.scope_end.is_none());
+        if let (Some(at), Some(body)) = (first_part, body) {
+            // mdoc_macro.c::blk_part_exp emits leading delimiters under
+            // the BLOCK. They still belong to this native enclosure for
+            // declaration evidence, although they execute before BODY pre.
+            emit(Event::EnclosureContent(&node.children[..at], body.id));
+            emit(Event::Children(&node.children[at..]));
+        } else {
+            emit(Event::Children(&node.children));
+        }
         return true;
     }
     let Some(marks) = resolved_enclosure_marks(node) else {

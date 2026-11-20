@@ -364,7 +364,7 @@ fn collect_group(
     let lead = operand_at(operands, span.start);
     let operand_label = lead.is_some_and(|operand| {
         operand.role == NativeOperandRole::ExplicitOption
-            || matches!(operand.role, NativeOperandRole::Placeholder(_))
+            || matches!(operand.role, NativeOperandRole::Placeholder { .. })
     });
     let program = enclosure
         .is_none()
@@ -472,15 +472,26 @@ fn independent_groups<'a>(
     let mut group_start = start;
     let edges =
         invocation::ParameterEdges::new(text, start..start + head.len(), &operands[first..]);
+    let mut nested = invocation::closed_child_enclosures(
+        start..start + head.len(),
+        &operands[first..],
+        enclosure,
+    )
+    .into_iter()
+    .peekable();
     named::split_named_groups(head, |index, scope| {
         let top_level = scope.is_none();
         let offset = start + index;
+        while nested.next_if(|range| range.end <= offset).is_some() {}
+        if nested.peek().is_some_and(|range| range.contains(&offset)) || edges.absorbs(offset) {
+            return true;
+        }
         while let Some(operand) = receipts.next_if(|operand| operand.bytes.start <= offset) {
             last = Some(operand);
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
         let separator = matches!(head.as_bytes()[index], b',' | b'|');
-        if edges.exposes(offset, scope) {
+        if edges.exposes(offset, enclosure, scope) {
             return false;
         }
         if top_level && separator && syntax.protects(group_start, offset) {

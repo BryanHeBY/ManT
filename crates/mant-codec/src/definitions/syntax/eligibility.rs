@@ -130,7 +130,7 @@ impl<'a> OperandUses<'a> {
             }
             #[cfg(feature = "roff")]
             NameSource::Placeholder => self.intersecting(part).any(|operand| {
-                matches!(operand.role, NativeOperandRole::Placeholder(_))
+                matches!(operand.role, NativeOperandRole::Placeholder { .. })
                     && operand.bytes.start <= self.offset + part.start
                     && operand.bytes.end >= self.offset + part.end
             }),

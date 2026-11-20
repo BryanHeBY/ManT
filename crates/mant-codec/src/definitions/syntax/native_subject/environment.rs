@@ -1,5 +1,5 @@
 //! Recognize Ev names from accepted operands and their own annotation.
-use super::{annotations, offset, operand_at, operand_cursor};
+use super::{annotations, invocation, offset, operand_at, operand_cursor};
 use crate::definitions::syntax::{
     eligibility::{OperandUses, intersecting_operands},
     named,
@@ -105,9 +105,17 @@ fn split_groups<'a>(
     let text = view.text.as_str();
     let mut assignments = Vec::new();
     let mut value_word = None;
+    let enclosures = invocation::closed_child_enclosures(0..text.len(), operands, None);
+    let in_enclosure = |at| {
+        let index = enclosures.partition_point(|range| range.end <= at);
+        enclosures
+            .get(index)
+            .is_some_and(|range| range.contains(&at))
+    };
     let protect = |at, scope: Option<char>| {
         let role = operand_at(operands, at);
-        if uses.protects_declaration_separator(at)
+        if in_enclosure(at)
+            || uses.protects_declaration_separator(at)
             || role.is_some_and(|operand| is_description(operand.role))
         {
             return true;
@@ -132,7 +140,7 @@ fn split_groups<'a>(
         }
         let literal = text[operand.bytes.clone()].trim();
         let start = offset(text, literal);
-        (literal == "or").then_some(start..start + literal.len())
+        (literal == "or" && !in_enclosure(start)).then_some(start..start + literal.len())
     });
     let (groups, complete) =
         named::split_named_groups_with_connectors(text, protect, connectors, |left, end| {
