@@ -191,22 +191,20 @@ impl<'a> HeadView<'a> {
                     role if role.is_description() => {
                         !(self.style(offset).emphasis
                             || role == NativeOperandRole::Description
-                                && self.is_assignment_separator(offset, operand))
+                                && self.text.as_bytes()[offset] == b'='
+                                && self.text[operand.bytes.clone()].trim() == "=")
                     }
                     _ => false,
                 })
     }
 
     #[cfg(feature = "roff")]
-    fn is_assignment_separator(&self, offset: usize, operand: &NativeOperand) -> bool {
-        // A separately executed Li can supply the assignment operator
-        // between Fl and Ar (mdoc_term.c::termp_li_pre). Arbitrary Li
-        // suffixes still require independent evidence for the whole form.
-        if self.text[operand.bytes.clone()].trim() != "=" || self.text.as_bytes()[offset] != b'=' {
-            return false;
-        }
-        let argument = self.text[operand.bytes.end..].trim_start_matches([' ', '\t']);
-        self.operand(self.text.len() - argument.len())
-            .is_some_and(|operand| matches!(operand.role, NativeOperandRole::Placeholder { .. }))
+    pub(super) fn operands_in(&self, range: Range<usize>) -> impl Iterator<Item = &NativeOperand> {
+        let start = self
+            .operands
+            .partition_point(|item| item.bytes.end <= range.start);
+        self.operands[start..]
+            .iter()
+            .take_while(move |item| item.bytes.start < range.end)
     }
 }

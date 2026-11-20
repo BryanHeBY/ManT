@@ -12,6 +12,8 @@ use serde::Deserialize;
 
 #[path = "declaration_names/limits.rs"]
 mod limits;
+#[path = "declaration_names/native_boundaries.rs"]
+mod native_boundaries;
 #[path = "declaration_names/parameters.rs"]
 mod parameters;
 

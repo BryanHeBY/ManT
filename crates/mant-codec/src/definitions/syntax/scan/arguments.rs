@@ -3,6 +3,84 @@
 use super::parameter_token::{ParameterToken, parameter_character};
 use super::{Argument, HeadView, LexicalState, closing, quote_closer};
 
+#[cfg(feature = "roff")]
+pub(super) fn proves_native_assignment(view: &HeadView<'_>, argument: &Argument) -> bool {
+    use super::NativeOperandRole as Role;
+
+    let span = &argument.bytes;
+    if !view.text[span.clone()].starts_with('=') {
+        return true;
+    }
+    // Fl, the exact assignment sign, and a native Ar wrapped by balanced
+    // delimiters can be separate term_word() calls. Validate the whole
+    // argument slice, including everything after its last Ar.
+    let rhs = span.start + 1..span.end;
+    let mut cursor = rhs.start;
+    let mut lexical = LexicalState::default();
+    let mut has_argument = false;
+    let mut scopes = Vec::new();
+    for operand in view.operands_in(rhs.clone()) {
+        let start = operand.bytes.start.max(cursor);
+        let end = operand.bytes.end.min(rhs.end);
+        if !observe_assignment_syntax(&mut lexical, &view.text[cursor..start]) {
+            return false;
+        }
+        let value = &view.text[start..end];
+        let role = operand.role;
+        // An attached value of the same Fl word has an accepted spelling
+        // receipt even if an overstrike clipped part of the value.
+        let own_value = role == Role::ExplicitOption && operand.bytes.start < span.start;
+        if own_value || matches!(role, Role::Placeholder { .. } | Role::SearchArgument(_)) {
+            for ch in value.chars() {
+                lexical.observe(ch);
+            }
+            has_argument |= !value.trim().is_empty();
+        } else {
+            match role {
+                Role::EnclosureStart { body, parent }
+                    if scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
+                {
+                    scopes.push(body);
+                }
+                Role::EnclosureEnd(body) if scopes.pop() == Some(body) => {}
+                Role::Literal
+                | Role::LiteralContinuation(_)
+                | Role::LiteralDelimiter { .. }
+                | Role::LiteralPunctuation
+                | Role::Description
+                | Role::SearchSign
+                | Role::SearchOpen { .. }
+                | Role::SearchClose
+                | Role::EnclosureContent(_) => {}
+                _ => return false,
+            }
+            if !observe_assignment_syntax(&mut lexical, value) {
+                return false;
+            }
+        }
+        cursor = end;
+    }
+    has_argument
+        && scopes.is_empty()
+        && observe_assignment_syntax(&mut lexical, &view.text[cursor..rhs.end])
+        && lexical.is_top_level()
+}
+
+#[cfg(feature = "roff")]
+fn observe_assignment_syntax(lexical: &mut LexicalState, text: &str) -> bool {
+    text.chars().all(|ch| {
+        lexical.observe(ch);
+        ch != '\n'
+            && (ch.is_whitespace()
+                || closing(ch).is_some()
+                || quote_closer(ch).is_some()
+                || matches!(
+                    ch,
+                    ']' | '}' | ')' | '>' | '”' | '’' | ',' | '/' | ':' | '@' | '|' | '.'
+                ))
+    })
+}
+
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {
     let range = &argument.bytes;
     let mut literal = String::new();

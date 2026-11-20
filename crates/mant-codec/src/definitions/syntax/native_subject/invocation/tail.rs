@@ -101,7 +101,7 @@ impl ScopeScan {
                 continue;
             }
             let start = operand.bytes.start.max(cursor);
-            state.authored_text(&text[cursor..start]);
+            state.authored_text(&text[cursor..start], cursor);
             let role = operand.role;
             let word = text[start..end].trim();
             match role {
@@ -125,7 +125,7 @@ impl ScopeScan {
                 | NativeOperandRole::EnclosureContent(_)
                     if is_bracket_text(word) =>
                 {
-                    state.authored_text(word);
+                    state.authored_text(&text[start..end], start);
                 }
                 NativeOperandRole::ExplicitOption | NativeOperandRole::Placeholder { .. } => {
                     state.argument();
@@ -135,7 +135,7 @@ impl ScopeScan {
                     if matches!(role, NativeOperandRole::Placeholder { .. }) {
                         for (offset, glyph) in edges.within(start..end) {
                             if edges.exposes(offset, state.native_body(), state.authored_closer()) {
-                                state.bracket(glyph);
+                                state.bracket(glyph, offset);
                             }
                         }
                     }
@@ -164,7 +164,7 @@ impl ScopeScan {
             }
             cursor = end;
         }
-        state.authored_text(&text[cursor..span.end]);
+        state.authored_text(&text[cursor..span.end], cursor);
         state.malformed |= !state.groups.is_empty() || !state.leading_delimiters.is_empty();
         state.top_level_pipe |= possible_pipeline && state.malformed;
         state
@@ -177,14 +177,14 @@ impl ScopeScan {
         {
             self.leading_delimiters.push((body, glyph, offset));
         } else {
-            self.bracket(glyph);
+            self.bracket(glyph, offset);
         }
     }
 
     fn enter_leading_delimiters(&mut self, body: u32) {
         for (scope, glyph, offset) in std::mem::take(&mut self.leading_delimiters) {
             if scope == body {
-                self.bracket(glyph);
+                self.bracket(glyph, offset);
                 if let Some(group) = self.groups.last_mut() {
                     group.leading_offset = Some(offset);
                 }
@@ -218,10 +218,9 @@ impl ScopeScan {
             .map_or(self.root_scope, |at| self.groups[at].native_body);
         for group in &mut self.groups[index..] {
             if parent == self.root_scope {
-                self.outer_delimiters.extend(group.leading_offset);
+                self.outer_delimiters.extend(group.leading_offset.take());
             }
             group.native_body = parent;
-            group.leading_offset = None;
         }
         if native.argument {
             self.argument();
@@ -243,22 +242,21 @@ impl ScopeScan {
         }
     }
 
-    fn authored_text(&mut self, text: &str) {
-        let text = text.trim();
-        if is_bracket_text(text) {
-            for ch in text.chars().filter(|ch| !ch.is_whitespace()) {
-                self.bracket(ch);
+    fn authored_text(&mut self, text: &str, start: usize) {
+        if is_bracket_text(text.trim()) {
+            for (offset, ch) in text.char_indices().filter(|(_, ch)| !ch.is_whitespace()) {
+                self.bracket(ch, start + offset);
             }
-        } else if !text.is_empty() {
+        } else if !text.trim().is_empty() {
             self.unproved_prose();
         }
     }
 
-    fn bracket(&mut self, glyph: char) {
+    fn bracket(&mut self, glyph: char, offset: usize) {
         match glyph {
             '(' => self.open(InvocationGroup::Authored(')'), false),
             '[' => self.open(InvocationGroup::Authored(']'), false),
-            ')' | ']' => self.close(InvocationGroup::Authored(glyph)),
+            ')' | ']' => self.close_authored(glyph, offset),
             _ => {}
         }
     }
@@ -282,12 +280,27 @@ impl ScopeScan {
             .map_or(self.root_scope, |group| group.native_body)
     }
 
-    fn close(&mut self, kind: InvocationGroup) {
-        if self.groups.last().is_none_or(|group| group.kind != kind) {
+    fn close_authored(&mut self, closer: char, offset: usize) {
+        let Some(index) = self
+            .groups
+            .iter()
+            .rposition(|group| matches!(group.kind, InvocationGroup::Authored(_)))
+        else {
+            self.malformed = true;
+            return;
+        };
+        // The native BODY can execute the close of an already-open
+        // authored group. Native openers do not close that punctuation
+        // (mdoc_macro.c::blk_part_exp).
+        let group = &self.groups[index];
+        if group.kind != InvocationGroup::Authored(closer) {
             self.malformed = true;
             return;
         }
-        let group = self.groups.pop().expect("matching invocation group");
+        if group.native_body == self.root_scope && self.native_body() != self.root_scope {
+            self.outer_delimiters.push(offset);
+        }
+        let group = self.groups.remove(index);
         if group.argument {
             self.argument();
         } else {
@@ -304,7 +317,7 @@ impl ScopeScan {
     }
 }
 
-pub(in crate::definitions::syntax::native_subject) fn outer_leading_delimiters(
+pub(in crate::definitions::syntax::native_subject) fn outer_authored_delimiters(
     text: &str,
     span: Range<usize>,
     operands: &[NativeOperand],
@@ -319,7 +332,7 @@ pub(in crate::definitions::syntax::native_subject) fn outer_leading_delimiters(
                 operand.role,
                 NativeOperandRole::LiteralDelimiter {
                     glyph: '(' | '[',
-                    enclosure: Some(_),
+                    ..
                 }
             )
         })

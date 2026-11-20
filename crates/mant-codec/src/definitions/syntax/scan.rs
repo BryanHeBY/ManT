@@ -476,6 +476,16 @@ impl<'a> Scanner<'a> {
     fn finish_argument(&mut self) {
         if let Some(mut argument) = self.argument_start.take() {
             argument.bytes.end = self.cursor;
+            #[cfg(feature = "roff")]
+            if self
+                .names
+                .last()
+                .and_then(|name| name.parts.first())
+                .is_some_and(|part| self.view.explicit_option(part.start))
+                && argument.attached_to_name
+            {
+                self.unproved_form |= !arguments::proves_native_assignment(self.view, &argument);
+            }
             self.arguments.push(argument);
         }
         self.styled_argument = false;

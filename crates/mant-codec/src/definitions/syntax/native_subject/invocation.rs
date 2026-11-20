@@ -9,7 +9,7 @@ use std::ops::Range;
 mod brackets;
 mod tail;
 pub(super) use brackets::ParameterEdges;
-pub(super) use tail::outer_leading_delimiters;
+pub(super) use tail::outer_authored_delimiters;
 use tail::{InvocationTail, starts_program};
 
 /// Native children that have both accepted delimiters are opaque to their

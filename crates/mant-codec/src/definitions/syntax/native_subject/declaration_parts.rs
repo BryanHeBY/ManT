@@ -472,7 +472,7 @@ fn independent_groups<'a>(
     let mut group_start = start;
     let edges =
         invocation::ParameterEdges::new(text, start..start + head.len(), &operands[first..]);
-    let leading = invocation::outer_leading_delimiters(
+    let outer_authored = invocation::outer_authored_delimiters(
         text,
         start..start + head.len(),
         &operands[first..],
@@ -490,6 +490,9 @@ fn independent_groups<'a>(
         let top_level = scope.is_none();
         let offset = start + index;
         while nested.next_if(|range| range.end <= offset).is_some() {}
+        if outer_authored.binary_search(&offset).is_ok() {
+            return false;
+        }
         if nested.peek().is_some_and(|range| range.contains(&offset)) || edges.absorbs(offset) {
             return true;
         }
@@ -498,7 +501,7 @@ fn independent_groups<'a>(
         }
         let current = last.filter(|operand| operand.bytes.contains(&offset));
         let separator = matches!(head.as_bytes()[index], b',' | b'|');
-        if edges.exposes(offset, enclosure, scope) || leading.binary_search(&offset).is_ok() {
+        if edges.exposes(offset, enclosure, scope) {
             return false;
         }
         if top_level && separator && syntax.protects(group_start, offset) {
