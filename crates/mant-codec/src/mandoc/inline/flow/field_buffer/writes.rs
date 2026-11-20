@@ -427,7 +427,9 @@ impl FieldBuffer {
         }
         let start = self.word_first_content?;
         let last = self.cells.len().checked_sub(1)?;
-        let affected = if matches!(self.cells[last], FieldCell::BreakableBlank | FieldCell::Tab) {
+        let retracts_raw_blank =
+            matches!(self.cells[last], FieldCell::BreakableBlank | FieldCell::Tab);
+        let affected = if retracts_raw_blank {
             last
         } else {
             // encode1() emits Backline across intervening controls.
@@ -468,7 +470,11 @@ impl FieldBuffer {
             return None;
         }
         Some(LeadingBlankRetreat {
-            offset: (self.projection_length(affected, affected + 1) > 0)
+            // A staged backline's accepted pass edits the source range.
+            // Removing the blank here too would shift that edit onto
+            // the next glyph. A raw blank retraction owns its edit now.
+            offset: ((retracts_raw_blank || !self.staged_backline_projection)
+                && self.projection_length(affected, affected + 1) > 0)
                 .then(|| self.projection_length(start, affected)),
             character,
             rearmed: self.backafter_armed,

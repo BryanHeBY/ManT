@@ -1726,6 +1726,39 @@ fn a_later_operand_can_remove_the_blank_that_would_end_the_previous_pass() {
 }
 
 #[test]
+fn an_accepted_backline_does_not_remove_the_first_glyph_after_its_blank() {
+    // encode1() appends BS rather than removing a raw byte when the last
+    // input is ASCII_BREAK. The accepted field retires the covered space
+    // exactly once, keeping B in the original source or link label.
+    for (operand, suffix) in [
+        (r#".No "  \:BETA""#, ""),
+        (r#".Lk https://link.test "  \:BETA""#, ": https://link.test"),
+    ] {
+        let source = format!(
+            r#"{EDITABLE_FIELD}.No "ALPHA\zX\p\: "
+{operand}
+.br
+.No OMEGA
+"#
+        );
+        let markdown = render(&source, "roff", "markdown", "never", false);
+        for (input, format) in [(source.as_str(), "roff"), (markdown.as_str(), "markdown")] {
+            let text = render(input, format, "text", "never", false);
+            assert_eq!(
+                description(&text)
+                    .lines()
+                    .map(str::trim)
+                    .collect::<Vec<_>>(),
+                ["ALPHAX", &format!("BETA{suffix}"), "OMEGA"],
+                "{source}"
+            );
+            assert_eq!(search_visible_word_with_format(input, format, "BETA"), 1);
+            assert_eq!(search_visible_word_with_format(input, format, "ETA"), 0);
+        }
+    }
+}
+
+#[test]
 fn consecutive_and_detached_man_fields_share_the_device_minimum() {
     // term_flushln assigns minbl from trailspace even when no glyph
     // reaches term_field. An endline consumes that minimum.
