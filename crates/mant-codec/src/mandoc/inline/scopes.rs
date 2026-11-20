@@ -138,6 +138,7 @@ fn append_scope_children(builder: &mut InlineBuilder, node: &Node, name: Option<
         let role = match node.macro_token.as_ref() {
             // Explicit No can supply a declaration operand or separator.
             Some(Mdoc(MdocMacro::No)) => NativeOperandRole::LiteralContinuation(None),
+            Some(Mdoc(MdocMacro::Li)) => NativeOperandRole::LiteralValue,
             // mdoc_term.c gives Sy its own bold scope, separate from Cm/Ic.
             Some(Mdoc(MdocMacro::Sy)) => NativeOperandRole::SymbolicText,
             _ => NativeOperandRole::Description,

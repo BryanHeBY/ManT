@@ -191,8 +191,10 @@ impl<'a> HeadView<'a> {
                     #[cfg(feature = "roff")]
                     role if role.is_description() => {
                         !(self.style(offset).emphasis
-                            || role == NativeOperandRole::Description
-                                && self.text.as_bytes()[offset] == b'='
+                            || matches!(
+                                role,
+                                NativeOperandRole::Description | NativeOperandRole::LiteralValue
+                            ) && self.text.as_bytes()[offset] == b'='
                                 && self.text[operand.bytes.clone()].trim() == "=")
                     }
                     _ => false,

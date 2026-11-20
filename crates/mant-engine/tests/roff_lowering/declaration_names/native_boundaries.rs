@@ -314,6 +314,67 @@ fn an_executed_path_can_consist_only_of_punctuation() {
 }
 
 #[test]
+fn attached_path_pieces_stop_at_real_word_spacing() {
+    // The fixed tree and HTML have two Pa operands even when Ns makes
+    // their visible bytes touch. termp_ns_pre() controls that boundary.
+    for prefix in ["/", "../", "/tmp/"] {
+        for (after, gap) in [("Ns Pa foo", ""), ("Ns Li foo", ""), ("Pa foo", " ")] {
+            let head = format!("Fl a= Ns Pa {prefix} {after}");
+            let label = format!("-a={prefix}{gap}foo");
+            check("OPTIONS", &head, &["-a"], &label, gap.is_empty(), &["foo"]);
+        }
+    }
+}
+
+#[test]
+fn detached_groups_admit_literal_alternatives_with_actual_argument_evidence() {
+    // The fixed tree distinguishes Li, No and Em even when term_word()
+    // makes their text identical. Both terminal devices and HTML agree
+    // on the complete HEAD and leave BODY outside its delimiters.
+    for (open, close, left, right) in [
+        ("Po", " Pc", '(', ')'),
+        ("Pq", "", '(', ')'),
+        ("Bq", "", '[', ']'),
+        ("Oo", " Oc", '[', ']'),
+        ("[", " ]", '[', ']'),
+    ] {
+        for (body, visible, full) in [
+            ("Ar opt | Li auto", "opt | auto", true),
+            ("Li auto | Ar opt", "auto | opt", true),
+            ("Ar opt Ns = Ns Li auto", "opt=auto", true),
+            ("Ar opt , Li auto", "opt, auto", true),
+            ("Ar opt Ns / Ns Li auto", "opt/auto", true),
+            ("Ar opt | No deprecated", "opt | deprecated", false),
+            ("Ar opt , No deprecated", "opt, deprecated", false),
+            ("Ar opt Ns / Ns No deprecated", "opt/deprecated", false),
+            ("Ar opt | Em auto", "opt | auto", false),
+            ("No default : Pa /tmp", "default: /tmp", false),
+            ("Ar opt Li tail", "opt tail", false),
+        ] {
+            let head = format!("Fl a= Ns Ar x {open} {body}{close}");
+            let label = format!("-a=x {left}{visible}{right}");
+            check(
+                "OPTIONS",
+                &head,
+                &["-a"],
+                &label,
+                full,
+                &["opt", "auto", "/tmp"],
+            );
+        }
+    }
+    for (head, label) in [
+        (
+            r#"Fl a= Ns Ar x Bq "default:" Pa /tmp"#,
+            "-a=x [default: /tmp]",
+        ),
+        ("Fl a= Ns Ar x [ default: none ]", "-a=x [default: none]"),
+    ] {
+        check("OPTIONS", head, &["-a"], label, false, &["none", "/tmp"]);
+    }
+}
+
+#[test]
 fn real_assignment_forms_keep_compound_and_literal_alternatives() {
     // Reduced from node, pccritic, wavpack, dhcpcd, cmp, ld, m4, zdb
     // and exports. CVS term_word(), termp_ns_pre() and quote pre/post

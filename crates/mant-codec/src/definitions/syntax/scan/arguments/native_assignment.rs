@@ -22,7 +22,7 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
         let start = operand.bytes.start.max(cursor);
         let end = operand.bytes.end.min(rhs.end);
         if syntax
-            .literal(&view.text[cursor..start], true, false)
+            .literal(&view.text[cursor..start], Literal::Unmarked)
             .is_err()
         {
             return false;
@@ -30,29 +30,33 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
         let value = &view.text[start..end];
         let accepted = match operand.role {
             Role::Placeholder { .. } | Role::SearchArgument(_) => syntax.parameter(value, true),
-            Role::PathOperand(_) if syntax.atom.accepts_new_fragment() => syntax.path(value),
+            Role::PathOperand(_) => syntax.path(value),
             Role::ExplicitOption
                 if operand.bytes.start < span.start || syntax.lexical.within_group() =>
             {
                 // An enclosing Fl can own its own value. An inner Fl
                 // proves its spelling inside the group, not the group.
-                syntax.parameter(value, false)
+                let optional = syntax
+                    .detached
+                    .is_some_and(|group| group.kind == GroupKind::Optional);
+                syntax.parameter(value, operand.bytes.start < span.start || optional)
             }
             Role::EnclosureStart { body, parent }
                 if scopes.len() < MAX_NESTING
                     && scopes.last().is_none_or(|scope| Some(*scope) == parent) =>
             {
                 scopes.push(body);
-                syntax.literal(value, false, true)
+                syntax.literal(value, Literal::Delimiter)
             }
             Role::EnclosureEnd(body) if scopes.pop() == Some(body) => {
-                syntax.literal(value, false, false)
+                syntax.literal(value, Literal::Delimiter)
             }
             Role::EnclosureContent(body) if scopes.last() == Some(&body) => {
-                syntax.literal(value, true, false)
+                syntax.literal(value, Literal::Unmarked)
             }
+            Role::LiteralValue => syntax.literal(value, Literal::Explicit),
             Role::Literal | Role::LiteralContinuation(_) | Role::Description | Role::Command => {
-                syntax.literal(value, true, false)
+                syntax.literal(value, Literal::Unmarked)
             }
             Role::Argument
             | Role::LiteralDelimiter { .. }
@@ -60,7 +64,7 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
             | Role::PipeDelimiter(_)
             | Role::SearchSign
             | Role::SearchOpen { .. }
-            | Role::SearchClose => syntax.literal(value, false, false),
+            | Role::SearchClose => syntax.literal(value, Literal::Delimiter),
             _ => return false,
         };
         if accepted.is_err() {
@@ -70,7 +74,7 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
     }
     scopes.is_empty()
         && syntax
-            .literal(&view.text[cursor..rhs.end], true, false)
+            .literal(&view.text[cursor..rhs.end], Literal::Unmarked)
             .is_ok()
         && syntax.has_value
         && syntax.lexical.is_top_level()
@@ -82,11 +86,52 @@ enum Atom {
     Expected,
     Complete,
     AfterDot,
+    PathContinuation,
 }
 
 impl Atom {
     fn accepts_new_fragment(self) -> bool {
         !matches!(self, Self::Complete)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Literal {
+    Delimiter,
+    Unmarked,
+    Explicit,
+}
+
+#[derive(Clone, Copy, Default)]
+struct DetachedGroup {
+    kind: GroupKind,
+    proved_argument: bool,
+    literal: bool,
+    connector: bool,
+    awaiting: Option<Join>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum GroupKind {
+    #[default]
+    Ordinary,
+    Optional,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Join {
+    Word,
+    Adjacent,
+}
+
+impl DetachedGroup {
+    fn complete(self) -> bool {
+        self.awaiting.is_none()
+            && if self.proved_argument {
+                !self.literal || self.connector
+            } else {
+                self.kind == GroupKind::Optional && self.literal
+            }
     }
 }
 
@@ -96,15 +141,15 @@ struct AssignmentSyntax {
     atom: Atom,
     has_value: bool,
     after_space: bool,
-    /// A detached author group can be prose. Every content atom needs
-    /// independent argument evidence, and punctuation alone is insufficient.
-    detached_argument: Option<bool>,
+    /// Detached groups need native argument evidence. Li can supply the
+    /// literal side of an assignment or alternative inside that group.
+    detached: Option<DetachedGroup>,
 }
 
 impl AssignmentSyntax {
     fn parameter(&mut self, value: &str, proves_argument: bool) -> Result<(), ()> {
         for ch in value.chars() {
-            if !self.punctuation(ch, false)? {
+            if !self.punctuation(ch)? {
                 self.lexical.observe(ch);
                 self.record_value(proves_argument);
             }
@@ -113,30 +158,44 @@ impl AssignmentSyntax {
     }
 
     fn path(&mut self, value: &str) -> Result<(), ()> {
-        if value.is_empty() {
+        let path = value.trim_start();
+        self.literal(&value[..value.len() - path.len()], Literal::Delimiter)?;
+        if path.is_empty() {
             return Ok(());
         }
+        if !self.atom.accepts_new_fragment() {
+            return Err(());
+        }
+        let trimmed = path.trim_end();
         // mdoc_html.c::mdoc_pa_pre() preserves a pathname even when it
         // consists entirely of punctuation, as with /, . and ../.
-        let punctuation_only = value.chars().all(|ch| matches!(ch, '/' | '.'));
+        let punctuation_only = trimmed.chars().all(|ch| matches!(ch, '/' | '.'));
         if punctuation_only {
             self.record_value(true);
-            Ok(())
         } else {
-            self.parameter(value, true)
+            self.parameter(trimmed, true)?;
+            // A typed pathname can itself end at a slash.
+            if trimmed.ends_with('/') {
+                self.record_value(true);
+            }
         }
+        if trimmed.ends_with(['/', '.']) {
+            self.atom = Atom::PathContinuation;
+        }
+        self.literal(&path[trimmed.len()..], Literal::Delimiter)
     }
 
     fn record_value(&mut self, proves_argument: bool) {
         self.atom = Atom::Complete;
         self.has_value = true;
         self.after_space = false;
-        if let Some(proved) = &mut self.detached_argument {
-            *proved |= proves_argument;
+        if let Some(group) = &mut self.detached {
+            group.proved_argument |= proves_argument;
+            group.awaiting = None;
         }
     }
 
-    fn literal(&mut self, value: &str, permits_atom: bool, native_group: bool) -> Result<(), ()> {
+    fn literal(&mut self, value: &str, literal: Literal) -> Result<(), ()> {
         let mut in_atom = false;
         for ch in value.chars() {
             if ch == '\n' {
@@ -146,14 +205,17 @@ impl AssignmentSyntax {
                 self.atom = Atom::AfterDot;
                 continue;
             }
-            if self.punctuation(ch, native_group)? {
+            if self.punctuation(ch)? {
                 in_atom = false;
-            } else if self.detached_argument.is_none()
-                && permits_atom
+            } else if literal != Literal::Delimiter
+                && (self.detached.is_none() || literal == Literal::Explicit)
                 && (in_atom || self.atom.accepts_new_fragment())
                 && parameter_character(ch)
             {
                 self.lexical.observe(ch);
+                if let Some(group) = &mut self.detached {
+                    group.literal = true;
+                }
                 self.record_value(false);
                 in_atom = true;
             } else {
@@ -163,10 +225,18 @@ impl AssignmentSyntax {
         Ok(())
     }
 
-    fn punctuation(&mut self, ch: char, native_group: bool) -> Result<bool, ()> {
+    fn punctuation(&mut self, ch: char) -> Result<bool, ()> {
         if ch.is_whitespace() {
+            if self
+                .detached
+                .is_some_and(|group| group.awaiting == Some(Join::Adjacent))
+            {
+                // A detached `default: value` note can be styled as Ar
+                // on both sides. A colon joins atoms only without a gap.
+                return Err(());
+            }
             self.after_space = true;
-            if matches!(self.atom, Atom::AfterDot) {
+            if matches!(self.atom, Atom::AfterDot | Atom::PathContinuation) {
                 self.atom = Atom::Complete;
             }
             return Ok(true);
@@ -177,13 +247,35 @@ impl AssignmentSyntax {
             if opener
                 && self.after_space
                 && self.lexical.is_top_level()
-                && (!self.has_value || !self.atom.accepts_new_fragment())
-                && !(native_group && ch == '[')
+                && (!self.has_value || !matches!(self.atom, Atom::Expected))
             {
-                self.detached_argument = Some(false);
+                self.detached = Some(DetachedGroup {
+                    kind: if ch == '[' {
+                        GroupKind::Optional
+                    } else {
+                        GroupKind::Ordinary
+                    },
+                    ..DetachedGroup::default()
+                });
+            }
+            let join = match ch {
+                '|' | '=' | ',' => Some(Join::Word),
+                ':' => Some(Join::Adjacent),
+                '/' if !matches!(self.atom, Atom::Expected) && !self.after_space => {
+                    Some(Join::Adjacent)
+                }
+                _ => None,
+            };
+            if let (Some(group), Some(join)) = (&mut self.detached, join) {
+                let adjacent = join == Join::Adjacent;
+                if matches!(self.atom, Atom::Expected) || adjacent && self.after_space {
+                    return Err(());
+                }
+                group.connector = true;
+                group.awaiting = Some(join);
             }
             let closed = self.lexical.observe(ch);
-            if closed && self.detached_argument.take() == Some(false) {
+            if closed && self.detached.take().is_some_and(|group| !group.complete()) {
                 return Err(());
             }
             self.atom = if !closed && (opener || separator) {

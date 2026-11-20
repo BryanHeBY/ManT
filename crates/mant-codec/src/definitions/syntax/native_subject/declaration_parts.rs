@@ -528,6 +528,7 @@ fn independent_groups<'a>(
                     || match operand.role.declaration_delimiter() {
                         NativeOperandRole::ExplicitOption
                         | NativeOperandRole::Description
+                        | NativeOperandRole::LiteralValue
                         | NativeOperandRole::ClippedInvocation
                         | NativeOperandRole::SymbolicText
                         | NativeOperandRole::LiteralPunctuation

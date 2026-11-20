@@ -70,6 +70,9 @@ pub(crate) enum NativeOperandRole {
     /// Styled text executed by its own mdoc macro in a declaration HEAD.
     #[cfg(feature = "roff")]
     Description,
+    /// A literal word executed by Li, distinct from styled prose.
+    #[cfg(feature = "roff")]
+    LiteralValue,
     /// An independently executed mdoc Sy word.
     #[cfg(feature = "roff")]
     SymbolicText,
@@ -198,6 +201,7 @@ impl NativeOperandRole {
         matches!(
             self,
             Self::Description
+                | Self::LiteralValue
                 | Self::SymbolicText
                 | Self::Command
                 | Self::ProgramName(_)
