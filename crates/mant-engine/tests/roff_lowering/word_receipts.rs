@@ -10,6 +10,8 @@ use super::{case_failures::verify_cases, json_roundtrip::json_string_roundtrip};
 
 #[path = "word_receipts/accepted_coverage.rs"]
 mod accepted_coverage;
+#[path = "word_receipts/field_handoff.rs"]
+mod field_handoff;
 
 #[derive(Deserialize)]
 struct Matrix {

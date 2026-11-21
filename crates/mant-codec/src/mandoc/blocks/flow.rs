@@ -309,9 +309,12 @@ impl BlockState {
                     builder.observe_no_fill_source_lines(false);
                 });
             if closes_head {
-                if self.formatter.consume_definition_head_row() {
-                    self.paragraph
-                        .consume_invisible_head_row(&mut self.formatter);
+                if self.formatter.definition_head_row_pending()
+                    && self
+                        .paragraph
+                        .consume_invisible_head_row(&mut self.formatter)
+                {
+                    self.formatter.consume_definition_head_row();
                 }
                 self.formatter.settle_definition_head_rows();
             }

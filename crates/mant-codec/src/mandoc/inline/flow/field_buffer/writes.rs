@@ -211,6 +211,7 @@ impl FieldBuffer {
         self.write_cursor = WriteCursor::End;
         self.raw_tail_fonts.clear();
         self.raw_copy_aliases.clear();
+        self.projection_owner = super::FieldProjectionOwner::Active;
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
         self.pass_retreats.clear();
@@ -262,6 +263,7 @@ impl FieldBuffer {
         &mut self,
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
+        let prior_raw_fence = self.proven_prefix_fence(writes.first());
         self.word_first_content = None;
         self.begin_word_writes(writes);
         self.device_tail = None;
@@ -331,7 +333,9 @@ impl FieldBuffer {
                 | FieldWrite::ProveRawSlots { .. }
                 | FieldWrite::OpaqueRawSlots { .. }
                 | FieldWrite::ReplaceLivePrefix { .. }
-                | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
+                | FieldWrite::PlacedZeroWidthRetreat { .. } => {
+                    self.apply_slot_placement(write, prior_raw_fence);
+                }
                 FieldWrite::ProveAppendedSlots(proof) => self.prove_appended_slots(entry, proof),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::MotionPadding {
@@ -361,6 +365,19 @@ impl FieldBuffer {
         self.finish_word_writes(leading_retreat, consumed_motion_padding)
     }
 
+    fn proven_prefix_fence(&self, first: Option<&FieldWrite>) -> Option<usize> {
+        // Replaying a suffix cannot invalidate raw bytes before that suffix.
+        match first {
+            Some(FieldWrite::ReplaceLivePrefix { start, .. })
+                if self.projection_owner == super::FieldProjectionOwner::Detached
+                    && self.raw_slot_fence < *start =>
+            {
+                Some(self.raw_slot_fence)
+            }
+            _ => None,
+        }
+    }
+
     fn prove_appended_slots(&mut self, entry: usize, proof: &super::AppendedSlotProof) {
         if self.cells.len() == entry.saturating_add(proof.cells) {
             // The exact ending font run can be replayed. Earlier paint
@@ -374,10 +391,13 @@ impl FieldBuffer {
                 self.record_appended_font(entry + range.start..entry + range.end, *font);
             }
         } else {
-            self.apply_slot_placement(&FieldWrite::OpaqueRawSlots {
-                styled_suffix: None,
-                keeps_prior_slots: false,
-            });
+            self.apply_slot_placement(
+                &FieldWrite::OpaqueRawSlots {
+                    styled_suffix: None,
+                    keeps_prior_slots: false,
+                },
+                None,
+            );
         }
     }
 
@@ -388,6 +408,7 @@ impl FieldBuffer {
             start,
             end: start + 1,
             source,
+            run_in_overlap: false,
         });
     }
 
@@ -411,6 +432,7 @@ impl FieldBuffer {
             start,
             end: self.cells.len(),
             source,
+            run_in_overlap: false,
         });
     }
 
@@ -538,6 +560,7 @@ impl FieldBuffer {
                     start: cell,
                     end: cell + 1,
                     source,
+                    run_in_overlap: true,
                 },
             );
             added = true;
@@ -551,6 +574,10 @@ impl FieldBuffer {
 
     pub(in crate::mandoc::inline::flow) const fn has_retained_word_cursor(&self) -> bool {
         self.write_cursor.retreat() > 0
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_positioned_slots(&self) -> bool {
+        !matches!(self.write_cursor, WriteCursor::End)
     }
 
     fn finish_word_writes(
@@ -699,6 +726,12 @@ impl FieldBuffer {
         self.staged_backline_projection = false;
         self.backbefore_graph = None;
         self.backline_projection_target = None;
+    }
+
+    pub(in crate::mandoc::inline::flow) fn resume_run_in_owner(&mut self) {
+        // mdoc_term.c::termp_it_pre() keeps the original inset/diag
+        // field live across the HEAD and BODY projection owners.
+        self.projection_owner = super::FieldProjectionOwner::Detached;
     }
 
     pub(in crate::mandoc::inline::flow) fn push_separator_blank(&mut self) {

@@ -148,6 +148,12 @@ pub(in crate::mandoc::inline) enum PrefixExtension {
     LeadingMarker,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum ReplayPass {
+    Incremental,
+    Editable,
+}
+
 /// A small, uncommitted field with a proved one-to-one slot correspondence.
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.
@@ -162,6 +168,7 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
     pub(in crate::mandoc::inline) pending_cell: Option<usize>,
+    pub(in crate::mandoc::inline) pass: ReplayPass,
 }
 
 impl DeviceTail {

@@ -382,6 +382,9 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         let cell = next.start;
         let owner = projected_restart_owner(buffer, anchors, pass, next);
         if let Some(mut index) = owner.checked_sub(1) {
+            if project_definition_handoff(handoff, buffer, anchors, pass, next, &mut boundaries) {
+                continue;
+            }
             let section_seam = matches!(
                 handoff,
                 Some(NativePassHandoff::Section(section))
@@ -465,6 +468,41 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         let pending = nodes.split_off(start);
         nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
     }
+}
+
+fn project_definition_handoff(
+    handoff: Option<NativePassHandoff<'_>>,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    pass: &super::super::field_buffer::FillPass,
+    next: &super::super::field_buffer::FillPass,
+    boundaries: &mut BTreeMap<String, Vec<RecordedRowSplit>>,
+) -> bool {
+    if let Some(NativePassHandoff::Definition(head)) = handoff
+        && let Some(last) = buffer.last_projected_cell(pass.start..pass.end)
+        && anchors[..anchors.partition_point(|anchor| anchor.content <= last)]
+            .last()
+            .is_some_and(|anchor| head.owns_word(&anchor.owner))
+        && let Some(first) =
+            (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)
+        && let Some(body) = anchors[..anchors.partition_point(|anchor| anchor.content <= first)]
+            .last()
+            .filter(|anchor| !head.owns_word(&anchor.owner))
+    {
+        // term_flushln closes the HEAD before skipping invisible entry
+        // cells. The detached HEAD has no marker in this output.
+        boundaries
+            .entry(body.owner.clone())
+            .or_default()
+            .push(RecordedRowSplit {
+                offset: 0,
+                pass_end: pass.end,
+                before_cached_glyph: false,
+                section_seam: false,
+            });
+        return true;
+    }
+    false
 }
 
 fn projected_restart_owner(
@@ -686,6 +724,21 @@ fn project_native_pass_nodes<'a>(
     for node in nodes {
         #[cfg(test)]
         OWNER_NODES_VISITED.with(|work| work.set(work.get().saturating_add(1)));
+        if matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(super::INTERNAL_FIELD_PREFIX))
+        {
+            // term_field() adds positioning before printing the word.
+            // Its generated prefix does not advance the owner's scalar
+            // cursor; the following native word marker resumes that cursor.
+            project_owner_tail_events(cursor, &mut output);
+            if let Some(owner) = cursor.owner.take() {
+                cursor
+                    .positions
+                    .insert(owner, (cursor.scalar, cursor.next_boundary));
+            }
+            cursor.boundaries = &[];
+            output.push(node.clone());
+            continue;
+        }
         if let Some(marker) = native_word_marker(node) {
             if cursor.owner.as_deref() != Some(marker) {
                 project_owner_tail_events(cursor, &mut output);

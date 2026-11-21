@@ -200,16 +200,17 @@ pub(super) fn definition_item(
         formatter,
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
-    if let Some(captured) =
-        deferred_head_projection.and_then(|receiver| receiver.resume_terms(&mut terms))
+    if let Some(receiver) = &deferred_head_projection
+        && let Some(captured) = receiver.resume_terms(&mut terms)
     {
         capture_deferred_operands(context, head, captured);
     }
     retire_covered_head_ink(formatter, &mut terms, context, head);
+    let observed = finish_definition_body_execution(formatter, man_node);
     carry_completed_head_rows(
         node,
         &terms,
-        closed_head_row,
+        closed_head_row || deferred_head_projection.is_some() && observed.term_carried_row_close(),
         empty_head_rows,
         carried_head_rows,
         &mut description,
@@ -217,7 +218,6 @@ pub(super) fn definition_item(
     if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {
         finish_man_ip_head(&mut terms, &mut geometry, finished.definition_field_exited);
     }
-    let observed = finish_definition_body_execution(formatter, man_node);
     apply_executed_definition_body_layout(
         &mut geometry,
         flow,

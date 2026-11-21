@@ -220,7 +220,7 @@ pub(super) fn transfer_completed_empty_head_rows(terms: &mut [Vec<Inline>], rows
 pub(super) fn carry_completed_head_rows(
     node: &Node,
     terms: &[Vec<Inline>],
-    closed_head_row: bool,
+    term_owned_row_close: bool,
     completed_empty_rows: u16,
     carried_hard_rows: u16,
     description: &mut Vec<Block>,
@@ -239,7 +239,10 @@ pub(super) fn carry_completed_head_rows(
         // Data-span and HEAD-post endlines are independent of layout gaps.
         carried_hard_rows
     } else {
-        u16::from(closed_head_row && invisible_closed_head_row(terms))
+        // A shared term_field() pass can cover the final HEAD glyph
+        // with the generated run-in blank before term_newln() ends the
+        // row. A BODY row already assigned to that term still exists.
+        u16::from(term_owned_row_close && invisible_closed_head_row(terms))
     };
     if hard_rows > 0 {
         // A physical row ended even though the HEAD contained no printable

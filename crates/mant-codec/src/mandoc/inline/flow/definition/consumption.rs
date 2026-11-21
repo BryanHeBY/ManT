@@ -286,7 +286,15 @@ impl InlineBuilder {
         use super::super::output::deferred_blanks;
         let definition = self.execution.definition.as_ref().expect("native field");
         if return_to_head && let Some(receiver) = &definition.deferred_head_projection {
-            let receipts = definition.field_buffer.printed_deferred_blanks(passes);
+            let anchors = &definition.field_word_anchors;
+            let receipts =
+                definition
+                    .field_buffer
+                    .printed_deferred_blanks_at_handoff(passes, |cell| {
+                        anchors[..anchors.partition_point(|anchor| anchor.content <= cell)]
+                            .last()
+                            .is_some_and(|anchor| receiver.owns_word(&anchor.owner))
+                    });
             receiver.accept_blanks(&receipts);
             deferred_blanks::project_from(&mut self.nodes, start, &receipts);
         } else {
@@ -307,7 +315,8 @@ impl InlineBuilder {
         let shared_tail = definition.deferred_head_projection.is_some()
             && definition.field_buffer.has_unprinted_tail(passes);
         let pending_field_edits = definition.field_buffer.has_unprinted_projection(passes)
-            || definition.field_buffer.has_pass_retreats();
+            || definition.field_buffer.has_pass_retreats()
+            || definition.deferred_head_projection.is_some();
         if !pending_field_edits && !shared_tail {
             return;
         }

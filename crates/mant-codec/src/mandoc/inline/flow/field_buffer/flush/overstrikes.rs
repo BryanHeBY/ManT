@@ -24,9 +24,10 @@ impl FieldBuffer {
         }
         let end = self.printed_content_end(start, end);
         let cells = &self.cells[start..end];
-        if !cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
-            .windows(2)
-            .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
+        if self.projection_owner != super::super::FieldProjectionOwner::Detached
+            && !cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
+                .windows(2)
+                .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
         {
             return None;
         }
@@ -91,7 +92,7 @@ impl FieldBuffer {
             }
             let index = start + offset;
             match cell {
-                FieldCell::Graph { text, width: 1 } if text.is_ascii() => {}
+                FieldCell::Graph { text, width: 1 } if text.is_ascii() || *text == '\u{a0}' => {}
                 FieldCell::Hyphen
                 | FieldCell::BreakableBlank
                 | FieldCell::NonBreakingBlank
@@ -154,7 +155,7 @@ impl FieldBuffer {
                 .enumerate()
                 .filter_map(|(offset, by)| {
                     let target = start + offset;
-                    by.filter(|_| self.projected_ink(target) || self.has_deferred_blank_at(target))
+                    by.filter(|_| self.projected_coverable_cell(target))
                         .map(|by| (target, Some(by)))
                 })
                 .collect(),
@@ -162,6 +163,19 @@ impl FieldBuffer {
             overhang,
         };
         Some((proof, stepped_left))
+    }
+
+    fn projected_coverable_cell(&self, cell: usize) -> bool {
+        self.projected_ink(cell)
+            || self.has_deferred_blank_at(cell)
+            || self.projection_owner == super::super::FieldProjectionOwner::Detached
+                && self.projection_length(cell, cell + 1) > 0
+                && matches!(
+                    self.cells[cell],
+                    FieldCell::BreakableBlank
+                        | FieldCell::NonBreakingBlank
+                        | FieldCell::Graph { text: '\u{a0}', .. }
+                )
     }
 
     // A retreat can leave already-painted ink beyond viscol. Keep a

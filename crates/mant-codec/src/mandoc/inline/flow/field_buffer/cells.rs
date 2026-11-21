@@ -128,6 +128,7 @@ pub(in crate::mandoc) enum FieldWrite {
         start: usize,
         positions: Vec<Option<usize>>,
         first_incoming: usize,
+        first_incoming_ink: Option<usize>,
         entry_blanks: usize,
         entry_gap: Option<usize>,
         unpublished: Option<usize>,
@@ -209,6 +210,7 @@ pub(super) struct DeferredBlankRun {
     pub(super) start: usize,
     pub(super) end: usize,
     pub(super) source: DeferredSourceBlank,
+    pub(super) run_in_overlap: bool,
 }
 
 impl FieldWrite {

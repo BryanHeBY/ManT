@@ -18,6 +18,7 @@ pub(super) struct WordPassProjection {
     pub(super) prints_padding: bool,
     pub(super) authored_separator: Option<Inline>,
     pub(super) split_word: Option<Vec<Inline>>,
+    pub(super) retained_motion_width: usize,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -108,7 +109,13 @@ impl WordPassProjection {
         } else {
             word_start
         };
-        if self.native_separator == 0
+        if let Some(ink) = entry.incoming_ink()
+            && let Some((gap, width)) = buffer.retained_motion_gap(ink)
+            && width >= self.native_separator
+        {
+            self.separator = SeparatorDisposition::DeviceAdvance(gap);
+            self.retained_motion_width = width;
+        } else if self.native_separator == 0
             && entry.receipt.prints_padding
             && entry.receipt.first_content_cell >= word_start
             && let Some((gap, previous)) = buffer.device_gap_before(gap_end, replayed)

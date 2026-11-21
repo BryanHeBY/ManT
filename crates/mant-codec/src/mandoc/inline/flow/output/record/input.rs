@@ -165,6 +165,12 @@ impl ExecutedWordEntry {
         self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some()
     }
 
+    pub(super) fn incoming_ink(&self) -> Option<usize> {
+        self.prefix
+            .first_incoming_ink
+            .or_else(|| self.rewound().then_some(self.receipt.first_content_cell))
+    }
+
     pub(super) fn retains_blank(&self, cell: usize) -> bool {
         self.prefix.retains_blank(cell)
     }

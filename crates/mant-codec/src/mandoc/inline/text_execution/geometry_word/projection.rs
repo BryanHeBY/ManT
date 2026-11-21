@@ -41,6 +41,7 @@ impl<'a> PlacedWord<'a> {
             replace_tail,
             replayed_entry,
             advance_marker,
+            editable_pass,
         } = seed;
         let Placement {
             slots,
@@ -66,7 +67,10 @@ impl<'a> PlacedWord<'a> {
             exact_inner_blanks,
             replaced_advance_marker,
         );
-        let settled = super::overprint::settle(&mut slots);
+        let settled = settle_replay_slots(
+            &mut slots,
+            editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS,
+        );
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
         retire_trailing_entry_blanks(&mut slots, &reading, earlier);
@@ -95,21 +99,19 @@ impl<'a> PlacedWord<'a> {
             .map(|id| (id, slots.iter().any(|slot| slot.owner == Some(id))));
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
-        if retain_suffix {
-            record_slot_proof(
-                &mut writes,
-                &settled,
-                &slots,
-                extent,
-                FieldWrite::ProveRawSlots {
-                    count: end,
-                    cursor_retreat,
-                    backbefore,
-                    duplicates,
-                    editable_marker,
-                },
-            );
-        }
+        record_slot_proof(
+            &mut writes,
+            &settled,
+            &slots,
+            extent,
+            retain_suffix.then_some(FieldWrite::ProveRawSlots {
+                count: end,
+                cursor_retreat,
+                backbefore,
+                duplicates,
+                editable_marker,
+            }),
+        );
         writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
             FieldWrite::PlacedZeroWidthRetreat {
                 target_from_end: end - target,
@@ -510,13 +512,45 @@ fn publish_inner_advances(
     }
 }
 
+fn settle_replay_slots(
+    slots: &mut Vec<FillSlot>,
+    keep_raw_advances: bool,
+) -> Vec<std::ops::Range<usize>> {
+    if keep_raw_advances {
+        expand_replay_advances(slots);
+    }
+    super::overprint::settle(slots)
+}
+
+fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
+    // Keep raw advances addressable through the next term_word().
+    // The field scanner may compress them once it consumes them.
+    for index in (0..slots.len()).rev() {
+        let slot = &slots[index];
+        if slot.drawing_advance && slot.owner.is_none() && slot.count > 1 {
+            let count = slot.count;
+            let cell = slot.cell.clone();
+            slots.splice(
+                index..=index,
+                (0..count).map(|_| FillSlot {
+                    cell: cell.clone(),
+                    count: 1,
+                    owner: None,
+                    drawing_advance: true,
+                }),
+            );
+        }
+    }
+}
+
 fn record_slot_proof(
     writes: &mut Vec<FieldWrite>,
     settled: &[std::ops::Range<usize>],
     slots: &[FillSlot],
     extent: usize,
-    proof: FieldWrite,
+    proof: Option<FieldWrite>,
 ) {
+    let Some(proof) = proof else { return };
     if !settled.is_empty() {
         // The visible column order cannot prove one owner per raw byte.
         writes.push(FieldWrite::OpaqueRawSlots {
@@ -596,12 +630,17 @@ fn replay_prefix(
 ) -> FieldWrite {
     let mut positions = vec![None; earlier];
     let mut first_incoming = slots.len();
+    let mut first_incoming_ink = None;
+    let mut interleaved_ink = false;
     let mut entry_blanks = 0;
     let mut entry_gap = None;
     for (position, slot) in slots.iter().enumerate() {
         let Some(owner) = slot.owner else { continue };
         if owner < earlier {
             positions[owner] = Some(start + position);
+            interleaved_ink |= first_incoming_ink.is_some()
+                && matches!(slot.cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+                && matches!(reading[owner].glyph, ReadingGlyph::Earlier(1..));
         } else if matches!(reading[owner].glyph, ReadingGlyph::EntryBlank) {
             if position < first_incoming {
                 entry_blanks += 1;
@@ -609,12 +648,18 @@ fn replay_prefix(
             }
         } else {
             first_incoming = first_incoming.min(position);
+            if incoming_ink(slot, reading, earlier).is_some() {
+                first_incoming_ink.get_or_insert(start + position);
+            }
         }
     }
     FieldWrite::ReplaceLivePrefix {
         start,
         positions,
         first_incoming: start + first_incoming,
+        // Interleaved old glyphs own their individual advances. They
+        // cannot share an entry-width correction on the incoming word.
+        first_incoming_ink: first_incoming_ink.filter(|_| !interleaved_ink),
         entry_blanks,
         entry_gap: entry_gap.filter(|_| entry_blanks == 1),
         unpublished: unpublished.map(|index| start + index),

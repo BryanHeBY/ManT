@@ -100,10 +100,13 @@ impl InlineBuilder {
                     native_anchor_marker.as_deref(),
                     projection.authored_separator.take(),
                 );
-            if word
-                && (field_padding || virtual_padding || replayed_gap.is_some())
-                && let Some(marker) = native_anchor_marker.as_ref()
-            {
+            let prefix_marker = native_anchor_marker.filter(|_| {
+                word && (field_padding
+                    || virtual_padding
+                    || replayed_gap.is_some()
+                    || projection.retained_motion_width > 0)
+            });
+            if let Some(marker) = &prefix_marker {
                 self.mark_native_field_prefix(
                     marker,
                     replayed_gap.or(projection.projected_gap(field_padding)),
@@ -111,6 +114,8 @@ impl InlineBuilder {
             }
             if field_padding {
                 self.append_device_field_padding();
+            } else if projection.retained_motion_width > 0 {
+                self.materialize_replayed_motion_gap(projection.retained_motion_width, payload);
             } else {
                 self.append_boundary_spacing(
                     spacing_boundary,
@@ -124,15 +129,33 @@ impl InlineBuilder {
                     authored_in_payload,
                 );
             }
-            if word
-                && (field_padding || virtual_padding || replayed_gap.is_some())
-                && let Some(marker) = native_anchor_marker
-            {
+            if let Some(marker) = prefix_marker {
                 // Device minbl is field geometry, not a native buffer cell.
                 // The word's accepted scalar interval begins after that pad.
                 self.nodes.push(Inline::anchor(marker));
             }
             layout_start
+        }
+    }
+
+    fn materialize_replayed_motion_gap(&mut self, width: usize, payload: &[Inline]) {
+        // A replay can move an earlier blank into the leading payload.
+        // Count both sides of the seam before projecting the remaining advance.
+        let mut before_ink = true;
+        let mut leading = 0;
+        mant_ir::visit_inline_plain_text(payload, |text| {
+            if before_ink {
+                let spaces = text.len() - text.trim_start_matches(' ').len();
+                leading += spaces;
+                before_ink = spaces == text.len();
+            }
+        });
+        let trailing = super::super::trailing_ascii_spaces(&self.nodes);
+        let represented = trailing.saturating_add(leading);
+        if represented > width {
+            trim_trailing_breakable_spaces(&mut self.nodes, trailing.min(represented - width));
+        } else if represented < width {
+            self.push_field_owned_breakable_space(" ".repeat(width - represented));
         }
     }
 
@@ -221,10 +244,11 @@ impl InlineBuilder {
         } else if word
             && !empty_word
             && matches!(projection.separator, SeparatorDisposition::DeviceAdvance(_))
-            && self
-                .execution
-                .last_visible_character
-                .is_some_and(|character| !character.is_whitespace())
+            && (projection.retained_motion_width > 0
+                || self
+                    .execution
+                    .last_visible_character
+                    .is_some_and(|character| !character.is_whitespace()))
         {
             (PendingBoundary::Preserved, true)
         } else if word

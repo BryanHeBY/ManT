@@ -50,6 +50,11 @@ that crate was not published for that change.
 - Keep the surviving glyphs, link labels, printed spaces and hard rows from
   accepted roff fields after horizontal motion. Run-in definition labels and
   bodies retain the order painted by the shared field.
+- Preserve hard rows and clickable labels when a run-in definition body
+  overwrites part of its label's terminal field. Keep generated padding at
+  its actual position so it cannot split an otherwise joined word.
+- Recognize paired Unicode angle delimiters in native flag values and retain
+  complete signatures and independent aliases after numeric comparisons.
 - Resolve declaration aliases at native parameter boundaries, including
   native enclosure events, literal brackets, tight separators and split
   relative paths. Keep independent options discoverable and exclude grouped

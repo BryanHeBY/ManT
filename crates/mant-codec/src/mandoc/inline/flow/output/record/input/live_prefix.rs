@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 #[derive(Default)]
 pub(super) struct PrefixEdits {
     first_incoming: Option<usize>,
+    pub(super) first_incoming_ink: Option<usize>,
     pub(super) word_start: Option<usize>,
     pub(super) entry_blanks: usize,
     pub(super) entry_gap: Option<usize>,
@@ -41,6 +42,7 @@ impl PrefixEdits {
             start,
             positions,
             first_incoming,
+            first_incoming_ink,
             entry_blanks,
             entry_gap,
             unpublished,
@@ -119,21 +121,20 @@ impl PrefixEdits {
             });
         }
         moved.sort_unstable_by_key(|&(position, _)| position);
-        let gaps = rebase_earlier_words(earlier, positions, *start, *first_incoming, &earlier_ink);
+        let gaps = rebase_earlier_words(
+            buffer,
+            earlier,
+            positions,
+            *start,
+            *first_incoming,
+            &earlier_ink,
+        );
+        // An earlier surviving write can shift the interval's start.
+        let word_start = word_start_after_overlay(positions, *start, *first_incoming);
         Self {
             first_incoming: Some(*first_incoming),
-            // Replay can change the number of slots owned by earlier
-            // words (e.g. encode1's duplicate bold glyph). Do not cut
-            // their accepted ranges at the old incoming word start.
-            word_start: Some(
-                positions
-                    .iter()
-                    .flatten()
-                    .copied()
-                    .filter(|&position| position < *first_incoming)
-                    .max()
-                    .map_or(*start, |position| position + 1),
-            ),
+            first_incoming_ink: *first_incoming_ink,
+            word_start: Some(word_start),
             entry_blanks: *entry_blanks,
             entry_gap: *entry_gap,
             moved,
@@ -237,10 +238,11 @@ impl PrefixEdits {
                 relocated.insert(slot.marker, (projection_owner, projection));
             }
         }
+        let mut removed_gaps = BTreeMap::new();
         if !self.gaps.remove.is_empty() {
             // Edit the owned gap after using the old scalar coordinates
             // to detach surviving glyphs from their source words.
-            remove_overwritten_gaps(nodes, &self.gaps.remove, &mut false);
+            take_overwritten_gaps(nodes, &self.gaps.remove, &mut None, &mut removed_gaps);
         }
         // A slot can survive in source order before an already painted
         // graph. Only a trailing reading blank can satisfy the new seam.
@@ -279,9 +281,11 @@ impl PrefixEdits {
                 let Ok(slot) = slot.parse::<usize>() else {
                     continue;
                 };
-                if let Some(marker) = self.gaps.relocate.get(&slot) {
+                if let Some(marker) = self.gaps.relocate.get(&slot)
+                    && let Some(value) = removed_gaps.remove(marker.as_str())
+                {
                     incoming.push(Inline::anchor(marker.as_str()));
-                    incoming.push(Inline::Text { value: " ".into() });
+                    incoming.push(Inline::Text { value });
                     incoming.push(Inline::anchor(incoming_owner));
                 } else if let Some((owner, glyph)) = relocated.remove(&slot) {
                     incoming.push(Inline::anchor(owner));
@@ -293,13 +297,31 @@ impl PrefixEdits {
     }
 }
 
+fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: usize) -> usize {
+    // encode1() can add or remove bold copies. Keep earlier surviving
+    // slots out of the incoming word's interval, independent of its old start.
+    positions
+        .iter()
+        .flatten()
+        .copied()
+        .filter(|&position| position < first)
+        .max()
+        .map_or(start, |position| position + 1)
+}
+
 #[derive(Default)]
 struct GapEdits {
-    remove: BTreeSet<String>,
+    remove: BTreeMap<String, GapRemoval>,
     relocate: BTreeMap<usize, String>,
 }
 
+struct GapRemoval {
+    lost_columns: usize,
+    relocate: bool,
+}
+
 fn rebase_earlier_words(
+    buffer: &FieldBuffer,
     earlier: &mut [NativeWordAnchor],
     positions: &[Option<usize>],
     start: usize,
@@ -310,24 +332,11 @@ fn rebase_earlier_words(
     let mut gaps = GapEdits::default();
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
         if let Some(old) = owner.projected_gap_cell
-            && let Some(position) = old
+            && let Some(offset) = old
                 .checked_sub(start)
-                .and_then(|offset| positions.get(offset))
+                .filter(|&offset| offset < positions.len())
         {
-            owner.projected_gap_cell = *position;
-            if position.is_none_or(|position| position >= first_incoming) {
-                let serial = owner
-                    .owner
-                    .strip_prefix(super::super::super::INTERNAL_FIELD_WORD)
-                    .expect("native word owner");
-                let marker = format!("{}{serial}", super::super::super::INTERNAL_FIELD_PREFIX);
-                gaps.remove.insert(marker.clone());
-                if position.is_some() {
-                    gaps.relocate.insert(old - start, marker);
-                } else {
-                    owner.projected_field_prefix = false;
-                }
-            }
+            gaps.rebase(buffer, positions, owner, start, offset, first_incoming);
         }
         let remap = |index: usize| {
             let Some(offset) = index.checked_sub(start) else {
@@ -349,20 +358,85 @@ fn rebase_earlier_words(
     gaps
 }
 
-fn remove_overwritten_gaps(nodes: &mut [Inline], owners: &BTreeSet<String>, remove: &mut bool) {
+impl GapEdits {
+    fn rebase(
+        &mut self,
+        buffer: &FieldBuffer,
+        positions: &[Option<usize>],
+        owner: &mut NativeWordAnchor,
+        start: usize,
+        offset: usize,
+        first_incoming: usize,
+    ) {
+        let mut lost_columns = 0usize;
+        let mut surviving = None;
+        // A prefix can represent several consecutive cells. Overwriting
+        // its first slot does not invalidate an independently retained one.
+        for (source, &position) in positions.iter().enumerate().skip(offset) {
+            let width = match buffer.cells()[start + source] {
+                FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => width,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
+                _ => break,
+            };
+            if let Some(cell) = position {
+                surviving = Some((source, cell));
+                break;
+            }
+            lost_columns = lost_columns.saturating_add(width);
+        }
+        owner.projected_gap_cell = surviving.map(|(_, cell)| cell);
+        let relocate = surviving.is_some_and(|(_, cell)| cell >= first_incoming);
+        if lost_columns == 0 && !relocate && surviving.is_some() {
+            return;
+        }
+        let serial = owner
+            .owner
+            .strip_prefix(super::super::super::INTERNAL_FIELD_WORD)
+            .expect("native word owner");
+        let marker = format!("{}{serial}", super::super::super::INTERNAL_FIELD_PREFIX);
+        if let Some((source, _)) = surviving.filter(|_| relocate) {
+            self.relocate.insert(source, marker.clone());
+        }
+        owner.projected_field_prefix &= surviving.is_some();
+        self.remove.insert(
+            marker,
+            GapRemoval {
+                lost_columns: surviving.map_or(usize::MAX, |_| lost_columns),
+                relocate,
+            },
+        );
+    }
+}
+
+fn take_overwritten_gaps<'a>(
+    nodes: &mut [Inline],
+    owners: &'a BTreeMap<String, GapRemoval>,
+    pending: &mut Option<(&'a str, &'a GapRemoval)>,
+    removed: &mut BTreeMap<&'a str, String>,
+) {
     for node in nodes {
         match node {
-            Inline::Anchor { id, .. } => *remove = owners.contains(id.as_str()),
-            Inline::Text { value } if *remove => {
-                if value.starts_with(' ') {
-                    value.remove(0);
+            Inline::Anchor { id, .. } => {
+                *pending = owners
+                    .get_key_value(id.as_str())
+                    .map(|(owner, edit)| (owner.as_str(), edit));
+            }
+            Inline::Text { value } => {
+                if let Some((owner, edit)) = pending.take() {
+                    let columns = value.len() - value.trim_start_matches(' ').len();
+                    let lost = columns.min(edit.lost_columns);
+                    if edit.relocate && lost < columns {
+                        removed.insert(owner, value[lost..columns].to_owned());
+                    }
+                    value.drain(..if edit.relocate { columns } else { lost });
                 }
-                *remove = false;
             }
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => remove_overwritten_gaps(children, owners, remove),
-            _ => {}
+            | Inline::Link { children, .. } => {
+                take_overwritten_gaps(children, owners, pending, removed);
+            }
+            _ => *pending = None,
         }
     }
 }

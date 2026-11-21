@@ -75,6 +75,14 @@ impl FieldBuffer {
         &self,
         passes: &[FillPass],
     ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
+        self.printed_deferred_blanks_at_handoff(passes, |_| false)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn printed_deferred_blanks_at_handoff(
+        &self,
+        passes: &[FillPass],
+        belongs_to_head: impl Fn(usize) -> bool,
+    ) -> Vec<(super::cells::DeferredSourceBlank, usize)> {
         let mut next = self.deferred_blanks.iter().peekable();
         let covered = self.covered_pass_retreats(passes);
         let mut output = Vec::new();
@@ -86,7 +94,16 @@ impl FieldBuffer {
             while let Some(run) = next.peek().filter(|run| run.start < pass.end) {
                 let start = run.start.max(pass.start);
                 let end = run.end.min(printed_end);
-                if start < end {
+                // A generated BODY separator lying before surviving HEAD
+                // ink cannot contribute a lexical gap at the ownership
+                // seam. Test accepted positions after any BODY overwrite.
+                let displaced = run.run_in_overlap && (end..printed_end).take(super::placement::MAX_REPLAY_PREFIX_CELLS).any(|cell| {
+                    matches!(self.cells[cell], FieldCell::Graph { text, .. } if !text.is_whitespace())
+                        && self.projection_length(cell, cell + 1) > 0
+                        && covered.binary_search(&cell).is_err()
+                        && belongs_to_head(cell)
+                });
+                if start < end && !displaced {
                     // Some authored spaces have no provisional scalar but
                     // can still be covered by an accepted backline.
                     let overwritten = covered.partition_point(|&cell| cell < end)
@@ -171,6 +188,7 @@ impl FieldBuffer {
             write_cursor: WriteCursor::End,
             raw_tail_fonts: Vec::new(),
             raw_copy_aliases: Vec::new(),
+            projection_owner: super::FieldProjectionOwner::Active,
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,
             pass_tab_offset: self.pass_tab_offset,
@@ -302,7 +320,9 @@ impl FieldBuffer {
         mut accept: impl FnMut(usize, Option<usize>),
         mut order: impl FnMut(Vec<usize>),
     ) {
-        if !self.has_pass_retreats() {
+        if !self.has_pass_retreats()
+            && self.projection_owner != super::FieldProjectionOwner::Detached
+        {
             return;
         }
         let mut retreats = self.pass_retreats.iter().peekable();

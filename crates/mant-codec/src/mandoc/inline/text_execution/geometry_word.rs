@@ -3,7 +3,7 @@
 use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecution};
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite},
-    native_slots::{NativeSlots, PriorSlotEdit, ReplayDomain},
+    native_slots::{NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass},
 };
 use crate::mandoc::roff_escape::{PresentationKind, RoffFont};
 
@@ -687,6 +687,7 @@ struct GeometrySeed<'a> {
     earlier: usize,
     unpublished: Option<usize>,
     advance_marker: Option<usize>,
+    editable_pass: bool,
 }
 
 // A continuation can make the previous trailing HORIZ printable. Its
@@ -742,6 +743,7 @@ impl GeometrySeed<'_> {
                 replace_tail: 0,
                 replayed_entry: false,
                 advance_marker,
+                editable_pass: prefix.pass == ReplayPass::Editable,
             }
         } else if let Some(tail) = context.slot_entry.device_tail.take() {
             let automatic = context.slot_entry.automatic_blanks;
@@ -756,6 +758,7 @@ impl GeometrySeed<'_> {
                 earlier: 0,
                 unpublished: None,
                 advance_marker: None,
+                editable_pass: false,
             }
         } else {
             let mut placement =
@@ -796,6 +799,7 @@ impl GeometrySeed<'_> {
                 earlier: 0,
                 unpublished: None,
                 advance_marker: None,
+                editable_pass: false,
             }
         };
         seed.placement
@@ -885,8 +889,14 @@ fn execute_seed<'a>(
                 })
             });
     let retain_suffix = context.policy.field_authoritative
-        && (!has_marker || marker.is_some() || live_cursor || pending_glyph || terminal_marker);
+        && (!has_marker
+            || marker.is_some()
+            || live_cursor
+            || pending_glyph
+            || terminal_marker
+            || seed.editable_pass);
     let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
+        || has_marker && seed.editable_pass && slots.cursor_before_end()
         || has_marker && live_cursor
         // BACKBEFORE can hold a glyph inside material still following
         // col. Leave the marker editable until a real device flush.

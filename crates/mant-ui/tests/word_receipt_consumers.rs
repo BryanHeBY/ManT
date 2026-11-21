@@ -410,3 +410,25 @@ fn replayed_passes_and_relocated_links_keep_their_painted_cells() {
         }
     });
 }
+
+#[test]
+fn linked_run_in_body_keeps_the_native_break_and_click_target() {
+    // term_flushln() ends the accepted HEAD pass before the target's
+    // NBRZW controls and accepted BODY glyph, at all viewport widths.
+    let source = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/run-in-replays-linked-word-after-marker.1"
+    );
+    visit_readbacks(source, |content| {
+        for width in [32, 78, 100] {
+            let (mut app, terminal) = paint(content, width);
+            let buffer = terminal.backend().buffer();
+            let at = only_position(buffer, "Y");
+            assert!(
+                (0..buffer.area.width).any(|column| buffer[(column, at.1 - 1)].symbol() == "-"),
+            );
+            copy(&mut app, at, "Y");
+            click(&mut app, at.0, at.1);
+            assert_eq!(opened_targets(&mut app), ["https://k.test"]);
+        }
+    });
+}

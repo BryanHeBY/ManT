@@ -221,6 +221,13 @@ impl WriteCursor {
 
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
 /// words of one native field.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum FieldProjectionOwner {
+    #[default]
+    Active,
+    Detached,
+}
+
 #[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
@@ -233,6 +240,8 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     write_cursor: WriteCursor,
     raw_tail_fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
     raw_copy_aliases: Vec<(usize, usize)>,
+    /// The field stays live after its run-in label is handed to another IR owner.
+    projection_owner: FieldProjectionOwner,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.
     tab_offset: i64,

@@ -448,6 +448,7 @@ impl InlineBuilder {
             // with its original configuration.
             let mut state = field.state;
             state.run_in_continuation = true;
+            state.field_buffer.resume_run_in_owner();
             self.execution.definition = Some(state);
             if let Some(author) = &mut self.execution.author_execution {
                 author.break_effect = field.author_effect;

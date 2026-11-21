@@ -7,7 +7,11 @@ use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 64;
 
 impl FieldBuffer {
-    pub(super) fn apply_slot_placement(&mut self, write: &FieldWrite) {
+    pub(super) fn apply_slot_placement(
+        &mut self,
+        write: &FieldWrite,
+        prior_raw_fence: Option<usize>,
+    ) {
         match write {
             FieldWrite::Placed { cell, scalars } => self.push_placed(cell, *scalars),
             FieldWrite::KeepPlacedRetreat { from_end } => self.keep_placed_retreat(*from_end),
@@ -20,8 +24,10 @@ impl FieldBuffer {
                 duplicates,
                 editable_marker,
             } => {
-                self.raw_slot_fence = self.cells.len() - count;
-                self.raw_edit_fence = self.raw_slot_fence;
+                let appended_start = self.cells.len() - count;
+                self.raw_slot_fence =
+                    prior_raw_fence.map_or(appended_start, |fence| fence.min(appended_start));
+                self.raw_edit_fence = appended_start;
                 if *editable_marker {
                     // An interior \p has only marked the raw word.
                     // term.c::term_fill runs when a real flush accepts
@@ -30,11 +36,14 @@ impl FieldBuffer {
                 }
                 self.write_cursor = WriteCursor::Placed(*cursor_retreat);
                 self.backbefore_armed = *backbefore;
-                self.raw_copy_aliases.clear();
-                self.raw_copy_aliases
-                    .extend(duplicates.iter().map(|&(copy, owner)| {
-                        (self.raw_slot_fence + copy, self.raw_slot_fence + owner)
-                    }));
+                self.raw_copy_aliases.retain(|&(copy, owner)| {
+                    prior_raw_fence.is_some_and(|fence| fence <= copy && owner < appended_start)
+                });
+                self.raw_copy_aliases.extend(
+                    duplicates
+                        .iter()
+                        .map(|&(copy, owner)| (appended_start + copy, appended_start + owner)),
+                );
             }
             FieldWrite::OpaqueRawSlots {
                 styled_suffix,
@@ -145,8 +154,17 @@ impl FieldBuffer {
         // A proved landing may still edit the unread suffix. The ordinary
         // spaces immediately before a retained raw cursor are proved slots
         // too. Preserve their deferred source ownership through replay.
-        let floor = self
-            .replay_fence(live_replay)
+        let detached_replay =
+            live_replay && self.projection_owner == super::FieldProjectionOwner::Detached;
+        let fence = if detached_replay {
+            // term.c::encode1() can overwrite only part of a decoration.
+            // A generated run-in blank may attach projection metadata inside
+            // that pair, but both slots still belong to the live buffer.
+            self.raw_slot_fence
+        } else {
+            self.replay_fence(live_replay)
+        };
+        let floor = fence
             .max(self.resume)
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         // A projection-only recovery spelling can fence its own native
@@ -167,7 +185,9 @@ impl FieldBuffer {
             .partition_point(|&(copy, _)| copy < start);
         if start == self.cells.len()
             || self.write_cursor.retreat() > self.cells.len() - start
-            || start != 0 && self.projection_length(start, self.cells.len()) == 0
+            || !detached_replay
+                && start != 0
+                && self.projection_length(start, self.cells.len()) == 0
             || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
             || self
                 .raw_copy_aliases
@@ -214,6 +234,13 @@ impl FieldBuffer {
             pending_cell: self
                 .backbefore_graph
                 .and_then(|index| index.checked_sub(start)),
+            pass: if matches!(self.word_scan, super::WordScanPolicy::AwaitFlush)
+                || self.projection_owner == super::FieldProjectionOwner::Detached
+            {
+                super::super::native_slots::ReplayPass::Editable
+            } else {
+                super::super::native_slots::ReplayPass::Incremental
+            },
         })
     }
 
@@ -233,16 +260,34 @@ impl FieldBuffer {
     fn replace_live_prefix(&mut self, start: usize, positions: &[Option<usize>]) {
         use super::cells::DeferredBlankRun;
 
-        // encode1() can decorate the covering glyph after a backline
-        // whose target is outside this suffix. Keep that dependency
-        // while its marker survives at a proved slot in the overlay.
+        // Keep earlier BACKBEFORE evidence when both the target and
+        // its marker survive the overlay, including a target to its left.
         let first_retreat = self
             .pass_retreats
             .partition_point(|&(_, mark)| mark < start);
         let crossing: Vec<_> = self.pass_retreats[first_retreat..]
             .iter()
-            .filter(|&&(old, _)| old < start)
-            .filter_map(|&(old, mark)| positions.get(mark - start)?.map(|new| (old, new)))
+            .filter(|&&(target, _)| {
+                self.projection_owner == super::FieldProjectionOwner::Detached || target < start
+            })
+            .filter_map(|&(old, mark)| {
+                let target = if old < start {
+                    old
+                } else {
+                    positions.get(old - start).copied().flatten()?
+                };
+                let new = positions.get(mark - start).copied().flatten()?;
+                let backline = mark.checked_sub(1)?;
+                let surviving_backline = if backline < start {
+                    Some(backline)
+                } else {
+                    positions.get(backline - start).copied().flatten()
+                };
+                (self.projection_owner != super::FieldProjectionOwner::Detached
+                    || self.cells[backline] == FieldCell::Backline
+                        && surviving_backline == new.checked_sub(1))
+                .then_some((target, new))
+            })
             .collect();
         let first = self.deferred_blanks.partition_point(|run| run.end <= start);
         let mut surviving = Vec::new();
@@ -255,14 +300,16 @@ impl FieldBuffer {
                     surviving.push(DeferredBlankRun {
                         start: new,
                         end: new + 1,
-                        source: run.source,
+                        ..run
                     });
                 }
             }
         }
         if start == 0 {
             let scan = self.word_scan;
+            let projection_owner = self.projection_owner;
             self.clear();
+            self.projection_owner = projection_owner;
             if matches!(scan, super::WordScanPolicy::AwaitFlush) {
                 self.word_scan = scan;
             }
@@ -346,6 +393,74 @@ impl FieldBuffer {
                 FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
                     return (fixed && self.projection_length(index, index + 1) > 0)
                         .then_some((gap, index));
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retained_motion_gap(
+        &self,
+        end: usize,
+    ) -> Option<(usize, usize)> {
+        let end = (end..self.cells.len())
+            .take(MAX_REPLAY_PREFIX_CELLS)
+            .find(|&cell| {
+                !matches!(
+                    self.cells[cell],
+                    FieldCell::ZeroWidthGraph
+                        | FieldCell::Breakpoint
+                        | FieldCell::TabReference
+                        | FieldCell::BreakMarker
+                )
+            })?;
+        if !matches!(self.cells[end], FieldCell::Graph { .. }) {
+            return None;
+        }
+        // term_field() queues all spaces between printing cells. NBRZW,
+        // TABREF and an in-band marker do not print the pending columns.
+        // A later overwrite can keep them even if it removes the original
+        // right-hand glyph and its reading separator.
+        let mut width = 0usize;
+        let mut saw_motion = false;
+        let mut gap = end;
+        let floor = self.resume.max(end.saturating_sub(MAX_REPLAY_PREFIX_CELLS));
+        let mut before_ink = end;
+        while before_ink >= floor + 2
+            && self.cells[before_ink - 1] == FieldCell::Backline
+            && matches!(self.cells[before_ink - 2], FieldCell::Graph { .. })
+            && self.projection_length(before_ink - 2, before_ink - 1) == 0
+        {
+            // The font's underline/bold prefix is a pair at the same
+            // visual column. It does not consume the preceding advance.
+            before_ink -= 2;
+        }
+        for cell in (floor..before_ink).rev() {
+            match self.cells[cell] {
+                FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => {
+                    saw_motion = true;
+                    gap = cell;
+                    let known = self.deferred_blanks.partition_point(|run| run.end <= cell);
+                    if self
+                        .deferred_blanks
+                        .get(known)
+                        .is_some_and(|run| run.start <= cell)
+                    {
+                        continue;
+                    }
+                    width = width.saturating_add(count);
+                }
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
+                    width += 1;
+                }
+                FieldCell::BreakMarker
+                | FieldCell::ZeroWidthGraph
+                | FieldCell::TabReference
+                | FieldCell::Breakpoint => {}
+                FieldCell::Graph { text, .. } if !text.is_whitespace() => {
+                    return (saw_motion && (1..=MAX_REPLAY_PREFIX_CELLS).contains(&width))
+                        .then_some((gap, width));
                 }
                 _ => return None,
             }

@@ -71,7 +71,7 @@ pub(super) struct FormatterState {
 #[allow(clippy::struct_excessive_bools)]
 pub(super) struct DefinitionBodyObservation {
     before_visible: bool,
-    pending_head_row: bool,
+    head_row: DefinitionHeadRow,
     placement: DefinitionBodyPlacement,
     source_continues_after_run_in: Option<bool>,
     /// The BODY's first visible word printed under `TERMP_NOSPACE` (the
@@ -85,6 +85,21 @@ pub(super) struct DefinitionBodyObservation {
     run_in_boundary: Option<super::inline::RunInBoundaryReceipt>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DefinitionHeadRow {
+    Unshared,
+    Pending,
+    CarriedByTerm,
+}
+
+impl DefinitionHeadRow {
+    fn settle(&mut self) {
+        if *self == Self::Pending {
+            *self = Self::Unshared;
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum DefinitionBodyPlacement {
     Pending,
@@ -93,6 +108,10 @@ enum DefinitionBodyPlacement {
 }
 
 impl DefinitionBodyObservation {
+    pub(super) fn term_carried_row_close(&self) -> bool {
+        self.head_row == DefinitionHeadRow::CarriedByTerm
+    }
+
     pub(super) const fn placement_breaks(&self) -> bool {
         !matches!(self.placement, DefinitionBodyPlacement::Pending)
     }
@@ -210,7 +229,11 @@ impl FormatterState {
         self.execution.concat_consumed_for_body = false;
         self.definition_bodies.push(DefinitionBodyObservation {
             before_visible: true,
-            pending_head_row: shares_pending_head_row,
+            head_row: if shares_pending_head_row {
+                DefinitionHeadRow::Pending
+            } else {
+                DefinitionHeadRow::Unshared
+            },
             placement: DefinitionBodyPlacement::Pending,
             source_continues_after_run_in: None,
             first_word_concatenated: false,
@@ -280,7 +303,7 @@ impl FormatterState {
         let last = self.definition_bodies.len().saturating_sub(1);
         for (index, body) in self.definition_bodies.iter_mut().enumerate() {
             body.before_visible = false;
-            body.pending_head_row = false;
+            body.head_row.settle();
             if concatenated && index == last {
                 body.first_word_concatenated = true;
                 body.first_word_flushed_at_body |= flushed;
@@ -294,9 +317,9 @@ impl FormatterState {
         let Some(body) = self.definition_bodies.last_mut() else {
             return false;
         };
-        let pending = body.before_visible && body.pending_head_row;
+        let pending = body.before_visible && body.head_row == DefinitionHeadRow::Pending;
         if pending {
-            body.pending_head_row = false;
+            body.head_row = DefinitionHeadRow::CarriedByTerm;
         }
         pending
     }
@@ -308,20 +331,20 @@ impl FormatterState {
         if self
             .definition_bodies
             .iter()
-            .any(|body| body.pending_head_row)
+            .any(|body| body.head_row == DefinitionHeadRow::Pending)
             && !self.execution.has_printable_pending_zero_advance_glyph()
         {
             self.execution.discard_zero_advance_at_row_end();
         }
         for body in &mut self.definition_bodies {
-            body.pending_head_row = false;
+            body.head_row.settle();
         }
     }
 
     pub(super) fn definition_head_row_pending(&self) -> bool {
         self.definition_bodies
             .last()
-            .is_some_and(|body| body.before_visible && body.pending_head_row)
+            .is_some_and(|body| body.before_visible && body.head_row == DefinitionHeadRow::Pending)
     }
 
     pub(super) fn with_output_builder<R>(
