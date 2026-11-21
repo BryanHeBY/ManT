@@ -955,9 +955,9 @@
         },
         "lint": {
           "exitCode": 1,
-          "stdoutSha256": "1d93a572f618be40251103afaff7d566e28cb4b4c66362949cbf0ff444f004c9",
+          "stdoutSha256": "1fd3ad11f495478c991323a0d4a3939ef1db87525fbf67b9405dcdbdbbc55866",
           "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "stdoutBytes": 507,
+          "stdoutBytes": 339,
           "stderrBytes": 0,
           "status": "CapturedWithDiagnostics"
         }

@@ -63,7 +63,7 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
         }
         let value = &view.text[start..end];
         let touches_next = view.text[end..rhs.end].starts_with(|character: char| {
-            !character.is_whitespace() && !matches!(character, ']' | ')' | '}' | '>')
+            !character.is_whitespace() && !matches!(character, ']' | ')' | '}' | '>' | '⟩')
         }) && view.operand(end).is_none_or(|next| {
             next.bytes.start == end
                 && !matches!(next.role, Role::EnclosureEnd(_) | Role::ClippedEnclosure)
@@ -103,13 +103,13 @@ pub(in crate::definitions::syntax::scan) fn proves_native_assignment(
 fn complete_flag_value(view: &HeadView<'_>, rhs: std::ops::Range<usize>) -> bool {
     let mut lexical = LexicalState::default();
     for (offset, ch) in view.text[rhs.clone()].char_indices() {
-        if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.,|[](){}<>".contains(ch) {
+        if !parameter_character(ch) && !"+%*?#~&!^$;/:@=.,|[](){}<>⟨⟩".contains(ch) {
             return false;
         }
-        if !matches!(ch, '<' | '>')
+        if !matches!(ch, '<' | '>' | '⟨' | '⟩')
             || view.paired_assignment_angle(rhs.start + offset)
             || offset == 0
-            || offset + 1 == rhs.len()
+            || offset + ch.len_utf8() == rhs.len()
         {
             lexical.observe(ch);
         }
@@ -177,7 +177,7 @@ fn open_operand_edges(
         {
             edges.pop();
         } else if (!matches!(character, '<' | '>' | '⟨' | '⟩') || is_paired_angle(offset))
-            && (closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>'))
+            && (closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>' | '⟩'))
         {
             if edges.len() == MAX_NESTING {
                 return Err(());

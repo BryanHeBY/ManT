@@ -1388,3 +1388,103 @@ fn native_enclosure_edges_and_literal_comparisons_have_distinct_roles() {
         check("OPTIONS", head, names, label, full, &["-v", "value"]);
     }
 }
+
+// The mdoc enclosure handlers write delimiters independently of Fl/Ar
+// operands. Both literal angle families must keep the same scoped roles.
+#[test]
+fn literal_angle_values_and_native_enclosures_keep_independent_names() {
+    for (head, names, form, hidden) in [
+        (
+            r"Fl a= Ns Ar ⟨yes | Fl v Ns Ar ⟩ , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨yes | -v⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar \(layes | Fl v Ns Ar \(ra , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨yes | -v⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <yes | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<yes | -v>, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar root Ao Ar yes | Fl v Ac , Fl b",
+            &["-a", "-b"][..],
+            "-a=root ⟨yes | -v⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a=⟨root⟩ , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨root⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a=\(laroot\(ra , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨root⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar ⟨root⟩ , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨root⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a=<root> , Fl b",
+            &["-a", "-b"][..],
+            "-a=<root>, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar ket⟩ , Fl b",
+            &["-a", "-b"][..],
+            "-a=ket⟩, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar ⟨root , Fl b",
+            &["-a", "-b"][..],
+            "-a=⟨root, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <min>2 | Fl b= Ns Ar max>=3 , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=<min>2 | -b=max>=3, -c",
+            &["-v"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <min>2 , Fl b Ar max>=3 , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=<min>2, -b max>=3, -c",
+            &["-v"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <min>2 , Fl b= Ns Ar max>=3 , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=<min>2, -b=max>=3, -c",
+            &["-v"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <min>2 | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<min>2 | -v>, -b",
+            &["-v", "-c"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <min>2 | Fl b= Ns Ar max , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=<min>2 | -b=max, -c",
+            &["-v"][..],
+        ),
+    ] {
+        check("OPTIONS", head, names, form, true, hidden);
+    }
+}
