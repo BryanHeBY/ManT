@@ -188,8 +188,14 @@ def plan(args):
         if not resolved:
             raise ValueError(f'missing groff backend {name}')
         binaries['groff-' + name] = identity(resolved)
-    rules = [Path(__file__), ROOT / 'scripts/roff/lib/roff_audit_common.py', ROOT / 'scripts/roff/lib/roff_reference.py',
-             *[ROOT / 'scripts/roff/audit' / ('audit_roff_' + name + '.py') for name in (*PROFILES, 'fidelity', 'layout', 'rendering')]]
+    rules = [
+        Path(__file__),
+        ROOT / 'scripts/roff/lib/roff_audit_common.py',
+        ROOT / 'scripts/roff/lib/roff_audit_sources.py',
+        ROOT / 'scripts/roff/lib/roff_reference.py',
+        *[ROOT / 'scripts/roff/audit' / ('audit_roff_' + name + '.py')
+          for name in (*PROFILES, 'fidelity', 'layout', 'rendering')],
+    ]
     # The source helper imports these modules. Freeze them too; do not invoke
     # their oracles or imply their full-corpus coverage in this runner.
     rules += [ROOT / name for name in ('scripts/roff/lib/roff_content_compare.py', 'scripts/roff/lib/roff_layout_geometry.py',

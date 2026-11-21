@@ -213,12 +213,15 @@ class AllAuditTests(unittest.TestCase):
             with patch.object(AUDIT.SOURCES, 'census_inputs', return_value=[('/input', [{'id': 'one'}])]), \
                  patch.object(AUDIT.SOURCES, 'ZSTD_BINARY', decoder), \
                  patch.object(AUDIT, 'identity', side_effect=lambda path: {'path': str(path), 'sha256': 'bound'}), \
-                 patch.object(AUDIT.SOURCES, 'file_hash', return_value='rule'), \
+                 patch.object(AUDIT.SOURCES, 'file_hash',
+                              side_effect=lambda path: path.relative_to(AUDIT.ROOT).as_posix()), \
                  patch.object(AUDIT, 'git', return_value='commit'), \
                  patch.object(AUDIT.shutil, 'which', side_effect=lambda name:
                      {'xz': None, 'bzip2': '/resolved/bzip2'}.get(name, '/backend')):
                 _, report = AUDIT.plan(args)
-            self.assertEqual(report['rules']['scripts/roff/lib/roff_line_observations.py'], 'rule')
+            for name in ('roff_line_observations.py', 'roff_audit_common.py', 'roff_audit_sources.py'):
+                path = f'scripts/roff/lib/{name}'
+                self.assertEqual(report['rules'][path], path)
             self.assertEqual(report['dependencyAvailability']['zstd'], decoder is not None)
             self.assertNotIn('xz', report['dependencyAvailability'])
             self.assertNotIn('xz', report['binaries'])
