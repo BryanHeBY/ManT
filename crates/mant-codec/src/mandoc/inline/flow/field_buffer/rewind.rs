@@ -24,6 +24,7 @@ pub(in crate::mandoc::inline::flow) enum EntryRewind {
         retired_separator: usize,
         traversed_source_blanks: Vec<usize>,
         overwritten_glyphs: Vec<RewoundGlyph>,
+        cursor_retreat: usize,
     },
     Unmodeled,
 }
@@ -38,6 +39,7 @@ pub(in crate::mandoc::inline::flow) struct RewoundGlyph {
 struct EntryReplay {
     start: usize,
     writes: Vec<FieldWrite>,
+    cursor_retreat: usize,
     retired_separator: usize,
     traversed_source_blanks: Vec<usize>,
     overwritten_glyphs: Vec<(usize, char)>,
@@ -65,6 +67,7 @@ enum EntryWrite {
     ArmBackafter,
     CancelBackafter,
     CancelBackbefore,
+    Receipt,
     Rewind,
 }
 
@@ -140,6 +143,10 @@ impl FieldWrite {
             Self::ArmBackafter => EntryWrite::ArmBackafter,
             Self::CancelBackafter => EntryWrite::CancelBackafter,
             Self::CancelBackbefore => EntryWrite::CancelBackbefore,
+            Self::OpaqueRawSlots {
+                styled_suffix: None,
+                ..
+            } => EntryWrite::Receipt,
             Self::RewindWordEntry(_)
             | Self::MotionPadding { .. }
             | Self::StageBacklineProjection
@@ -214,6 +221,7 @@ impl FieldBuffer {
             retired_separator,
             traversed_source_blanks,
             overwritten_glyphs,
+            cursor_retreat,
         } = replay;
         let overwritten_glyphs = overwritten_glyphs
             .into_iter()
@@ -253,6 +261,7 @@ impl FieldBuffer {
             retired_separator,
             traversed_source_blanks,
             overwritten_glyphs,
+            cursor_retreat,
         }
     }
 
@@ -268,9 +277,7 @@ impl FieldBuffer {
         // offset, not the input cells. Replaying the word from zero still
         // gives a valid marker/ownership receipt for an empty literal row.
         let mut at = end.saturating_sub(count);
-        if at < self.resume {
-            return None;
-        }
+        (at >= self.resume).then_some(())?;
         let mut rewritten = None;
         let mut replay = Vec::new();
         let mut retired_separator = 0;
@@ -346,33 +353,89 @@ impl FieldBuffer {
                         backbefore = std::mem::take(&mut armed);
                     }
                     let overwritten_end = at.saturating_add(native_cells).min(end);
-                    for cell in at..overwritten_end {
-                        match self.entry_replacement(cell, word_start) {
-                            EntryReplacement::Protected => return None,
-                            EntryReplacement::Projected(text) => {
-                                overwritten_glyphs.push((cell, text));
-                            }
-                            EntryReplacement::ControlOrPadding => {}
-                        }
-                        retired_separator += usize::from(cell >= word_start);
-                    }
+                    self.replay_overwritten(
+                        at..overwritten_end,
+                        word_start,
+                        &mut overwritten_glyphs,
+                    )?;
+                    retired_separator += overwritten_end.saturating_sub(at.max(word_start));
                     rewritten.get_or_insert(at);
                     at = overwritten_end;
                 }
                 EntryWrite::ArmBackafter => armed = true,
                 EntryWrite::CancelBackafter => armed = false,
                 EntryWrite::CancelBackbefore => backbefore = false,
+                EntryWrite::Receipt => {}
                 EntryWrite::Rewind => return None,
             }
             replay.push(write.clone());
         }
-        (at == end).then_some(EntryReplay {
+        let cursor_retreat = end - at;
+        if cursor_retreat != 0 {
+            // A control-only overwrite can target a raw font copy that
+            // the word model has compressed into one reading scalar.
+            // It cannot prove that it replaced the earlier glyph itself.
+            let first = rewritten.filter(|_| wrote_source)?;
+            retired_separator += self.replay_blank_tail(at..end, first, word_start, &mut replay)?;
+        }
+        Some(EntryReplay {
             start: rewritten.unwrap_or(end),
             writes: replay,
+            cursor_retreat,
             retired_separator,
             traversed_source_blanks,
             overwritten_glyphs,
         })
+    }
+
+    fn replay_overwritten(
+        &self,
+        range: std::ops::Range<usize>,
+        word_start: usize,
+        glyphs: &mut Vec<(usize, char)>,
+    ) -> Option<()> {
+        for cell in range {
+            match self.entry_replacement(cell, word_start) {
+                EntryReplacement::Protected => return None,
+                EntryReplacement::Projected(text) => glyphs.push((cell, text)),
+                EntryReplacement::ControlOrPadding => {}
+            }
+        }
+        Some(())
+    }
+
+    fn replay_blank_tail(
+        &self,
+        tail: std::ops::Range<usize>,
+        overwritten_start: usize,
+        word_start: usize,
+        writes: &mut Vec<FieldWrite>,
+    ) -> Option<usize> {
+        // Outside the editable suffix, a compressed HORIZ cannot locate
+        // a raw cell. A source NBSP is itself an encoded graph slot.
+        if overwritten_start < self.raw_edit_fence
+            && !matches!(
+                self.cells[overwritten_start],
+                FieldCell::Graph { text: '\u{a0}', .. }
+            )
+        {
+            return None;
+        }
+        // A short write changes col independently of lastcol. Retain
+        // the old blank suffix, including an automatic entry slot now
+        // lying after the new graph (term.c::encode1 and bufferc).
+        let mut retired = 0;
+        for cell in tail {
+            if cell >= word_start && self.cells[cell] == FieldCell::BreakableBlank {
+                retired += 1;
+                writes.push(FieldWrite::UnprojectedBlank);
+            } else if self.projection_length(cell, cell + 1) == 0 {
+                writes.push(self.replay_entry_cell(cell)?);
+            } else {
+                return None;
+            }
+        }
+        Some(retired)
     }
 
     fn entry_replacement(&self, cell: usize, word_start: usize) -> EntryReplacement {

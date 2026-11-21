@@ -12,9 +12,23 @@ pub(super) struct PrefixEdits {
     pub(super) entry_blanks: usize,
     pub(super) entry_gap: Option<usize>,
     moved: Vec<(usize, usize)>,
-    edits: Vec<(usize, RewoundGlyph, Option<usize>)>,
+    detached_moves: BTreeMap<usize, String>,
+    edits: Vec<GlyphEdit>,
     gaps: GapEdits,
     retained_blanks: Vec<(usize, usize, RewoundGlyph)>,
+}
+
+#[derive(Clone, Copy)]
+struct Relocation {
+    marker: usize,
+    cell: usize,
+}
+
+struct GlyphEdit {
+    owner: usize,
+    glyph: RewoundGlyph,
+    relocation: Option<Relocation>,
+    unprinted_tail: usize,
 }
 
 impl PrefixEdits {
@@ -41,8 +55,13 @@ impl PrefixEdits {
         let mut retained_blanks = Vec::new();
         for (offset, (position, location)) in positions.iter().zip(locations).enumerate() {
             let cell = start + offset;
-            let relocated = position.filter(|pos| pos >= first_incoming).map(|_| offset);
-            if let (Some(position), Some((owner, following_scalars))) = (position, location)
+            let relocated = position
+                .filter(|pos| pos >= first_incoming)
+                .map(|cell| Relocation {
+                    marker: offset,
+                    cell,
+                });
+            if let (Some(position), Some((owner, following_scalars, _))) = (position, location)
                 && relocated.is_none()
             {
                 if matches!(
@@ -70,7 +89,7 @@ impl PrefixEdits {
             if position.is_some() && relocated.is_none() {
                 continue;
             }
-            let Some((owner, following_scalars)) = location else {
+            let Some((owner, following_scalars, unprinted_tail)) = location else {
                 continue;
             };
             if let (Some(position), Some(_)) = (position, relocated) {
@@ -88,15 +107,16 @@ impl PrefixEdits {
                 FieldCell::Tab => '\t',
                 _ => continue,
             };
-            edits.push((
+            edits.push(GlyphEdit {
                 owner,
-                RewoundGlyph {
+                glyph: RewoundGlyph {
                     cell,
                     scalar,
                     following_scalars,
                 },
-                relocated,
-            ));
+                relocation: relocated,
+                unprinted_tail,
+            });
         }
         moved.sort_unstable_by_key(|&(position, _)| position);
         let gaps = rebase_earlier_words(earlier, positions, *start, *first_incoming, &earlier_ink);
@@ -117,6 +137,7 @@ impl PrefixEdits {
             entry_blanks: *entry_blanks,
             entry_gap: *entry_gap,
             moved,
+            detached_moves: BTreeMap::new(),
             edits,
             gaps,
             retained_blanks,
@@ -139,6 +160,11 @@ impl PrefixEdits {
             resumed.projected_gap_cell = None;
             resumed.projected_device_padding = 0;
             anchors.push(NativeWordAnchor {
+                owner: self
+                    .detached_moves
+                    .get(&position)
+                    .cloned()
+                    .unwrap_or(old.owner),
                 start: position,
                 content: position,
                 projected_field_prefix: false,
@@ -170,24 +196,45 @@ impl PrefixEdits {
     ) {
         // Suffix-relative offsets of later drops survive earlier removals.
         let mut relocated = std::collections::BTreeMap::new();
-        for (owner, glyph, slot) in &self.edits {
-            let owner = &earlier[*owner].owner;
+        let mut extracted = Vec::new();
+        for edit in &self.edits {
+            let GlyphEdit {
+                owner: owner_index,
+                glyph,
+                relocation: slot,
+                unprinted_tail,
+            } = edit;
+            let owner = &earlier[*owner_index].owner;
             let detached = head.filter(|head| head.owns_word(owner));
-            let projection = super::super::super::source_blanks::take_rewound_glyph(
+            let mut projection_owner = owner.clone();
+            let mut projection = super::super::super::source_blanks::take_rewound_glyph(
                 nodes,
                 incoming,
                 owner,
                 glyph,
                 slot.is_some() || detached.is_some(),
             );
+            if projection.is_some() {
+                extracted.push((*owner_index, glyph.following_scalars));
+            }
             if projection.is_none()
-                && slot.is_none()
                 && let Some(head) = detached
             {
-                head.accept_rewind(owner, glyph);
+                projection = take_detached_ink(head, owner, glyph, *unprinted_tail);
+                if let Some(slot) = slot {
+                    if projection.is_some() {
+                        // The original HEAD and the relocated BODY fragment
+                        // have independent scalar cursors at final flush.
+                        let cell = slot.cell;
+                        projection_owner = format!("{incoming_owner}:relocated:{cell}");
+                        self.detached_moves.insert(cell, projection_owner.clone());
+                    }
+                } else if projection.is_none() {
+                    head.accept_rewind(owner, glyph);
+                }
             }
             if let (Some(slot), Some(projection)) = (slot, projection) {
-                relocated.insert(*slot, (owner, projection));
+                relocated.insert(slot.marker, (projection_owner, projection));
             }
         }
         if !self.gaps.remove.is_empty() {
@@ -198,10 +245,21 @@ impl PrefixEdits {
         // A slot can survive in source order before an already painted
         // graph. Only a trailing reading blank can satisfy the new seam.
         self.retained_blanks.retain(|(_, owner, glyph)| {
+            // Earlier scalar addresses were measured before we relocated
+            // later parts of the same owner. Test the current seam using
+            // that owner's remaining suffix, not its old text length.
+            let mut glyph = glyph.clone();
+            glyph.following_scalars -= extracted
+                .iter()
+                .filter(|&&(removed, following)| {
+                    removed == *owner && following < glyph.following_scalars
+                })
+                .count()
+                .min(glyph.following_scalars);
             super::super::super::source_blanks::has_trailing_rewound_blank(
                 nodes,
                 &earlier[*owner].owner,
-                glyph,
+                &glyph,
             )
         });
         if self.first_incoming.is_some() {
@@ -226,7 +284,7 @@ impl PrefixEdits {
                     incoming.push(Inline::Text { value: " ".into() });
                     incoming.push(Inline::anchor(incoming_owner));
                 } else if let Some((owner, glyph)) = relocated.remove(&slot) {
-                    incoming.push(Inline::anchor(owner.as_str()));
+                    incoming.push(Inline::anchor(owner));
                     incoming.push(glyph);
                     incoming.push(Inline::anchor(incoming_owner));
                 }
@@ -309,13 +367,32 @@ fn remove_overwritten_gaps(nodes: &mut [Inline], owners: &BTreeSet<String>, remo
     }
 }
 
+fn take_detached_ink(
+    head: &DeferredHeadProjection,
+    owner: &str,
+    glyph: &RewoundGlyph,
+    unprinted_tail: usize,
+) -> Option<Inline> {
+    head.relocate_ink(owner, glyph).or_else(|| {
+        // HEAD can finish its reading payload before BODY executes.
+        // term_field() leaves the raw trailing SP/TAB in the field
+        // without publishing those scalars to the detached terms.
+        if unprinted_tail == 0 || unprinted_tail > glyph.following_scalars {
+            return None;
+        }
+        let mut shortened = glyph.clone();
+        shortened.following_scalars -= unprinted_tail;
+        head.relocate_ink(owner, &shortened)
+    })
+}
+
 fn projection_locations(
     buffer: &FieldBuffer,
     earlier: &[NativeWordAnchor],
     start: usize,
     positions: &[Option<usize>],
     unpublished: Option<usize>,
-) -> Vec<Option<(usize, usize)>> {
+) -> Vec<Option<(usize, usize, usize)>> {
     // The native overlay is bounded. Walk it backwards in display order
     // per word marker, including every surviving fragment of that word.
     // A moved glyph keeps its original marker even when another word now
@@ -323,6 +400,7 @@ fn projection_locations(
     // cannot identify it in the word's projected stream.
     let mut suffix = HashMap::new();
     let mut locations = vec![None; positions.len()];
+    let printed_end = buffer.printed_content_end(start, buffer.cells().len());
     let gaps: BTreeSet<_> = earlier[earlier.partition_point(|owner| owner.content < start)..]
         .iter()
         .filter_map(NativeWordAnchor::entry_gap_cell)
@@ -338,10 +416,15 @@ fn projection_locations(
         let Some(owner) = earlier_word_after_cell(earlier, cell).checked_sub(1) else {
             continue;
         };
-        let remaining = suffix.entry(earlier[owner].owner.as_str()).or_insert(0);
-        locations[offset] = Some((owner, *remaining));
+        let remaining = suffix
+            .entry(earlier[owner].owner.as_str())
+            .or_insert((0, 0));
+        locations[offset] = Some((owner, remaining.0, remaining.1));
         if unpublished != Some(cell) || position.is_some() {
-            *remaining += count;
+            remaining.0 += count;
+            if cell >= printed_end {
+                remaining.1 += count;
+            }
         }
     }
     locations

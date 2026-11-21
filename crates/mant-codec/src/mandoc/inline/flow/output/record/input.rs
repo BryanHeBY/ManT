@@ -45,8 +45,15 @@ impl ExecutedWordEntry {
         });
         let mut receipt = buffer.apply_writes(&writes);
         buffer.hold_pending_glyph_passes(&writes);
-        if let EntryRewind::Positioned(retreat) = rewind {
-            buffer.retain_word_cursor(retreat);
+        match rewind {
+            EntryRewind::Positioned(retreat)
+            | EntryRewind::Executed {
+                cursor_retreat: retreat @ 1..,
+                ..
+            } => {
+                buffer.retain_word_cursor(retreat);
+            }
+            _ => {}
         }
         if let Some(first) = prefix.first_incoming().or(placed_first) {
             receipt.first_content_cell = first;

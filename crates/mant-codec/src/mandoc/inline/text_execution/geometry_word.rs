@@ -689,12 +689,41 @@ struct GeometrySeed<'a> {
     advance_marker: Option<usize>,
 }
 
+// A continuation can make the previous trailing HORIZ printable. Its
+// entry motion must stay in the new operand's own slots. A retreat
+// through the retained prefix is handled by native overwrite replay.
+fn moves_within_word_entry(events: &[RoffInlineEvent]) -> bool {
+    let mut column = 0_i32;
+    let mut moved = false;
+    for event in events {
+        let RoffInlineEvent::HorizontalMotion { argument, .. } = event else {
+            break;
+        };
+        let Some((false, units)) = argument.as_deref().and_then(motion_columns) else {
+            return false;
+        };
+        column = column.saturating_add(units);
+        if column < 0 {
+            return false;
+        }
+        moved |= units != 0;
+    }
+    moved && column == 0
+}
+
 impl GeometrySeed<'_> {
     fn begin(context: &mut TextExecutionContext<'_>, events: &[RoffInlineEvent]) -> Self {
         let mut seed = if let Some(prefix) = context.slot_entry.prefix.take() {
             let mut placement = Placement::empty(NativeSlots::with_field_prefix(&prefix));
             let earlier = prefix.cells.len();
-            let advance_marker = placement.slots.trailing_advance_marker(prefix.automatic);
+            let advance_marker = placement
+                .slots
+                .trailing_advance_marker(prefix.automatic)
+                .or_else(|| {
+                    moves_within_word_entry(events)
+                        .then(|| placement.slots.trailing_open_advance(prefix.automatic))
+                        .flatten()
+                });
             for (_, scalars) in prefix.cells {
                 placement.mark(ReadingGlyph::Earlier(scalars), Font::Regular);
             }

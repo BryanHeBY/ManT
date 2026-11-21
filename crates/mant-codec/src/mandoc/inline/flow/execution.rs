@@ -465,7 +465,7 @@ impl InlineBuilder {
         native_count: usize,
         generated_word: bool,
     ) {
-        use super::field_buffer::FieldWrite;
+        use super::field_buffer::{DeferredSourceBlank, FieldWrite};
 
         if !generated_word {
             return;
@@ -477,6 +477,7 @@ impl InlineBuilder {
             .0
             .generated_blank_overlap(native_count);
         let native_count = native_count - traversed;
+        let projected_overlap = count.saturating_sub(native_count);
         let count = count.min(native_count);
         let mut writes = Vec::new();
         if traversed != 0 {
@@ -491,17 +492,34 @@ impl InlineBuilder {
         self.tighten_next_boundary();
         self.begin_word_projection(true);
         self.begin_native_word_owner();
+        let font = self.execution.font.display_current();
+        let mut projected = Vec::new();
+        if traversed > 0 {
+            let source = DeferredSourceBlank {
+                owner: self.execution.native_owner_serial,
+                write: 0,
+                font,
+            };
+            let buffer = if self.execution.uses_definition_word_buffer() {
+                &mut self
+                    .execution
+                    .definition
+                    .as_mut()
+                    .expect("run-in field")
+                    .field_buffer
+            } else {
+                &mut self.execution.plain_input.buffer
+            };
+            if buffer.defer_run_in_overlap(traversed, projected_overlap, source) {
+                projected.push(Inline::anchor(source.marker()));
+            }
+        }
+        self.execution
+            .zero_advance
+            .append_generated_cells(count, &mut projected, font);
+        self.append_word(projected);
         if count > 0 {
-            let mut projected = Vec::new();
-            self.execution.zero_advance.append_generated_cells(
-                count,
-                &mut projected,
-                self.execution.font.display_current(),
-            );
-            self.append_word(projected);
             self.execution.trailing_output = TrailingOutput::FixedBlank;
-        } else {
-            self.append_word(Vec::new());
         }
         // CVS sets TERMP_NOSPACE again before executing BODY children.
         self.tighten_next_boundary();

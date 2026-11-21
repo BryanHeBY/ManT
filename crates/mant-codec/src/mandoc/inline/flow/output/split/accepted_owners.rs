@@ -86,7 +86,10 @@ impl AcceptedOwners<'_> {
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 self.retain_text(value)
             }
-            Inline::LineBreak { .. } => self.has_native_cells(),
+            Inline::LineBreak { .. } => {
+                self.has_native_cells()
+                    || self.limits[self.owner.expect("native owner")].starts_accepted_row
+            }
         }
     }
 
@@ -133,7 +136,19 @@ impl AcceptedOwners<'_> {
         let (position, next_omission) = self.positions.entry(owner).or_default();
         let accepted = &self.limits[owner];
         let omissions = &accepted.omitted_scalars;
-        value.retain(|_| {
+        value.retain(|character| {
+            // A word-time projection can already have removed some
+            // unpainted padding. Only whitespace can fill its scalar
+            // positions; do not spend those positions on surviving ink.
+            while !self.covered_only
+                && !character.is_whitespace()
+                && let Some(omit) = omissions.get(*next_omission)
+                && !omit.covered
+                && omit.range.contains(position)
+            {
+                *position = omit.range.end;
+                *next_omission += 1;
+            }
             let scalar = *position;
             *position = position.saturating_add(1);
             while omissions

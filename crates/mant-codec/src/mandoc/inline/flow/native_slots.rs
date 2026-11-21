@@ -354,6 +354,18 @@ impl NativeSlots {
         .then_some(marker)
     }
 
+    pub(in crate::mandoc::inline) fn trailing_open_advance(
+        &self,
+        automatic: usize,
+    ) -> Option<usize> {
+        if self.cursor_before_end() || self.backafter() || self.backbefore() {
+            return None;
+        }
+        let boundary = self.extent.checked_sub(automatic)?;
+        let (_, run) = self.runs.range(..boundary).next_back()?;
+        (run.end == boundary && matches!(run.pattern, Pattern::DrawingAdvance)).then_some(boundary)
+    }
+
     pub(in crate::mandoc::inline) fn has_unpainted_marker_tail(&self) -> bool {
         self.runs
             .range(..self.cursor)

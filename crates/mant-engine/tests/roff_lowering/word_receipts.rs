@@ -97,6 +97,9 @@ fn description_rows<'a>(text: &'a str, source: &str) -> Vec<&'a str> {
     };
     if let Some(next_section) = next_section {
         let (body, _) = body.split_once(next_section).unwrap();
+        if body.is_empty() {
+            return Vec::new();
+        }
         // One inter-section layout row belongs to the surrounding document.
         body.strip_suffix('\n')
             .unwrap_or(body)

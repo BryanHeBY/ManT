@@ -253,6 +253,24 @@ impl FieldBuffer {
             })
     }
 
+    pub(in crate::mandoc::inline::flow) fn has_unprinted_projection(
+        &self,
+        passes: &[FillPass],
+    ) -> bool {
+        passes
+            .iter()
+            .any(|pass| self.has_unprinted_padding(pass.start, pass.end))
+            || passes
+                .windows(2)
+                .any(|pair| self.projects_skipped_gap(pair[0].end, pair[1].start))
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_unprinted_tail(&self, passes: &[FillPass]) -> bool {
+        passes
+            .last()
+            .is_some_and(|pass| self.projection_length(pass.end, self.cells.len()) > 0)
+    }
+
     pub(in crate::mandoc::inline::flow) fn has_pass_retreats(&self) -> bool {
         !self.pass_retreats.is_empty()
     }

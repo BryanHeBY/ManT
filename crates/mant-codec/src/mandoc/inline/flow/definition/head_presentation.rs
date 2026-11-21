@@ -23,6 +23,7 @@ struct PendingRows {
     blanks: Vec<(DeferredSourceBlank, usize)>,
     coverage: BTreeMap<String, OwnerAcceptance>,
     rewinds: Vec<(String, RewoundGlyph)>,
+    terms: Option<Rc<Vec<Vec<Inline>>>>,
     operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
 }
 
@@ -43,6 +44,7 @@ impl Clone for DeferredHeadProjection {
             blanks: source.blanks.clone(),
             coverage: source.coverage.clone(),
             rewinds: source.rewinds.clone(),
+            terms: source.terms.clone(),
             operands: source
                 .operands
                 .as_ref()
@@ -67,6 +69,7 @@ impl DeferredHeadProjection {
             blanks: Vec::new(),
             coverage: BTreeMap::new(),
             rewinds: Vec::new(),
+            terms: None,
             operands,
         })))
     }
@@ -77,6 +80,41 @@ impl DeferredHeadProjection {
 
     pub(in crate::mandoc::inline::flow) fn owns_word(&self, owner: &str) -> bool {
         self.0.borrow().owners.contains(owner)
+    }
+
+    pub(in crate::mandoc) fn suspend_terms(&self, terms: &mut Vec<Vec<Inline>>) {
+        self.0.borrow_mut().terms = Some(Rc::new(std::mem::take(terms)));
+    }
+
+    pub(in crate::mandoc) fn resume_terms(
+        &self,
+        terms: &mut Vec<Vec<Inline>>,
+    ) -> Option<crate::definitions::CapturedHeadOperands> {
+        if let Some(saved) = self.0.borrow_mut().terms.take() {
+            *terms = Rc::unwrap_or_clone(saved);
+        }
+        self.apply(terms)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn relocate_ink(
+        &self,
+        owner: &str,
+        glyph: &RewoundGlyph,
+    ) -> Option<Inline> {
+        // The original label is suspended while its BODY is running.
+        // A proved later device position moves an authored glyph out of
+        // that label exactly once, with its original style and link.
+        let mut pending = self.0.borrow_mut();
+        let terms = Rc::make_mut(pending.terms.as_mut()?);
+        terms.iter_mut().rev().find_map(|term| {
+            super::super::output::source_blanks::take_rewound_glyph(
+                term,
+                &mut [],
+                owner,
+                glyph,
+                true,
+            )
+        })
     }
 
     pub(in crate::mandoc::inline::flow) fn accept(&self, receipts: &[RowReceipt]) {

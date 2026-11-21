@@ -190,7 +190,8 @@ pub(super) fn definition_item(
     );
     let deferred_head_projection = run_in_execution
         .as_ref()
-        .and_then(|run_in| run_in.state.deferred_head_projection());
+        .and_then(|run_in| run_in.state.deferred_head_projection())
+        .inspect(|receiver| receiver.suspend_terms(&mut terms));
     let spacing_enabled = formatter.spacing_enabled();
     let mut description = lower_scope(
         body,
@@ -199,8 +200,8 @@ pub(super) fn definition_item(
         formatter,
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
-    if let Some(receiver) = deferred_head_projection
-        && let Some(captured) = receiver.apply(&mut terms)
+    if let Some(captured) =
+        deferred_head_projection.and_then(|receiver| receiver.resume_terms(&mut terms))
     {
         capture_deferred_operands(context, head, captured);
     }

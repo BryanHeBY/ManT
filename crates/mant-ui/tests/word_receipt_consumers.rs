@@ -204,6 +204,51 @@ fn overwritten_cells_and_hard_rows_remain_searchable_after_reader_readbacks() {
 }
 
 #[test]
+fn accepted_replay_keeps_reader_cells_and_links_at_ownership_seams() {
+    // term_flushln() skips inter-pass SP before X. termp_it_pre() and
+    // term_field() paint the run-in label and BODY as CBJ in device order.
+    let link = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-skips-leading-padding-in-link.1"
+    );
+    // Addressable export intentionally retains raw anchors as literal
+    // source on reimport. Portable export is the exact row comparison.
+    let mut content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(link.as_bytes()).unwrap(),
+    );
+    for _ in 0..3 {
+        for width in [32, 78] {
+            assert_rows(&content, width, &["AF", "X"], "X", None);
+            let (mut app, terminal) = paint(&content, width);
+            let (column, row) = only_position(terminal.backend().buffer(), "X");
+            for (x, target) in [(column, Some("https://f.test")), (column + 1, None)] {
+                click(&mut app, x, row);
+                assert_eq!(
+                    opened_targets(&mut app),
+                    target.into_iter().collect::<Vec<_>>()
+                );
+            }
+        }
+        let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
+        content = json_roundtrip::json_string_roundtrip(
+            &mant_loader::load_markdown_text(&markdown, None).unwrap(),
+        );
+    }
+    let run_in = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/run-in-relocates-head-ink.1"
+    );
+    visit_readbacks(run_in, |content| {
+        for width in [32, 78] {
+            let (mut app, terminal) = paint(content, width);
+            let at = only_position(terminal.backend().buffer(), "CBJ");
+            let rendered = DocumentView::new(content).render(width);
+            assert_eq!(rendered.search("CBJ").len(), 1);
+            assert_eq!(rendered.search("CJB").len(), 0);
+            copy(&mut app, at, "CBJ");
+        }
+    });
+}
+
+#[test]
 fn successive_passes_keep_the_printed_rows_and_link_cells_after_readback() {
     // The pinned term_field() advances only before an actual output
     // character. The word_passes sources retain the exact native rows.

@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
+    pub(super) starts_accepted_row: bool,
     pub(in crate::mandoc::inline::flow) scalars: usize,
     pub(in crate::mandoc::inline::flow) native_cells: bool,
     /// The first accepted interval printed this word's deferred device pad.
@@ -87,6 +88,24 @@ impl OwnerAcceptance {
             }
         }
     }
+
+    fn omit_skipped_gap(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        gap: std::ops::Range<usize>,
+        owner: std::ops::Range<usize>,
+    ) {
+        if !buffer.projects_skipped_gap(gap.start, gap.end) {
+            return;
+        }
+        let first = gap.start.max(owner.start);
+        let last = gap.end.min(owner.end);
+        if first < last {
+            let next = self.scalars + buffer.projection_length(first, last);
+            self.omit(self.scalars, next, false);
+            self.scalars = next;
+        }
+    }
 }
 
 fn pass_projection_end(
@@ -152,7 +171,9 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             // An empty word can be followed by BACKBEFORE replacing its
             // trailing native blank. Its zero-length projection interval
             // cannot consume a pass needed by that replacement's owner.
-            lengths.entry(owner.clone()).or_default();
+            let acceptance: &mut OwnerAcceptance = lengths.entry(owner.clone()).or_default();
+            acceptance.starts_accepted_row |=
+                starts_projected_pass(buffer, passes, anchor.start..end);
             continue;
         }
         while passes
@@ -164,23 +185,19 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             pass_index += 1;
         }
         let acceptance: &mut OwnerAcceptance = lengths.entry(owner.clone()).or_default();
-        let mut cursor = *content;
         while let Some(pass) = passes.get(pass_index) {
             #[cfg(test)]
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
             let start = (*content).max(pass.start);
             let accepted_end = end.min(pass.end);
             let (printed_end, printed, projected_end, projected) = printed_ends[pass_index];
+            // Include skipped scalar positions even when a pending owner
+            // fragment consists entirely of the skipped native spaces.
+            if let Some(previous) = pass_index.checked_sub(1).map(|i| &passes[i]) {
+                acceptance.omit_skipped_gap(buffer, previous.end..pass.start, *content..end);
+            }
             if start < accepted_end {
                 let projected_end = projected_end.min(accepted_end);
-                // term_flushln() can skip SP between accepted passes of the
-                // same word. Preserve its source position so the following
-                // accepted glyph retains its full scalar quota.
-                if cursor < start && buffer.projects_skipped_gap(cursor, start) {
-                    let next = acceptance.scalars + buffer.projection_length(cursor, start);
-                    acceptance.omit(acceptance.scalars, next, false);
-                    acceptance.scalars = next;
-                }
                 let offset = acceptance.scalars;
                 let origin = (start, offset);
                 acceptance.collect_ordered_glyphs(
@@ -223,7 +240,6 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                     }
                 }
                 acceptance.scalars += buffer.projection_length(start, projected_end);
-                cursor = accepted_end;
                 acceptance.native_cells = true;
                 if start == *content {
                     acceptance.prefix_printed |=
@@ -235,9 +251,31 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             }
             pass_index += 1;
         }
+        if !acceptance.native_cells {
+            acceptance.starts_accepted_row |=
+                starts_projected_pass(buffer, passes, anchor.start..end);
+        }
     }
     resolve_buffered_prefixes(anchors, passes, &printed_ends, &covered, &mut lengths);
     lengths
+}
+
+fn starts_projected_pass(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    passes: &[super::super::field_buffer::FillPass],
+    range: std::ops::Range<usize>,
+) -> bool {
+    // A control-only owner may carry the projected endline before the
+    // new pass even when its content cursor has no scalars (term.c:205-220).
+    if range.start > range.end {
+        return false;
+    }
+    let index = passes.partition_point(|pass| pass.start < range.start);
+    index != 0
+        && index < passes.len()
+        && passes[index - 1].end <= range.end
+        && passes[index - 1].boundary == super::super::field_buffer::FillBoundary::WordEndBreak
+        && buffer.has_projected_pass(passes[index - 1].end)
 }
 
 fn collect_native_overprints(
@@ -296,6 +334,12 @@ fn resolve_buffered_prefixes(
     }
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::mandoc::inline::flow) enum NativePassHandoff<'a> {
+    Section(&'a super::SectionHandoff),
+    Definition(&'a super::super::definition::head_presentation::DeferredHeadProjection),
+}
+
 /// Consume accepted `term_flushln()` passes at their real retirement point.
 /// Word-time marker passes may already have produced a boundary; a deferred
 /// scan supplies the remaining ones here. Definition and plain owners share
@@ -306,7 +350,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
-    section: Option<&super::SectionHandoff>,
+    handoff: Option<NativePassHandoff<'_>>,
 ) {
     use super::super::field_buffer::FillBoundary;
 
@@ -324,25 +368,27 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             // (term.c:307-324); authored \p events remain independent.
             continue;
         }
-        let cell = next.start;
-        // term_flushln() skips the separator and can restart at an
-        // invisible slot in the new word, including encode1()'s font
-        // decoration. Use that word's owner even when replay reused the
-        // separator and left no entry-gap receipt.
-        let mut owner = anchors.partition_point(|anchor| anchor.content <= cell);
-        if let Some(anchor) = anchors.get(owner).filter(|anchor| anchor.start <= cell) {
-            let end = anchors
-                .get(owner + 1)
-                .map_or(buffer.cells().len(), |next| next.start.min(next.content));
-            // An overwritten word can still span the restart in its
-            // native coordinates without owning any remaining reading text.
-            let restart_before_payload = buffer.projection_length(cell, anchor.content) == 0
-                && buffer.projection_length(anchor.content, end) > 0;
-            if anchor.entry_gap_cell().is_some() || restart_before_payload {
-                owner += 1;
-            }
+        // The final flush can reach a pass that was still editable when
+        // words were recorded. Its skipped SP still has provisional
+        // reading positions. Keep those positions until owner acceptance
+        // removes them, rather than letting them spend the next glyph's
+        // scalar quota (term.c:205-220).
+        let pending_gap = pass.boundary == FillBoundary::WordEndBreak
+            && pass.end < next.start
+            && buffer.projection_length(pass.end, next.start) != 0;
+        if pending_gap {
+            buffer.defer_projected_gap(pass.end, next.start);
         }
+        let cell = next.start;
+        let owner = projected_restart_owner(buffer, anchors, pass, next);
         if let Some(mut index) = owner.checked_sub(1) {
+            let section_seam = matches!(
+                handoff,
+                Some(NativePassHandoff::Section(section))
+                    if section.closes_at_section_seam(
+                        buffer, pass.start..pass.end, anchors[index].content,
+                    )
+            );
             let mut cut = cell;
             let (span_end, accepted_end) = if has_drawing_advance {
                 let end = buffer.printed_content_end(pass.start, pass.end);
@@ -350,10 +396,13 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             } else {
                 (cell, pass.end)
             };
-            if anchors[index].content < cell
-                && buffer
-                    .projection_length(anchors[index].content, span_end.max(anchors[index].content))
-                    == 0
+            if !section_seam
+                && (pending_gap
+                    || anchors[index].content < cell
+                        && buffer.projection_length(
+                            anchors[index].content,
+                            span_end.max(anchors[index].content),
+                        ) == 0)
                 && let Some(last) = buffer.last_projected_cell(pass.start..accepted_end)
             {
                 // A replay can resume a word in a control-only interval
@@ -365,7 +414,14 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 if let Some(actual) = actual.checked_sub(1)
                     && actual >= preceding
                     && actual < index
-                    && anchors[actual].owner != anchors[index].owner
+                    && (pending_gap || anchors[actual].owner != anchors[index].owner)
+                    // A detached label is outside the current output span.
+                    // Keep its closing boundary with the first BODY owner.
+                    && !matches!(
+                        handoff,
+                        Some(NativePassHandoff::Definition(head))
+                            if head.owns_word(&anchors[actual].owner)
+                    )
                 {
                     index = actual;
                     cut = last + 1;
@@ -380,9 +436,6 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 // removes them; the row ends before that discarded run.
                 cut = pass.end;
             }
-            let section_seam = section.is_some_and(|section| {
-                section.closes_at_section_seam(buffer, pass.start..pass.end, anchor.content)
-            });
             // Native replay can move part of one word after another
             // owner's glyph. The projection cursor counts an owner's
             // scalars across all of its fragments, not just this span.
@@ -412,6 +465,37 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         let pending = nodes.split_off(start);
         nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
     }
+}
+
+fn projected_restart_owner(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    pass: &super::super::field_buffer::FillPass,
+    next: &super::super::field_buffer::FillPass,
+) -> usize {
+    use super::super::field_buffer::FillBoundary;
+    if pass.boundary == FillBoundary::WordEndBreak
+        && buffer.printed_content_end(pass.start, pass.end) == pass.start
+        && let Some(last) = buffer.last_projected_cell(next.start..next.end)
+    {
+        // An invisible-only pass still ends a line. Its boundary needs
+        // an owner with accepted output to carry it.
+        return anchors.partition_point(|anchor| anchor.content <= last);
+    }
+
+    // term_flushln() may restart within the next word's invisible prefix,
+    // even when replay has removed its original entry-gap receipt.
+    let cell = next.start;
+    let owner = anchors.partition_point(|anchor| anchor.content <= cell);
+    let Some(anchor) = anchors.get(owner).filter(|anchor| anchor.start <= cell) else {
+        return owner;
+    };
+    let end = anchors
+        .get(owner + 1)
+        .map_or(buffer.cells().len(), |next| next.start.min(next.content));
+    let restart_before_payload = buffer.projection_length(cell, anchor.content) == 0
+        && buffer.projection_length(anchor.content, end) > 0;
+    owner + usize::from(anchor.entry_gap_cell().is_some() || restart_before_payload)
 }
 
 #[cfg(test)]

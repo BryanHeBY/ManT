@@ -449,14 +449,100 @@ impl FieldBuffer {
     }
 
     pub(in crate::mandoc::inline::flow) fn generated_blank_overlap(&self, count: usize) -> usize {
-        // termp_it_pre() uses a nonbreaking blank word. encode1() leaves
-        // the existing raw cell intact when this blank lands before lastcol.
+        // termp_it_pre() uses a nonbreaking blank word, including the
+        // native slots it rewrites before lastcol.
         match self.write_cursor {
             WriteCursor::Placed(retreat) if !self.backbefore_armed && !self.backafter_armed => {
                 retreat.min(count)
             }
             _ => 0,
         }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn defer_run_in_overlap(
+        &mut self,
+        traversed: usize,
+        projected: usize,
+        source: super::cells::DeferredSourceBlank,
+    ) -> bool {
+        let cursor = self.cells.len() - self.write_cursor.retreat();
+        let end = cursor + traversed;
+        // A run-in separator may traverse the HEAD's native trailing SP.
+        // HEAD's term drain trimmed that spacing, but term_field() can
+        // still print it when a subsequent BODY graph reaches the field.
+        let printed_end = self.printed_content_end(self.resume, self.cells.len());
+        let projected_start = end.saturating_sub(projected);
+        let pending_break = self.has_pending_break_markers();
+        let mut added = false;
+        let mut previous_font_copy = false;
+        for cell in cursor..end {
+            let replaces_backline = self.cells[cell] == FieldCell::Backline;
+            let replaces_font_pair = cell + 1 < end
+                && self.cells[cell + 1] == FieldCell::Backline
+                && self
+                    .raw_copy_aliases
+                    .binary_search_by_key(&cell, |&(copy, _)| copy)
+                    .is_ok();
+            let replaces_decoration = replaces_backline || replaces_font_pair;
+            let inside_font_pair = previous_font_copy || replaces_font_pair;
+            previous_font_copy = replaces_font_pair;
+            if pending_break && self.cells[cell] == FieldCell::BreakableBlank {
+                // A generated NBSP is a graph for term_fill(), including
+                // when it rewrites the ordinary SP after a saved marker.
+                self.cells[cell] = FieldCell::Graph {
+                    text: '\u{a0}',
+                    width: 1,
+                };
+                self.blank_positions.remove(&cell);
+                self.invalidate_projection_scan(cell);
+            }
+            if replaces_decoration {
+                // The UTF-8 generated blank goes through encode1() as
+                // U+00A0 and overwrites earlier font bytes. Track the
+                // surviving authored slots through the next word overlay.
+                self.cells[cell] = FieldCell::FixedDrawingAdvance(1);
+                self.nonbreaking_positions.insert(cell);
+                self.raw_copy_aliases.retain(|&(copy, _)| copy != cell);
+                if replaces_backline {
+                    self.pass_retreats.retain(|&(_, mark)| mark != cell + 1);
+                }
+                self.invalidate_projection_scan(cell);
+            }
+            // These advances replace the earlier label's own font bytes.
+            // Its lexical separator already precedes that label scalar.
+            if cell < projected_start
+                || (inside_font_pair || !replaces_decoration) && cell < printed_end
+            {
+                continue;
+            }
+            if !matches!(
+                self.cells[cell],
+                FieldCell::BreakableBlank
+                    | FieldCell::NonBreakingBlank
+                    | FieldCell::FixedDrawingAdvance(1)
+                    | FieldCell::Graph { text: '\u{a0}', .. }
+            ) {
+                continue;
+            }
+            let index = self.deferred_blanks.partition_point(|run| run.end <= cell);
+            if self
+                .deferred_blanks
+                .get(index)
+                .is_some_and(|run| run.start <= cell)
+            {
+                continue;
+            }
+            self.deferred_blanks.insert(
+                index,
+                super::cells::DeferredBlankRun {
+                    start: cell,
+                    end: cell + 1,
+                    source,
+                },
+            );
+            added = true;
+        }
+        added
     }
 
     pub(in crate::mandoc::inline::flow) fn retain_word_cursor(&mut self, retreat: usize) {

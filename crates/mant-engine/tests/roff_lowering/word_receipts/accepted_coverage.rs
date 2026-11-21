@@ -1329,7 +1329,208 @@ const LIVE_REPLAY_CASES: &[(&str, &[&str], Option<&str>)] = &[
         &["FF X"],
         None,
     ),
+    (
+        // term_flushln() consumes inter-pass SP without consuming the
+        // following author's surviving glyph or its label.
+        include_str!("live_replay/replay-skips-between-owned-glyphs.1"),
+        &["D", "J"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-skips-leading-padding.1"),
+        &["AF", "X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-skips-leading-padding-in-link.1"),
+        &["AF", "X"],
+        Some("X"),
+    ),
+    (
+        // A short overwrite leaves lastcol unchanged. term_fill() can
+        // reject the resulting field even though it still contains ink.
+        // The final endline still closes the now-empty row (term.c:250).
+        include_str!("live_replay/replay-short-write-into-rejected-field.1"),
+        &[""],
+        None,
+    ),
+    (
+        // NBRZW makes term_fill() accept a pass without a printed glyph.
+        include_str!("live_replay/replay-accepted-invisible-row.1"),
+        &["", "F"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-trailing-advance-before-ink.1"),
+        &["F  X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-shared-blank-once.1"),
+        &["A   XG"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-control-only-row-owner.1"),
+        &["C", "D", "F", "X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-marker-over-font-decoration.1"),
+        &["\u{a0}D J"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-overwrites-retained-advance.1"),
+        &["AD XG"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-empty-owner-at-pass-start.1"),
+        &["C", "D", "F", "X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-padding-owner-at-pass-start.1"),
+        &["C", "D", "F", "X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-preserves-opaque-advance.1"),
+        &["A FG  X"],
+        None,
+    ),
 ];
+
+#[test]
+fn accepted_run_in_writes_keep_word_boundaries_and_interleaved_ink() {
+    for (source, expected, excluded) in [
+        (
+            include_str!("live_replay/run-in-retains-a-buffered-separator.1"),
+            "C X",
+            "CX",
+        ),
+        (
+            include_str!("live_replay/run-in-relocates-head-ink.1"),
+            "CBJ",
+            "CJB",
+        ),
+        (
+            include_str!("live_replay/run-in-overwrites-a-backline.1"),
+            "C B",
+            "CB",
+        ),
+        (
+            include_str!("live_replay/run-in-relocates-covered-prefix.1"),
+            "V",
+            "B",
+        ),
+        (
+            include_str!("live_replay/run-in-replaces-head-glyph.1"),
+            "J",
+            "D",
+        ),
+        (
+            include_str!("live_replay/run-in-keeps-nonbreaking-separator.1"),
+            "C X",
+            "CX",
+        ),
+        (
+            include_str!("live_replay/run-in-keeps-surviving-font-word-joined.1"),
+            "Sy CV oY",
+            "o Y",
+        ),
+    ] {
+        // termp_it_pre() buffers U+00A0, then BODY can overwrite that
+        // slot or another glyph. term_field prints the surviving ink in
+        // device order and emits only the intervening live spacing.
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let rendered = mant_render::render_query_man(&content);
+            let rows = description_rows(&rendered, source);
+            assert_eq!(
+                rows.iter()
+                    .map(|row| row.trim_start_matches("• "))
+                    .collect::<Vec<_>>(),
+                [expected],
+                "{source}",
+            );
+            for (pattern, count) in [(expected, 1), (excluded, 0)] {
+                let hits = mant_query::search_query(
+                    &content,
+                    &SearchQuery {
+                        pattern: pattern.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(hits.total, count, "{source}: {pattern}");
+            }
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content =
+                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        }
+    }
+}
+
+#[test]
+fn authored_run_in_passes_close_the_detached_head_row() {
+    // term_flushln() ends the accepted HEAD pass before starting BODY.
+    // ASCII can paint an underline where UTF-8 paints only a blank.
+    for (source, head) in [
+        (
+            include_str!("live_replay/run-in-preserves-empty-head-row.1"),
+            "",
+        ),
+        (
+            include_str!("live_replay/run-in-preserves-closed-head-row.1"),
+            "C",
+        ),
+    ] {
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let rendered = mant_render::render_query_man(&content);
+            let rows = description_rows(&rendered, source);
+            assert_eq!(rows.len(), 2, "{source}");
+            assert_eq!(rows[0].trim_start_matches("• "), head, "{source}");
+            assert_eq!(rows[1].trim_start(), "Y", "{source}");
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content =
+                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        }
+    }
+}
+
+#[test]
+fn generated_diag_separators_overwrite_native_font_copies() {
+    // termp_it_pre() generates two no-break blanks. ASCII and UTF-8
+    // choose different advances, but both drop the overwritten 'o'.
+    let source = include_str!("live_replay/run-in-overwrites-diag-font-copy.1");
+    let mut content =
+        json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    for _ in 0..3 {
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, source);
+        assert_eq!(rows.len(), 1, "{source}");
+        assert_eq!(
+            rows[0]
+                .trim_start_matches("• ")
+                .split_whitespace()
+                .collect::<Vec<_>>(),
+            ["Sy", "CV", "X"]
+        );
+        let markdown = mant_codec::encode::render_markdown(&content);
+        content = json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+    }
+}
 
 #[test]
 fn live_field_replay_preserves_passes_and_scalar_owners() {

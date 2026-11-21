@@ -327,14 +327,9 @@ pub(super) fn retain_accepted_unit_output(
     // its final nbr. Use exactly the same native ownership intervals as
     // rejection; provisional IR spaces do not prove printed native content.
     let pending_start = buffer.resume_offset();
-    let unprinted_padding = passes
-        .iter()
-        .any(|pass| buffer.has_unprinted_padding(pass.start, pass.end));
-    if unprinted_padding
+    if buffer.has_unprinted_projection(passes)
         || buffer.has_pass_retreats()
-        || passes
-            .last()
-            .is_some_and(|pass| buffer.projection_length(pass.end, buffer.cells().len()) > 0)
+        || buffer.has_unprinted_tail(passes)
     {
         retain_unit_owner_ranges(nodes, buffer, anchors, passes, output_start, true);
     }

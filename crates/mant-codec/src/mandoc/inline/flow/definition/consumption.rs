@@ -301,12 +301,14 @@ impl InlineBuilder {
         passes: &[super::super::field_buffer::FillPass],
     ) {
         let definition = self.execution.definition.as_ref().expect("native field");
-        let unprinted_padding = passes.iter().any(|pass| {
-            definition
-                .field_buffer
-                .has_unprinted_padding(pass.start, pass.end)
-        });
-        if !unprinted_padding && !definition.field_buffer.has_pass_retreats() {
+        // A run-in BODY can overwrite the active HEAD buffer. A detached
+        // label keeps its authored spelling, including operand-end spaces
+        // that term_field() did not paint.
+        let shared_tail = definition.deferred_head_projection.is_some()
+            && definition.field_buffer.has_unprinted_tail(passes);
+        let pending_field_edits = definition.field_buffer.has_unprinted_projection(passes)
+            || definition.field_buffer.has_pass_retreats();
+        if !pending_field_edits && !shared_tail {
             return;
         }
         let accepted = super::super::output::native_passes::accepted_owner_lengths(
@@ -315,7 +317,7 @@ impl InlineBuilder {
             passes,
             true,
         );
-        if let Some(head) = &definition.deferred_head_projection {
+        if pending_field_edits && let Some(head) = &definition.deferred_head_projection {
             head.accept_coverage(&accepted);
         }
         let start = self
@@ -382,19 +384,25 @@ impl InlineBuilder {
     }
 
     fn project_accepted_field_passes(&mut self, passes: &[super::super::field_buffer::FillPass]) {
+        use super::super::output::native_passes::{
+            NativePassHandoff, project_accepted_native_passes,
+        };
         let state = self.execution.definition.as_mut().expect("native field");
         let start = self
             .execution
             .author_execution
             .as_ref()
             .map_or(0, |author| author.field_output_start);
-        super::super::output::native_passes::project_accepted_native_passes(
+        project_accepted_native_passes(
             &mut self.nodes,
             &mut state.field_buffer,
             &state.field_word_anchors,
             passes,
             start,
-            None,
+            state
+                .deferred_head_projection
+                .as_ref()
+                .map(NativePassHandoff::Definition),
         );
     }
 

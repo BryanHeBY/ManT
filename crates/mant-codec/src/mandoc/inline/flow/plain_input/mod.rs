@@ -15,7 +15,11 @@
 
 //! Plain native input retirement without resetting persistent execution state.
 
-use super::output::{CompletedRowOrigin, SectionHandoff, row_origins::OutputNodeEdits};
+use super::output::{
+    CompletedRowOrigin, SectionHandoff,
+    native_passes::{NativePassHandoff, project_accepted_native_passes},
+    row_origins::OutputNodeEdits,
+};
 use super::{Inline, InlineBuilder};
 
 mod projection;
@@ -310,13 +314,13 @@ impl InlineBuilder {
         // The same projector handles a complete unit and an accepted
         // prefix whose following pass is rejected.
         if !reprojected_literal_rows {
-            super::output::native_passes::project_accepted_native_passes(
+            project_accepted_native_passes(
                 nodes,
                 &mut buffer,
                 &anchors,
                 passes,
                 output_start,
-                handoff.as_deref(),
+                handoff.as_deref().map(NativePassHandoff::Section),
             );
         }
         let outcome = match &receipt {

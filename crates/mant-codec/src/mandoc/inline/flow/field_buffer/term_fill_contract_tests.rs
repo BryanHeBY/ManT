@@ -137,6 +137,7 @@ fn rewind_treats_raw_and_deferred_spaces_as_the_same_native_write() {
                 retired_separator: 0,
                 traversed_source_blanks,
                 overwritten_glyphs,
+                cursor_retreat: 0,
             } if overwritten_glyphs.is_empty() && traversed_source_blanks.len() == usize::from(projected)
         ));
         let word = buffer.apply_writes(&second);
