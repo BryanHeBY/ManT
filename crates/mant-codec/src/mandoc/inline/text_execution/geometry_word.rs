@@ -323,6 +323,7 @@ fn marker_replay(
     let mut ink_after_marker = false;
     let mut needs_complete_word = false;
     let mut has_backstep = false;
+    let mut has_motion = false;
     for event in events {
         match event {
             RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
@@ -344,15 +345,17 @@ fn marker_replay(
             }
             RoffInlineEvent::LineBreak => {
                 has_marker = true;
-                // A trailing request does not prove an editable suffix.
-                // The next word still owns execution of that boundary.
-                ink_after_marker = false;
+                // A final marker in a moving operand leaves its earlier
+                // marker and graph editable. term_word() keeps the raw
+                // suffix available to the next word until term_fill().
+                ink_after_marker &= has_motion;
             }
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(value),
                 ..
             } if filled && motion_columns(value).is_some() => {
                 needs_complete_word = true;
+                has_motion = true;
             }
             RoffInlineEvent::Breakpoint
             | RoffInlineEvent::BreakableHyphen
@@ -884,18 +887,7 @@ fn execute_seed<'a>(
     let slots = &seed.placement.slots;
     // A marker after new ink leaves an open cursor at the end of that
     // native segment, even when the old tail still holds glyphs.
-    let live_cursor = slots.cursor_before_end()
-        && (seed.prefix_start > 0
-            // An initial control-only word can leave the cursor before
-            // a marker. The next word must be able to overwrite it.
-            || !context.slot_entry.cursor.has_input()
-                && slots.cursor_before_invisible_tail()
-                && !slots.contains_ink_from(0)
-            || seed.earlier != 0
-                && (slots.cursor_before_invisible_tail()
-                    || slots.has_unpainted_marker_tail()
-                        && !events.iter().any(absolute_motion)
-                        && slots.contains_ink_from(seed.earlier)));
+    let live_cursor = retains_word_cursor(&seed, context.slot_entry.cursor, events);
     // A placed glyph can still be waiting under BACKBEFORE after a marker.
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
@@ -964,4 +956,52 @@ fn execute_seed<'a>(
     word.source_continuation = continuation;
     placed.project(context, word);
     Ok(())
+}
+
+fn retains_word_cursor(
+    seed: &GeometrySeed<'_>,
+    entry: EntryCursor,
+    events: &[RoffInlineEvent],
+) -> bool {
+    let slots = &seed.placement.slots;
+    slots.cursor_before_end()
+        && (seed.prefix_start > 0
+            // An initial control-only word can leave the cursor before
+            // a marker. The next word must be able to overwrite it.
+            || !entry.has_input()
+                && slots.cursor_before_invisible_tail()
+                && !slots.contains_ink_from(0)
+            || seed.earlier != 0
+                && (slots.cursor_before_invisible_tail()
+                    || slots.has_unpainted_marker_tail()
+                        && !events.iter().any(absolute_motion)
+                        && slots.contains_ink_from(seed.earlier)
+                    || slots_rewritten_by_controls(events)))
+}
+
+/// A complete replay can place `\p` or another control inside a field
+/// without contributing a new scalar. `bufferc()` can advance `col` within
+/// the existing `lastcol` extent (term.c:860–873).
+fn slots_rewritten_by_controls(events: &[RoffInlineEvent]) -> bool {
+    let mut rewound = false;
+    let mut marker = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                rewound |= argument
+                    .as_deref()
+                    .and_then(motion_columns)
+                    .is_some_and(|(absolute, units)| !absolute && units < 0);
+            }
+            RoffInlineEvent::LineBreak => marker = true,
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::ZeroAdvance
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint => {}
+            _ => return false,
+        }
+    }
+    rewound && marker
 }

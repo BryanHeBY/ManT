@@ -12,6 +12,8 @@ use super::{case_failures::verify_cases, json_roundtrip::json_string_roundtrip};
 mod accepted_coverage;
 #[path = "word_receipts/field_handoff.rs"]
 mod field_handoff;
+#[path = "word_receipts/native_cursor.rs"]
+mod native_cursor;
 
 #[derive(Deserialize)]
 struct Matrix {
