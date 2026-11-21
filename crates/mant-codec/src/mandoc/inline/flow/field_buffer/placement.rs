@@ -177,12 +177,18 @@ impl FieldBuffer {
             return None;
         }
         let mut cells = Vec::with_capacity(self.cells.len() - start);
+        let trailing_marker =
+            (self.cells.last() == Some(&FieldCell::BreakMarker)).then(|| self.cells.len() - 1);
         for (offset, cell) in self.cells[start..].iter().enumerate() {
             let index = start + offset;
             let length = self.projection_length(index, index + 1);
             let raw = match cell {
                 FieldCell::DrawnSpaces(1) => FieldCell::BreakableBlank,
-                FieldCell::FixedDrawingAdvance(1) => FieldCell::NonBreakingBlank,
+                // Keep the advance's origin when replay still owns the
+                // adjacent break; a later operand can write through it.
+                FieldCell::FixedDrawingAdvance(1) if trailing_marker != Some(index + 1) => {
+                    FieldCell::NonBreakingBlank
+                }
                 _ => cell.clone(),
             };
             cells.push((raw, length));

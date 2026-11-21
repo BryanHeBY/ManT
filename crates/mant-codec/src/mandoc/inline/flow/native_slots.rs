@@ -337,6 +337,23 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
+    /// The raw position of a buffered break immediately after a fixed advance.
+    pub(in crate::mandoc::inline) fn trailing_advance_marker(
+        &self,
+        automatic: usize,
+    ) -> Option<usize> {
+        let marker = self.extent.checked_sub(automatic + 1)?;
+        (self.previous_cell(marker + 1) == Some(&FieldCell::BreakMarker)
+            && self
+                .runs
+                .range(..marker)
+                .next_back()
+                .is_some_and(|(_, run)| {
+                    run.end == marker && matches!(run.pattern, Pattern::DrawingAdvance)
+                }))
+        .then_some(marker)
+    }
+
     pub(in crate::mandoc::inline) fn has_unpainted_marker_tail(&self) -> bool {
         self.runs
             .range(..self.cursor)

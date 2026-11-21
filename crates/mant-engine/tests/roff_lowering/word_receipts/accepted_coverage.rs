@@ -1315,6 +1315,20 @@ const LIVE_REPLAY_CASES: &[(&str, &[&str], Option<&str>)] = &[
         &["X", "D"],
         None,
     ),
+    (
+        // CVS term.c encode1() leaves both fixed advances in the live
+        // buffer when the last word replaces the trailing break marker.
+        include_str!("live_replay/replay-forward-motion-marker.1"),
+        &["G  X"],
+        None,
+    ),
+    (
+        // CVS term.c term_field() publishes the advance before the
+        // surviving break marker when later ink joins the same pass.
+        include_str!("live_replay/replay-advance-before-surviving-marker.1"),
+        &["FF X"],
+        None,
+    ),
 ];
 
 #[test]

@@ -1,5 +1,7 @@
 //! Project accepted native slots to reading text and its owners.
 
+use std::ops::Range;
+
 use super::super::{WordOutput, references};
 use super::{
     FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorSlotEdit, ReadingCell, ReadingGlyph,
@@ -7,7 +9,7 @@ use super::{
 };
 use crate::mandoc::inline::{
     flow::{
-        field_buffer::{DeferredSourceBlank, isolated_passes},
+        field_buffer::{DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS, isolated_passes},
         native_slots::FillSlot,
     },
     font::style::styled_link,
@@ -38,6 +40,7 @@ impl<'a> PlacedWord<'a> {
             unpublished,
             replace_tail,
             replayed_entry,
+            advance_marker,
         } = seed;
         let Placement {
             slots,
@@ -52,10 +55,17 @@ impl<'a> PlacedWord<'a> {
         let (extent, cursor_retreat) = slots.extent_and_retreat();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
-        if exact_inner_blanks {
-            publish_inner_advances(&mut slots, &mut reading, earlier);
-        }
-        defer_retained_separator_advances(&mut slots, &mut reading, earlier, word_owner);
+        let replaced_advance_marker = advance_marker.filter(|_| {
+            retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS && word_owner.is_some()
+        });
+        prepare_reading_blanks(
+            &mut slots,
+            &mut reading,
+            earlier,
+            word_owner,
+            exact_inner_blanks,
+            replaced_advance_marker,
+        );
         let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
@@ -78,23 +88,11 @@ impl<'a> PlacedWord<'a> {
                 replayed_entry,
             ));
         }
-        let inherited_pending = pending_owner
-            .filter(|owner| Some(*owner) == unpublished)
-            .and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)));
+        let inherited = unpublished.filter(|_| pending_owner == unpublished);
+        let inherited_pending = inherited_pending_slot(&slots, &reading, earlier, inherited)?;
         let prior = unpublished
             .filter(|_| inherited_pending.is_none())
             .map(|id| (id, slots.iter().any(|slot| slot.owner == Some(id))));
-        if let Some(position) = inherited_pending
-            && slots[..position].iter().any(|slot| {
-                slot.owner.is_some_and(|owner| {
-                    owner >= earlier && !matches!(reading[owner].glyph, ReadingGlyph::EntryBlank)
-                })
-            })
-        {
-            // An inherited glyph still under BACKBEFORE cannot be
-            // published at a new position before its replacement is known.
-            return Err(PriorSlotEdit::Unresolved);
-        }
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
         if retain_suffix {
@@ -221,6 +219,97 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
+fn inherited_pending_slot(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    earlier: usize,
+    owner: Option<usize>,
+) -> Result<Option<usize>, PriorSlotEdit> {
+    let position = owner.and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)));
+    if let Some(position) = position
+        && slots[..position].iter().any(|slot| {
+            slot.owner.is_some_and(|owner| {
+                owner >= earlier && !matches!(reading[owner].glyph, ReadingGlyph::EntryBlank)
+            })
+        })
+    {
+        // An inherited glyph still under BACKBEFORE cannot be
+        // published at a new position before its replacement is known.
+        return Err(PriorSlotEdit::Unresolved);
+    }
+    Ok(position)
+}
+
+fn prepare_reading_blanks(
+    slots: &mut Vec<FillSlot>,
+    reading: &mut Vec<ReadingCell<'_>>,
+    earlier: usize,
+    word_owner: Option<u64>,
+    exact_inner_blanks: bool,
+    advance_marker: Option<usize>,
+) {
+    if exact_inner_blanks {
+        publish_inner_advances(slots, reading, earlier);
+    }
+    let advance =
+        advance_marker.and_then(|marker| split_buffered_advance(slots, reading, earlier, marker));
+    defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
+}
+
+/// `term_word()` buffers a positive HORIZ before writing the break marker.
+/// Later ink can replace the marker or join the same pass past it. The
+/// advance contributes reading spaces only when `term_field()` accepts it.
+fn split_buffered_advance(
+    slots: &mut Vec<FillSlot>,
+    reading: &[ReadingCell<'_>],
+    earlier: usize,
+    marker: usize,
+) -> Option<Range<usize>> {
+    let mut offset = 0;
+    let boundary = slots.iter().position(|slot| {
+        let at_boundary = offset == marker;
+        offset += slot.count;
+        at_boundary
+    })?;
+    let boundary_slot = &slots[boundary];
+    if incoming_ink(boundary_slot, reading, earlier).is_none()
+        && !(boundary_slot.cell == FieldCell::BreakMarker
+            && slots[boundary + 1..]
+                .iter()
+                .any(|slot| incoming_ink(slot, reading, earlier).is_some()))
+    {
+        return None;
+    }
+    let mut start = boundary;
+    while start != 0 && slots[start - 1].drawing_advance && slots[start - 1].owner.is_none() {
+        start -= 1;
+    }
+    if start == boundary {
+        return None;
+    }
+    let count = slots[start..boundary]
+        .iter()
+        .map(|slot| slot.count)
+        .sum::<usize>();
+    slots.splice(
+        start..boundary,
+        (0..count).map(|_| FillSlot {
+            cell: FieldCell::NonBreakingBlank,
+            count: 1,
+            owner: None,
+            drawing_advance: true,
+        }),
+    );
+    Some(start..start + count)
+}
+
+fn incoming_ink(slot: &FillSlot, reading: &[ReadingCell<'_>], earlier: usize) -> Option<usize> {
+    slot.owner.filter(|&owner| {
+        owner >= earlier
+            && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+    })
+}
+
 /// The next word can leave a short motion after an authored separator in
 /// the same accepted pass. Read it from the replayed slots: an edit can
 /// overwrite that motion, and `term_field()` can still drop it at row end.
@@ -229,6 +318,7 @@ fn defer_retained_separator_advances(
     reading: &mut Vec<ReadingCell<'_>>,
     earlier: usize,
     word_owner: Option<u64>,
+    advance: Option<&Range<usize>>,
 ) {
     let Some(word_owner) = word_owner.filter(|_| earlier != 0) else {
         return;
@@ -236,9 +326,10 @@ fn defer_retained_separator_advances(
     let is_replayed_marker = |slot: &FillSlot| {
         slot.cell == FieldCell::BreakMarker && slot.owner.is_some_and(|owner| owner < earlier)
     };
-    let Some(last_marker) = slots.iter().rposition(is_replayed_marker) else {
+    let last_marker = slots.iter().rposition(is_replayed_marker);
+    if last_marker.is_none() && advance.is_none() {
         return;
-    };
+    }
     let mut after_marker = false;
     let mut next_ink = 0;
     for index in 0..slots.len() {
@@ -268,25 +359,23 @@ fn defer_retained_separator_advances(
         // HORIZ can also land the new word before an older marker. A
         // surviving motion then separates ink before that same marker.
         // Its placement is still decided by the accepted term_field pass.
-        let precedes_marker = index < last_marker
+        let precedes_marker = last_marker.is_some_and(|marker| index < marker)
             && (motion.drawing_advance || motion.owner.is_some_and(|owner| owner < earlier));
-        if !follows_marker && !precedes_marker {
+        let advances_to_ink = advance.is_some_and(|range| range.contains(&index));
+        if !follows_marker && !precedes_marker && !advances_to_ink {
             continue;
         }
-        let ink_end = if follows_marker {
+        let ink_end = if follows_marker || advances_to_ink {
             slots.len()
         } else {
-            last_marker
+            last_marker.expect("motion before marker")
         };
         next_ink = next_ink.max(index + 1);
         let owner = loop {
             if next_ink >= ink_end {
                 break None;
             }
-            if let Some(owner) = slots[next_ink].owner.filter(|&owner| {
-                owner >= earlier
-                    && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
-            }) {
+            if let Some(owner) = incoming_ink(&slots[next_ink], reading, earlier) {
                 break Some(owner);
             }
             next_ink += 1;

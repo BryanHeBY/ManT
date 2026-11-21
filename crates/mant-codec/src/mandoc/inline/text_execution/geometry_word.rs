@@ -686,6 +686,7 @@ struct GeometrySeed<'a> {
     prefix_start: usize,
     earlier: usize,
     unpublished: Option<usize>,
+    advance_marker: Option<usize>,
 }
 
 impl GeometrySeed<'_> {
@@ -693,6 +694,7 @@ impl GeometrySeed<'_> {
         let mut seed = if let Some(prefix) = context.slot_entry.prefix.take() {
             let mut placement = Placement::empty(NativeSlots::with_field_prefix(&prefix));
             let earlier = prefix.cells.len();
+            let advance_marker = placement.slots.trailing_advance_marker(prefix.automatic);
             for (_, scalars) in prefix.cells {
                 placement.mark(ReadingGlyph::Earlier(scalars), Font::Regular);
             }
@@ -710,6 +712,7 @@ impl GeometrySeed<'_> {
                     .flatten(),
                 replace_tail: 0,
                 replayed_entry: false,
+                advance_marker,
             }
         } else if let Some(tail) = context.slot_entry.device_tail.take() {
             let automatic = context.slot_entry.automatic_blanks;
@@ -723,6 +726,7 @@ impl GeometrySeed<'_> {
                 prefix_start: 0,
                 earlier: 0,
                 unpublished: None,
+                advance_marker: None,
             }
         } else {
             let mut placement =
@@ -762,6 +766,7 @@ impl GeometrySeed<'_> {
                 prefix_start: 0,
                 earlier: 0,
                 unpublished: None,
+                advance_marker: None,
             }
         };
         seed.placement
@@ -834,11 +839,20 @@ fn execute_seed<'a>(
             .iter()
             .rposition(|event| matches!(event, RoffInlineEvent::LineBreak))
             .is_some_and(|marker| {
-                // Earlier motion may have left the marker in an older
-                // word. That edit needs the live-cursor proof above.
-                !events[..marker].iter().any(|event| {
-                    matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
-                        if argument.as_deref().and_then(motion_columns) != Some((false, 0)))
+                // HORIZ may traverse an occupied slot without writing it
+                // (term.c::bufferc). Extend the cursor proof only for a
+                // marker actually reached after writing fixed advances.
+                events[..marker].iter().all(|event| match event {
+                    RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                        match argument.as_deref().and_then(motion_columns) {
+                            Some((false, 0)) => true,
+                            Some((false, units)) if units > 0 => {
+                                slots.trailing_advance_marker(0).is_some()
+                            }
+                            _ => false,
+                        }
+                    }
+                    _ => true,
                 })
             });
     let retain_suffix = context.policy.field_authoritative
