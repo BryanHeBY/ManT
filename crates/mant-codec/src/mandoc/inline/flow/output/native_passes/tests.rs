@@ -1,4 +1,6 @@
-use super::{BTreeMap, Inline, split_native_field_passes};
+use super::acceptance::OWNER_PASS_INTERSECTIONS;
+use super::rows::{OWNER_NODES_VISITED, split_native_field_passes};
+use super::{BTreeMap, Inline};
 use crate::mandoc::inline::plain_text;
 use mant_ir::LinkTarget;
 
@@ -57,12 +59,12 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
             panic!("the graphless final marker must reject");
         };
         assert_eq!(passes.len(), words);
-        super::OWNER_PASS_INTERSECTIONS.with(|work| work.set(0));
+        OWNER_PASS_INTERSECTIONS.with(|work| work.set(0));
         let accepted = super::accepted_owner_lengths(&buffer, &anchors, &passes, false);
         assert_eq!(accepted.len(), words + 1);
         assert_eq!(accepted[&marker("0")].scalars, 2);
         assert!(!accepted[&marker(&words.to_string())].native_cells);
-        let intersections = super::OWNER_PASS_INTERSECTIONS.with(std::cell::Cell::get);
+        let intersections = OWNER_PASS_INTERSECTIONS.with(std::cell::Cell::get);
         assert!(
             intersections <= 4 * (words + 1),
             "{words} owners revisited {intersections} pass intervals"
@@ -110,14 +112,14 @@ fn repeated_physical_flushes_never_revisit_the_committed_head_prefix() {
             ".Dd September 30, 2026\n.Dt TEST 1\n.Os\n.Sh DESCRIPTION\n.nf\n.Bl -hang -width 4n\n.It Xo\n{}.Xc\n.No BodyWord\n.El\n",
             ".No aa\n".repeat(words)
         );
-        super::OWNER_NODES_VISITED.with(|work| work.set(0));
+        OWNER_NODES_VISITED.with(|work| work.set(0));
         let document = crate::mandoc::parse_plain_manual(
             std::path::Path::new("native-owner-scan-scale.1"),
             source.as_bytes(),
         )
         .unwrap();
         assert_ne!(document.sections.len(), 0);
-        let inspected = super::OWNER_NODES_VISITED.with(std::cell::Cell::get);
+        let inspected = OWNER_NODES_VISITED.with(std::cell::Cell::get);
         assert!(
             inspected <= words * 8,
             "{words} rows revisited {inspected} owner nodes"
@@ -393,7 +395,7 @@ fn consecutive_deferred_glyphs_project_each_owner_once() {
             ".Dd October 13, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n{}.No B\n",
             ".No \"A\\p\\:\\zX\"\n".repeat(words),
         );
-        super::OWNER_NODES_VISITED.with(|work| work.set(0));
+        OWNER_NODES_VISITED.with(|work| work.set(0));
         let document = crate::mandoc::parse_plain_manual(
             std::path::Path::new("deferred-rows.1"),
             source.as_bytes(),
@@ -411,7 +413,7 @@ fn consecutive_deferred_glyphs_project_each_owner_once() {
             plain_text(children),
             format!("A\n{}XB", "XA\n".repeat(words - 1))
         );
-        let visits = super::OWNER_NODES_VISITED.with(std::cell::Cell::get);
+        let visits = OWNER_NODES_VISITED.with(std::cell::Cell::get);
         assert!(
             visits <= words * 8,
             "{words} words caused {visits} owner visits"
