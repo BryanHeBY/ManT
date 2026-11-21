@@ -135,10 +135,7 @@ pub(in crate::mandoc) enum FieldWrite {
         styled_suffix: Option<(usize, crate::mandoc::roff_escape::RoffFont)>,
         keeps_prior_slots: bool,
     },
-    ProveAppendedSlots {
-        cells: usize,
-        fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
-    },
+    ProveAppendedSlots(AppendedSlotProof),
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).
@@ -173,6 +170,18 @@ pub(in crate::mandoc) enum FieldWrite {
     /// A negative relative HORIZ. The first write can use the bounded
     /// entry plan; a later write cannot prove the word's cursor interval.
     RewindWordEntry(usize),
+}
+
+#[derive(Clone, Debug)]
+pub(in crate::mandoc) struct AppendedSlotProof {
+    pub(in crate::mandoc::inline) cells: usize,
+    /// An exact styled suffix can narrow which slots a later word may edit.
+    /// `None` carries forward the existing edit boundary.
+    pub(in crate::mandoc::inline) replay_tail: Option<usize>,
+    /// The final glyph awaits `BACKBEFORE` in the following word.
+    pub(in crate::mandoc::inline) pending: bool,
+    pub(in crate::mandoc::inline) fonts:
+        Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

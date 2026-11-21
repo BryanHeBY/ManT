@@ -1,5 +1,5 @@
 use super::RoffInlineEvent;
-use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+use crate::mandoc::inline::flow::field_buffer::{AppendedSlotProof, FieldCell, FieldWrite};
 
 #[derive(Default)]
 pub(super) struct AppendedFonts {
@@ -41,8 +41,7 @@ impl AppendedFonts {
                     FieldCell::BreakableBlank
                     | FieldCell::NonBreakingBlank
                     | FieldCell::ZeroWidthGraph
-                    | FieldCell::Breakpoint
-                    | FieldCell::BreakMarker,
+                    | FieldCell::Breakpoint,
                 ) if !self.pending => {}
                 _ => return false,
             }
@@ -51,13 +50,24 @@ impl AppendedFonts {
         true
     }
 
-    pub(super) fn proof(self) -> Option<FieldWrite> {
-        (!(self.pending || self.armed)
-            || self.cells <= super::super::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS)
-            .then_some(FieldWrite::ProveAppendedSlots {
-                cells: self.cells,
-                fonts: self.fonts,
-            })
+    pub(super) fn proof(self, styled_tail: Option<(usize, super::Font)>) -> Option<FieldWrite> {
+        if (self.pending || self.armed)
+            && self.cells > super::super::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
+        {
+            return None;
+        }
+        let decorated: usize = self.fonts.iter().map(|(range, _)| range.len()).sum();
+        let replay_tail = match styled_tail {
+            Some((count, _)) if count == decorated => None,
+            Some((count, _)) => Some(count),
+            None => Some(0),
+        };
+        Some(FieldWrite::ProveAppendedSlots(AppendedSlotProof {
+            cells: self.cells,
+            fonts: self.fonts,
+            replay_tail,
+            pending: self.pending,
+        }))
     }
 }
 

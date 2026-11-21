@@ -1213,3 +1213,41 @@ Done.
         }
     }
 }
+
+#[test]
+fn an_append_proof_cannot_authorize_a_rewind_across_opaque_field_bytes() {
+    // The accepted CVS field still includes HX, G or HX respectively.
+    // A preceding suffix proves its decoration but not where those
+    // glyphs land after the next term_word() crosses an uncertain slot.
+    for (body, kept) in [
+        (
+            r#".Em "\zC\pJ" No "\:\p\h'-9n'\&\zFG" Em "H \p" Em "\h'-2n'X""#,
+            "HX",
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\p\p\h'-10n'\&\p\p\zFG" Em "H\zG" Ns No "\:\h'-4n'\&X""#,
+            "G",
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\p\h'-9n'\&\p\zFG" Sy "H\zG" Ns No "\h'-1n'\:\h'-4n'\&X""#,
+            "HX",
+        ),
+    ] {
+        let source = format!("{REPLAY_HEADER}{body}\n.Sh ENDTEST\nDone.\n");
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let rendered = mant_render::render_query_man(&content);
+            let text = description_rows(&rendered, &source).join("\n");
+            let mut visible = text.chars();
+            for glyph in kept.chars() {
+                assert!(
+                    visible.any(|ch| ch == glyph),
+                    "missing {glyph}: {source}\n{text}"
+                );
+            }
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        }
+    }
+}

@@ -21,6 +21,7 @@ impl FieldBuffer {
                 editable_marker,
             } => {
                 self.raw_slot_fence = self.cells.len() - count;
+                self.raw_edit_fence = self.raw_slot_fence;
                 if *editable_marker {
                     // An interior \p has only marked the raw word.
                     // term.c::term_fill runs when a real flush accepts
@@ -105,6 +106,7 @@ impl FieldBuffer {
         // only when the bounded placement window reaches it.
         if !keeps_prior_slots || tail.is_none() {
             self.raw_slot_fence = tail.as_ref().map_or(end, |(range, _)| range.start);
+            self.raw_edit_fence = self.raw_slot_fence;
             self.raw_copy_aliases.clear();
             self.raw_tail_fonts.clear();
         }
@@ -211,14 +213,14 @@ impl FieldBuffer {
 
     fn replay_fence(&self, live_replay: bool) -> usize {
         let Some(deferred) = self.deferred_blanks.last() else {
-            return self.raw_slot_fence;
+            return self.raw_edit_fence;
         };
-        if self.has_retained_word_cursor() && deferred.end == self.raw_slot_fence {
+        if self.has_retained_word_cursor() && deferred.end == self.raw_edit_fence {
             deferred.start
         } else if live_replay {
-            self.raw_slot_fence.max(deferred.start)
+            self.raw_edit_fence.max(deferred.start)
         } else {
-            self.raw_slot_fence.max(deferred.end)
+            self.raw_edit_fence.max(deferred.end)
         }
     }
 
@@ -371,6 +373,7 @@ impl FieldBuffer {
 
     pub(super) fn push_placed(&mut self, cell: &FieldCell, scalars: usize) {
         self.raw_slot_fence = self.cells.len() + 1;
+        self.raw_edit_fence = self.raw_slot_fence;
         self.clear_backtracking();
         self.backafter_armed = false;
         let previous = self.projection_prefix.last().copied().unwrap_or(0);
@@ -382,6 +385,7 @@ impl FieldBuffer {
         self.break_markers
             .truncate(self.break_markers.partition_point(|&marker| marker < end));
         self.raw_slot_fence = self.raw_slot_fence.min(end);
+        self.raw_edit_fence = self.raw_edit_fence.min(end);
         self.raw_tail_fonts.truncate(
             self.raw_tail_fonts
                 .partition_point(|(range, _)| range.start < end),

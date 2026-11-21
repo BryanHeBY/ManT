@@ -207,6 +207,7 @@ impl FieldBuffer {
         self.cells.clear();
         self.device_tail = None;
         self.raw_slot_fence = 0;
+        self.raw_edit_fence = 0;
         self.write_cursor = WriteCursor::End;
         self.raw_tail_fonts.clear();
         self.raw_copy_aliases.clear();
@@ -327,9 +328,7 @@ impl FieldBuffer {
                 | FieldWrite::OpaqueRawSlots { .. }
                 | FieldWrite::ReplaceLivePrefix { .. }
                 | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
-                FieldWrite::ProveAppendedSlots { cells, fonts } => {
-                    self.prove_appended_slots(entry, *cells, fonts);
-                }
+                FieldWrite::ProveAppendedSlots(proof) => self.prove_appended_slots(entry, proof),
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::MotionPadding {
                     consumed_by_backbefore,
@@ -358,14 +357,16 @@ impl FieldBuffer {
         self.finish_word_writes(leading_retreat, consumed_motion_padding)
     }
 
-    fn prove_appended_slots(
-        &mut self,
-        entry: usize,
-        cells: usize,
-        fonts: &[(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)],
-    ) {
-        if self.cells.len() == entry.saturating_add(cells) {
-            for (range, font) in fonts {
+    fn prove_appended_slots(&mut self, entry: usize, proof: &super::AppendedSlotProof) {
+        if self.cells.len() == entry.saturating_add(proof.cells) {
+            // The exact ending font run can be replayed. Earlier paint
+            // remains valid even when a later cursor cannot revisit it.
+            if !(entry == 0 && proof.pending)
+                && let Some(tail) = proof.replay_tail
+            {
+                self.raw_edit_fence = self.cells.len().saturating_sub(tail);
+            }
+            for (range, font) in &proof.fonts {
                 self.record_appended_font(entry + range.start..entry + range.end, *font);
             }
         } else {

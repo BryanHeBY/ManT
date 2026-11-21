@@ -46,7 +46,7 @@ pub(in crate::mandoc::inline) use placement::isolated_passes;
 pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
 pub(super) use scan::{CompactPass, compact_first_pass};
 
-pub(in crate::mandoc::inline) use cells::DeferredSourceBlank;
+pub(in crate::mandoc::inline) use cells::{AppendedSlotProof, DeferredSourceBlank};
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
 pub(super) use cells::{LeadingBlankRetreat, WordWriteReceipt};
 
@@ -226,8 +226,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
     device_tail: Option<Box<super::native_slots::DeviceTail>>,
     // Earlier cells can stand for layout-equivalent rather than byte-exact
-    // native input. Only the proved append suffix can be used for slot edits.
+    // native input. A styled append can keep old paint evidence without
+    // authorizing a later word to rewind through that append.
     raw_slot_fence: usize,
+    raw_edit_fence: usize,
     write_cursor: WriteCursor,
     raw_tail_fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
     raw_copy_aliases: Vec<(usize, usize)>,

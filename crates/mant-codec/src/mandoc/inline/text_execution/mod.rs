@@ -309,15 +309,14 @@ fn record_word_slot_proof(
     appended: Option<native_writes::AppendedFonts>,
     last_font: Option<(Font, usize)>,
 ) {
-    if let Some(proof) = appended.and_then(native_writes::AppendedFonts::proof) {
+    // A preceding pending glyph can change the leading bytes, but
+    // encode1 still writes exact copies of the final styled glyphs.
+    let styled_suffix = last_font.and_then(|(font, start)| {
+        native_writes::proved_decorated_tail(events, &writes[start..], font)
+    });
+    if let Some(proof) = appended.and_then(|append| append.proof(styled_suffix)) {
         writes.push(proof);
     } else {
-        // A preceding pending glyph can change the leading bytes,
-        // but encode1 still writes exact copies of the final styled
-        // glyphs. Fence those copies separately from the older slots.
-        let styled_suffix = last_font.and_then(|(font, start)| {
-            native_writes::proved_decorated_tail(events, &writes[start..], font)
-        });
         writes.push(FieldWrite::OpaqueRawSlots {
             styled_suffix,
             keeps_prior_slots: false,
