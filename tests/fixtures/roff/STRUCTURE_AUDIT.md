@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v27` successful page response requires
+The `mant.roff-structure-profile/v28` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -134,9 +134,10 @@ coordinates, item counts, row indexes and spans require nonboolean integers.
 Known enum values and table-cell flags retain the distinct AST and IR shapes.
 A table address includes its occurrence at the same source coordinates.
 Equation checks preserve order and multiplicity in each known owner, including
-sections and simple source-proven paragraphs. Each referenced cell must belong
-to a data row in the same observation stream and an observed cell must contain
-blocks. A source equation
+sections and simple source-proven paragraphs. Their occurrence numbers
+distinguish separate owners expanded at the same source line. Each referenced
+cell must belong to a data row in the same observation stream. The expected
+cell must own its content and the observed cell must contain blocks. A source equation
 known to be inside a table without an exact cell address is recorded for
 review. A known table-external equation has no cell address.
 
@@ -144,7 +145,11 @@ Limited incremental scans allocate the quota to unattempted or stale source
 identities first. Failed paths then rotate in least-recently-attempted order.
 The adjacent `.retries.json` file preserves this order across invocations and
 keeps an unreadable path's attempt without assigning it a decoded-source hash.
-Per-section limits follow the same order within each section.
+Corrupt compressed pages receive a page-level explanation. If a source
+pattern cannot inspect a damaged page, the audit reports that uncertainty
+and continues with the readable candidates. Per-section limits follow the
+same order within each section. Removing stale retries requires a complete
+enumeration of the same corpus and roots.
 The source ordinal observer retains overwrite evidence across node boundaries,
 including styled pieces and source continuations, and records an uncertain
 owner with its original coordinates instead of inventing a definite shape.

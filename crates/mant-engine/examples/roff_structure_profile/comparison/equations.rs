@@ -23,9 +23,9 @@ pub(super) fn compare_equation_topology(
     let mut known = HashMap::<_, VecDeque<_>>::new();
     for (index, equation) in observed.iter().enumerate() {
         let key = signature(equation.context, &equation.value, equation.source_line);
-        for paragraph in [None, Some(equation.source_line)] {
+        for paragraph in std::iter::once(None).chain(equation.paragraph.map(Some)) {
             known
-                .entry((equation.cell, equation.section_line, paragraph, key))
+                .entry((equation.cell, equation.section, paragraph, key))
                 .or_default()
                 .push_back(index);
         }
@@ -34,21 +34,16 @@ pub(super) fn compare_equation_topology(
     let mut matched = vec![None; expected.len()];
     // Reserve exact owner occurrences before comparing source equations
     // whose AST proves they belong to a table without an exact address.
-    let known_equations = |exact| {
-        expected
-            .iter()
-            .enumerate()
-            .filter(move |(_, eq)| !eq.unproved_cell && eq.paragraph_line.is_some() == exact)
-    };
+    let known_equations = expected
+        .iter()
+        .enumerate()
+        .filter(|(_, eq)| !eq.unproved_cell);
     let uncertain_equations = expected
         .iter()
         .enumerate()
         .filter(|(_, eq)| eq.unproved_cell);
     let mut uncertain = None;
-    for (expected_index, equation) in known_equations(true)
-        .chain(known_equations(false))
-        .chain(uncertain_equations)
-    {
+    for (expected_index, equation) in known_equations.chain(uncertain_equations) {
         let key = signature(
             equation.context,
             equation.value.as_str(),
@@ -61,7 +56,7 @@ pub(super) fn compare_equation_topology(
                     if !used[index] && candidate.cell.is_some() {
                         unmatched
                             .entry((
-                                candidate.section_line,
+                                candidate.section,
                                 signature(
                                     candidate.context,
                                     candidate.value.as_str(),
@@ -75,16 +70,11 @@ pub(super) fn compare_equation_topology(
                 unmatched
             });
             unmatched
-                .get_mut(&(equation.section_line, key))
+                .get_mut(&(equation.section, key))
                 .and_then(VecDeque::pop_front)
         } else {
             known
-                .get_mut(&(
-                    equation.cell,
-                    equation.section_line,
-                    equation.paragraph_line,
-                    key,
-                ))
+                .get_mut(&(equation.cell, equation.section, equation.paragraph, key))
                 .and_then(|indices| {
                     std::iter::from_fn(|| indices.pop_front()).find(|&index| !used[index])
                 })
@@ -121,7 +111,7 @@ fn check_equation_order(
             && !equation.unproved_cell
         {
             let previous = last
-                .entry((equation.cell, equation.section_line))
+                .entry((equation.cell, equation.section))
                 .or_insert(index);
             if index < *previous {
                 violations.push(format!(
@@ -139,9 +129,19 @@ fn check_equation_order(
 fn report_missing_equation(violations: &mut Vec<String>, equation: &AstEquationTopology) {
     let owner = equation.cell.map_or_else(
         || {
-            equation.paragraph_line.map_or_else(
-                || format!(" in section at line {}", equation.section_line),
-                |line| format!(" in paragraph at line {line}"),
+            equation.paragraph.map_or_else(
+                || {
+                    format!(
+                        " in section at line {}, occurrence {}",
+                        equation.section.line, equation.section.occurrence
+                    )
+                },
+                |paragraph| {
+                    format!(
+                        " in paragraph at line {}, occurrence {}",
+                        paragraph.line, paragraph.occurrence
+                    )
+                },
             )
         },
         |cell| {

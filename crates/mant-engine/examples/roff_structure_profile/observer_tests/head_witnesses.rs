@@ -453,3 +453,208 @@ fn generated_wrappers_do_not_hide_authored_words_or_supply_missing_words() {
         );
     }
 }
+
+#[test]
+fn equation_owners_follow_execution_when_macro_nodes_share_source_lines() {
+    for (source, name) in [
+        (
+            r".EQ
+delim $$
+.EN
+$x$
+world $y$
+",
+            "eq-start",
+        ),
+        (
+            r".de XX
+.Sh FIRST
+BEFORE
+.EQ
+x
+.EN
+.Sh SECOND
+AFTER
+..
+.XX
+",
+            "macro-section-display",
+        ),
+        (
+            r".de XX
+.Sh FIRST
+BEFORE $x$
+.Sh SECOND
+AFTER
+..
+.EQ
+delim $$
+.EN
+.XX
+",
+            "macro-section-inline",
+        ),
+        (
+            r".de XX
+.Sh FIRST
+BEFORE $x$
+.Pp
+AFTER
+..
+.EQ
+delim $$
+.EN
+.XX
+",
+            "macro-paragraph-inline",
+        ),
+        (
+            r".de XX
+.Sh FIRST
+.No BEFORE
+plain $x$
+.Pp
+AFTER $x$
+..
+.EQ
+delim $$
+.EN
+.XX
+",
+            "same-coordinate-identical",
+        ),
+    ] {
+        let input = format!("{DISPATCH_HEADER}{source}.Sh ENDPROBE\nDone.\n");
+        let (expected, native, mut document) = parsed(&input);
+        let check = |document: &Document| {
+            let (observed, topology) = ir_profile(document);
+            compare_structure(&expected, &observed, &native, &topology)
+        };
+        let issues = check(&document);
+        assert!(issues.is_empty(), "{name}: {issues:?}");
+        match name {
+            "eq-start" | "same-coordinate-identical" => continue,
+            "macro-section-display" => {
+                let equation = document.sections[2].blocks.pop().unwrap();
+                document.sections[3].blocks.insert(0, equation);
+            }
+            _ => {
+                let Block::Paragraph { children, .. } = &mut document.sections[2].blocks[0] else {
+                    panic!("first paragraph");
+                };
+                let index = children
+                    .iter()
+                    .position(|node| matches!(node, Inline::Equation { .. }))
+                    .unwrap();
+                let equation = children.remove(index);
+                let section = if name == "macro-section-inline" { 3 } else { 2 };
+                let Some(Block::Paragraph { children, .. }) =
+                    document.sections[section].blocks.last_mut()
+                else {
+                    panic!("destination paragraph");
+                };
+                children.push(equation);
+            }
+        }
+        let issues = check(&document);
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.contains("observed no matching IR value")
+                    && issue.contains("occurrence 1")),
+            "{name}: {issues:?}"
+        );
+    }
+}
+
+#[test]
+fn structured_heads_keep_literal_rows_and_words_joined_by_field_execution() {
+    // CVS mdoc_term.c closes an extra line for indented TEXT. HANG
+    // resets BRIND after br/sp; the next literal words can share a field.
+    // Fo's nested wrappers may join authored words with generated punctuation.
+    for (index, source) in [
+        r".Bl -tag -width a
+.It Xo
+.Bd -literal
+A
+ B
+C
+.Ed
+.Xc
+BODY
+.El
+",
+        r".Bl -hang -width a
+.It Xo
+.Bd -literal
+A
+.br
+B
+C
+.Ed
+.Xc
+BODY
+.El
+",
+        r".Bl -hang -width a
+.It Xo
+.Bd -literal
+A
+.sp
+B
+C
+.Ed
+.Xc
+BODY
+.El
+",
+        r".Bl -tag -width a
+.It Xo
+.Fo out
+.Oo
+.EQ
+alpha
+.EN
+.Oc
+.Fc
+.Xc
+BODY
+.El
+",
+        r".Bl -tag -width a
+.It Xo
+.Fo out
+.Fo inside
+.No ALPHA
+.Dl PROBE
+.Fc
+.Fc
+.Xc
+BODY
+.El
+",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let input = format!("{DISPATCH_HEADER}{source}.Sh ENDPROBE\nDone.\n");
+        let (_, native, mut document) = parsed(&input);
+        let issues = violations(&native, &document);
+        assert!(issues.is_empty(), "{index}: {issues:?}");
+        let nodes = first_term(&mut document);
+        if index == 0 {
+            let next = nodes
+                .iter()
+                .position(|node| matches!(node, Inline::Text { value } if value == " B"))
+                .unwrap();
+            let at = nodes[..next]
+                .iter()
+                .rposition(|node| matches!(node, Inline::LineBreak {}))
+                .unwrap();
+            nodes.remove(at);
+        } else {
+            nodes.clear();
+        }
+        assert!(!violations(&native, &document).is_empty(), "{index}");
+    }
+}

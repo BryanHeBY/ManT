@@ -119,12 +119,26 @@ pub(super) fn record(
     let mut rows = Rows::begin(payload);
     let mut start = 0;
     let mut continues = false;
+    let mut hang_without_gap = false;
     for (index, node) in body.children.iter().enumerate() {
         let empty_text = node.kind == NodeKind::Text
             && node.text.as_deref() == Some("")
             && node.flags.line_start;
+        let space_started = node.kind == NodeKind::Text
+            && node.flags.line_start
+            && node
+                .text
+                .as_deref()
+                .is_some_and(|text| text.starts_with(' '));
         if !simple_node(node) {
-            rows.record(&body.children[start..index], source, payload, 0);
+            rows.record_literal(
+                &body.children[start..index],
+                source,
+                payload,
+                hang_without_gap,
+            );
+            hang_without_gap |= matches!(payload.field, Field::Hanging)
+                && matches!(node.macro_token.as_deref(), Some("br" | "sp"));
             super::HeadPayloads::walk_part_slice(
                 std::slice::from_ref(node),
                 source,
@@ -138,8 +152,18 @@ pub(super) fn record(
             continue;
         }
         if node.flags.line_start && (!continues || empty_text) {
-            rows.record(&body.children[start..index], source, payload, 0);
+            rows.record_literal(
+                &body.children[start..index],
+                source,
+                payload,
+                hang_without_gap,
+            );
             start = index;
+        }
+        if !continues && (empty_text || space_started) {
+            // print_mdoc_node() can flush a second time for an empty or
+            // space-started TEXT after the NODE_NOFILL line-start flush.
+            rows.flush_empty_field(payload.field, 0);
         }
         if empty_text {
             // print_mdoc_node() uses term_vspace() for empty TEXT, except
@@ -148,9 +172,9 @@ pub(super) fn record(
                 // NODE_LINE flushed the preceding input above. The empty
                 // TEXT's term_vspace calls term_newln again before emitting
                 // an independent vertical row (term.c:474–496).
-                rows.flush_empty_field(payload.field, 0);
                 rows.end_line();
             }
+            rows.last_literal_atom = None;
             start = index + 1;
         }
         continues = !empty_text
@@ -162,7 +186,7 @@ pub(super) fn record(
                 .as_deref()
                 .is_some_and(|text| RoffWordEvidence::read(text).has(RoffWordEffect::Continues));
     }
-    rows.record(&body.children[start..], source, payload, 0);
+    rows.record_literal(&body.children[start..], source, payload, hang_without_gap);
     true
 }
 
@@ -179,9 +203,35 @@ fn simple_node(node: &Node) -> bool {
 pub(super) struct Rows {
     row: DisplayRow,
     columns: Option<usize>,
+    last_literal_atom: Option<usize>,
 }
 
 impl Rows {
+    fn record_literal(
+        &mut self,
+        nodes: &[Node],
+        source: &SourceContext,
+        payload: &mut TermPayload,
+        hang_without_gap: bool,
+    ) {
+        let previous = self.last_literal_atom;
+        let index = payload.atoms.len();
+        self.record(nodes, source, payload, 0);
+        if payload.atoms.len() > index {
+            if hang_without_gap
+                && previous == index.checked_sub(1)
+                && let Some(previous) = previous
+                && payload.atoms[previous].row.is_some_and(|row| !row.ended)
+            {
+                // roff_term_pre_br clears BRIND and trailspace, but HANG
+                // survives. The two immediately neighboring literal fields
+                // can join even when their exact starting column is unproved.
+                payload.joins.insert(previous, "");
+            }
+            self.last_literal_atom = payload.atoms.len().checked_sub(1);
+        }
+    }
+
     fn begin(payload: &mut TermPayload) -> Self {
         payload.displays += 1;
         Self {
@@ -199,6 +249,7 @@ impl Rows {
             } else {
                 None
             },
+            last_literal_atom: None,
         }
     }
 

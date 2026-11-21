@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
-    EquationCell, EquationContext, ListTopologyKind,
+    EquationCell, EquationContext, ListTopologyKind, SourceOccurrence,
     native::{equation_has_payload, equation_visible_text},
     next_table_occurrence, ordinal_labels,
 };
@@ -16,7 +16,7 @@ pub(super) fn collect(root: &Node, spacing: &ordinal_labels::SourceContext) -> A
         root,
         false,
         None,
-        (0, None),
+        (SourceOccurrence::default(), None),
         &mut topology,
         spacing,
         &mut ColumnBodies::default(),
@@ -104,6 +104,7 @@ fn mdoc_column_rows(
 struct ColumnBodies {
     occurrences: BTreeMap<(u32, u32), usize>,
     addresses: HashMap<u32, EquationCell>,
+    sections: BTreeMap<u32, usize>,
 }
 
 impl ColumnBodies {
@@ -138,17 +139,20 @@ impl ColumnBodies {
 struct ParagraphWitness {
     section_body: bool,
     simple: bool,
-    first_text: Option<u32>,
+    owner: Option<SourceOccurrence>,
+    occurrences: BTreeMap<u32, usize>,
 }
 
 impl ParagraphWitness {
-    fn observe(&mut self, child: &Node) -> Option<u32> {
+    fn observe(&mut self, child: &Node) -> Option<SourceOccurrence> {
         // roff_eqndelim() replays a source line as TEXT, EQ, TEXT.
         // Direct section text after entry or Pp proves the IR owner start.
         // Other producers (e.g. a list or display) keep only section proof.
-        if child.macro_token.as_deref() == Some("Pp") && self.section_body {
+        if matches!(child.macro_token.as_deref(), Some("Pp" | "PP" | "P" | "LP"))
+            && self.section_body
+        {
             self.simple = true;
-            self.first_text = None;
+            self.owner = None;
         } else if self.simple {
             match child.kind {
                 NodeKind::Text
@@ -159,23 +163,47 @@ impl ParagraphWitness {
                             .as_deref()
                             .is_some_and(|text| text.starts_with(char::is_alphanumeric)) =>
                 {
-                    self.first_text.get_or_insert(child.line);
+                    self.start(child.line);
                 }
                 NodeKind::Equation
                     if child.equation_inline == Some(false)
                         && child.equation.as_ref().is_some_and(equation_has_payload) =>
                 {
-                    self.first_text = None;
+                    self.owner = None;
+                }
+                NodeKind::Equation
+                    if child.equation_inline == Some(true)
+                        && !child.flags.no_fill
+                        && child.equation.as_ref().is_some_and(equation_has_payload) =>
+                {
+                    self.start(child.line);
                 }
                 NodeKind::Equation => {}
                 NodeKind::Text if !child.flags.line_start => {}
+                NodeKind::Element
+                    if child.macro_token.as_deref() == Some("No")
+                        && !child.flags.no_fill
+                        && let [text] = child.children.as_slice()
+                        && text.kind == NodeKind::Text
+                        && text
+                            .text
+                            .as_deref()
+                            .is_some_and(|text| text.starts_with(char::is_alphanumeric)) =>
+                {
+                    self.start(child.line);
+                }
                 _ => {
                     self.simple = false;
-                    self.first_text = None;
+                    self.owner = None;
                 }
             }
         }
-        self.first_text
+        self.owner
+    }
+
+    fn start(&mut self, line: u32) {
+        self.owner
+            .get_or_insert_with(|| SourceOccurrence::next(&mut self.occurrences, line));
     }
 }
 
@@ -183,7 +211,7 @@ fn collect_ast_topology(
     node: &Node,
     inside_table: bool,
     cell: Option<EquationCell>,
-    (section_line, paragraph_line): (u32, Option<u32>),
+    (section_owner, paragraph): (SourceOccurrence, Option<SourceOccurrence>),
     topology: &mut AstTopology,
     spacing: &ordinal_labels::SourceContext,
     column_bodies: &mut ColumnBodies,
@@ -194,17 +222,17 @@ fn collect_ast_topology(
     let blocks = destination == SourceDestination::Blocks;
     let cell = column_bodies.addresses.remove(&node.id).or(cell);
     let section = matches!(node.macro_token.as_deref(), Some("Sh" | "Ss" | "SH" | "SS"));
-    let section_line = if section && node.kind == NodeKind::Block {
-        node.line
+    let section_owner = if section && node.kind == NodeKind::Block {
+        SourceOccurrence::next(&mut column_bodies.sections, node.line)
     } else {
-        section_line
+        section_owner
     };
     record_equation(
         node,
         inside_table,
         blocks,
         cell,
-        (section_line, paragraph_line),
+        (section_owner, paragraph),
         &mut topology.equations,
     );
     if blocks && node.kind == NodeKind::Block && node.line > 0 {
@@ -216,10 +244,11 @@ fn collect_ast_topology(
     let mut paragraph = ParagraphWitness {
         section_body: section && node.kind == NodeKind::Body && blocks,
         simple: section && node.kind == NodeKind::Body && blocks,
-        first_text: None,
+        owner: None,
+        occurrences: BTreeMap::new(),
     };
     for child in &node.children {
-        let first_text = paragraph.observe(child);
+        let owner = paragraph.observe(child);
         if blocks
             && child.kind == NodeKind::Table
             && spacing.destination(child) == Some(SourceDestination::Blocks)
@@ -254,7 +283,7 @@ fn collect_ast_topology(
                 child,
                 true,
                 cell,
-                (section_line, None),
+                (section_owner, None),
                 topology,
                 spacing,
                 column_bodies,
@@ -266,8 +295,8 @@ fn collect_ast_topology(
             inside_table || blocks && is_table_container(node),
             cell,
             (
-                section_line,
-                first_text.filter(|_| child.equation_inline == Some(true)),
+                section_owner,
+                owner.filter(|_| child.equation_inline == Some(true)),
             ),
             topology,
             spacing,
@@ -318,7 +347,7 @@ fn record_equation(
     inside_table: bool,
     blocks: bool,
     cell: Option<EquationCell>,
-    (section_line, paragraph_line): (u32, Option<u32>),
+    (section_owner, paragraph): (SourceOccurrence, Option<SourceOccurrence>),
     equations: &mut Vec<AstEquationTopology>,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
@@ -335,8 +364,8 @@ fn record_equation(
             value: equation_visible_text(&equation.readable_text()),
             cell,
             unproved_cell: inside_table && cell.is_none(),
-            section_line,
-            paragraph_line,
+            section: section_owner,
+            paragraph,
         });
     }
 }

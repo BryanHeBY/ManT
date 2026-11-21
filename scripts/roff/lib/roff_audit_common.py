@@ -22,6 +22,7 @@ import os
 import re
 import shutil
 import subprocess
+import zlib
 from collections import Counter
 from pathlib import Path
 from typing import Sequence
@@ -253,12 +254,18 @@ def positive_integer(value: str) -> int:
     return parsed
 
 
-def discover_pages(roots: Sequence[Path]) -> list[Path]:
+def discover_pages(roots: Sequence[Path], *, strict: bool = False) -> list[Path]:
+    def report(error: OSError) -> None:
+        if strict:
+            raise ValueError(f"could not enumerate manual root: {error}") from error
+
     pages: set[Path] = set()
     for root in roots:
         if not root.is_dir():
             raise ValueError(f"manual root is not a directory: {root}")
-        for path in root.rglob("*"):
+        paths = (Path(folder) / name for folder, dirs, files in os.walk(root, onerror=report)
+                 for name in (*dirs, *files)) if strict else root.rglob("*")
+        for path in paths:
             if (path.is_file() or path.is_symlink()) and MANUAL_SUFFIX.search(path.name):
                 pages.add(path)
     return sorted(pages, key=lambda path: path.as_posix())
@@ -300,28 +307,40 @@ def manual_hierarchy_root(path: Path, roots: Sequence[Path]) -> Path | None:
     return None
 
 
-def source_bytes(path: Path) -> bytes | None:
+def decode_source(path: Path) -> bytes:
+    """Decode one page or report the decompressor's page-local failure."""
+    if path.name.endswith(".gz"):
+        with gzip.open(path, "rb") as stream:
+            return stream.read()
+    if path.name.endswith(".bz2"):
+        with bz2.open(path, "rb") as stream:
+            return stream.read()
+    if path.name.endswith(".xz"):
+        with lzma.open(path, "rb") as stream:
+            return stream.read()
+    if path.name.endswith(".zst"):
+        zstd = shutil.which("zstd")
+        if zstd is None:
+            raise OSError("zstd decompressor not found")
+        result = subprocess.run(
+            [zstd, "--decompress", "--stdout", str(path)], capture_output=True, check=False,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr.decode("utf-8", errors="replace").strip()
+                          or f"zstd exited with status {result.returncode}")
+        return result.stdout
+    return path.read_bytes()
+
+
+def read_source(path: Path) -> tuple[bytes | None, str | None]:
     try:
-        if path.name.endswith(".gz"):
-            return gzip.open(path, "rb").read()
-        if path.name.endswith(".bz2"):
-            return bz2.open(path, "rb").read()
-        if path.name.endswith(".xz"):
-            return lzma.open(path, "rb").read()
-        if path.name.endswith(".zst"):
-            zstd = shutil.which("zstd")
-            if zstd is None:
-                return None
-            result = subprocess.run(
-                [zstd, "--decompress", "--stdout", str(path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            return result.stdout if result.returncode == 0 else None
-        return path.read_bytes()
-    except OSError:
-        return None
+        return decode_source(path), None
+    except (OSError, EOFError, lzma.LZMAError, zlib.error) as error:
+        return None, " ".join(str(error).splitlines()) or type(error).__name__
+
+
+def source_bytes(path: Path) -> bytes | None:
+    return read_source(path)[0]
 
 
 def source_digest(path: Path) -> str | None:

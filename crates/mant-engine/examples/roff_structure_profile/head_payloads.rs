@@ -88,7 +88,7 @@ struct TermPayload {
     displays: usize,
     field: literal_rows::Field,
     short_rows: Option<literal_rows::Rows>,
-    function_joins: HashSet<usize>,
+    joins: HashMap<usize, &'static str>,
 }
 
 impl TermPayload {
@@ -121,26 +121,31 @@ impl TermPayload {
         self.opaque_words = true;
     }
 
-    fn compound_spellings(&self) -> Vec<Option<Vec<String>>> {
-        self.atoms
-            .windows(2)
-            .enumerate()
-            .map(|(index, atoms)| {
-                self.function_joins.contains(&index).then(|| {
-                    let [name, argument] = atoms else {
-                        unreachable!("two atoms")
-                    };
-                    name.spellings()
-                        .filter(|word| word.ends_with('('))
-                        .flat_map(|name| {
-                            argument
-                                .spellings()
-                                .map(move |value| format!("{name}{value}"))
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect()
+    fn compound_spellings(&self) -> HashMap<usize, HashMap<String, usize>> {
+        let mut compounds = HashMap::new();
+        for &index in self.joins.keys() {
+            let first = &self.atoms[index];
+            let mut stem = first.value.clone();
+            // Each edge has one source-proved separator. Generate only
+            // consecutive prefixes of that chain, not a product of wrappers.
+            for end in (index + 1..self.atoms.len()).take(32) {
+                let Some(separator) = self.joins.get(&(end - 1)) else {
+                    break;
+                };
+                let last = &self.atoms[end];
+                stem.push_str(separator);
+                for spelling in last.spellings() {
+                    for left in ["", first.wrappers.0.as_str()] {
+                        compounds
+                            .entry(index)
+                            .or_insert_with(HashMap::new)
+                            .insert(format!("{left}{stem}{spelling}"), end - index);
+                    }
+                }
+                stem.push_str(&last.value);
+            }
+        }
+        compounds
     }
 
     fn compare(
@@ -159,7 +164,7 @@ impl TermPayload {
             .iter()
             .filter(|item| !matches!(item.origin, Origin::Equation))
             .flat_map(ExpectedAtom::spellings)
-            .chain(compound.iter().flatten().flatten().cloned())
+            .chain(compound.values().flat_map(|words| words.keys().cloned()))
             .collect();
         let mut observation = TermObservation::default();
         for (index, term) in terms.iter().enumerate() {
@@ -176,16 +181,14 @@ impl TermPayload {
         let mut witnesses = self.atoms.iter().enumerate();
         while let Some((index, expected)) = witnesses.next() {
             let joined = |item: &ObservedAtom| {
-                !item.equation
-                    && compound
-                        .get(index)
-                        .and_then(Option::as_ref)
-                        .is_some_and(|spellings| spellings.contains(&item.value))
+                (!item.equation)
+                    .then(|| compound.get(&index)?.get(&item.value))
+                    .flatten()
             };
             let matches = |item: &ObservedAtom| {
                 item.equation == matches!(expected.origin, Origin::Equation)
                     && expected.spellings().any(|word| word == item.value)
-                    || joined(item)
+                    || joined(item).is_some()
             };
             let found = if self.opaque_words {
                 observed.find(|item| matches(item))
@@ -199,8 +202,8 @@ impl TermPayload {
                 ));
                 return;
             };
-            if joined(found) {
-                witnesses.next();
+            if let Some(&extra) = joined(found) {
+                witnesses.nth(extra - 1);
             }
             if let Some(row) = expected.row {
                 if let Some((source, projected, term)) = previous_row {
@@ -572,7 +575,7 @@ impl HeadPayloads {
                 if node.macro_token.as_deref() == Some("Fo") && from > start {
                     payload.atoms[from - 1].wrappers.1.push_str(&left);
                     if let Some(first) = payload.atoms.get(from)
-                        && first.row.is_some()
+                        && (first.row.is_some() || matches!(first.origin, Origin::Equation))
                         && !first.wrappers.0.is_empty()
                     {
                         // A nested enclosure can emit its opener before
@@ -588,7 +591,7 @@ impl HeadPayloads {
                             first.row.is_none() && !matches!(first.origin, Origin::Equation)
                         })
                     {
-                        payload.function_joins.insert(from - 1);
+                        payload.joins.insert(from - 1, "(");
                     }
                 } else if let Some(first) = payload.atoms.get_mut(from) {
                     first.wrappers.0.insert_str(0, &left);

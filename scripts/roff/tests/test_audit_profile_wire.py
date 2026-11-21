@@ -389,10 +389,10 @@ class AuditProfileWireTests(unittest.TestCase):
                 broken = deepcopy(response)
                 broken['topology'][side]['tableRows'][0]['kind'] = kind
                 self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
-            if side == 'observed':
-                broken = deepcopy(response)
-                broken['topology'][side]['tableRows'][0]['cells'][0]['empty'] = True
-                self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
+            broken = deepcopy(response)
+            marker = 'empty' if side == 'observed' else 'verticalContinuation'
+            broken['topology'][side]['tableRows'][0]['cells'][0][marker] = True
+            self.assertEqual(self.finding(structure, broken).status, 'hard-failure')
             for key, wrong in (
                 ('tableSourceLine', 99), ('tableSourceColumn', 9), ('tableOccurrence', 2),
                 ('rowIndex', 2), ('cellIndex', 1), ('cellIndex', False),

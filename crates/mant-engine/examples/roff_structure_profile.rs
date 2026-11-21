@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v27";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v28";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,9 +159,30 @@ struct IrTopology {
     table_rows: Vec<IrTableRowTopology>,
     equations: Vec<IrEquationTopology>,
     #[serde(skip)]
-    section_line: u32,
+    section: SourceOccurrence,
+    #[serde(skip)]
+    paragraph: Option<SourceOccurrence>,
     #[serde(skip)]
     table_occurrences: BTreeMap<(u32, u32), usize>,
+    #[serde(skip)]
+    section_occurrences: BTreeMap<u32, usize>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+struct SourceOccurrence {
+    line: u32,
+    occurrence: usize,
+}
+
+impl SourceOccurrence {
+    fn next(occurrences: &mut BTreeMap<u32, usize>, line: u32) -> Self {
+        let index = occurrences.entry(line).or_default();
+        *index += 1;
+        Self {
+            line,
+            occurrence: *index,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
@@ -191,9 +212,9 @@ struct AstEquationTopology {
     cell: Option<EquationCell>,
     unproved_cell: bool,
     #[serde(skip)]
-    section_line: u32,
+    section: SourceOccurrence,
     #[serde(skip)]
-    paragraph_line: Option<u32>,
+    paragraph: Option<SourceOccurrence>,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -204,7 +225,9 @@ struct IrEquationTopology {
     value: String,
     cell: Option<EquationCell>,
     #[serde(skip)]
-    section_line: u32,
+    section: SourceOccurrence,
+    #[serde(skip)]
+    paragraph: Option<SourceOccurrence>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]

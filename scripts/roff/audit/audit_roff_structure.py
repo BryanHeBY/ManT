@@ -16,16 +16,11 @@ focused regression. Ordinary CI runs only the script's dependency-free
 from __future__ import annotations
 
 import argparse
-import bz2
 import csv
-import gzip
 import hashlib
 import json
-import lzma
 import os
 import re
-import shutil
-import subprocess
 import sys
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -35,7 +30,7 @@ from typing import Iterable, Sequence
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
     SourceReview, discover_pages, is_nonnegative_integer, manual_section, ordinal_source_reviews,
-    run_jsonl_profile_batch, source_reviews,
+    read_source, run_jsonl_profile_batch, source_digest, source_reviews,
 )
 
 
@@ -44,7 +39,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v27"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v28"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -269,35 +264,6 @@ def manual_hierarchy_root(path: Path, roots: Sequence[Path]) -> Path | None:
     return None
 
 
-def source_bytes(path: Path) -> bytes | None:
-    try:
-        if path.name.endswith(".gz"):
-            return gzip.open(path, "rb").read()
-        if path.name.endswith(".bz2"):
-            return bz2.open(path, "rb").read()
-        if path.name.endswith(".xz"):
-            return lzma.open(path, "rb").read()
-        if path.name.endswith(".zst"):
-            zstd = shutil.which("zstd")
-            if zstd is None:
-                return None
-            result = subprocess.run(
-                [zstd, "--decompress", "--stdout", str(path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            return result.stdout if result.returncode == 0 else None
-        return path.read_bytes()
-    except OSError:
-        return None
-
-
-def source_digest(path: Path) -> str | None:
-    source = source_bytes(path)
-    return hashlib.sha256(source).hexdigest() if source is not None else None
-
-
 def compile_source_patterns(values: Sequence[str] | None) -> list[re.Pattern[str]]:
     patterns = []
     for value in values or []:
@@ -308,20 +274,19 @@ def compile_source_patterns(values: Sequence[str] | None) -> list[re.Pattern[str
     return patterns
 
 
-def filter_pages_by_source(
-    pages: Sequence[Path], patterns: Sequence[re.Pattern[str]]
-) -> tuple[list[Path], list[Path]]:
-    if not patterns:
-        return list(pages), []
-    selected = []
-    unreadable = []
+def observe_sources(pages: Sequence[Path], roots: Sequence[Path], patterns: Sequence[re.Pattern[str]]):
+    records, failures = {}, {}
     for path in pages:
-        source = source_bytes(path)
-        if source is None:
-            unreadable.append(path)
-        elif all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
-            selected.append(path)
-    return selected, unreadable
+        source, error = read_source(path)
+        label = relative_label(path, roots)
+        if error is not None:
+            failures[path] = error
+            if not patterns:
+                records[path] = label, None
+        elif source is not None:
+            if not patterns or all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
+                records[path] = label, hashlib.sha256(source).hexdigest()
+    return records, failures
 
 
 def stable_sample(pages: Sequence[Path], maximum: int) -> list[Path]:
@@ -429,7 +394,7 @@ def write_structure_database(path: Path, entries: Iterable[AuditRecord]) -> None
     temporary.replace(path)
 
 
-RetryIdentity = tuple[str, str, str | None]
+RetryIdentity = tuple[str, str, str | None, str]
 
 
 def read_retry_order(path: Path) -> dict[RetryIdentity, None]:
@@ -442,7 +407,8 @@ def read_retry_order(path: Path) -> dict[RetryIdentity, None]:
         return {}
     attempts = {}
     for item in document["attempted"]:
-        if (not isinstance(item, list) or len(item) != 3
+        if (not isinstance(item, list) or len(item) != 4
+                or not isinstance(item[3], str)
                 or not all(isinstance(value, str) and value for value in item[:2])
                 or (item[2] is not None and (not isinstance(item[2], str)
                                             or not re.fullmatch(r"[a-f0-9]{64}", item[2])))):
@@ -646,7 +612,8 @@ def valid_structure_topology(value: object) -> bool:
                 index = cell["cellIndex"]
                 if row is None or row["kind"] != "data" or index >= len(row["cells"]):
                     return False
-                if side == "observed" and row["cells"][index]["empty"]:
+                excluded = "empty" if side == "observed" else "verticalContinuation"
+                if row["cells"][index][excluded]:
                     return False
     return True
 
@@ -747,20 +714,24 @@ def main(argv: Sequence[str]) -> int:
             )
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
         corpus = arguments.corpus or ("fixtures" if not arguments.manpath else "local-manpath")
-        all_pages = discover_pages(roots)
-        if arguments.man_section:
-            sections = set(arguments.man_section)
-            all_pages = [page for page in all_pages if manual_section(page) in sections]
-        all_pages, unreadable = filter_pages_by_source(
-            all_pages, compile_source_patterns(arguments.source_pattern)
-        )
-        records = {
-            page: (relative_label(page, roots), source_digest(page)) for page in all_pages
-        }
+        complete = not any((arguments.man_section, arguments.source_pattern, arguments.max_pages,
+                            arguments.max_pages_per_section, arguments.replay_fidelity_records,
+                            arguments.recorded_only))
+        all_pages = discover_pages(roots, strict=complete)
+        root_scope = json.dumps([str(root) for root in roots])
         database = read_structure_database(arguments.audit_db)
         retry_path = arguments.audit_db.with_suffix(arguments.audit_db.suffix + ".retries.json")
         retries = read_retry_order(retry_path)
-        pages = list(all_pages)
+        if complete:
+            discovered = {relative_label(page, roots) for page in all_pages}
+            retries = {key: None for key in retries
+                       if key[0] != corpus or key[3] != root_scope or key[1] in discovered}
+        if arguments.man_section:
+            sections = set(arguments.man_section)
+            all_pages = [page for page in all_pages if manual_section(page) in sections]
+        patterns = compile_source_patterns(arguments.source_pattern)
+        records, unreadable = observe_sources(all_pages, roots, patterns)
+        pages = list(records)
         if arguments.replay_fidelity_records:
             identities = read_fidelity_identities(arguments.fidelity_db, corpus)
             pages = [
@@ -794,7 +765,7 @@ def main(argv: Sequence[str]) -> int:
                     previous = database.get(key)
                     legacy_retry = (previous is not None and previous.profile_schema == PROFILE_SCHEMA
                                     and previous.scan_status == "hard-failure")
-                    return order.get(key, int(legacy_retry))
+                    return order.get((*key, root_scope), int(legacy_retry))
 
                 pages.sort(key=priority)
         pages = (
@@ -806,12 +777,14 @@ def main(argv: Sequence[str]) -> int:
         print(f"audit-roff-structure: {error}", file=sys.stderr)
         return 2
 
-    for path in unreadable:
+    for path, reason in (unreadable.items() if patterns else ()):
         print(
-            f"audit-roff-structure: source pattern could not inspect unreadable path: {path}",
+            f"audit-roff-structure: source pattern could not inspect unreadable path: {path}: {reason}",
             file=sys.stderr,
         )
     if not pages:
+        if complete:
+            write_retry_order(retry_path, retries)
         print("audit-roff-structure: no selected manual pages")
         return 0
 
@@ -824,7 +797,12 @@ def main(argv: Sequence[str]) -> int:
     print()
 
     try:
-        findings = list(profile_findings(pages, roots, arguments.timeout, arguments.profiler))
+        readable = [page for page in pages if page not in unreadable]
+        findings = list(profile_findings(readable, roots, arguments.timeout, arguments.profiler))
+        findings.extend(
+            Finding(records[page][0], "hard-failure", [], f"could not decode source: {unreadable[page]}")
+            for page in pages if page in unreadable
+        )
     except ValueError as error:
         print(f"audit-roff-structure: {error}", file=sys.stderr)
         return 2
@@ -832,12 +810,12 @@ def main(argv: Sequence[str]) -> int:
     source_review_count = sum(len(finding.source_review) for finding in findings)
     by_label = {finding.path: finding for finding in findings}
     selected_labels = {(corpus, records[path][0]) for path in pages}
-    retries = {key: None for key in retries if key[:2] not in selected_labels}
+    retries = {key: None for key in retries if key[3] != root_scope or key[:2] not in selected_labels}
     for path in pages:
         label, digest = records[path]
         finding = by_label[label]
         if finding.status == "hard-failure" or digest is None:
-            retries[(corpus, label, digest)] = None
+            retries[(corpus, label, digest, root_scope)] = None
         if not arguments.findings_only or finding.status != "clean":
             detail = f" — {finding.detail}" if finding.detail else ""
             observations = "; ".join([

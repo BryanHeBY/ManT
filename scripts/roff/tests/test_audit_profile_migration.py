@@ -1,10 +1,14 @@
 """Exercise stale ledger selection without changing human review ownership."""
 
+import bz2
 import contextlib
 import gzip
 import io
 import json
+import lzma
 from pathlib import Path
+import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -47,12 +51,12 @@ class AuditProfileMigrationTests(unittest.TestCase):
                           contextlib.redirect_stdout(io.StringIO())):
                         for _ in range(3):
                             scan(quota, '1')
-                        self.assertEqual(visits, [a, b, c])
+                        self.assertEqual(visits, [b, c] if undecodable else [a, b, c])
                         self.assertEqual(len(structure.read_structure_database(ledger)), 2 if undecodable else 3)
                         failed.remove(b)
                         self.assertEqual(scan(quota, '1'), 1)
                         self.assertEqual(scan(quota, '1'), 0)
-                        self.assertEqual(visits[-2:], [a, b])
+                        self.assertEqual(visits[-2:], [c, b] if undecodable else [a, b])
                         if undecodable:
                             a.write_bytes(gzip.compress(source))
                         failed.clear()
@@ -62,6 +66,72 @@ class AuditProfileMigrationTests(unittest.TestCase):
                         self.assertEqual(len(records), 3)
                         self.assertTrue(all(record.scan_status == 'clean' for record in records))
                         self.assertFalse(ledger.with_suffix('.csv.retries.json').exists())
+
+    def test_bad_compression_is_page_local_and_never_stamps_an_identity(self):
+        def zstd_compress(source):
+            return subprocess.run(['zstd', '-q', '-c'], input=source, capture_output=True, check=True).stdout
+
+        compressors = [('gz', gzip.compress), ('bz2', bz2.compress), ('xz', lzma.compress)]
+        if shutil.which('zstd'):
+            compressors.append(('zst', zstd_compress))
+        for suffix, compress in compressors:
+            for bad in ('short', 'header'):
+                with self.subTest(suffix=suffix, bad=bad), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    source = b'.TH PROBE 1\n.SH DESCRIPTION\nTEXT\n'
+                    healthy = root / 'a.1'
+                    damaged = root / f'z.1.{suffix}'
+                    healthy.write_bytes(source)
+                    packed = compress(source)
+                    damaged.write_bytes(packed[:-1] if bad == 'short' else b'invalid compressed input')
+                    ledger = root / 'audit.csv'
+                    args = ['--manpath', str(root), '--profiler', str(healthy), '--audit-db', str(ledger)]
+
+                    def probe(selected, *_args):
+                        return [structure.Finding(structure.relative_label(page, [root]), 'clean', []) for page in selected]
+
+                    with (patch.object(structure, 'profile_findings', side_effect=probe) as profile,
+                          contextlib.redirect_stdout(io.StringIO()) as output,
+                          contextlib.redirect_stderr(io.StringIO()) as diagnostics):
+                        self.assertEqual(structure.main([*args, '--source-pattern', 'DESCRIPTION']), 0)
+                        self.assertIn(damaged.name, diagnostics.getvalue())
+                        self.assertEqual(profile.call_args.args[0], [healthy])
+                        self.assertEqual(structure.main([*args, '--max-pages', '1']), 1)
+                        self.assertIn('could not decode source:', output.getvalue())
+                        self.assertEqual([Path(row.path).name for row in structure.read_structure_database(ledger).values()],
+                                         [healthy.name])
+                        damaged.write_bytes(packed)
+                        self.assertEqual(structure.main([*args, '--max-pages-per-section', '1']), 0)
+                        self.assertEqual(profile.call_args.args[0], [damaged])
+                        rows = list(structure.read_structure_database(ledger).values())
+                        self.assertEqual([Path(row.path).name for row in rows], [healthy.name, damaged.name])
+                        self.assertEqual(rows[1].digest, rows[0].digest)
+
+    def test_retry_pruning_requires_complete_enumeration_of_the_same_scope(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(directory)
+            other = root / 'other'
+            other.mkdir()
+            page = root / 'a.1.gz'
+            page.write_bytes(b'truncated')
+            profiler = root / 'profiler'
+            profiler.touch()
+            ledger = root / 'audit.csv'
+            retry = ledger.with_suffix('.csv.retries.json')
+            args = ['--profiler', str(profiler), '--audit-db', str(ledger)]
+            same = [*args, '--manpath', str(root), '--corpus', 'first']
+            self.assertEqual(structure.main(same), 1)
+            before = retry.read_bytes()
+            page.unlink()
+            for incomplete in (['--max-pages', '1'], ['--source-pattern', 'DESCRIPTION'],
+                               ['--man-section', '7'], ['--recorded-only']):
+                self.assertEqual(structure.main([*same, *incomplete]), 0)
+                self.assertEqual(retry.read_bytes(), before)
+            self.assertEqual(structure.main([*same, '--corpus', 'second']), 0)
+            self.assertEqual(structure.main([*args, '--manpath', str(other), '--corpus', 'first']), 0)
+            self.assertEqual(retry.read_bytes(), before)
+            self.assertEqual(structure.main([*same, '--recheck-recorded']), 0)
+            self.assertFalse(retry.exists())
 
     def test_structure_limited_scans_cover_new_pages_before_retrying_persistent_failures(self):
         for quota in ('--max-pages', '--max-pages-per-section'):

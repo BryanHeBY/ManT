@@ -2,7 +2,7 @@
 use super::{
     Block, Document, EquationCell, EquationContext, Inline, IrEquationTopology, IrListTopology,
     IrStructure, IrTableCellTopology, IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind,
-    Section,
+    Section, SourceOccurrence,
 };
 
 pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
@@ -28,7 +28,10 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
 }
 
 fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut IrTopology) {
-    topology.section_line = section.source.map_or(0, |source| source.line);
+    topology.section = SourceOccurrence::next(
+        &mut topology.section_occurrences,
+        section.source.map_or(0, |source| source.line),
+    );
     profile.section_outcomes.record_heading(section);
     collect_inlines(
         &section.heading.content,
@@ -37,7 +40,17 @@ fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut 
         profile,
         topology,
     );
-    collect_blocks(&section.blocks, None, profile, topology);
+    let mut paragraphs = std::collections::BTreeMap::new();
+    for block in &section.blocks {
+        topology.paragraph = match block {
+            Block::Paragraph {
+                source: Some(span), ..
+            } => Some(SourceOccurrence::next(&mut paragraphs, span.line)),
+            _ => None,
+        };
+        collect_blocks(std::slice::from_ref(block), None, profile, topology);
+    }
+    topology.paragraph = None;
     for child in &section.children {
         collect_section(child, profile, topology);
     }
@@ -76,7 +89,8 @@ fn collect_blocks(
                         context: EquationContext::Display,
                         value: value.clone(),
                         cell,
-                        section_line: topology.section_line,
+                        section: topology.section,
+                        paragraph: topology.paragraph,
                     });
                 }
             }
@@ -215,7 +229,8 @@ fn collect_inlines(
                     },
                     value: value.clone(),
                     cell,
-                    section_line: topology.section_line,
+                    section: topology.section,
+                    paragraph: topology.paragraph,
                 });
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}
