@@ -233,8 +233,24 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
+        self.begin_source_row(node);
+        // NODE_LINE settles the previous field under its old settings;
+        // roff_term_pre_ta() then changes stops for the subsequent field.
+        self.execution.execute_tab_configuration(node);
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::Grouped {
-            self.execution.execute_tab_configuration(node);
+            return;
+        }
+        // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
+        // not from the numeric source coordinate. User-macro expansion can
+        // execute several input rows that all retain the call site's line.
+        if self.execution.keep.keeping() && node.flags.line_start {
+            self.execution.keep.phase = KeepPhase::PreKeep;
+        }
+    }
+
+    /// The line/fill preamble precedes the native NOPRT/comment return.
+    pub(in crate::mandoc) fn begin_source_row(&mut self, node: &libmandoc_rs::Node) {
+        if self.execution.observe_no_fill_source_lines == SourceLineObservation::Grouped {
             return;
         }
         let line_entered = self.execution.take_no_fill_source_line_entered(node.id);
@@ -256,15 +272,6 @@ impl InlineBuilder {
         // BRNEVER widens term_fill's target, not term_flushln's final
         // NOBREAK tail comparison (term.c:143-144,250-253).
         self.execution.no_fill_word_active = node.flags.no_fill;
-        // NODE_LINE settles the previous field under its old settings;
-        // roff_term_pre_ta() then changes stops for the subsequent field.
-        self.execution.execute_tab_configuration(node);
-        // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
-        // not from the numeric source coordinate. User-macro expansion can
-        // execute several input rows that all retain the call site's line.
-        if self.execution.keep.keeping() && node.flags.line_start {
-            self.execution.keep.phase = KeepPhase::PreKeep;
-        }
     }
 
     /// Apply the TEXT-specific branches of `print_man_node` and `print_mdoc_node`

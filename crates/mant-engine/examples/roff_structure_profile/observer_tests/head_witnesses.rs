@@ -658,3 +658,46 @@ BODY
         assert!(!violations(&native, &document).is_empty(), "{index}");
     }
 }
+
+#[test]
+fn relocated_literal_tag_keeps_the_source_row_and_the_destination() {
+    // mdoc_term.c::print_mdoc_node() closes the no-fill source row before
+    // NODE_NOPRT skips Tg. A preceding \c suppresses that particular close.
+    // mdoc_validate.c::post_tg() puts the target on the selected successor.
+    for next in [".Em B", ".Sy B", ".No B", ".Li B", "B"] {
+        for (continuation, want) in [("", &["A", "B  C", "D"][..]), ("\\c", &["AB", "C  D"][..])] {
+            let source = format!(
+                "{DISPATCH_HEADER}.Bl -tag -width a\n.It Xo\n.Bd -literal\nA{continuation}\n.Tg dest\n{next}\n.No C\nD\n.Ed\n.Xc\nBODY\n.El\n"
+            );
+            let (expected, native, mut document) = parsed(&source);
+            let (observed, topology) = ir_profile(&document);
+            assert!(
+                compare_structure(&expected, &observed, &native, &topology).is_empty(),
+                "{source}"
+            );
+            let term = first_term(&mut document);
+            let text = mant_ir::inline_plain_text(term);
+            let rows = text
+                .lines()
+                .map(str::trim_start)
+                .filter(|row| !row.is_empty())
+                .collect::<Vec<_>>();
+            assert_eq!(rows, want, "{source}");
+            let anchors = term
+                .iter()
+                .enumerate()
+                .filter(|(_, node)| matches!(node, Inline::Anchor { id, .. } if id == "dest"))
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            let [anchor] = anchors.as_slice() else {
+                panic!("expected one relocated anchor: {term:?}");
+            };
+            assert_eq!(mant_ir::inline_plain_text(&term[..*anchor]).trim(), "A");
+            assert!(
+                mant_ir::inline_plain_text(&term[*anchor + 1..])
+                    .trim_start()
+                    .starts_with('B')
+            );
+        }
+    }
+}

@@ -52,13 +52,15 @@ pub(in crate::mandoc) fn append_inline_node_with_source(
     let previous = siblings.previous;
     let next = siblings.raw_next;
     if node.flags.no_print || node.kind == NodeKind::Comment {
+        // print_mdoc_node() applies NODE_LINE before ignoring NOPRT.
+        builder.begin_source_row(node);
         // Tg can recover an authored target even when native output is hidden.
         if node.macro_token.as_ref() == Some(&Mdoc(MdocMacro::Tg)) {
             scopes::append(builder, node, default_name);
         }
         return;
     }
-    if node.kind == NodeKind::Text && !node.flags.no_print {
+    if node.kind == NodeKind::Text {
         append_source_text(builder, node, siblings);
         builder.finish_executed_node(node);
         return;

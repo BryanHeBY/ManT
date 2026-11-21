@@ -47,6 +47,8 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Preserve authored no-fill row boundaries before invisible mdoc nodes,
+  including explicit targets that validation moves to a visible operand.
 - Keep nested mdoc enclosure operands from changing an outer option's
   declaration scope. Recognize independent options with executed argument
   or path values after a numeric comparison.
