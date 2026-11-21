@@ -13,6 +13,35 @@ mod netbsd_bpf;
 mod openbsd_ports;
 
 #[test]
+fn freebsd_pfilctl_flags_are_operands_of_the_original_command_groups() {
+    // The release member uses the same Aq/Op groups in SYNOPSIS and the
+    // original It heads. CVS's quote handlers generate the delimiters.
+    let content = fixture("freebsd-pfilctl.8.gz");
+    for (line, name, form) in [
+        (56, "link", "link ⟨-i | -o⟩ [-a] hook head"),
+        (84, "unlink", "unlink ⟨-i | -o⟩ hook head"),
+    ] {
+        assert_eq!(explain(&content, name).counts.direct_entry.total, 1);
+        let result = explain(&content, form);
+        assert_eq!(result.counts.direct_entry.total, 1, "{form}");
+        assert!(
+            result
+                .evidence
+                .iter()
+                .any(|hit| { hit.source.is_some_and(|source| source.line == line) }),
+            "{form}"
+        );
+    }
+    for flag in ["-i", "-o", "-a"] {
+        assert_eq!(
+            explain(&content, flag).counts.direct_entry.total,
+            0,
+            "{flag}"
+        );
+    }
+}
+
+#[test]
 fn dragonfly_hack_environment_alternatives_share_the_original_definition() {
     // CVS gives USER and LOGNAME separate Ev scopes with a literal No or.
     let content = fixture("dragonflybsd-hack.6.gz");

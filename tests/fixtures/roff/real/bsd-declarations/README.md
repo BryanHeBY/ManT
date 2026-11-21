@@ -16,6 +16,7 @@ otherwise identical to the upstream release members.
 | `dragonflybsd-netstat.1.gz` | DragonFly BSD 6.4.2 x86-64 release ISO, `usr/share/man/man1/netstat.1.gz` | Both address-family aliases stay values when their parenthetical annotation contains two constants. |
 | `freebsd-awk.1.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man1/awk.1.gz` | Pipe operands stay in the `getline` form, with independent definitions for the three input forms. |
 | `freebsd-ping.8.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man8/ping.8.gz` | The `-M` declaration keeps its ICMP mode arguments visible without indexing them as aliases. |
+| `freebsd-pfilctl.8.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man8/pfilctl.8.gz` | The `link` and `unlink` forms retain their enclosed flag operands, which are not independently declared. |
 | `netbsd-patch.1` | NetBSD 11.0 amd64 `man.tar.xz`, `usr/share/man/man1/patch.1` | The short and long version-control names share one original description. The two argument lists remain invocation syntax. |
 | `openbsd-openssl.1` | OpenBSD 7.9 amd64 `man79.tgz`, `./usr/share/man/man1/openssl.1` | `pem` has one genuine definition and is also mentioned in many option arguments. |
 | `freebsd-ng_deflate.4.gz` | FreeBSD 15.1 amd64 `base.txz`, `usr/share/man/man4/ng_deflate.4.gz` | `NGM_DEFLATE_CONFIG` retains its original description alongside the parenthesized command alias. |

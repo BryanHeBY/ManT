@@ -16,6 +16,7 @@ fixtures,real/bsd-closure/dragonfly-adduser.8.gz,8,d2c2c09556f74e93bac34e9e3d170
 fixtures,real/bsd-closure/dragonfly-gdb.1.gz,1,249b232d42ce6091c61bf1ab85e0e32e9aeb1c30ab73f9ba0d8ef943a55200d2,mant.roff-layout-audit/v3,clean,not-required,
 fixtures,real/bsd-closure/netbsd-drm.4,4,de68d037313c80fce7ecdb72da76e09e6009aafba7ad6673d1a6e7df7c6ed9a3,mant.roff-layout-audit/v3,clean,not-required,
 fixtures,real/bsd-closure/openbsd-current-term.5,5,e756a45cd89d0afef51fde45de85fc69030c2ec151e8937fc6dc5d86886002bf,mant.roff-layout-audit/v3,clean,not-required,
+fixtures,real/bsd-declarations/freebsd-pfilctl.8.gz,8,3dbd8e2281a32db4d6979ce20133fb5a7206bd08a093e8294898d15dc8ad8b2c,mant.roff-layout-audit/v3,clean,not-required,
 fixtures,real/cross-platform-releases/cargo.1.zst,1,c483b800c9aceb307fb15ea4138783838cb379b6f4e306a8dabe84af8fd4b01d,mant.roff-layout-audit/v3,clean,not-required,
 fixtures,real/cross-platform-releases/cmake-toolchains.7.zst,7,4f5e1946154896899d6471c4e5b0bf902394429641231074dcacc71bbc5dd20b,mant.roff-layout-audit/v3,clean,not-required,
 fixtures,real/cross-platform-releases/rustc.1.zst,1,03a056a5b5041454e837f12027e3002ceee1e452530d17a5c55edf14183b9afb,mant.roff-layout-audit/v3,clean,not-required,

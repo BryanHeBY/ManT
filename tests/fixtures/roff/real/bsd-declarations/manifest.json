@@ -902,6 +902,66 @@
           "status": "CapturedWithDiagnostics"
         }
       }
+    },
+    {
+      "file": "freebsd-pfilctl.8.gz",
+      "sourceIdentity": "freebsd-15.1-amd64:man/man8/pfilctl.8.gz",
+      "originUrl": "https://download.freebsd.org/releases/amd64/amd64/15.1-RELEASE/base.txz",
+      "archive": "base.txz",
+      "archiveMember": "usr/share/man/man8/pfilctl.8.gz",
+      "archiveSha256": "3768988b151c20f965679062b065c63a977d6bbb9f47fd83695ec2c40790c18f",
+      "sourceSha256": "40051930870ab489bc29ae9a09b24989049f21919366c94f11a737b08160372b",
+      "fixtureSha256": "40051930870ab489bc29ae9a09b24989049f21919366c94f11a737b08160372b",
+      "decompressedSha256": "3dbd8e2281a32db4d6979ce20133fb5a7206bd08a093e8294898d15dc8ad8b2c",
+      "sourceBytes": 1321,
+      "fixtureBytes": 1321,
+      "retrievedFromRetainedCorpusOn": "2026-11-21",
+      "license": "BSD-2-Clause",
+      "licenseFile": "freebsd-pfilctl.8.gz",
+      "transformation": "None; exact complete compressed member, with a portable fixture basename.",
+      "selectionReason": "Command groups retain their synopsis operands without indexing enclosed flags as declarations.",
+      "oracleProfiles": {
+        "ascii": {
+          "exitCode": 0,
+          "stdoutSha256": "52d974099c89ea5a14996b21098e0a8218134de498fe1aa0c6e815866d6afef2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2046,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "utf8": {
+          "exitCode": 0,
+          "stdoutSha256": "d0d795f343c152fb5ac77fd5922bfa7d8e7dc710075259f4ef71c3732720dfa2",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 2064,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "html": {
+          "exitCode": 0,
+          "stdoutSha256": "9205c0e93de8335af86b696a9040bdc0f79bd46bd493863267596e9138d7848c",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 6662,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "tree": {
+          "exitCode": 0,
+          "stdoutSha256": "97ce01878bcff7f684d4b996534fca2d95ca8cb68438a77c499194850a5e3f42",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 10091,
+          "stderrBytes": 0,
+          "status": "Captured"
+        },
+        "lint": {
+          "exitCode": 1,
+          "stdoutSha256": "1d93a572f618be40251103afaff7d566e28cb4b4c66362949cbf0ff444f004c9",
+          "stderrSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "stdoutBytes": 507,
+          "stderrBytes": 0,
+          "status": "CapturedWithDiagnostics"
+        }
+      }
     }
   ]
 }
