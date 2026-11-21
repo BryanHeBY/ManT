@@ -82,6 +82,35 @@ impl NativeHeadEvidence {
     }
 
     #[cfg(feature = "roff")]
+    pub(crate) fn retire_painted_suffix(&mut self, key: usize, suffix: &str) {
+        let Some(captured) = self.pending_operands.get_mut(&key) else {
+            return;
+        };
+        let Some(prefix) = captured.text.strip_suffix(suffix) else {
+            return;
+        };
+        let end = prefix.len();
+        captured.text.truncate(end);
+        captured.operands.retain_mut(|operand| {
+            if operand.bytes.end > end {
+                operand.bytes.end = end;
+                operand.role = match operand.role {
+                    NativeOperandRole::FlDash(_) => NativeOperandRole::Argument,
+                    NativeOperandRole::ExplicitOption | NativeOperandRole::FlWord(_) => {
+                        NativeOperandRole::ClippedOption
+                    }
+                    role => role.without_complete_spelling(),
+                };
+            }
+            operand.bytes.start < end
+        });
+        captured.bodies.retain_mut(|body| {
+            body.end = body.end.min(end);
+            body.start < end
+        });
+    }
+
+    #[cfg(feature = "roff")]
     pub(crate) fn record_operands(
         &mut self,
         item: &DefinitionItem,

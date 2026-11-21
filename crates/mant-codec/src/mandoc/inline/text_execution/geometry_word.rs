@@ -427,6 +427,7 @@ enum ReadingGlyph<'a> {
     Earlier(usize),
     EntryBlank,
     DeviceAdvance,
+    DeferredBlank(crate::mandoc::inline::flow::field_buffer::DeferredSourceBlank),
 }
 
 impl ReadingGlyph<'_> {
@@ -434,7 +435,7 @@ impl ReadingGlyph<'_> {
         match self {
             Self::Scalar(value) => text.push(value),
             Self::Spelling(value) => text.push_str(value),
-            Self::Earlier(_) | Self::EntryBlank | Self::DeviceAdvance => {}
+            Self::Earlier(_) | Self::EntryBlank | Self::DeviceAdvance | Self::DeferredBlank(_) => {}
         }
     }
 
@@ -443,7 +444,7 @@ impl ReadingGlyph<'_> {
             Self::Scalar(_) | Self::EntryBlank => 1,
             Self::Spelling(text) => text.chars().count(),
             Self::Earlier(count) => count,
-            Self::DeviceAdvance => 0,
+            Self::DeviceAdvance | Self::DeferredBlank(_) => 0,
         }
     }
 }
@@ -851,7 +852,13 @@ fn execute_seed<'a>(
         // carried forward at the end of that earlier word.
         return Err(PriorSlotEdit::Unresolved);
     }
-    let placed = PlacedWord::prepare(seed, retain_suffix, include_advances, editable_marker)?;
+    let placed = PlacedWord::prepare(
+        seed,
+        retain_suffix,
+        include_advances,
+        editable_marker,
+        context.zero_advance.native_word_owner(),
+    )?;
     *context.font = font;
     context.zero_advance.take_armed();
     word.source_continuation = continuation;

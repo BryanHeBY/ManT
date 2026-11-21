@@ -327,6 +327,9 @@ impl FieldBuffer {
                 | FieldWrite::OpaqueRawSlots { .. }
                 | FieldWrite::ReplaceLivePrefix { .. }
                 | FieldWrite::PlacedZeroWidthRetreat { .. } => self.apply_slot_placement(write),
+                FieldWrite::ProveAppendedSlots { cells, fonts } => {
+                    self.prove_appended_slots(entry, *cells, fonts);
+                }
                 FieldWrite::UnprojectedBlank => self.push_unprojected_blank(),
                 FieldWrite::MotionPadding {
                     consumed_by_backbefore,
@@ -339,19 +342,13 @@ impl FieldBuffer {
                 FieldWrite::DeferredBlanks { source, count } => {
                     self.defer_source_blanks(*source, *count);
                 }
+                FieldWrite::PlacedBlank { source } => {
+                    self.place_deferred_blank(*source);
+                }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
                 FieldWrite::RewindWordEntry(columns) => {
-                    // A rewind left in the stream was either unmodeled
-                    // at entry or occurred inside a word. term.c:678–714
-                    // skips it with BACKAFTER, otherwise moves col.
-                    if !std::mem::take(&mut self.backafter_armed)
-                        && (*columns > 0 || self.backbefore_armed)
-                    {
-                        self.word_scan = WordScanPolicy::UnmodeledRewind;
-                        self.scan = None;
-                        self.clear_backtracking();
-                    }
+                    self.unmodeled_word_rewind(*columns);
                 }
                 FieldWrite::CancelBackbefore => {
                     self.clear_backtracking();
@@ -359,6 +356,45 @@ impl FieldBuffer {
             }
         }
         self.finish_word_writes(leading_retreat, consumed_motion_padding)
+    }
+
+    fn prove_appended_slots(
+        &mut self,
+        entry: usize,
+        cells: usize,
+        fonts: &[(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)],
+    ) {
+        if self.cells.len() == entry.saturating_add(cells) {
+            for (range, font) in fonts {
+                self.record_appended_font(entry + range.start..entry + range.end, *font);
+            }
+        } else {
+            self.apply_slot_placement(&FieldWrite::OpaqueRawSlots {
+                styled_suffix: None,
+                keeps_prior_slots: false,
+            });
+        }
+    }
+
+    fn place_deferred_blank(&mut self, source: super::cells::DeferredSourceBlank) {
+        let start = self.cells.len();
+        self.push_placed(&FieldCell::FixedDrawingAdvance(1), 0);
+        self.deferred_blanks.push(super::cells::DeferredBlankRun {
+            start,
+            end: start + 1,
+            source,
+        });
+    }
+
+    fn unmodeled_word_rewind(&mut self, columns: usize) {
+        // A rewind left in the stream was either unmodeled
+        // at entry or occurred inside a word. term.c:678–714
+        // skips it with BACKAFTER, otherwise moves col.
+        if !std::mem::take(&mut self.backafter_armed) && (columns > 0 || self.backbefore_armed) {
+            self.word_scan = WordScanPolicy::UnmodeledRewind;
+            self.scan = None;
+            self.clear_backtracking();
+        }
     }
 
     fn defer_source_blanks(&mut self, source: super::cells::DeferredSourceBlank, count: usize) {

@@ -263,6 +263,11 @@ impl InlineBuilder {
         ) else {
             return false;
         };
+        if print.first && sweep.printed_row.is_some() {
+            // term_field() only emits its advance once there is accepted
+            // ink on the inherited physical row (term.c:389–434).
+            sweep.inherited_row_advance = printed;
+        }
         if print.first {
             sweep.separator_retention = if sweep.printed_row.is_none() {
                 self.printed_separator_retention(

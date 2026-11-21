@@ -192,6 +192,14 @@ pub(in crate::mandoc::inline::flow) struct HangNativeRow {
     pub(in crate::mandoc::inline::flow) transition: HangRowTransition,
     pub(in crate::mandoc::inline::flow) suppress_next_auto_space: bool,
     pub(in crate::mandoc::inline::flow) margin_flush_seen: bool,
+    pub(in crate::mandoc::inline::flow) open_head_ink: Option<OpenHeadInk>,
+}
+
+#[derive(Clone)]
+pub(in crate::mandoc::inline::flow) struct OpenHeadInk {
+    pub(super) scope_depth: usize,
+    pub(super) text: String,
+    pub(super) covered: bool,
 }
 
 #[derive(Clone, Copy, Default, Eq, PartialEq)]
@@ -293,6 +301,7 @@ impl HangNativeRow {
     }
 
     pub(in crate::mandoc::inline::flow) fn endline(&mut self) {
+        self.expire_open_head_ink();
         self.viscol = 0;
         self.page_origin_printed = false;
         self.unprojected_origin_units = 0;
@@ -308,6 +317,24 @@ impl HangNativeRow {
         self.field_discarded = false;
         self.field_last_unbreakable_width = 0;
         self.transition = HangRowTransition::Flushed;
+    }
+
+    pub(super) fn expire_open_head_ink(&mut self) {
+        if self
+            .open_head_ink
+            .as_ref()
+            .is_some_and(|receipt| !receipt.covered)
+        {
+            self.open_head_ink = None;
+        }
+    }
+
+    pub(super) fn cover_open_head_ink(&mut self, columns: usize) {
+        if let Some(receipt) = &mut self.open_head_ink
+            && columns >= receipt.text.chars().count()
+        {
+            receipt.covered = true;
+        }
     }
 }
 impl InlineBuilder {

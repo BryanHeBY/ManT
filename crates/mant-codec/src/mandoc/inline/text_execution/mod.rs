@@ -218,7 +218,16 @@ fn execute_formatter_word_events(
     let can_record_last_font =
         !retained_previous_glyph && !context.zero_advance.is_armed() && prior_edit.is_none();
     let mut last_font = None;
-    let mut decorated_writes = 0;
+    let mut appended_fonts = (can_record_last_font
+        && context.policy.field_authoritative
+        && (opaque_slots
+            || events.iter().any(|event| {
+                matches!(
+                    event,
+                    RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+                )
+            })))
+    .then(native_writes::AppendedFonts::default);
     let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
         unproved_motion |= context.policy.field_authoritative
@@ -263,11 +272,10 @@ fn execute_formatter_word_events(
         );
         if word.native_writes.len() > write_start {
             last_font = Some((context.font.current, write_start));
-            if can_record_last_font {
-                decorated_writes += native_writes::decorated_write_count(
-                    &word.native_writes[write_start..],
-                    context.font.current,
-                );
+            if appended_fonts.as_mut().is_some_and(|append| {
+                !append.record(&word.native_writes[write_start..], context.font.current)
+            }) {
+                appended_fonts = None;
             }
         }
     }
@@ -283,28 +291,38 @@ fn execute_formatter_word_events(
         word.native_writes.push(FieldWrite::UnprovedMotion);
     }
     if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
-        let styled_suffix = last_font.and_then(|(font, start)| {
-            // A preceding pending glyph can change the leading bytes,
-            // but encode1 still writes exact copies of the final styled
-            // glyphs. Fence those copies separately from the older slots.
-            prior_edit
-                .is_none()
-                .then(|| {
-                    native_writes::proved_decorated_tail(events, &word.native_writes[start..], font)
-                })
-                .flatten()
-        });
-        word.native_writes.push(FieldWrite::OpaqueRawSlots {
-            styled_suffix,
-            // The exact final run may contain more than one styled glyph.
-            // Only keep prior slots when it covers every decorated write.
-            keeps_prior_slots: can_record_last_font
-                && styled_suffix.is_some_and(|(count, _)| count == decorated_writes),
-        });
+        record_word_slot_proof(
+            events,
+            &mut word.native_writes,
+            appended_fonts.filter(|_| !unproved_motion),
+            last_font.filter(|_| prior_edit.is_none()),
+        );
     }
     word.finish_content_prefix();
     word.flush_segment();
     finish_text_execution(events, context.zero_advance, word)
+}
+
+fn record_word_slot_proof(
+    events: &[RoffInlineEvent],
+    writes: &mut Vec<FieldWrite>,
+    appended: Option<native_writes::AppendedFonts>,
+    last_font: Option<(Font, usize)>,
+) {
+    if let Some(proof) = appended.and_then(native_writes::AppendedFonts::proof) {
+        writes.push(proof);
+    } else {
+        // A preceding pending glyph can change the leading bytes,
+        // but encode1 still writes exact copies of the final styled
+        // glyphs. Fence those copies separately from the older slots.
+        let styled_suffix = last_font.and_then(|(font, start)| {
+            native_writes::proved_decorated_tail(events, &writes[start..], font)
+        });
+        writes.push(FieldWrite::OpaqueRawSlots {
+            styled_suffix,
+            keeps_prior_slots: false,
+        });
+    }
 }
 
 fn finish_text_execution(

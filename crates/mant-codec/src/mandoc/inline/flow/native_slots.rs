@@ -13,11 +13,13 @@ pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) cell: FieldCell,
     pub(in crate::mandoc::inline) count: usize,
     pub(in crate::mandoc::inline) owner: Option<usize>,
+    pub(in crate::mandoc::inline) drawing_advance: bool,
 }
 
 #[derive(Clone, Debug)]
 enum Pattern {
     Plain(FieldCell),
+    DrawingAdvance,
     Overstrike {
         cells: Arc<[FieldCell]>,
         phase: usize,
@@ -28,6 +30,7 @@ impl Pattern {
     fn cell(&self, offset: usize) -> &FieldCell {
         match self {
             Self::Plain(cell) => cell,
+            Self::DrawingAdvance => &FieldCell::NonBreakingBlank,
             Self::Overstrike { cells, phase } => {
                 &cells[(phase + offset % cells.len()) % cells.len()]
             }
@@ -36,7 +39,7 @@ impl Pattern {
 
     fn shifted(&self, offset: usize) -> Self {
         match self {
-            Self::Plain(_) => self.clone(),
+            Self::Plain(_) | Self::DrawingAdvance => self.clone(),
             Self::Overstrike { cells, phase } => Self::Overstrike {
                 cells: Arc::clone(cells),
                 phase: (phase + offset % cells.len()) % cells.len(),
@@ -56,6 +59,7 @@ impl Pattern {
                     cell: previous.cell.clone(),
                     count: 1,
                     owner: previous.owner,
+                    drawing_advance: previous.drawing_advance,
                 };
                 out.push(tail);
             }
@@ -63,6 +67,7 @@ impl Pattern {
                 cell: cell.clone(),
                 count,
                 owner,
+                drawing_advance: matches!(self, Self::DrawingAdvance),
             });
         };
         let Self::Overstrike { cells, phase } = self else {
@@ -294,7 +299,7 @@ impl NativeSlots {
                     slots.advance(*count, FieldCell::BreakableBlank, None);
                 }
                 FieldCell::FixedDrawingAdvance(count) => {
-                    slots.advance(*count, FieldCell::NonBreakingBlank, None);
+                    slots.advance_pattern(*count, Pattern::DrawingAdvance, None);
                 }
                 _ => slots.write_run(cell.clone(), 1, Some(owner)),
             }
@@ -406,13 +411,17 @@ impl NativeSlots {
     /// `term_word` holds both col and lastcol. Spacing advances through old
     /// cells without overwriting them; a later glyph may split any run.
     fn advance(&mut self, count: usize, blank: FieldCell, owner: Option<usize>) {
+        self.advance_pattern(count, Pattern::Plain(blank), owner);
+    }
+
+    fn advance_pattern(&mut self, count: usize, pattern: Pattern, owner: Option<usize>) {
         let end = self.cursor.saturating_add(count);
         if end > self.extent {
             self.runs.insert(
                 self.extent,
                 Run {
                     end,
-                    pattern: Pattern::Plain(blank),
+                    pattern,
                     owner,
                 },
             );
@@ -452,7 +461,7 @@ impl NativeSlots {
         if relative > 0 {
             let cells = usize::try_from(relative).unwrap_or(usize::MAX).div_ceil(EN);
             let cells = cells.saturating_sub(usize::from(std::mem::take(&mut self.backbefore)));
-            self.advance(cells, FieldCell::NonBreakingBlank, owner);
+            self.advance_pattern(cells, Pattern::DrawingAdvance, owner);
         } else if relative < 0 {
             let cells = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX) / EN;
             let retreat = usize::from(std::mem::take(&mut self.backbefore));

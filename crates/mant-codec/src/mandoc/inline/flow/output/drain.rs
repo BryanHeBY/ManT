@@ -366,8 +366,24 @@ impl InlineBuilder {
         } else {
             self.execution.zero_advance.take_armed()
         };
+        let open_ink = (preserve_rows
+            && occupied_head_row
+            && self.execution.has_persistent_native_field_scope())
+        .then(|| {
+            let accepted = native.as_ref()?.receipt.accepted_passes()?;
+            let pass = accepted.all().last()?;
+            self.execution
+                .definition
+                .as_ref()?
+                .field_buffer
+                .proved_open_ink(pass)
+        })
+        .flatten();
         self.flush_zero_advance();
         self.retire_native_field_with_device(native.as_ref());
+        if let Some(ink) = open_ink {
+            self.execution.remember_open_head_ink(ink);
+        }
         // term_flushln() consumed every old input cell, including the
         // automatic separator after an empty HEAD operand. The persistent
         // native ledger retains viscol/minbl; this old IR projection debt

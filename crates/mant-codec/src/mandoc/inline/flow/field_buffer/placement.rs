@@ -109,14 +109,22 @@ impl FieldBuffer {
             self.raw_tail_fonts.clear();
         }
         if let Some((range, font)) = tail {
-            if let Some((prior, prior_font)) = self.raw_tail_fonts.last_mut()
-                && prior.end == range.start
-                && *prior_font == font
-            {
-                prior.end = range.end;
-            } else {
-                self.raw_tail_fonts.push((range, font));
-            }
+            self.record_appended_font(range, font);
+        }
+    }
+
+    pub(super) fn record_appended_font(
+        &mut self,
+        range: Range<usize>,
+        font: crate::mandoc::roff_escape::RoffFont,
+    ) {
+        if let Some((prior, prior_font)) = self.raw_tail_fonts.last_mut()
+            && prior.end == range.start
+            && *prior_font == font
+        {
+            prior.end = range.end;
+        } else {
+            self.raw_tail_fonts.push((range, font));
         }
     }
 

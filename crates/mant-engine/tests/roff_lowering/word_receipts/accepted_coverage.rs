@@ -1040,3 +1040,151 @@ fn assert_device_row(body: &str, rows: &[&str], link: Option<(&str, &str)>) {
         content = mant_loader::load_markdown_text(&markdown, None).unwrap();
     }
 }
+
+#[test]
+fn accepted_drawing_cells_keep_their_rows_through_motion_and_appended_styles() {
+    // CVS term_fill() accepts raw intervals before term_field() paints them.
+    // A horizontal advance only becomes reading space when it is printed;
+    // later font switches, NBRZW and split passes do not revive covered ink.
+    for (body, rows, link) in [
+        (
+            r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H \p\h'1n'" Em "\:\h'-1n'X""#,
+            &["H", "X"][..],
+            None,
+        ),
+        (
+            r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H \p\h'1n'" Em "\:\h'-1n'\X'tty: link https://x.test'X\X'tty: link'""#,
+            &["H", "X"][..],
+            Some(("https://x.test", "X")),
+        ),
+        (
+            r#".Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H\p\h'2n'" Em "\h'-2n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" Ns Sy "QQ\&""#,
+            &["HXQQ"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" Ns Sy "Q\fRQ""#,
+            &["HXQQ"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" Ns Sy "Q Q""#,
+            &["HXQ", "Q"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\p\X'tty: link https://d.test'D\X'tty: link'\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p" Ns No "\h'-1n'X" Ns Sy "QQ\&""#,
+            &["HXQQ"][..],
+            None,
+        ),
+        (r#".Sy "C\zJ" No "\h'-3n'\&""#, &["J"][..], None),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\h'0n'\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\&\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\h'0n'\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\&\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+    ] {
+        assert_device_row(body, rows, link);
+    }
+}
+
+#[test]
+fn an_open_head_keeps_its_ink_only_until_the_body_paints_the_same_cells() {
+    // Both fixed devices give X ownership of the current column after
+    // consecutive backspaces. The F beyond the cursor stays painted if
+    // roff_term_pre_br or Pp ends the row before term_field emits BODY.
+    for (list, width, shared_gap, body_indent) in [("hang", "4n", 5, 6), ("tag", "12n", 13, 14)] {
+        for boundary in ["", ".br\n", ".Pp\n"] {
+            let source = format!(
+                r#".Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Bl -{list} -width {width}
+.It Xo
+.Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em H Ns No "\h'-1n'X"
+.Xc
+{boundary}.No BODY
+.El
+.Sh ENDTEST
+Done.
+"#
+            );
+            let content =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let reading = mant_render::render_query_man(&content);
+            let rows = description_rows(&reading, &source);
+            let mut expected = Vec::new();
+            if boundary.is_empty() {
+                expected.push(format!("X{}BODY", " ".repeat(shared_gap)));
+            } else {
+                expected.push("XF".to_owned());
+                if boundary == ".Pp\n" {
+                    expected.push(String::new());
+                }
+                expected.push(format!("{}BODY", " ".repeat(body_indent)));
+            }
+            assert_eq!(rows, expected, "{source}");
+            let mut restored = content;
+            for _ in 0..2 {
+                let markdown = mant_codec::encode::render_markdown(&restored);
+                restored = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                let reading = mant_render::render_query_man(&restored);
+                let rows = description_rows(&reading, &source);
+                let with_body = rows.iter().find(|line| line.contains("BODY")).unwrap();
+                if boundary.is_empty() {
+                    assert_eq!(
+                        with_body
+                            .trim_start()
+                            .trim_start_matches("• ")
+                            .split_whitespace()
+                            .collect::<Vec<_>>(),
+                        ["X", "BODY"],
+                        "{markdown}"
+                    );
+                    assert!(!rows.iter().any(|line| line.contains("XF")));
+                } else {
+                    assert_eq!(with_body.trim(), "BODY", "{markdown}");
+                    assert!(
+                        rows.iter()
+                            .any(|line| line.trim().trim_start_matches("• ") == "XF"),
+                        "{markdown}"
+                    );
+                }
+            }
+        }
+    }
+}

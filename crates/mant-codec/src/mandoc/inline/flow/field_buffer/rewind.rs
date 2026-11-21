@@ -150,7 +150,9 @@ impl FieldWrite {
             | Self::ProveRawSlots { .. }
             | Self::ReplaceLivePrefix { .. }
             | Self::OpaqueRawSlots { .. }
-            | Self::Placed { .. } => EntryWrite::Rewind,
+            | Self::ProveAppendedSlots { .. }
+            | Self::Placed { .. }
+            | Self::PlacedBlank { .. } => EntryWrite::Rewind,
         }
     }
 }

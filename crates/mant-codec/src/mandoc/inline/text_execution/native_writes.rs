@@ -1,4 +1,65 @@
 use super::RoffInlineEvent;
+use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
+
+#[derive(Default)]
+pub(super) struct AppendedFonts {
+    cells: usize,
+    fonts: Vec<(std::ops::Range<usize>, super::Font)>,
+    armed: bool,
+    pending: bool,
+}
+
+impl AppendedFonts {
+    /// `encode1()` adds decoration at each graph, not at the end of a
+    /// source word. A final pending glyph hasn't yet caused a retreat.
+    pub(super) fn record(&mut self, writes: &[FieldWrite], font: super::Font) -> bool {
+        for write in writes {
+            match write {
+                FieldWrite::Cell(FieldCell::Graph { text, width: 1 })
+                    if text.is_ascii_graphic() =>
+                {
+                    if self.pending {
+                        return false;
+                    }
+                    self.pending = std::mem::take(&mut self.armed);
+                    if has_native_decoration(font) {
+                        if let Some((run, prior)) = self.fonts.last_mut()
+                            && run.end == self.cells
+                            && *prior == font
+                        {
+                            run.end += 1;
+                        } else {
+                            self.fonts.push((self.cells..self.cells + 1, font));
+                        }
+                    }
+                }
+                FieldWrite::ArmBackafter if !self.pending => {
+                    self.armed = true;
+                    continue;
+                }
+                FieldWrite::Cell(
+                    FieldCell::BreakableBlank
+                    | FieldCell::NonBreakingBlank
+                    | FieldCell::ZeroWidthGraph
+                    | FieldCell::Breakpoint
+                    | FieldCell::BreakMarker,
+                ) if !self.pending => {}
+                _ => return false,
+            }
+            self.cells += 1;
+        }
+        true
+    }
+
+    pub(super) fn proof(self) -> Option<FieldWrite> {
+        (!(self.pending || self.armed)
+            || self.cells <= super::super::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS)
+            .then_some(FieldWrite::ProveAppendedSlots {
+                cells: self.cells,
+                fonts: self.fonts,
+            })
+    }
+}
 
 pub(super) fn proved_decorated_tail(
     events: &[RoffInlineEvent],
@@ -41,25 +102,6 @@ pub(super) fn proved_decorated_tail(
 
 pub(super) fn has_native_decoration(font: super::Font) -> bool {
     !matches!(font, super::Font::Regular | super::Font::Code)
-}
-
-pub(super) fn decorated_write_count(
-    writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
-    font: super::Font,
-) -> usize {
-    use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
-    if !has_native_decoration(font) {
-        return 0;
-    }
-    writes
-        .iter()
-        .filter(|write| {
-            matches!(
-                write,
-                FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen)
-            )
-        })
-        .count()
 }
 
 /// A native `encode1()` writes actual decoration bytes into the input

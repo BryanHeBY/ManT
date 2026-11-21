@@ -135,6 +135,10 @@ pub(in crate::mandoc) enum FieldWrite {
         styled_suffix: Option<(usize, crate::mandoc::roff_escape::RoffFont)>,
         keeps_prior_slots: bool,
     },
+    ProveAppendedSlots {
+        cells: usize,
+        fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
+    },
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).
@@ -157,6 +161,10 @@ pub(in crate::mandoc) enum FieldWrite {
     DeferredBlanks {
         source: DeferredSourceBlank,
         count: usize,
+    },
+    /// A replayed native advance that owns no provisional text scalar.
+    PlacedBlank {
+        source: DeferredSourceBlank,
     },
     ArmBackafter,
     CancelBackafter,

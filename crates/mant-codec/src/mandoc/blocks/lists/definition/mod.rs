@@ -204,6 +204,7 @@ pub(super) fn definition_item(
     {
         capture_deferred_operands(context, head, captured);
     }
+    retire_covered_head_ink(formatter, &mut terms, context, head);
     carry_completed_head_rows(
         node,
         &terms,
@@ -302,6 +303,54 @@ fn capture_deferred_operands(
         .native_heads
         .borrow_mut()
         .capture_operands(head.as_ptr() as usize, captured);
+}
+
+// The device receipt proves the final single-cell glyphs were overpainted
+// by the BODY. Retire their spelling within the original styled owners.
+fn retire_covered_head_ink(
+    formatter: &mut crate::mandoc::formatter::FormatterState,
+    terms: &mut [Vec<Inline>],
+    context: &LoweringContext<'_>,
+    head: &[Node],
+) {
+    if let Some(covered) = formatter.execution.take_covered_head_ink()
+        && let Some(term) = terms.last_mut()
+    {
+        let mut candidate = term.clone();
+        if retire_painted_suffix(&mut candidate, &covered) == Some("") {
+            *term = candidate;
+            context
+                .native_heads
+                .borrow_mut()
+                .retire_painted_suffix(head.as_ptr() as usize, &covered);
+        }
+    }
+}
+
+fn retire_painted_suffix<'a>(nodes: &mut [Inline], mut suffix: &'a str) -> Option<&'a str> {
+    for node in nodes.iter_mut().rev() {
+        if suffix.is_empty() {
+            break;
+        }
+        match node {
+            Inline::Text { value } | Inline::Code { value } => {
+                let covered = value.len().min(suffix.len());
+                let start = value.len() - covered;
+                let rest = suffix.len() - covered;
+                if value.get(start..)? != &suffix[rest..] {
+                    return None;
+                }
+                value.truncate(start);
+                suffix = &suffix[..rest];
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => suffix = retire_painted_suffix(children, suffix)?,
+            Inline::Anchor { .. } => {}
+            Inline::LineBreak {} | Inline::Equation { .. } => return None,
+        }
+    }
+    Some(suffix)
 }
 
 fn finalize_definition_term(mut content: Vec<Inline>) -> mant_ir::DefinitionTerm {

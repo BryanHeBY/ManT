@@ -68,6 +68,11 @@ impl InlineBuilder {
         super::control_trace::projected();
         // This is an actual flush, unlike owner-prefix or word-time views.
         // Its row close can clear the buffer before retirement projects text.
+        if let Some(state) = &mut self.execution.definition {
+            state
+                .hang_row
+                .cover_open_head_ink(native.inherited_row_advance);
+        }
         self.capture_consumed_run_in_boundaries(native);
         let _ = self.capture_consumed_native_tabs(native);
         self.project_definition_field_receipt_using(false, false, Some(native))

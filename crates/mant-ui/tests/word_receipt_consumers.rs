@@ -61,7 +61,7 @@ fn paint(content: &ResolvedContent, width: u16) -> (App, Terminal<TestBackend>) 
 fn copy(app: &mut App, at: (u16, u16), expected: &str) {
     let (column, row) = at;
     let last = column + u16::try_from(expected.width()).unwrap() - 1;
-    select_span(app, column, row, last, None);
+    select_span(app, column, row, last, (last == column).then_some(last + 1));
     assert_eq!(
         copied_selections(app, |request| match request {
             CopyRequest::Selection { text } => text,
@@ -282,6 +282,45 @@ fn printed_link_blanks_keep_their_click_and_copy_ranges_after_reader_readbacks()
                 "ETA",
                 Some(0),
             );
+        }
+    });
+}
+
+#[test]
+fn emitted_link_ink_does_not_inherit_an_unprinted_motion_blank() {
+    // Fixed CVS term_field() paints H and linked X on different passes.
+    let source = r#".Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd example
+.Sh DESCRIPTION
+.Em "\zC\pJ" No "\h'-9n'\&\zFG" Em "H \p\h'1n'" Em "\:\h'-1n'\X'tty: link https://x.test'X\X'tty: link'"
+.Sh ENDTEST
+Done.
+"#;
+    visit_readbacks(source, |content| {
+        for width in [40, 78] {
+            let (mut app, terminal) = paint(content, width);
+            let buffer = terminal.backend().buffer();
+            let (column, row) = only_position(buffer, "X");
+            // Addressable export inserts the Em target as raw HTML on
+            // H's row. The reading row and X's label still start where
+            // the hard break places them.
+            assert_eq!(only_position(buffer, "H").1, row - 1);
+            assert_eq!(column, only_position(buffer, "Done.").0);
+            copy(&mut app, (column, row), "X");
+            let (mut app, _) = paint(content, width);
+            for (x, y, linked) in [
+                (column, row - 1, false),
+                (column, row, true),
+                (column + 1, row, false),
+            ] {
+                click(&mut app, x, y);
+                let expected: Vec<_> = linked.then_some("https://x.test").into_iter().collect();
+                assert_eq!(opened_targets(&mut app), expected);
+            }
         }
     });
 }

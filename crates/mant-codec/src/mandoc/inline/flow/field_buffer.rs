@@ -31,6 +31,9 @@
 /// overflow early return 350-351, tail acceptance 362-366); `term_field()`
 /// 374-444; `encode1()` BACKBEFORE retreat 901-908 (blank: `col--`,
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
+pub(in crate::mandoc::inline) const MAX_EDITABLE_APPEND_CELLS: usize =
+    placement::MAX_REPLAY_PREFIX_CELLS;
+
 mod cells;
 mod drawing;
 mod flush;

@@ -6,7 +6,10 @@ use super::{
     TextExecutionContext, WordExecution,
 };
 use crate::mandoc::inline::{
-    flow::{field_buffer::isolated_passes, native_slots::FillSlot},
+    flow::{
+        field_buffer::{DeferredSourceBlank, isolated_passes},
+        native_slots::FillSlot,
+    },
     font::style::styled_link,
 };
 
@@ -26,6 +29,7 @@ impl<'a> PlacedWord<'a> {
         retain_suffix: bool,
         exact_inner_blanks: bool,
         editable_marker: bool,
+        word_owner: Option<u64>,
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
             placement,
@@ -51,7 +55,7 @@ impl<'a> PlacedWord<'a> {
         if exact_inner_blanks {
             publish_inner_advances(&mut slots, &mut reading, earlier);
         }
-        publish_retained_separator_advances(&mut slots, &mut reading, earlier);
+        defer_retained_separator_advances(&mut slots, &mut reading, earlier, word_owner);
         let settled = super::overprint::settle(&mut slots);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
@@ -114,14 +118,11 @@ impl<'a> PlacedWord<'a> {
                 mark_from_end: end - mark,
             }
         }));
-        if let Some(index) = inherited_pending {
-            // A control such as an empty overstrike can leave both the
-            // old glyph and BACKBEFORE intact. The next real glyph, not
-            // this word boundary, must decide whether to cover it.
-            writes.push(FieldWrite::KeepPlacedRetreat {
+        writes.extend(
+            inherited_pending.map(|index| FieldWrite::KeepPlacedRetreat {
                 from_end: end - index,
-            });
-        }
+            }),
+        );
         writes.extend(next_tail.map(|tail| FieldWrite::RetainDeviceTail(Box::new(tail))));
         Ok(Self {
             slots,
@@ -223,25 +224,43 @@ impl<'a> PlacedWord<'a> {
 /// The next word can leave a short motion after an authored separator in
 /// the same accepted pass. Read it from the replayed slots: an edit can
 /// overwrite that motion, and `term_field()` can still drop it at row end.
-fn publish_retained_separator_advances(
+fn defer_retained_separator_advances(
     slots: &mut [FillSlot],
     reading: &mut Vec<ReadingCell<'_>>,
     earlier: usize,
+    word_owner: Option<u64>,
 ) {
-    for index in 2..slots.len() {
-        let [blank, marker, motion] = &slots[index - 2..=index] else {
-            unreachable!()
-        };
-        if blank.cell != FieldCell::BreakableBlank
-            || !blank
-                .owner
-                .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(1)))
-            || marker.cell != FieldCell::BreakMarker
-            || motion.cell != FieldCell::NonBreakingBlank
+    let Some(word_owner) = word_owner else { return };
+    for index in 1..slots.len() {
+        let motion = &slots[index];
+        if motion.cell != FieldCell::NonBreakingBlank
             || motion.count != 1
             || !motion
                 .owner
-                .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(0)))
+                .is_none_or(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(0)))
+        {
+            continue;
+        }
+        // An unprojected fallback HORIZ can retain the ordinary NBRSP
+        // kind in the prefix. Its preceding authored blank distinguishes
+        // it from a generated entry separator in that representation.
+        let after_authored_break = index >= 2
+            && slots[index - 1].cell == FieldCell::BreakMarker
+            && slots[index - 2].cell == FieldCell::BreakableBlank
+            && slots[index - 2]
+                .owner
+                .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(1)));
+        if !motion.drawing_advance && !after_authored_break {
+            continue;
+        }
+        if !slots[..index]
+            .iter()
+            .rev()
+            .find(|slot| !slot.drawing_advance)
+            .is_some_and(|slot| {
+                slot.cell == FieldCell::BreakMarker
+                    && slot.owner.is_some_and(|owner| owner < earlier)
+            })
         {
             continue;
         }
@@ -250,7 +269,11 @@ fn publish_retained_separator_advances(
         }) else { continue };
         let id = reading.len();
         reading.push(ReadingCell {
-            glyph: ReadingGlyph::Scalar(' '),
+            glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {
+                owner: word_owner,
+                write: index,
+                font: reading[owner].font,
+            }),
             link: None,
             ..reading[owner]
         });
@@ -357,6 +380,7 @@ fn publish_inner_advances(
                     cell: slot.cell.clone(),
                     count: 1,
                     owner: Some(id),
+                    drawing_advance: false,
                 }
             })
             .collect::<Vec<_>>();
@@ -365,6 +389,7 @@ fn publish_inner_advances(
                 cell: slot.cell.clone(),
                 count: slot.count - projected,
                 owner: None,
+                drawing_advance: slot.drawing_advance,
             });
         }
         slots.splice(index..=index, blanks);
@@ -587,6 +612,10 @@ fn resolve_backlines(
 }
 
 fn slot_write(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> FieldWrite {
+    if let Some(ReadingGlyph::DeferredBlank(source)) = slot.owner.map(|owner| reading[owner].glyph)
+    {
+        return FieldWrite::PlacedBlank { source };
+    }
     let count = slot.count;
     let scalars = slot.owner.map_or(0, |id| {
         let read = reading[id];
@@ -665,6 +694,11 @@ fn append_range(
             continue;
         }
         let current = reading[id];
+        if let ReadingGlyph::DeferredBlank(blank) = current.glyph {
+            word.flush_segment();
+            word.output.push(mant_ir::Inline::anchor(blank.marker()));
+            continue;
+        }
         if let ReadingGlyph::Earlier(scalars) = current.glyph {
             if wrote_source
                 && (scalars != 0

@@ -52,8 +52,23 @@ std::thread_local! {
 }
 
 impl FieldBuffer {
+    pub(in crate::mandoc::inline::flow) fn proved_open_ink(
+        &self,
+        pass: &FillPass,
+    ) -> Option<String> {
+        if !self.has_pass_retreats() {
+            return None;
+        }
+        self.prove_device_overprint(pass.start, pass.end)?.overhang
+    }
     pub(in crate::mandoc::inline::flow) fn has_deferred_blanks(&self) -> bool {
         !self.deferred_blanks.is_empty()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_deferred_drawing_advances(&self) -> bool {
+        self.deferred_blanks
+            .iter()
+            .any(|run| self.cells.get(run.start) == Some(&FieldCell::FixedDrawingAdvance(1)))
     }
 
     pub(in crate::mandoc::inline::flow) fn printed_deferred_blanks(
@@ -256,7 +271,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn visit_accepted_covers(
         &self,
         passes: &[FillPass],
-        accept: impl FnMut(usize, usize),
+        accept: impl FnMut(usize, Option<usize>),
     ) {
         self.visit_accepted_overprints(passes, accept, |_| {});
     }
@@ -264,7 +279,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn visit_accepted_overprints(
         &self,
         passes: &[FillPass],
-        mut accept: impl FnMut(usize, usize),
+        mut accept: impl FnMut(usize, Option<usize>),
         mut order: impl FnMut(Vec<usize>),
     ) {
         if !self.has_pass_retreats() {
@@ -314,7 +329,7 @@ impl FieldBuffer {
                     // overwrite its cell with an advancing graph while the
                     // preceding backline still owns the retreat.
                     if target >= start && last_advance.is_some_and(|advance| advance >= mark) {
-                        accept(target, mark);
+                        accept(target, Some(mark));
                     }
                     retreats.next();
                 }

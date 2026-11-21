@@ -56,6 +56,7 @@ impl InlineBuilder {
             viscol: row.viscol,
             printed_row: row.native_row_occupied().then_some(row.viscol),
             emission: NativeFieldEmission::Unprinted,
+            inherited_row_advance: 0,
             separator_retention: None,
             row_origins: Vec::new(),
             field_padding: Vec::new(),

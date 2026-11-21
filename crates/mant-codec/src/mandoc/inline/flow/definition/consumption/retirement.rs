@@ -136,6 +136,9 @@ impl InlineBuilder {
         }
         if let Some(state) = &mut self.execution.definition {
             if let Some(device) = device {
+                if device.ends_row || !device.loop_rows.is_empty() {
+                    state.hang_row.expire_open_head_ink();
+                }
                 state.field_buffer.set_tab_offset(device.tab_offset);
                 // Every real flush owns the final device position, including
                 // a detached HEAD post. NOBREAK may leave that printed row

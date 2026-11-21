@@ -103,8 +103,10 @@ impl HeadOperandCapture {
         // Unlike immediate BACKBEFORE projection, these glyphs remained
         // available for later writes. Only the accepted pass proves clipping.
         buffer.visit_accepted_covers(passes, |target, by| {
-            if let Some(owner) = word_at(target) {
-                self.mark_clipped_operands(std::iter::once(owner), word_at(by));
+            if buffer.projection_length(target, target + 1) != 0
+                && let Some(owner) = word_at(target)
+            {
+                self.mark_clipped_operands(std::iter::once(owner), by.and_then(word_at));
             }
         });
     }

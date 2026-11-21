@@ -284,6 +284,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     let start = output_start.min(nodes.len());
     let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
     let mut positions = BTreeMap::new();
+    let has_drawing_advance = buffer.has_deferred_drawing_advances();
     let mut preceding = 0;
     for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
@@ -313,9 +314,17 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         }
         if let Some(mut index) = owner.checked_sub(1) {
             let mut cut = cell;
+            let (span_end, accepted_end) = if has_drawing_advance {
+                let end = buffer.printed_content_end(pass.start, pass.end);
+                (end, end)
+            } else {
+                (cell, pass.end)
+            };
             if anchors[index].content < cell
-                && buffer.projection_length(anchors[index].content, cell) == 0
-                && let Some(last) = buffer.last_projected_cell(pass.start..pass.end)
+                && buffer
+                    .projection_length(anchors[index].content, span_end.max(anchors[index].content))
+                    == 0
+                && let Some(last) = buffer.last_projected_cell(pass.start..accepted_end)
             {
                 // A replay can resume a word in a control-only interval
                 // after a glyph from an older owner. Its scalar count is

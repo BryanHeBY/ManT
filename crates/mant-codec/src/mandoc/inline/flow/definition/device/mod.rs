@@ -45,6 +45,7 @@ struct NativeFieldSweep {
     viscol: usize,
     printed_row: Option<usize>,
     emission: NativeFieldEmission,
+    inherited_row_advance: usize,
     separator_retention: Option<usize>,
     row_origins: Vec<(String, usize, i32, bool)>,
     field_padding: Vec<(String, usize, usize, bool)>,
@@ -147,6 +148,7 @@ impl NativeFieldSweep {
             unprojected_origin_units: self.unprojected_origin_units,
             printed_row: self.printed_row,
             emission: self.emission,
+            inherited_row_advance: self.inherited_row_advance,
             separator_retention: self.separator_retention,
             separator_field,
             row_origins: self.row_origins,
@@ -191,6 +193,7 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     /// This flush printed an accepted encoded graph, rather than merely
     /// inheriting viscol from an earlier field on the same device row.
     pub(super) emission: NativeFieldEmission,
+    pub(super) inherited_row_advance: usize,
     /// Printed next-field cells left after the accepted row's public origin
     /// already represents its device padding. The automatic native word
     /// blank is separate from that positioning (term.c:113-116,389-427).
