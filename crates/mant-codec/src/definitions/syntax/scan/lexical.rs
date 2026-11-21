@@ -8,6 +8,8 @@ pub(super) struct LexicalState {
     closers: Vec<char>,
     escaped: bool,
     uncertain: bool,
+    #[cfg(feature = "roff")]
+    enclosures: Vec<u32>,
 }
 
 impl LexicalState {
@@ -20,7 +22,42 @@ impl LexicalState {
     }
 
     pub(super) fn group_depth(&self) -> usize {
-        self.closers.len() + usize::from(self.quote.is_some())
+        self.closers.len() + usize::from(self.quote.is_some()) + self.native_depth()
+    }
+
+    #[cfg(not(feature = "roff"))]
+    const fn native_depth(&self) -> usize {
+        0
+    }
+
+    #[cfg(feature = "roff")]
+    fn native_depth(&self) -> usize {
+        self.enclosures.len()
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn observe_enclosure(&mut self, role: super::NativeOperandRole) -> Option<bool> {
+        use super::NativeOperandRole as Role;
+        match role {
+            Role::EnclosureStart { body, .. } if self.group_depth() < MAX_NESTING => {
+                self.enclosures.push(body);
+                Some(false)
+            }
+            Role::EnclosureEnd(body) if self.enclosures.last() == Some(&body) => {
+                self.enclosures.pop();
+                Some(self.is_top_level())
+            }
+            Role::EnclosureStart { .. } | Role::EnclosureEnd(_) => {
+                self.uncertain = true;
+                Some(false)
+            }
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "roff")]
+    pub(super) fn inside_native_enclosure(&self) -> bool {
+        !self.enclosures.is_empty()
     }
 
     /// Return whether this scalar completed one outer quoted/bracketed value.

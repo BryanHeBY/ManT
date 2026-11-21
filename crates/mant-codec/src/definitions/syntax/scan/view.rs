@@ -181,15 +181,13 @@ impl<'a> HeadView<'a> {
                     if ch == '\n' {
                         open.clear();
                         groups.clear();
-                    } else if ch == '-'
-                        && self.native_option_starts(offset)
-                        && matches!(previous, Some((delimiter @ (',' | '|'), end)) if end < offset
-                            || delimiter == ',' && !self.literal_punctuation(end - 1)
-                            || self.option_starts_assignment(offset))
-                    {
-                        while open.last().is_some_and(|angle| !angle.leading) {
-                            open.pop();
-                        }
+                    } else if ch == '-' && self.assignment_alias_boundary(offset, previous) {
+                        retire_assignment_angles(
+                            &mut open,
+                            &mut pairs,
+                            matches!(previous, Some((',', _)))
+                                && self.option_starts_assignment(offset),
+                        );
                     }
                     if !ch.is_whitespace() {
                         previous = Some((ch, offset + ch.len_utf8()));
@@ -219,18 +217,19 @@ impl<'a> HeadView<'a> {
                             open.push(OpenAngle {
                                 offset,
                                 leading,
+                                numeric_close: None,
                                 enclosure: angle_enclosure(operand),
                                 depth: groups.len(),
                             });
                         }
-                        '>' => {
-                            if let Some(angle) = open.pop_if(|angle| {
-                                angle.depth == groups.len()
-                                    && angle.closes_at(&self.text, offset, operand)
-                            }) {
-                                pairs.extend([angle.offset, offset]);
-                            }
-                        }
+                        '>' => Self::close_assignment_angle(
+                            &self.text,
+                            &mut open,
+                            operand,
+                            offset,
+                            groups.len(),
+                            &mut pairs,
+                        ),
                         _ => {}
                     }
                 }
@@ -239,6 +238,38 @@ impl<'a> HeadView<'a> {
             })
             .binary_search(&offset)
             .is_ok()
+    }
+
+    #[cfg(feature = "roff")]
+    fn assignment_alias_boundary(&self, offset: usize, previous: Option<(char, usize)>) -> bool {
+        self.native_option_starts(offset)
+            && matches!(previous, Some((delimiter @ (',' | '|'), end)) if end < offset
+                || delimiter == ',' && !self.literal_punctuation(end - 1)
+                || self.option_starts_assignment(offset))
+    }
+
+    #[cfg(feature = "roff")]
+    fn close_assignment_angle(
+        text: &str,
+        open: &mut Vec<OpenAngle>,
+        operand: Option<&NativeOperand>,
+        offset: usize,
+        depth: usize,
+        pairs: &mut Vec<usize>,
+    ) {
+        let Some(angle) = open.last_mut().filter(|angle| angle.depth == depth) else {
+            return;
+        };
+        if operand.is_some_and(|operand| {
+            operand.bytes.contains(&angle.offset)
+                && text[offset + 1..operand.bytes.end].starts_with(|ch: char| ch.is_ascii_digit())
+        }) {
+            angle.numeric_close = Some(offset);
+        }
+        if angle.closes_at(text, offset, operand) {
+            pairs.extend([angle.offset, offset]);
+            open.pop();
+        }
     }
 
     #[cfg(feature = "roff")]
@@ -254,17 +285,14 @@ impl<'a> HeadView<'a> {
         offset: usize,
         character: char,
     ) -> bool {
-        matches!(character, '<' | '>')
+        matches!(character, '<' | '>' | '⟨' | '⟩')
             && self
                 .operand(offset)
                 .is_some_and(|operand| match operand.role {
-                    NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_) => {
-                        true
-                    }
-                    NativeOperandRole::LiteralValue | NativeOperandRole::Command => {
-                        argument.attached_to_name
-                            && self.text[argument.bytes.start..].starts_with('=')
-                    }
+                    NativeOperandRole::Placeholder { .. }
+                    | NativeOperandRole::PathOperand(_)
+                    | NativeOperandRole::LiteralValue
+                    | NativeOperandRole::Command => true,
                     NativeOperandRole::ExplicitOption => {
                         let rhs_start = argument.bytes.start + 1;
                         argument.attached_to_name
@@ -373,8 +401,24 @@ impl<'a> HeadView<'a> {
 struct OpenAngle {
     offset: usize,
     leading: bool,
+    numeric_close: Option<usize>,
     enclosure: Option<u32>,
     depth: usize,
+}
+
+#[cfg(feature = "roff")]
+fn retire_assignment_angles(open: &mut Vec<OpenAngle>, pairs: &mut Vec<usize>, independent: bool) {
+    while open.last().is_some_and(|angle| !angle.leading) {
+        open.pop();
+    }
+    // A comma and a separately authored assignment resolve a deferred
+    // same-word numeric close in the preceding assignment.
+    if independent
+        && let Some(offset) = open.last().and_then(|angle| angle.numeric_close)
+        && let Some(angle) = open.pop()
+    {
+        pairs.extend([angle.offset, offset]);
+    }
 }
 
 #[cfg(feature = "roff")]

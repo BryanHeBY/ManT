@@ -620,6 +620,39 @@ impl<'a> Scanner<'a> {
             }
         }
         let top_level = self.lexical.is_top_level();
+        let complete_group = self.observe_argument_character(character);
+        if complete_group {
+            self.structured_argument = true;
+        } else if top_level && !character.is_whitespace() {
+            self.structured_argument = false;
+        }
+        self.placeholder = self.placeholder.observe(character, parameter);
+        self.cursor = next_offset;
+    }
+
+    fn observe_argument_character(&mut self, character: char) -> bool {
+        #[cfg(feature = "roff")]
+        {
+            // termp_quote_pre/post emit their delimiters from the enclosure
+            // node. A visually identical operand glyph cannot close it.
+            if let Some(event) = self
+                .view
+                .operand(self.cursor)
+                .filter(|operand| {
+                    matches!(
+                        operand.role,
+                        NativeOperandRole::EnclosureStart { .. }
+                            | NativeOperandRole::EnclosureEnd(_)
+                    ) && self.view.skip_space(operand.bytes.start) == self.cursor
+                })
+                .and_then(|operand| self.lexical.observe_enclosure(operand.role))
+            {
+                return event;
+            }
+            if self.lexical.inside_native_enclosure() {
+                return false;
+            }
+        }
         #[cfg(feature = "roff")]
         let literal_angle = self.argument_start.as_ref().is_some_and(|argument| {
             self.view
@@ -627,16 +660,8 @@ impl<'a> Scanner<'a> {
         });
         #[cfg(not(feature = "roff"))]
         let literal_angle = false;
-        if self
-            .lexical
+        self.lexical
             .observe(if literal_angle { 'x' } else { character })
-        {
-            self.structured_argument = true;
-        } else if top_level && !character.is_whitespace() {
-            self.structured_argument = false;
-        }
-        self.placeholder = self.placeholder.observe(character, parameter);
-        self.cursor = next_offset;
     }
 
     fn complete_bare_parameter(&self, following: usize) -> bool {

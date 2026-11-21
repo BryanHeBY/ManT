@@ -170,13 +170,13 @@ fn open_operand_edges(
             }
         } else if let Some(end) = quote_closer(character) {
             quote = Some(end);
-        } else if (character != '>' || is_paired_angle(offset))
+        } else if (!matches!(character, '>' | '⟩') || is_paired_angle(offset))
             && edges
                 .last()
                 .is_some_and(|&(_, open)| closing(open) == Some(character))
         {
             edges.pop();
-        } else if (!matches!(character, '<' | '>') || is_paired_angle(offset))
+        } else if (!matches!(character, '<' | '>' | '⟨' | '⟩') || is_paired_angle(offset))
             && (closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>'))
         {
             if edges.len() == MAX_NESTING {
@@ -466,6 +466,16 @@ impl AssignmentSyntax {
         if operand.is_empty() {
             return Ok(());
         }
+        if !self.after_space
+            && !self.atom.accepts_new_fragment()
+            && operand
+                .chars()
+                .all(|ch| matches!(ch, '<' | '>' | '⟨' | '⟩'))
+        {
+            // An authored angle suffix glued to a typed value is part
+            // of that spelling, rather than an independent group value.
+            return self.literal(&value[value.trim_end().len()..], Literal::Delimiter);
+        }
         let joined_path = is_path
             && !self.after_space
             && matches!(self.atom, Atom::Path)
@@ -667,9 +677,11 @@ fn is_operand_connector(character: char) -> bool {
 }
 
 fn has_literal_angle(piece: OperandPiece<'_>, view: &HeadView<'_>) -> bool {
-    piece.value.char_indices().any(|(offset, ch)| {
-        matches!(ch, '<' | '>') && !view.paired_assignment_angle(piece.start + offset)
-    })
+    piece.value.split_whitespace().count() == 1
+        && piece.value.char_indices().any(|(offset, ch)| {
+            matches!(ch, '<' | '>' | '⟨' | '⟩')
+                && !view.paired_assignment_angle(piece.start + offset)
+        })
 }
 
 fn relative_path_prefix(value: &str, continuation: &str) -> bool {

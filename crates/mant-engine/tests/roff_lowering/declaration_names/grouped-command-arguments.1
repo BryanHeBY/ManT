@@ -1,0 +1,22 @@
+.Dd November 21, 2026
+.Dt PROBE 8
+.Os
+.Sh NAME
+.Nm probe
+.Nd inspect command groups
+.Sh DESCRIPTION
+.Bl -tag -width Ds
+.It Xo
+.Cm link
+.Aq Fl i | Fl o
+.Op Fl a
+.Ar hook Ar head
+.Xc
+Link a hook.
+.It Xo
+.Cm unlink
+.Aq Fl i | Fl o
+.Ar hook Ar head
+.Xc
+Unlink a hook.
+.El

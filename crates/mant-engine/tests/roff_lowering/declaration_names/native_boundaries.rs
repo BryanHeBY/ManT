@@ -1219,10 +1219,10 @@ fn independent_aliases_use_the_same_cut_for_name_and_form() {
 }
 
 #[test]
-fn pfilctl_command_groups_keep_their_flags_inside_the_form() {
-    // The FreeBSD page uses the same Aq scope in its synopsis and in
-    // both command definitions. CVS prints the labelled It entries.
-    let source = include_str!("freebsd-pfilctl.8");
+fn command_groups_keep_their_flags_inside_the_form() {
+    // CVS termp_quote_pre/post keep Aq/Op delimiters distinct from
+    // the enclosed Fl words. This small source also runs from the crate package.
+    let source = include_str!("grouped-command-arguments.1");
     let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
     for (name, form) in [
         ("link", "link ⟨-i | -o⟩ [-a] hook head"),
@@ -1253,5 +1253,138 @@ fn pfilctl_command_groups_keep_their_flags_inside_the_form() {
         )
         .unwrap();
         assert_eq!(reply.counts.direct_entry.total, count, "{query}");
+    }
+}
+
+const SCOPED_LITERAL_CASES: &[(&str, &[&str], &str, bool)] = &[
+    (
+        "Fl a= Ns Ar ket⟩ , Fl b",
+        &["-a", "-b"],
+        "-a=ket⟩, -b",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar ket\\(ra , Fl b",
+        &["-a", "-b"],
+        "-a=ket⟩, -b",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar ⟨psi , Fl b",
+        &["-a", "-b"],
+        "-a=⟨psi, -b",
+        true,
+    ),
+    ("Fl a= Ns Ar ket , Fl b", &["-a", "-b"], "-a=ket, -b", true),
+    (
+        "Fl a= Ns Ar root Ao Ar x | Fl v Ac , Fl b",
+        &["-a", "-b"],
+        "-a=root ⟨x | -v⟩, -b",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar root Ao Ar x⟩y | Fl v Ac , Fl b",
+        &["-a", "-b"],
+        "-a=root ⟨x⟩y | -v⟩, -b",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar root Ao Li x⟩y<0 | Fl v Ac , Fl b",
+        &["-a", "-b"],
+        "-a=root ⟨x⟩y<0 | -v⟩, -b",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar root Bo Ar x]y | Fl v Bc , Fl b",
+        &["-a", "-b"],
+        "-a=root [x]y | -v], -b",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar <prefix>2 , Fl b= Ns Ar pkg>=2 , Fl c",
+        &["-a", "-b", "-c"],
+        "-a=<prefix>2, -b=pkg>=2, -c",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar <prefix>2 , Fl b= Ns Ar pkg , Fl c",
+        &["-a", "-b", "-c"],
+        "-a=<prefix>2, -b=pkg, -c",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar <prefix>suffix , Fl b= Ns Ar pkg>=2 , Fl c",
+        &["-a", "-b", "-c"],
+        "-a=<prefix>suffix, -b=pkg>=2, -c",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar <x>0 | Fl v Ns Ar > , Fl b",
+        &["-a", "-b"],
+        "-a=<x>0 | -v>, -b",
+        true,
+    ),
+    (
+        "Fl a Li x<y , Fl b= Ns Ar n>=2 , Fl c",
+        &["-a", "-b", "-c"],
+        "-a x<y, -b=n>=2, -c",
+        true,
+    ),
+    (
+        "Fl a Cm x<y , Ns Fl b Ar y> , Fl c",
+        &["-a", "-b", "-c"],
+        "-a x<y,-b y>, -c",
+        true,
+    ),
+    (
+        "Fl a Ar x<y , Ns Fl b Ar y> , Fl c",
+        &["-a", "-b", "-c"],
+        "-a x<y,-b y>, -c",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Ar value | Li \"see the manual for x<5\"",
+        &["-a"],
+        "-a=x (value | see the manual for x<5)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Ar value | Cm \"see the manual for x<5\"",
+        &["-a"],
+        "-a=x (value | see the manual for x<5)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Ar value | Cm \"see the manual for x=5\"",
+        &["-a"],
+        "-a=x (value | see the manual for x=5)",
+        false,
+    ),
+    (
+        "Fl a= Ns Ar x Pq Ar value | Li x<5",
+        &["-a"],
+        "-a=x (value | x<5)",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Dq Ar value | Fl v Ns Li >",
+        &["-a"],
+        "-a=x “value | -v>”",
+        true,
+    ),
+    (
+        "Fl a= Ns Ar x Dq Ar value | Fl v Ns Ar >",
+        &["-a"],
+        "-a=x “value | -v>”",
+        true,
+    ),
+];
+
+#[test]
+fn native_enclosure_edges_and_literal_comparisons_have_distinct_roles() {
+    // CVS termp_quote_pre/post own the Ao/Bo delimiter. Other literal
+    // delimiters and comparisons are emitted by the operand's term_word.
+    for &(head, names, label, full) in SCOPED_LITERAL_CASES {
+        check("OPTIONS", head, names, label, full, &["-v", "value"]);
     }
 }
