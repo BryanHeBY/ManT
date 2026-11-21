@@ -47,6 +47,11 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep surviving roff glyphs, link labels and printed spaces attached to
+  their accepted field rows. An open definition HEAD retains its ink until
+  later BODY output paints over it.
+- Keep declaration separators at their executed macro boundaries, including
+  tight aliases, quoted angle groups and split relative paths.
 - Keep the accepted space count and surviving links when a word-end marker
   is followed by a continuation, horizontal move, or breakpoint. Appended
   font runs preserve earlier overprint coverage.
@@ -380,6 +385,10 @@ that crate was not published for that change.
 
 ### mant-engine
 
+- Track equation owners by source occurrence when macro expansion repeats
+  coordinates, and verify the literal rows and joined words in definition
+  HEADs. Structure audits isolate damaged compressed pages and keep retry
+  order scoped to the enumerated corpus roots.
 - In structure audits, check empty field flushes between definition displays,
   verify equation owners, and rotate failed scans within the page quota.
 - Check generated list markers independently from equal authored words,
