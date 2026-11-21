@@ -725,6 +725,7 @@ def main(argv: Sequence[str]) -> int:
         }
         retries = {key: None for key in retries
                    if key[0] != corpus or key[3] != root_scope or key[1] not in recovered}
+        repeated = refresh | unreadable.keys()
         pages = list(records)
         if arguments.replay_fidelity_records:
             identities = read_fidelity_identities(arguments.fidelity_db, corpus)
@@ -754,19 +755,23 @@ def main(argv: Sequence[str]) -> int:
                 # An unreadable file participates in scheduling without ever
                 # being stamped with a decoded source identity in the ledger.
                 order = {key: number for number, key in enumerate(retries, start=2)}
+                historical_failures = {
+                    page for page in pages
+                    if (previous := database.get((corpus, *records[page]))) is not None
+                    and previous.profile_schema == PROFILE_SCHEMA
+                    and previous.scan_status == "hard-failure"
+                }
+                repeated.update(historical_failures)
 
                 def priority(page: Path) -> int:
                     key = (corpus, *records[page])
-                    previous = database.get(key)
-                    legacy_retry = (previous is not None and previous.profile_schema == PROFILE_SCHEMA
-                                    and previous.scan_status == "hard-failure")
-                    refresh_observed = page in refresh and previous is not None
-                    return order.get((*key, root_scope), int(legacy_retry or refresh_observed))
+                    refresh_observed = page in refresh and key in database
+                    return order.get((*key, root_scope), int(page in historical_failures or refresh_observed))
 
                 pages.sort(key=priority)
         queue = RefreshQueue(
             arguments.audit_db, PROFILE_SCHEMA, corpus, roots,
-            refresh | unreadable.keys() if refresh else (),
+            repeated,
             enabled=bool(arguments.max_pages or arguments.max_pages_per_section),
         )
         queue.order(pages)
@@ -819,11 +824,13 @@ def main(argv: Sequence[str]) -> int:
     by_label = {finding.path: finding for finding in findings}
     selected_labels = {(corpus, records[path][0]) for path in pages}
     retries = {key: None for key in retries if key[3] != root_scope or key[:2] not in selected_labels}
+    failed = []
     for path in pages:
         label, digest = records[path]
         finding = by_label[label]
         if finding.status == "hard-failure" or digest is None:
             retries[(corpus, label, digest, root_scope)] = None
+            failed.append(path)
         if not arguments.findings_only or finding.status != "clean":
             detail = f" — {finding.detail}" if finding.detail else ""
             observations = "; ".join([
@@ -852,7 +859,7 @@ def main(argv: Sequence[str]) -> int:
     )
     print("REVIEW is an AST-to-IR candidate, not a regression until source and IR are inspected.")
     write_structure_database(arguments.audit_db, database.values())
-    queue.record(pages)
+    queue.record(pages, new_repeats=failed)
     write_retry_order(retry_path, retries)
     print(f"structure database: {arguments.audit_db}")
     write_report(arguments.json, corpus, roots, findings, unreadable)

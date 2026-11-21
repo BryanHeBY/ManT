@@ -5,26 +5,29 @@ import hashlib
 from collections import Counter
 from fractions import Fraction
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Sequence
 
 from .model import SyntaxProfile
 from .sources import manual_section
 
 
-def stable_sample(pages: Sequence[Path], maximum: int, seed: str) -> list[Path]:
+def stable_sample(pages: Sequence[Path], maximum: int, seed: str, *,
+                  age: Callable[[Path], int] | None = None) -> list[Path]:
     if maximum == 0 or len(pages) <= maximum:
         return list(pages)
     ranked = sorted(
         pages,
-        key=lambda path: hashlib.sha256(
-            f"{seed}\0{path.as_posix()}".encode("utf-8")
-        ).digest(),
+        key=lambda path: (
+            age(path) if age else -1,
+            hashlib.sha256(f"{seed}\0{path.as_posix()}".encode("utf-8")).digest(),
+        ),
     )
     return sorted(ranked[:maximum], key=lambda path: path.as_posix())
 
 
 def stable_sample_by_section(
-    pages: Sequence[Path], maximum: int, seed: str
+    pages: Sequence[Path], maximum: int, seed: str, *,
+    age: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     grouped: dict[str, list[Path]] = {}
     for path in pages:
@@ -34,7 +37,7 @@ def stable_sample_by_section(
     sampled = [
         path
         for section in sorted(grouped)
-        for path in stable_sample(grouped[section], maximum, f"{seed}\0{section}")
+        for path in stable_sample(grouped[section], maximum, f"{seed}\0{section}", age=age)
     ]
     return sorted(sampled, key=lambda path: path.as_posix())
 
@@ -58,6 +61,8 @@ def rare_feature_sample(
     profiles: dict[Path, SyntaxProfile],
     frequencies: Counter[str],
     coverage: Counter[str],
+    *,
+    age: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     if maximum == 0 or len(pages) <= maximum:
         selected = list(pages)
@@ -66,7 +71,7 @@ def rare_feature_sample(
     remaining = set(pages)
     selected: list[Path] = []
     while remaining and len(selected) < maximum:
-        def score(page: Path) -> tuple[Fraction, Fraction, bytes]:
+        def score(page: Path) -> tuple[int, Fraction, Fraction, bytes]:
             features = profiles[page].features
             uncovered = sum(
                 (
@@ -89,7 +94,7 @@ def rare_feature_sample(
             tie = hashlib.sha256(
                 f"{seed}\0{page.as_posix()}".encode("utf-8")
             ).digest()
-            return uncovered, balance, tie
+            return -age(page) if age else 1, uncovered, balance, tie
 
         chosen = max(remaining, key=score)
         remaining.remove(chosen)
@@ -109,6 +114,8 @@ def rare_feature_sample_by_section(
     profiles: dict[Path, SyntaxProfile],
     frequencies: Counter[str],
     coverage: Counter[str],
+    *,
+    age: Callable[[Path], int] | None = None,
 ) -> list[Path]:
     grouped: dict[str, list[Path]] = {}
     for page in pages:
@@ -125,6 +132,7 @@ def rare_feature_sample_by_section(
             profiles,
             frequencies,
             coverage,
+            age=age,
         )
     ]
     return sorted(sampled, key=lambda path: path.as_posix())

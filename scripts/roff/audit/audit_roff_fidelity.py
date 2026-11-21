@@ -60,7 +60,7 @@ from scripts.roff.lib.fidelity.report import (
 
 from scripts.roff.oracle import mandoc_oracle
 from scripts.roff.lib.roff_audit_common import (
-    observe_sources, read_verified_manual, uncovered_sources, verify_source_digest,
+    RefreshQueue, observe_sources, read_verified_manual, uncovered_sources, verify_source_digest,
 )
 from scripts.roff.lib.roff_reference import reference_environment, run_renderer
 from scripts.roff.lib.roff_reference import self_check as reference_runner_self_check
@@ -84,6 +84,7 @@ from scripts.roff.lib.fidelity.sources import (
     contains_external_request,
     redirect_only_target,
     confined_redirect_target,
+    redirect_source,
     mant_render_command,
     reference_render_command,
 )
@@ -207,6 +208,17 @@ def audit_page(
             reference_output=reference_output,
             mant_output=mant_output,
         )
+
+    if reference_kind == "mandoc" and hierarchy_root is not None and redirect_only_target(raw_source):
+        try:
+            current = redirect_source(path, hierarchy_root, raw_source, verified_reference_source)
+        except (ValueError, OSError, RuntimeError):
+            current = None
+        if current != reference_input:
+            return AuditArtifact(
+                Finding(label, "hard-failure", detail="redirect source changed during comparison"),
+                raw_source, reference_output, mant_output,
+            )
 
     return compare_rendered(label, raw_source, reference_output, mant_output,
                             reference_kind, ngram, layout_signals)
@@ -435,7 +447,8 @@ def main(argv: Sequence[str]) -> int:
             else {}
         )
         source_patterns = compile_source_patterns(arguments.source_pattern)
-        page_records, unreadable = observe_sources(all_pages, roots, source_patterns)
+        refresh: set[Path] = set()
+        page_records, unreadable = observe_sources(all_pages, roots, source_patterns, refresh=refresh)
         recorded_labels = {label for scope, label, _ in database if scope == corpus}
         for path in unreadable:
             label = relative_label(path, roots)
@@ -479,14 +492,18 @@ def main(argv: Sequence[str]) -> int:
             for path, (label, digest) in page_records.items()
             if digest is not None and (corpus, label, digest) in database
         }
-        completed = set()
+        completed, incomplete, failures = set(), set(), set()
         for path in recorded:
             label, digest = page_records[path]
-            if digest is not None and database[
-                (corpus, label, digest)
-            ].scan_status != "skipped":
+            status = database[(corpus, label, digest)].scan_status
+            if status == "skipped":
+                incomplete.add(path)
+            elif status == "hard-failure":
+                failures.add(path)
+            elif path not in refresh:
                 completed.add(path)
-        incomplete = recorded - completed
+        for path in refresh:
+            cross_corpus_duplicates.pop(path, None)
         pending = set()
         for path in recorded:
             label, digest = page_records[path]
@@ -504,13 +521,25 @@ def main(argv: Sequence[str]) -> int:
         elif arguments.retry_skipped:
             pages = [path for path in pages if path in incomplete]
         elif arguments.recorded_only:
-            pages = [path for path in pages if path in recorded]
+            pages = [path for path in pages if path in recorded or (
+                path in unreadable and page_records[path][0] in recorded_labels
+            )]
         elif not arguments.recheck_recorded:
             pages = [
                 path
                 for path in pages
                 if path not in completed and path not in cross_corpus_duplicates
             ]
+        repeated_paths = refresh | unreadable.keys() | failures | incomplete
+        if arguments.recheck_recorded or arguments.recorded_only or arguments.pending_only:
+            repeated_paths.update(pages)
+        queue = RefreshQueue(
+            arguments.audit_db, f"fidelity/{arguments.reference_kind}/{reference_id}", corpus, roots,
+            repeated_paths,
+            enabled=bool(arguments.max_pages or arguments.max_pages_per_section),
+        ) if arguments.audit_db is not None else None
+        age = queue.age if queue is not None else None
+        selected_dependent = refresh.intersection(pages)
         profiles: dict[Path, SyntaxProfile] = {}
         if syntax_enabled:
             syntax_cache = read_syntax_cache(arguments.syntax_cache)
@@ -537,6 +566,7 @@ def main(argv: Sequence[str]) -> int:
                     profiles,
                     frequencies,
                     coverage,
+                    age=age,
                 )
                 if arguments.max_pages_per_section
                 else rare_feature_sample(
@@ -546,6 +576,7 @@ def main(argv: Sequence[str]) -> int:
                     profiles,
                     frequencies,
                     coverage,
+                    age=age,
                 )
             )
             if arguments.syntax_report:
@@ -563,10 +594,10 @@ def main(argv: Sequence[str]) -> int:
         else:
             pages = (
                 stable_sample_by_section(
-                    pages, arguments.max_pages_per_section, arguments.seed
+                    pages, arguments.max_pages_per_section, arguments.seed, age=age,
                 )
                 if arguments.max_pages_per_section
-                else stable_sample(pages, arguments.max_pages, arguments.seed)
+                else stable_sample(pages, arguments.max_pages, arguments.seed, age=age)
             )
     except ValueError as error:
         print(f"audit-roff-fidelity: {error}", file=sys.stderr)
@@ -577,12 +608,15 @@ def main(argv: Sequence[str]) -> int:
         print(f"syntax cache:  {arguments.syntax_cache}")
     for path, reason in unreadable.items():
         print(f"audit-roff-fidelity: unreadable source: {path}: {reason}", file=sys.stderr)
+    uncovered = dict(unreadable)
+    for path in sorted(selected_dependent - set(pages)):
+        uncovered[path] = "a potentially changing source dependency was not selected by this budget"
     if not pages and arguments.audit_db and (completed or cross_corpus_duplicates):
         if arguments.json:
             write_json_report(
                 arguments.json, roots, arguments.mant, arguments.reference,
                 arguments.reference_kind, reference_id, arguments.layout_signals,
-                AuditSummary(), [], uncovered_sources(unreadable, roots),
+                AuditSummary(), [], uncovered_sources(uncovered, roots),
             )
         print(
             "audit-roff-fidelity: no new or changed manual pages; "
@@ -591,6 +625,12 @@ def main(argv: Sequence[str]) -> int:
         )
         return 0
     if not pages:
+        if arguments.json:
+            write_json_report(
+                arguments.json, roots, arguments.mant, arguments.reference,
+                arguments.reference_kind, reference_id, arguments.layout_signals,
+                AuditSummary(), [], uncovered_sources(uncovered, roots),
+            )
         print("audit-roff-fidelity: no manual pages discovered", file=sys.stderr)
         return 2
 
@@ -626,6 +666,7 @@ def main(argv: Sequence[str]) -> int:
 
     findings: list[Finding] = []
     review_artifacts: list[tuple[str, AuditArtifact]] = []
+    repeated = []
     summary = AuditSummary()
     for path in pages:
         label, digest = page_records[path]
@@ -647,6 +688,8 @@ def main(argv: Sequence[str]) -> int:
                     None, None, None,
                 )
         finding = artifact.finding
+        if finding.status in {"hard-failure", "skipped"}:
+            repeated.append(path)
         findings.append(finding)
         if arguments.review_dir is not None:
             review_artifacts.append((label, artifact))
@@ -697,7 +740,7 @@ def main(argv: Sequence[str]) -> int:
             arguments.layout_signals,
             summary,
             findings,
-            uncovered_sources(unreadable, roots),
+            uncovered_sources(uncovered, roots),
         )
         print(f"report: {arguments.json}")
     if arguments.review_dir:
@@ -718,6 +761,8 @@ def main(argv: Sequence[str]) -> int:
             arguments.reference_kind,
             reference_id,
         )
+        if queue is not None:
+            queue.record(pages, new_repeats=repeated)
         print(f"audit database: {arguments.audit_db}")
     return 1 if summary.hard_failures else 0
 

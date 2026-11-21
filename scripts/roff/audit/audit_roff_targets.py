@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
+from scripts.roff.lib.fidelity.sources import redirect_observation
 from scripts.roff.lib.roff_audit_common import (
     RefreshQueue,
     merge_clean_review_state,
@@ -295,7 +296,7 @@ def profile_findings(
     *, exact_roots=None, batch_runner=None,
 ) -> Iterable[Finding]:
     requests = {}
-    labels = {}
+    sources = {}
     for path in pages:
         label = relative_label(path, roots)
         hierarchy_root = exact_roots[path] if exact_roots is not None else manual_hierarchy_root(path, roots)
@@ -308,14 +309,14 @@ def profile_findings(
             "path": str(path),
             "root": str(hierarchy_root),
         }
-        labels[request_id] = label
+        sources[request_id] = (label, path, hierarchy_root)
     items = list(requests.items())
     for offset in range(0, len(items), 256):
         batch = dict(items[offset : offset + 256])
         responses = (batch_runner(profiler, batch, timeout) if batch_runner else
                      run_jsonl_profile_batch(profiler, batch, timeout, "target"))
         for request_id, response in responses.items():
-            label = labels[request_id]
+            label, path, hierarchy_root = sources[request_id]
             if response.get("schema") != PROFILE_SCHEMA:
                 yield Finding(label, "hard-failure", [], "unsupported profiler schema")
                 continue
@@ -415,10 +416,23 @@ def profile_findings(
             if not valid:
                 yield Finding(label, "hard-failure", [], "invalid profiler response")
                 continue
+            # roff.c::roff_so records a diagnostic before parsing the include.
+            # A parser that opened the include can leave document.meta.alias_target
+            # empty, including when missing-source recovery emitted a placeholder.
+            diagnostics = response.get("diagnostics")
+            alias = response.get("alias") is True
+            inspected_include = isinstance(diagnostics, dict) and bool(diagnostics.get("parser"))
+            redirect = redirect_observation(path, hierarchy_root) if alias or inspected_include else None
+            alias_detail = (
+                "native alias declaration has no indexed target observation: "
+                + (redirect or "redirect source is unverified")
+                if alias or redirect else None
+            )
             yield Finding(
                 label,
-                "review" if violations else "clean",
+                "review" if violations or alias_detail else "clean",
                 violations,
+                detail=alias_detail,
                 expected=expected,
                 observed=observed,
                 observed_occurrences=observed_occurrences,

@@ -14,6 +14,7 @@ import lzma
 import os
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import zlib
@@ -28,7 +29,12 @@ MANUAL_SUFFIX = re.compile(
 MANUAL_COMPRESSION = {".gz": b"\x1f\x8b", ".zst": b"\x28\xb5\x2f\xfd",
                       ".xz": b"\xfd7zXZ\x00", ".bz2": b"BZh"}
 MAX_MANUAL_BYTES = 16 * 1024 * 1024
-MANUAL_INCLUDE = re.compile(rb"(?:^|[\s\\])[.'][ \t]*m?so(?:[ \t]|$)")
+MANUAL_INCLUDE = re.compile(rb"(?:^|[\s\\])[.'][ \t]*m?so(?:quiet)?(?:[ \t\r\n]|$)")
+
+
+def possible_manual_include(source: bytes) -> bool:
+    """Conservatively identify source that may depend on another input."""
+    return MANUAL_INCLUDE.search(source.removeprefix(b"\xef\xbb\xbf")) is not None
 
 
 def discover_pages(roots: Sequence[Path], *, strict: bool = False) -> list[Path]:
@@ -119,15 +125,24 @@ def read_source(path: Path) -> tuple[bytes | None, str | None]:
 def read_verified_manual(path: Path) -> tuple[bytes | None, str | None]:
     """Accept only transport identities shared by the file-based audit backends."""
     try:
-        with path.open("rb", buffering=0) as stream:
+        # Source discovery retains symlinks. Opening a pipe reached through
+        # one would block before fstat can reject the non-manual input.
+        flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+        with os.fdopen(os.open(path, flags), "rb", buffering=0) as stream:
+            metadata = os.fstat(stream.fileno())
+            if not stat.S_ISREG(metadata.st_mode):
+                return None, "manual source is not a regular file"
+            if metadata.st_size > MAX_MANUAL_BYTES:
+                return None, "stored manual exceeds the loader input limit"
             header = stream.read(6)
             detected = manual_compression(header)
             if error := manual_transport_error(path, detected):
                 return None, error
-            if os.fstat(stream.fileno()).st_size > MAX_MANUAL_BYTES:
-                return None, "stored manual exceeds the loader input limit"
             if detected is None:
-                return header + stream.read(), None
+                source = header + stream.read(MAX_MANUAL_BYTES + 1 - len(header))
+                if len(source) > MAX_MANUAL_BYTES:
+                    return None, "stored manual exceeds the loader input limit"
+                return source, None
             stream.seek(0)
             if detected == ".gz":
                 return decode_verified_gzip(stream), None
@@ -202,7 +217,7 @@ def observe_sources(
             continue
         if not patterns or all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
             records[path] = label, hashlib.sha256(source).hexdigest()
-            if refresh is not None and (path.is_symlink() or MANUAL_INCLUDE.search(source)):
+            if refresh is not None and (path.is_symlink() or possible_manual_include(source)):
                 # The entry digest says nothing about the current include
                 # target. Until dependencies are recorded, observe it again.
                 refresh.add(path)

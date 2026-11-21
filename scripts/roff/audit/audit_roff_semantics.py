@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
+from scripts.roff.lib.fidelity.sources import redirect_observation
 from scripts.roff.lib.roff_audit_common import (
     RefreshQueue,
     SourceReview,
@@ -378,7 +379,7 @@ def profile_findings(
     *, exact_roots=None, batch_runner=None,
 ) -> Iterable[Finding]:
     requests = {}
-    labels = {}
+    sources = {}
     for path in pages:
         label = relative_label(path, roots)
         hierarchy_root = exact_roots[path] if exact_roots is not None else manual_hierarchy_root(path, roots)
@@ -391,19 +392,24 @@ def profile_findings(
             "path": str(path),
             "root": str(hierarchy_root),
         }
-        labels[request_id] = label
+        sources[request_id] = (label, path, hierarchy_root)
     items = list(requests.items())
     for offset in range(0, len(items), 256):
         batch = dict(items[offset : offset + 256])
         responses = (batch_runner(profiler, batch, timeout) if batch_runner else
                      run_jsonl_profile_batch(profiler, batch, timeout, "semantic"))
         for request_id, response in responses.items():
-            label = labels[request_id]
+            label, path, hierarchy_root = sources[request_id]
             if response.get("schema") != PROFILE_SCHEMA:
                 yield Finding(label, "hard-failure", [], "unsupported profiler schema")
                 continue
-            if isinstance(response.get("error"), str):
-                yield Finding(label, "hard-failure", [], str(response["error"]))
+            if isinstance(error := response.get("error"), str):
+                if "standalone .so redirects require MANPATH discovery" in error:
+                    detail = redirect_observation(path, hierarchy_root) or "redirect source is unverified"
+                    yield Finding(label, "review", [],
+                                  f"standalone alias has no indexed semantic observation: {detail}")
+                else:
+                    yield Finding(label, "hard-failure", [], error)
                 continue
             entries = response.get("entries")
             entry_counts = response.get("entryCounts")

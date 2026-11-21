@@ -315,9 +315,11 @@ class RefreshQueue:
                  repeated: Iterable[Path], *, enabled: bool):
         self.path = database.with_suffix(database.suffix + ".refresh.json")
         self.scope = json.dumps([profile, corpus, *map(str, roots)])
+        self.roots = roots
+        self.enabled = enabled
         self.labels = {page: relative_label(page, roots) for page in repeated} if enabled else {}
         self.scopes: dict[str, list[str]] = {}
-        if self.labels and self.path.exists():
+        if self.enabled and self.path.exists():
             try:
                 data = json.loads(self.path.read_text(encoding="utf-8"))
             except (OSError, UnicodeError) as error:
@@ -328,14 +330,20 @@ class RefreshQueue:
             ):
                 raise ValueError(f"invalid refresh order: {self.path}")
             self.scopes = data
+        self.ages = {label: index for index, label in enumerate(self.scopes.get(self.scope, []))}
+
+    def age(self, page: Path) -> int:
+        return self.ages.get(self.labels.get(page, ""), -1)
 
     def order(self, pages: list[Path]) -> None:
-        ages = {label: index for index, label in enumerate(self.scopes.get(self.scope, []))}
         # Keep each driver's priority among unseen inputs. Repeated inputs
         # then run least recently attempted first, including failures.
-        pages.sort(key=lambda page: ages.get(self.labels.get(page, ""), -1))
+        pages.sort(key=self.age)
 
-    def record(self, pages: Sequence[Path]) -> None:
+    def record(self, pages: Sequence[Path], *, new_repeats: Iterable[Path] = ()) -> None:
+        if not self.enabled:
+            return
+        self.labels.update((page, relative_label(page, self.roots)) for page in new_repeats)
         attempted = dict.fromkeys(self.labels[page] for page in pages if page in self.labels)
         if not attempted:
             return

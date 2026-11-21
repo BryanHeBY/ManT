@@ -22,6 +22,94 @@ from scripts.roff.lib.roff_audit_common import source_digest
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_structure_bounded_scans_rotate_historical_failures_and_refreshes_together(self):
+        for quota in ('--max-pages', '--max-pages-per-section'):
+            with (self.subTest(quota=quota), tempfile.TemporaryDirectory() as directory,
+                  contextlib.redirect_stdout(io.StringIO())):
+                root = Path(directory)
+                man = root / 'man1'
+                man.mkdir()
+                alias, terminal, failed = (man / f'{name}.1' for name in ('a', 'leaf', 'zbad'))
+                alias.write_bytes(b'.so man1/leaf.1\n')
+                terminal.write_bytes(b'.TH LEAF 1\n.SH DESCRIPTION\nOwner.\n')
+                failed.write_bytes(b'.TH FAIL 1\n.SH DESCRIPTION\nPermanent failure marker.\n')
+                ledger, report = root / 'audit.csv', root / 'latest.json'
+                args = ['--manpath', str(root), '--profiler', str(alias), '--audit-db', str(ledger),
+                        '--json', str(report)]
+                broken = set()
+
+                def profile(selected, *_args):
+                    return [
+                        structure.Finding(
+                            structure.relative_label(path, [root]),
+                            'hard-failure' if path in broken or (path == alias and not terminal.exists())
+                            else 'clean', [],
+                        )
+                        for path in selected
+                    ]
+
+                with patch.object(structure, 'profile_findings', side_effect=profile):
+                    self.assertEqual(structure.main(args), 0)
+                    broken.add(failed)
+                    self.assertEqual(structure.main([*args, '--recheck-recorded', '--source-pattern',
+                                                     'Permanent failure marker']), 1)
+                    for _ in range(2):
+                        structure.main([*args, quota, '1'])
+                    terminal.unlink()
+                    observed = []
+                    for _ in range(4):
+                        self.assertEqual(structure.main([*args, quota, '1']), 1)
+                        findings = json.loads(report.read_text())['findings']
+                        self.assertEqual(len(findings), 1)
+                        self.assertEqual(findings[0]['status'], 'hard-failure')
+                        observed.append(Path(findings[0]['path']).name)
+                    self.assertCountEqual(observed, [alias.name, failed.name] * 2)
+
+    def test_source_only_profiles_disclose_alias_dependency_coverage(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            man = root / 'man1'
+            man.mkdir()
+            alias, terminal = man / 'alias.1', man / 'leaf.1'
+            alias.write_bytes(b'.so man1/leaf.1\n')
+            terminal.write_bytes(b'.TH LEAF 1\n.SH DESCRIPTION\nOwner.\n')
+            response = {
+                semantic: {
+                    'schema': semantic.PROFILE_SCHEMA,
+                    'error': f'{alias}: standalone .so redirects require MANPATH discovery and '
+                             'cannot be followed by --input',
+                },
+                targets: {
+                    'schema': targets.PROFILE_SCHEMA, 'alias': False, 'diagnostics': {'parser': 4},
+                    'expected': [], 'observed': [], 'observedOccurrences': [], 'matched': [],
+                    'observedIdentities': [], 'observedFragmentAliases': [],
+                    'observedEntryIdentities': [], 'observedSectionIdentities': [], 'anchors': [],
+                    'sectionLinkTargets': [], 'missing': [], 'unexpectedTargets': [],
+                    'roleCollisions': [], 'identityViolations': [], 'duplicateTargetCount': 0,
+                    'danglingTargetCount': 0, 'targetOwnerCount': 0, 'classifiedOwnerCount': 0,
+                    'logicalOwnerCount': 0, 'classifiedLogicalOwnerCount': 0, 'ownerClasses': [],
+                    'unclassifiedOwners': [], 'violations': [],
+                },
+            }
+            for dependency in ('verified source', 'absent from the hierarchy'):
+                for audit in (targets, semantic):
+                    with self.subTest(audit=audit.__name__, dependency=dependency):
+                        def batch(_profiler, requests, _timeout):
+                            return {key: response[audit] for key in requests}
+
+                        found, = audit.profile_findings([alias], [root], alias, 1, batch_runner=batch)
+                        self.assertEqual(found.status, 'review')
+                        self.assertIn('no indexed', found.detail)
+                        self.assertIn(dependency, found.detail)
+                if terminal.exists():
+                    terminal.unlink()
+            alias.write_bytes(b'.TH PROBE 1\n.SH DESCRIPTION\nThis documents .so syntax.\n')
+            found, = targets.profile_findings(
+                [alias], [root], alias, 1,
+                batch_runner=lambda _profiler, requests, _timeout: {key: response[targets] for key in requests},
+            )
+            self.assertEqual(found.status, 'clean')
+
     def test_refresh_candidates_rotate_with_a_one_page_budget(self):
         for audit in (projection, semantic, targets, structure):
             for text in (b'.so man1/target.1\n', b'.TH TEST 1\nThis documents .so syntax.\n'):

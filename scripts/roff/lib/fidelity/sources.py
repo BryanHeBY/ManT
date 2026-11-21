@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path, PurePosixPath
-from typing import Sequence
+from typing import Callable, Sequence
 
 from scripts.roff.lib.roff_audit_common import (
     MANUAL_SUFFIX,
@@ -13,7 +13,18 @@ from scripts.roff.lib.roff_audit_common import (
     source_bytes,
     source_digest,
 )
-from .text import EXTERNAL_ROFF_CONTEXT
+from scripts.roff.lib.roff_audit_sources import (
+    MAX_MANUAL_BYTES,
+    possible_manual_include,
+    read_verified_manual,
+)
+
+MAX_SO_REDIRECTS = 16
+SO_CONTROL = rb"(?:[.']|\\\.)[ \t]*"
+SO_NAME = rb"so(?:quiet)?"
+SO_REQUEST = re.compile(rb"^" + SO_CONTROL + SO_NAME + rb"(?:[ \t\r]|$)", re.MULTILINE)
+EXTERNAL_REQUEST = re.compile(rb"^" + SO_CONTROL + rb"m?" + SO_NAME + rb"(?:[ \t\r]|$)", re.MULTILINE)
+SO_REDIRECT = re.compile(SO_CONTROL + SO_NAME + rb"[ \t]+([^ \x00-\x1f\x7f\\]+)")
 
 
 def explicit_pages(path: Path, roots: Sequence[Path]) -> list[Path]:
@@ -118,7 +129,7 @@ def source_is_context_independent(path: Path) -> bool:
 
 
 def source_bytes_are_context_independent(source: bytes) -> bool:
-    return EXTERNAL_ROFF_CONTEXT.search(source) is None
+    return not possible_manual_include(source)
 
 
 def contains_so_request(path: Path) -> bool:
@@ -126,36 +137,36 @@ def contains_so_request(path: Path) -> bool:
     source = source_bytes(path)
     if source is None:
         return False
-    return any(
-        re.match(rb"^[.']so(?:[ \t]|$)", line) is not None
-        for line in source.splitlines()
-    )
+    return has_so_request(source)
+
+
+def has_so_request(source: bytes) -> bool:
+    return SO_REQUEST.search(source.removeprefix(b"\xef\xbb\xbf")) is not None
 
 
 def contains_external_request(source: bytes) -> bool:
-    return any(
-        re.match(rb"^[.'](?:so|mso)(?:[ \t]|$)", line) is not None
-        for line in source.splitlines()
-    )
+    return EXTERNAL_REQUEST.search(source.removeprefix(b"\xef\xbb\xbf")) is not None
 
 
 def redirect_only_target(source: bytes) -> str | None:
     """Return the sole relative target of a redirect-only roff source.
 
-    mandoc intentionally reports a top-level ``.so`` request instead of
-    following it. Resolve only the unambiguous alias shape used by manual
-    hierarchies; embedded includes remain non-comparable rather than growing a
-    second roff interpreter in this audit script.
+    With includes disabled, mandoc's read.c ROFF_SO reports a final redirect
+    without opening its path. Recognize only static standalone redirects, in
+    the same narrow syntax as mant-codec's mandoc/redirect.rs.
     """
     meaningful = []
-    for raw_line in source.splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith((b'.\\"', b"'\\\"")):
+    for raw_line in source.removeprefix(b"\xef\xbb\xbf").split(b"\n"):
+        line = raw_line.removesuffix(b"\r")
+        if b"\\#" in line or line.endswith(b"\\"):
+            return None
+        line = line.split(b'\\"', 1)[0].rstrip(b" \t")
+        if not line or line in (b".", b"'", b"\\."):
             continue
         meaningful.append(line)
     if len(meaningful) != 1:
         return None
-    match = re.fullmatch(rb"[.']so[ \t]+([^ \t\x00]+)[ \t]*", meaningful[0])
+    match = SO_REDIRECT.fullmatch(meaningful[0])
     if match is None:
         return None
     return match.group(1).decode("utf-8", errors="surrogateescape")
@@ -166,31 +177,86 @@ def confined_redirect_target(
     hierarchy_root: Path,
     target: str,
 ) -> Path | None:
-    """Resolve one mandoc alias target inside its owning manual hierarchy."""
+    try:
+        return resolve_redirect_target(path, hierarchy_root.resolve(strict=True), target)
+    except (ValueError, OSError, RuntimeError):
+        return None
+
+
+def resolve_redirect_target(path: Path, hierarchy_root: Path, target: str) -> Path:
+    """Use the indexed loader's root-first order and target confinement."""
     logical = PurePosixPath(target)
     if (
         logical.is_absolute()
         or not logical.parts
-        or any(part in {"", ".", ".."} for part in logical.parts)
+        or any(part in {".", ".."} for part in target.split("/"))
         or "\\" in target
     ):
+        raise ValueError(f"redirect target is not a safe relative path: {target}")
+    bases = (hierarchy_root, path.parent) if len(logical.parts) == 1 else (hierarchy_root,)
+    for base in dict.fromkeys(bases):
+        candidate = base.joinpath(*logical.parts)
+        suffixes = ("",) if candidate.suffix in {".gz", ".zst"} else ("", ".gz", ".zst")
+        for suffix in suffixes:
+            try:
+                resolved = candidate.with_name(candidate.name + suffix).resolve(strict=True)
+            except FileNotFoundError:
+                continue
+            if not resolved.is_relative_to(hierarchy_root):
+                raise ValueError(f"redirect target resolves outside the hierarchy: {target}")
+            if not resolved.is_file():
+                raise ValueError(f"redirect target is not a regular manual source: {target}")
+            return resolved
+    raise ValueError(f"redirect target is absent from the hierarchy: {target}")
+
+
+def verified_source_bytes(path: Path) -> bytes | None:
+    return read_verified_manual(path)[0]
+
+
+def redirect_source(
+    path: Path, hierarchy_root: Path, source: bytes,
+    source_reader: Callable[[Path], bytes | None] = verified_source_bytes,
+) -> bytes:
+    """Read a bounded, confined chain and return its verified terminal source."""
+    root = hierarchy_root.resolve(strict=True)
+    visited = {path.resolve()}
+    stored, decoded = path.stat().st_size, len(source)
+    for _ in range(MAX_SO_REDIRECTS):
+        target = redirect_only_target(source)
+        if target is None:
+            break
+        path = resolve_redirect_target(path, root, target)
+        if path in visited:
+            raise ValueError(f"redirect cycle through {target}")
+        visited.add(path)
+        stored += path.stat().st_size
+        if stored > MAX_MANUAL_BYTES:
+            raise ValueError("redirect chain exceeds the stored manual input limit")
+        next_source = source_reader(path)
+        if next_source is None:
+            raise ValueError(f"cannot verify redirect source transport: {target}")
+        source = next_source
+        decoded += len(source)
+        if decoded > MAX_MANUAL_BYTES:
+            raise ValueError("redirect chain exceeds the decoded manual input limit")
+    if redirect_only_target(source) is not None:
+        raise ValueError(f"redirect depth exceeds {MAX_SO_REDIRECTS}")
+    if contains_external_request(source):
+        raise ValueError("redirect chain terminates in an external include source")
+    return source
+
+
+def redirect_observation(path: Path, hierarchy_root: Path) -> str | None:
+    """Describe dependency evidence for an audit of the alias source alone."""
+    source, _ = read_verified_manual(path)
+    if source is None or redirect_only_target(source) is None:
         return None
-    base = hierarchy_root if logical.parts[0].startswith("man") else path.parent
-    candidate = base.joinpath(*logical.parts)
     try:
-        candidate.relative_to(hierarchy_root)
-    except ValueError:
-        return None
-    candidates = [candidate]
-    if not candidate.name.endswith((".gz", ".bz2", ".xz", ".zst")):
-        candidates.extend(
-            candidate.with_name(f"{candidate.name}{suffix}")
-            for suffix in (".gz", ".bz2", ".xz", ".zst")
-        )
-    return next(
-        (value for value in candidates if value.is_file() or value.is_symlink()),
-        None,
-    )
+        redirect_source(path, hierarchy_root, source)
+    except (ValueError, OSError, RuntimeError) as error:
+        return str(error)
+    return "the redirect leads to a verified source"
 
 
 def mant_render_command(
@@ -202,8 +268,7 @@ def mant_render_command(
     Redirect-only aliases then resolve normally; unsupported embedded includes
     become visible hard failures instead of silently leaving the audit corpus.
     """
-    needs_hierarchy = (contains_so_request(path) if source is None else
-        any(re.match(rb"^[.']so(?:[ \t]|$)", line) is not None for line in source.splitlines()))
+    needs_hierarchy = contains_so_request(path) if source is None else has_so_request(source)
     if needs_hierarchy:
         section = manual_section(path)
         topic = manual_topic(path)
@@ -243,20 +308,20 @@ def reference_render_command(
 ) -> tuple[list[str] | None, bytes | None, str | None]:
     """Build a renderer invocation or explain why the source is not comparable."""
     if reference_kind == "mandoc":
-        reference_path = path
-        if source is not None and contains_external_request(source):
-            target = redirect_only_target(source)
-            if target is None:
-                return None, None, "mandoc does not expand embedded .so/.mso requests"
+        reader = source_reader or verified_source_bytes
+        if source is not None and redirect_only_target(source) is not None:
             if hierarchy_root is None:
                 return None, None, "redirect-only page has no owning manual hierarchy"
-            resolved = confined_redirect_target(path, hierarchy_root, target)
-            if resolved is None:
-                return None, None, f"redirect target is absent or outside the hierarchy: {target}"
-            reference_path = resolved
-        reference_source = (source_reader or source_bytes)(reference_path)
+            try:
+                reference_source = redirect_source(path, hierarchy_root, source, reader)
+            except (ValueError, OSError, RuntimeError) as error:
+                return None, None, str(error)
+        elif source is not None and contains_external_request(source):
+            return None, None, "mandoc does not expand embedded .so/.mso requests"
+        else:
+            reference_source = reader(path)
         if reference_source is None:
-            return None, None, f"cannot decompress mandoc reference source: {reference_path}"
+            return None, None, f"cannot decompress mandoc reference source: {path}"
         return [reference, "-T", "utf8", "-O", "width=200"], reference_source, None
     if hierarchy_root is not None:
         section = manual_section(path)

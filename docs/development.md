@@ -966,7 +966,16 @@ python3 -m scripts.roff.audit.audit_roff_fidelity --manpath /usr/share/man --pen
   --audit-db "$MANT_ROFF_CORPUS/audits/mant/current/FIDELITY_AUDIT.csv" --corpus archlinux-host
 ```
 
-The audit compares NFC-normalized visible Unicode tokens and contiguous token phrases, plus narrowly source-conditioned whitespace and punctuation that carry mdoc semantics. A phrase may not cross a source-proven tbl cell boundary: terminal tbl alignment and ManT's portable ` | ` table projection have different physical ordering, while each cell remains subject to the ordinary token and phrase checks. It deliberately ignores general line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable path sampling uses the path and `--seed`, so repeating a bounded local scan selects the same pages. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, repeat `--man-section` to focus on exact suffixes such as `1`, `3ssl`, or `8`, and repeat `--source-pattern` to require multiple multiline source shapes before sampling. Source-directed sweeps are the appropriate complement to random and AST-priority sampling when a rare macro family needs complete review.
+The audit compares NFC-normalized visible Unicode tokens and contiguous token phrases, plus narrowly source-conditioned whitespace and punctuation that carry mdoc semantics. A phrase may not cross a source-proven tbl cell boundary: terminal tbl alignment and ManT's portable ` | ` table projection have different physical ordering, while each cell remains subject to the ordinary token and phrase checks. It deliberately ignores general line wrapping, indentation, blank lines, typography, headers, footers, and ManT-specific visible link targets. A `REVIEW` result is a candidate for human inspection rather than a test failure; reference renderers and ManT intentionally differ in several presentation details. Stable path sampling uses the path and `--seed` to reproduce an initial bounded sample. Use `--max-pages-per-section` when broad coverage matters more than matching the host corpus distribution, repeat `--man-section` to focus on exact suffixes such as `1`, `3ssl`, or `8`, and repeat `--source-pattern` to require multiple multiline source shapes before sampling. Source-directed sweeps are the appropriate complement to random and AST-priority sampling when a rare macro family needs complete review.
+
+When a bounded scan uses a ledger, its refresh sidecar also tracks which
+paths have already been attempted. This lets unreadable files, recurring
+failures, and aliases share the quota with newly discovered pages. Aliases
+are rechecked even when their own bytes are unchanged. For mandoc comparisons,
+static alias chains are followed only within the selected manual hierarchy
+and only through verified source transports. Missing, unsafe, cyclic, and
+unreadable chains are reported as non-comparable. JSON reports include
+currently unreadable paths even when an earlier ledger record exists.
 
 ### Roff structure audit
 
@@ -991,6 +1000,11 @@ cannot supply clean coverage for the decoded page. Structure rechecks redirects
 and symlinks even if the entry bytes match a ledger row, because the target may
 have changed. Bounded layout scans give readable pages priority over transport
 failures, so an unreadable file cannot consume every subsequent scan's budget.
+The standalone semantic profiler and parser-side target profiler report
+alias-only observations separately from indexed manual coverage. Their alias
+review records distinguish a verified dependency from a missing or
+non-comparable target. The structure, projection and fidelity audits exercise
+indexed alias loads.
 
 The separate CommonMark projection oracle catches valid-but-wrong Markdown
 topology after lowering has already succeeded:
