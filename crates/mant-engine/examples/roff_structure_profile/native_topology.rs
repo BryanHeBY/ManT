@@ -156,12 +156,7 @@ impl ParagraphWitness {
         } else if self.simple {
             match child.kind {
                 NodeKind::Text
-                    if child.flags.line_start
-                        && !child.flags.no_fill
-                        && child
-                            .text
-                            .as_deref()
-                            .is_some_and(|text| text.starts_with(char::is_alphanumeric)) =>
+                    if child.flags.line_start && !child.flags.no_fill && starts_prose(child) =>
                 {
                     self.start(child.line);
                 }
@@ -183,12 +178,7 @@ impl ParagraphWitness {
                 NodeKind::Element
                     if child.macro_token.as_deref() == Some("No")
                         && !child.flags.no_fill
-                        && let [text] = child.children.as_slice()
-                        && text.kind == NodeKind::Text
-                        && text
-                            .text
-                            .as_deref()
-                            .is_some_and(|text| text.starts_with(char::is_alphanumeric)) =>
+                        && matches!(child.children.as_slice(), [text] if starts_prose(text)) =>
                 {
                     self.start(child.line);
                 }
@@ -205,6 +195,14 @@ impl ParagraphWitness {
         self.owner
             .get_or_insert_with(|| SourceOccurrence::next(&mut self.occurrences, line));
     }
+}
+
+fn starts_prose(node: &Node) -> bool {
+    node.kind == NodeKind::Text
+        && node
+            .text
+            .as_deref()
+            .is_some_and(|text| text.starts_with(char::is_alphanumeric))
 }
 
 fn collect_ast_topology(
