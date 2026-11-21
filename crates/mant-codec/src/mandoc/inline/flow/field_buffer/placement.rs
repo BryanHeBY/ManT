@@ -139,6 +139,17 @@ impl FieldBuffer {
         &mut self,
         writes: &[FieldWrite],
     ) {
+        // ASCII_NBRZW counts as graph for term_fill() and has no reading
+        // scalar. In a proved control prefix, the following space may
+        // stop a pass only after every term_word() has finished writing
+        // before lastcol. Keep this prefix editable from its first write.
+        if self.has_editable_control_prefix()
+            && self.cells.contains(&FieldCell::ZeroWidthGraph)
+            && self.cells.contains(&FieldCell::BreakableBlank)
+        {
+            self.hold_editable_passes();
+            return;
+        }
         if self.backbefore_graph.is_none() || !self.has_pending_break_markers() {
             return;
         }

@@ -1,6 +1,6 @@
 //! Control-only operands can relocate, but do not close, a live field.
 
-use super::{description_rows, json_string_roundtrip};
+use super::{Labels, Visit, description_rows, json_string_roundtrip};
 use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
 
 const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
@@ -79,6 +79,43 @@ fn control_only_rewinds_leave_the_existing_extent_editable() {
             )
             .unwrap();
             assert_eq!(result.total, hits, "{source}: {pattern}");
+        }
+    }
+}
+
+#[test]
+fn a_control_only_prefix_remains_editable_until_its_accepted_rows() {
+    // term_word() writes both \& and ignored device escapes as NBRZW
+    // (term.c:799). term_fill() counts that zero-width slot as graph before
+    // it decides whether the following source space consumes a pending \p.
+    // A relocated X can replace the slot, so the native endline belongs
+    // after the actual printed X, not its neighbor's first empty fragment.
+    let cases: &[(&str, &[&str], bool)] = &[
+        (r"\X'foo'\p ", &["X Y"], false),
+        (
+            r"\X'tty: link https://gap.test'\p \X'tty: link'",
+            &["XY"],
+            true,
+        ),
+        (r"\p\X'foo' ", &["X", "Y"], false),
+        (r"\&\p ", &["X Y"], false),
+    ];
+    for &(prefix, expected, has_link) in cases {
+        // Without the rewind, NBRZW still establishes the preceding empty
+        // pass. Its endline must not split the following accepted YX row.
+        for (edit, rows) in [(r"\h'-3n'", expected), ("", &["", "YX"][..])] {
+            let source = format!("{HEADER}.No \"{prefix}\" Ns No \"Y{edit}\" Ns No X{END}");
+            let content =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let rendered = mant_render::render_query_man(&content);
+            assert_eq!(description_rows(&rendered, &source), rows, "{source}");
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            let links = has_link
+                .then(|| ("https://gap.test".to_owned(), String::new()))
+                .into_iter()
+                .collect::<Vec<_>>();
+            assert_eq!(labels.0, links, "{source}");
         }
     }
 }

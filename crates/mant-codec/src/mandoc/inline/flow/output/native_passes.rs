@@ -87,26 +87,23 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 continue;
             }
             let mut cut = cell;
-            let (span_end, accepted_end) = if has_drawing_advance {
-                let end = buffer.printed_content_end(pass.start, pass.end);
-                (end, end)
-            } else {
-                (cell, pass.end)
-            };
+            let (span_end, accepted_end) = pass_cut_bounds(buffer, pass, cell, has_drawing_advance);
             if !section_seam
                 && (pending_gap
-                    || anchors[index].content < cell
-                        && buffer.projection_length(
-                            anchors[index].content,
-                            span_end.max(anchors[index].content),
-                        ) == 0)
+                    || projected_restart_needs_earlier_cut(
+                        buffer,
+                        anchors,
+                        index,
+                        pass,
+                        cell,
+                        span_end,
+                        &first_owners,
+                    ))
                 && let Some(last) = buffer.last_projected_cell(pass.start..accepted_end)
             {
-                // A replay can resume a word in a control-only interval
-                // after a glyph from an older owner. Its scalar count is
-                // unchanged, so a tail cut on that word would close its
-                // first fragment, before the borrowed glyph. Cut after
-                // the actual last published cell of the accepted pass.
+                // A replay can give this word an earlier fragment with
+                // the same scalar position. Anchor the native endline
+                // after the last accepted ink instead (term.c:205-220).
                 let actual = anchors.partition_point(|anchor| anchor.content <= last);
                 if let Some(actual) = actual.checked_sub(1)
                     && actual >= preceding
@@ -157,6 +154,38 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     }
 }
 
+fn pass_cut_bounds(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    pass: &super::super::field_buffer::FillPass,
+    restart: usize,
+    has_drawing_advance: bool,
+) -> (usize, usize) {
+    if has_drawing_advance {
+        let end = buffer.printed_content_end(pass.start, pass.end);
+        (end, end)
+    } else {
+        (restart, pass.end)
+    }
+}
+
+fn projected_restart_needs_earlier_cut<'a>(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &'a [super::super::NativeWordAnchor],
+    index: usize,
+    pass: &super::super::field_buffer::FillPass,
+    restart: usize,
+    span_end: usize,
+    first_owners: &std::cell::OnceCell<std::collections::HashMap<&'a str, usize>>,
+) -> bool {
+    use super::super::field_buffer::FillBoundary;
+    let owner = &anchors[index];
+    owner.content < restart
+        && buffer.projection_length(owner.content, span_end.max(owner.content)) == 0
+        || pass.boundary == FillBoundary::WordEndBreak
+            && owner.content >= pass.end
+            && first_owner_positions(anchors, first_owners)[owner.owner.as_str()] < index
+}
+
 fn exclude_skipped_gap(
     buffer: &super::super::field_buffer::FieldBuffer,
     content: usize,
@@ -195,14 +224,7 @@ fn project_detached_gap_restart<'a>(
     // term_field() defers trailing padding. If replay assigned it to a
     // fresh next owner, the cut belongs before that owner's first scalar.
     // A raw count on the old owner can include several writes to one glyph.
-    let first = first_owners.get_or_init(|| {
-        let mut first = std::collections::HashMap::new();
-        for (index, anchor) in anchors.iter().enumerate() {
-            first.entry(anchor.owner.as_str()).or_insert(index);
-        }
-        first
-    });
-    if first[following.owner.as_str()] != owner {
+    if first_owner_positions(anchors, first_owners)[following.owner.as_str()] != owner {
         return false;
     }
     boundaries
@@ -215,6 +237,19 @@ fn project_detached_gap_restart<'a>(
             section_seam: false,
         });
     true
+}
+
+fn first_owner_positions<'a, 'map>(
+    anchors: &'a [super::super::NativeWordAnchor],
+    positions: &'map std::cell::OnceCell<std::collections::HashMap<&'a str, usize>>,
+) -> &'map std::collections::HashMap<&'a str, usize> {
+    positions.get_or_init(|| {
+        let mut first = std::collections::HashMap::new();
+        for (index, anchor) in anchors.iter().enumerate() {
+            first.entry(anchor.owner.as_str()).or_insert(index);
+        }
+        first
+    })
 }
 
 fn project_definition_handoff(
@@ -261,11 +296,13 @@ fn projected_restart_owner(
     use super::super::field_buffer::FillBoundary;
     if pass.boundary == FillBoundary::WordEndBreak
         && buffer.printed_content_end(pass.start, pass.end) == pass.start
-        && let Some(last) = buffer.last_projected_cell(next.start..next.end)
+        && let Some(first) =
+            (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) != 0)
     {
         // An invisible-only pass still ends a line. Its boundary needs
-        // an owner with accepted output to carry it.
-        return anchors.partition_point(|anchor| anchor.content <= last);
+        // to precede the first accepted glyph, not the last source word
+        // within that next native pass (term.c:205-220).
+        return anchors.partition_point(|anchor| anchor.content <= first);
     }
 
     // term_flushln() may restart within the next word's invisible prefix,
