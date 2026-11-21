@@ -147,6 +147,7 @@ impl<'a> HeadView<'a> {
                 let mut open: Vec<OpenAngle> = Vec::new();
                 let mut escaped = false;
                 let mut quote = None;
+                let mut groups = Vec::new();
                 let mut previous = None;
                 let mut operands = self.operands.iter().peekable();
                 for (offset, ch) in self.text.char_indices() {
@@ -179,9 +180,11 @@ impl<'a> HeadView<'a> {
                     quote = super::quote_closer(ch);
                     if ch == '\n' {
                         open.clear();
+                        groups.clear();
                     } else if ch == '-'
                         && self.native_option_starts(offset)
-                        && matches!(previous, Some((',' | '|', end)) if end < offset
+                        && matches!(previous, Some((delimiter @ (',' | '|'), end)) if end < offset
+                            || delimiter == ',' && !self.literal_punctuation(end - 1)
                             || self.option_starts_assignment(offset))
                     {
                         while open.last().is_some_and(|angle| !angle.leading) {
@@ -201,6 +204,13 @@ impl<'a> HeadView<'a> {
                         continue;
                     }
                     match ch {
+                        '(' | '[' | '{' if groups.len() < super::MAX_NESTING => {
+                            groups.push(super::closing(ch).expect("opening bracket"));
+                        }
+                        ')' | ']' | '}' if groups.last() == Some(&ch) => {
+                            open.retain(|angle| angle.depth < groups.len());
+                            groups.pop();
+                        }
                         '<' if open.len() < super::MAX_NESTING => {
                             let leading = operand.is_none_or(|operand| {
                                 let prefix = self.text[operand.bytes.start..offset].trim();
@@ -210,17 +220,14 @@ impl<'a> HeadView<'a> {
                                 offset,
                                 leading,
                                 enclosure: angle_enclosure(operand),
+                                depth: groups.len(),
                             });
                         }
-                        '>' if open.last().is_some_and(|angle| angle.leading)
-                            || operand.is_none_or(|operand| {
-                                self.text[offset + 1..operand.bytes.end].starts_with(|ch: char| {
-                                    !super::parameter_token::parameter_character(ch)
-                                }) || offset + 1 == operand.bytes.end
-                            }) =>
-                        {
-                            let enclosure = angle_enclosure(operand);
-                            if let Some(angle) = open.pop_if(|angle| angle.enclosure == enclosure) {
+                        '>' => {
+                            if let Some(angle) = open.pop_if(|angle| {
+                                angle.depth == groups.len()
+                                    && angle.closes_at(&self.text, offset, operand)
+                            }) {
                                 pairs.extend([angle.offset, offset]);
                             }
                         }
@@ -248,17 +255,21 @@ impl<'a> HeadView<'a> {
         character: char,
     ) -> bool {
         matches!(character, '<' | '>')
-            && argument.attached_to_name
-            && self.text[argument.bytes.start..].starts_with('=')
             && self
                 .operand(offset)
                 .is_some_and(|operand| match operand.role {
                     NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_) => {
                         true
                     }
+                    NativeOperandRole::LiteralValue | NativeOperandRole::Command => {
+                        argument.attached_to_name
+                            && self.text[argument.bytes.start..].starts_with('=')
+                    }
                     NativeOperandRole::ExplicitOption => {
                         let rhs_start = argument.bytes.start + 1;
-                        offset > rhs_start && offset + 1 < operand.bytes.end
+                        argument.attached_to_name
+                            && self.text[argument.bytes.start..].starts_with('=')
+                            && offset > rhs_start
                     }
                     _ => false,
                 })
@@ -363,6 +374,29 @@ struct OpenAngle {
     offset: usize,
     leading: bool,
     enclosure: Option<u32>,
+    depth: usize,
+}
+
+#[cfg(feature = "roff")]
+impl OpenAngle {
+    fn closes_at(&self, text: &str, offset: usize, operand: Option<&NativeOperand>) -> bool {
+        if self.enclosure != angle_enclosure(operand) {
+            return false;
+        }
+        operand.is_none_or(|operand| {
+            let tail = &text[offset + 1..operand.bytes.end];
+            // Hold an opener across a numeric comparison within the same
+            // typed operand. A later typed >suffix can close the opener.
+            if operand.bytes.contains(&self.offset)
+                && tail.starts_with(|ch: char| ch.is_ascii_digit())
+            {
+                return false;
+            }
+            self.leading
+                || tail.is_empty()
+                || tail.starts_with(|ch| !super::parameter_token::parameter_character(ch))
+        })
+    }
 }
 
 #[cfg(feature = "roff")]

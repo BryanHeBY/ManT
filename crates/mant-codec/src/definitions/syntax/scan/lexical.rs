@@ -42,7 +42,7 @@ impl LexicalState {
             } else {
                 self.closers.push(closer);
             }
-        } else if matches!(character, ']' | '}' | ')' | '>') {
+        } else if matches!(character, ']' | '}' | ')' | '>' | '⟩') {
             if self.closers.pop() == Some(character) {
                 return self.closers.is_empty();
             }

@@ -474,8 +474,12 @@ impl<'a> Scanner<'a> {
     }
 
     fn finish_argument(&mut self) {
+        self.finish_argument_at(self.cursor);
+    }
+
+    fn finish_argument_at(&mut self, end: usize) {
         if let Some(mut argument) = self.argument_start.take() {
-            argument.bytes.end = self.cursor;
+            argument.bytes.end = end;
             #[cfg(feature = "roff")]
             if self
                 .names
@@ -594,7 +598,12 @@ impl<'a> Scanner<'a> {
                     || independent_assignment_alias
                     || self.view.literal_operand_starts(restart))
             {
-                self.finish_argument();
+                let end = if separator || character.is_whitespace() {
+                    self.separator.unwrap_or(self.cursor)
+                } else {
+                    self.cursor
+                };
+                self.finish_argument_at(end);
                 self.cursor = restart;
                 return;
             }
@@ -681,6 +690,7 @@ pub(super) fn closing(character: char) -> Option<char> {
         '{' => Some('}'),
         '(' => Some(')'),
         '<' => Some('>'),
+        '⟨' => Some('⟩'),
         _ => None,
     }
 }

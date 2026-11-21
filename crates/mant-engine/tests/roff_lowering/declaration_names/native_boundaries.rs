@@ -1090,3 +1090,168 @@ fn native_groups_keep_inner_names_private_through_suffixes_and_paths() {
         check("OPTIONS", head, names, label, true, hidden);
     }
 }
+
+#[test]
+fn assignment_scopes_and_alias_boundaries_follow_native_operands() {
+    // CVS termp_quote_pre/post own the Aq/Bq delimiters. Its HTML and
+    // terminal output agree on each It's label and independent BODY.
+    for (head, names, label, full) in [
+        (
+            "Fl a= Ns Ar <(x>0) | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<(x>0) | -v>, -b",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar <[x>0] | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<[x>0] | -v>, -b",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar <(x=0) | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<(x=0) | -v>, -b",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar <x>0 | Fl v Ns Ar > , Fl b",
+            &["-a", "-b"][..],
+            "-a=<x>0 | -v>, -b",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar <x | Fl v Ns Ar >suffix , Fl b",
+            &["-a", "-b"][..],
+            "-a=<x | -v>suffix, -b",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x Aq Ar x<y Ns | Ns Fl v= Ns Ar y Ns Ar >",
+            &["-a"][..],
+            "-a=x ⟨x<y|-v=y>⟩",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x Aq Ar one | Fl v",
+            &["-a"][..],
+            "-a=x ⟨one | -v⟩",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x Bq Ar x<y Ns | Ns Fl v= Ns Ar y Ns Ar >",
+            &["-a"][..],
+            "-a=x [x<y|-v=y>]",
+            true,
+        ),
+    ] {
+        check("OPTIONS", head, names, label, full, &["-v", "--fake"]);
+    }
+}
+
+#[test]
+fn independent_aliases_use_the_same_cut_for_name_and_form() {
+    // Both CVS devices preserve the comma and the actual operand spelling.
+    for (head, names, label, full) in [
+        (
+            "Fl a= Ns Li x<10 , Ns Fl b= Ns Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b=y>, -c",
+            true,
+        ),
+        (
+            "Fl a= Ns Cm x<10 , Ns Fl b= Ns Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b=y>, -c",
+            true,
+        ),
+        (
+            "Fl a=x<10 , Ns Fl b= Ns Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b=y>, -c",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x<10 , Ns Fl b= Ns Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b=y>, -c",
+            true,
+        ),
+        (
+            "Fl a= Ns Pa x<10 , Ns Fl b= Ns Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b=y>, -c",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x<10 , Ns Fl b Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10,-b y>, -c",
+            true,
+        ),
+        (
+            "Fl a= Ns Ar x<10 , Fl b Ar y> , Fl c",
+            &["-a", "-b", "-c"][..],
+            "-a=x<10, -b y>, -c",
+            true,
+        ),
+        (
+            r"Fl a= Ns Ar x Pq Ar value | No \&.. Ns Pa /config",
+            &["-a"][..],
+            "-a=x (value | ../config)",
+            true,
+        ),
+        (
+            r"Fl a= Ns Ar x Pq Ar value | No \&../ Ns Pa config",
+            &["-a"][..],
+            "-a=x (value | ../config)",
+            true,
+        ),
+        (
+            r"Fl a= Ns Ar x Pq Ar value | No \&.. Ns Pa config",
+            &["-a"][..],
+            "-a=x (value | ..config)",
+            false,
+        ),
+    ] {
+        check("OPTIONS", head, names, label, full, &["-v", "--fake"]);
+    }
+}
+
+#[test]
+fn pfilctl_command_groups_keep_their_flags_inside_the_form() {
+    // The FreeBSD page uses the same Aq scope in its synopsis and in
+    // both command definitions. CVS prints the labelled It entries.
+    let source = include_str!("freebsd-pfilctl.8");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    for (name, form) in [
+        ("link", "link ⟨-i | -o⟩ [-a] hook head"),
+        ("unlink", "unlink ⟨-i | -o⟩ hook head"),
+    ] {
+        let owner = owners(content.document.as_ref().unwrap())
+            .into_iter()
+            .find(|owner| owner.facts().is_some_and(|facts| facts.names == [name]))
+            .unwrap();
+        assert_eq!(
+            owner
+                .forms()
+                .unwrap()
+                .iter()
+                .map(inline_plain_text)
+                .collect::<Vec<_>>(),
+            [form]
+        );
+        assert_name_positions(&content, owner, name);
+    }
+    for (query, count) in [("link", 1), ("unlink", 1), ("-i", 0), ("-o", 0), ("-a", 0)] {
+        let reply = mant_query::explain_query(
+            &content,
+            &ExplanationQuery {
+                entry: query.into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert_eq!(reply.counts.direct_entry.total, count, "{query}");
+    }
+}

@@ -151,7 +151,10 @@ enum Literal {
 
 /// A pair contained in one typed operand is its author's spelling. An
 /// unmatched bracket can instead continue through other native operands.
-fn open_operand_edges(value: &str) -> Result<Vec<(usize, char)>, ()> {
+fn open_operand_edges(
+    value: &str,
+    is_paired_angle: impl Fn(usize) -> bool,
+) -> Result<Vec<(usize, char)>, ()> {
     let mut edges = Vec::new();
     let mut quote = None;
     let mut escaped = false;
@@ -167,12 +170,15 @@ fn open_operand_edges(value: &str) -> Result<Vec<(usize, char)>, ()> {
             }
         } else if let Some(end) = quote_closer(character) {
             quote = Some(end);
-        } else if edges
-            .last()
-            .is_some_and(|&(_, open)| closing(open) == Some(character))
+        } else if (character != '>' || is_paired_angle(offset))
+            && edges
+                .last()
+                .is_some_and(|&(_, open)| closing(open) == Some(character))
         {
             edges.pop();
-        } else if closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>') {
+        } else if (!matches!(character, '<' | '>') || is_paired_angle(offset))
+            && (closing(character).is_some() || matches!(character, ']' | '}' | ')' | '>'))
+        {
             if edges.len() == MAX_NESTING {
                 return Err(());
             }
@@ -294,7 +300,11 @@ impl AssignmentSyntax {
             Role::ExplicitOption if owns_assignment_prefix => {
                 // Fl can spell the start of its own assignment, including
                 // brackets that close in later operands: --skip=[-][sample|time].
-                self.literal(value, Literal::Assignment)
+                if has_literal_angle(piece, view) {
+                    self.operand(piece, view, ValueEvidence::Literal, false)
+                } else {
+                    self.literal(value, Literal::Assignment)
+                }
             }
             Role::ExplicitOption if self.lexical.within_group() => {
                 // An inner Fl proves its own spelling inside the optional
@@ -333,20 +343,24 @@ impl AssignmentSyntax {
                 // A Bq with the same terminal glyphs makes no such claim.
                 // A No dot can finish a pending choice together with the
                 // adjacent part of a Pa in the same generated enclosure.
-                let path_prefix = relative_path_prefix(value.trim())
-                    && piece.tail == OperandTail::Joined
-                    && self
-                        .group()
-                        .is_some_and(|group| group.join == Some(Join::Word))
-                    && view
-                        .operand(piece.start + value.len())
-                        .is_some_and(|operand| operand.role == Role::PathOperand(Some(body)));
+                let path_prefix =
+                    relative_path_prefix(value.trim(), &view.text[piece.start + value.len()..])
+                        && piece.tail == OperandTail::Joined
+                        && self
+                            .group()
+                            .is_some_and(|group| group.join == Some(Join::Word))
+                        && view
+                            .operand(piece.start + value.len())
+                            .is_some_and(|operand| operand.role == Role::PathOperand(Some(body)));
                 let literal = if path_prefix {
                     Literal::Explicit
                 } else {
                     scoped_literal(scopes.last().filter(|_| bare))
                 };
                 self.literal(value, literal)
+            }
+            Role::Command | Role::LiteralValue if has_literal_angle(piece, view) => {
+                self.operand(piece, view, ValueEvidence::Literal, false)
             }
             Role::Command => self.literal(value, scoped_literal(scopes.last())),
             Role::LiteralValue => self.literal(value, Literal::Explicit),
@@ -390,14 +404,9 @@ impl AssignmentSyntax {
         let spelling = trimmed.trim_end();
         let spelling_start = value_start + (value.len() - trimmed.len());
         let mut start = 0;
-        for (offset, bracket) in open_operand_edges(spelling)? {
-            // Comparison signs in a typed operand carry their own spelling.
-            // Export an unmatched angle only when it has a cross-operand mate.
-            if matches!(bracket, '<' | '>')
-                && !view.paired_assignment_angle(spelling_start + offset)
-            {
-                continue;
-            }
+        for (offset, bracket) in open_operand_edges(spelling, |offset| {
+            view.paired_assignment_angle(spelling_start + offset)
+        })? {
             self.operand_fragment(
                 &spelling[start..offset],
                 evidence,
@@ -572,7 +581,7 @@ impl AssignmentSyntax {
         }
         let delimiter = closing(ch).is_some()
             || quote_closer(ch).is_some()
-            || matches!(ch, ']' | '}' | ')' | '>' | '”' | '’');
+            || matches!(ch, ']' | '}' | ')' | '>' | '⟩' | '”' | '’');
         if delimiter {
             self.delimiter(ch)?;
         } else if matches!(ch, '=' | ',' | '/' | ':' | '@' | '|') {
@@ -657,8 +666,15 @@ fn is_operand_connector(character: char) -> bool {
     matches!(character, '=' | '|' | ',' | ':' | '@')
 }
 
-fn relative_path_prefix(value: &str) -> bool {
+fn has_literal_angle(piece: OperandPiece<'_>, view: &HeadView<'_>) -> bool {
+    piece.value.char_indices().any(|(offset, ch)| {
+        matches!(ch, '<' | '>') && !view.paired_assignment_angle(piece.start + offset)
+    })
+}
+
+fn relative_path_prefix(value: &str, continuation: &str) -> bool {
     value == "."
+        || value == ".." && continuation.starts_with('/')
         || value
             .strip_suffix('/')
             .is_some_and(|path| path.split('/').all(|part| matches!(part, "." | "..")))
