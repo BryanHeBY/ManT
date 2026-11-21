@@ -2,6 +2,9 @@
 use super::{Inline, NativeOperand, NativeOperandRole, Range};
 use crate::definitions::syntax::eligibility::operand_at;
 
+#[cfg(feature = "roff")]
+mod assignment_angles;
+
 #[derive(Clone, Copy, Default)]
 pub(super) struct Style {
     pub(super) strong: bool,
@@ -138,157 +141,9 @@ impl<'a> HeadView<'a> {
     #[cfg(feature = "roff")]
     pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
         self.assignment_angles
-            .get_or_init(|| {
-                // A leading angle can contain native Fl operands. An
-                // interior comparison cannot claim a later declaration's
-                // closing angle. Use accepted native operand starts, which
-                // can follow a space owned by the same operand.
-                let mut pairs = Vec::new();
-                let mut open: Vec<OpenAngle> = Vec::new();
-                let mut escaped = false;
-                let mut quote = None;
-                let mut groups = Vec::new();
-                let mut previous = None;
-                let mut operands = self.operands.iter().peekable();
-                for (offset, ch) in self.text.char_indices() {
-                    while let Some(operand) =
-                        operands.peek().filter(|item| item.bytes.end <= offset)
-                    {
-                        if let NativeOperandRole::EnclosureEnd(body) = operand.role {
-                            open.retain(|angle| angle.enclosure != Some(body));
-                        }
-                        operands.next();
-                    }
-                    let operand = operands
-                        .peek()
-                        .copied()
-                        .filter(|item| item.bytes.contains(&offset));
-                    if std::mem::take(&mut escaped) {
-                        continue;
-                    }
-                    if ch == '\\' {
-                        escaped = true;
-                        continue;
-                    }
-                    if let Some(closer) = quote {
-                        if ch == closer {
-                            quote = None;
-                            previous = Some((ch, offset + ch.len_utf8()));
-                        }
-                        continue;
-                    }
-                    quote = super::quote_closer(ch);
-                    if ch == '\n' {
-                        open.clear();
-                        groups.clear();
-                    } else if ch == '-' && self.assignment_alias_boundary(offset, previous) {
-                        retire_assignment_angles(
-                            &mut open,
-                            &mut pairs,
-                            self.option_starts_assignment(offset)
-                                || matches!(previous, Some((',', _)))
-                                    && self.option_starts_native_argument(offset),
-                        );
-                    }
-                    if !ch.is_whitespace() {
-                        previous = Some((ch, offset + ch.len_utf8()));
-                    }
-                    if operand.is_some_and(|item| {
-                        matches!(
-                            item.role,
-                            NativeOperandRole::EnclosureStart { .. }
-                                | NativeOperandRole::EnclosureEnd(_)
-                        )
-                    }) {
-                        continue;
-                    }
-                    match ch {
-                        '(' | '[' | '{' if groups.len() < super::MAX_NESTING => {
-                            groups.push(super::closing(ch).expect("opening bracket"));
-                        }
-                        ')' | ']' | '}' if groups.last() == Some(&ch) => {
-                            open.retain(|angle| angle.depth < groups.len());
-                            groups.pop();
-                        }
-                        '<' | '⟨' if open.len() < super::MAX_NESTING => {
-                            let leading = operand.is_none_or(|operand| {
-                                let prefix = self.text[operand.bytes.start..offset].trim();
-                                prefix.is_empty() || prefix.ends_with('=')
-                            });
-                            open.push(OpenAngle {
-                                offset,
-                                closer: super::closing(ch).expect("angle opener"),
-                                leading,
-                                numeric_close: None,
-                                enclosure: angle_enclosure(operand),
-                                depth: groups.len(),
-                            });
-                        }
-                        '>' | '⟩' => Self::close_assignment_angle(
-                            &self.text,
-                            &mut open,
-                            operand,
-                            offset,
-                            groups.len(),
-                            &mut pairs,
-                        ),
-                        _ => {}
-                    }
-                }
-                pairs.sort_unstable();
-                pairs
-            })
+            .get_or_init(|| assignment_angles::paired_offsets(self))
             .binary_search(&offset)
             .is_ok()
-    }
-
-    #[cfg(feature = "roff")]
-    fn assignment_alias_boundary(&self, offset: usize, previous: Option<(char, usize)>) -> bool {
-        self.native_option_starts(offset)
-            && matches!(previous, Some((delimiter @ (',' | '|'), end)) if end < offset
-                || delimiter == ',' && !self.literal_punctuation(end - 1)
-                || self.option_starts_assignment(offset))
-    }
-
-    #[cfg(feature = "roff")]
-    fn close_assignment_angle(
-        text: &str,
-        open: &mut Vec<OpenAngle>,
-        operand: Option<&NativeOperand>,
-        offset: usize,
-        depth: usize,
-        pairs: &mut Vec<usize>,
-    ) {
-        let Some(angle) = open.last_mut().filter(|angle| angle.depth == depth) else {
-            return;
-        };
-        if !text[offset..].starts_with(angle.closer) {
-            return;
-        }
-        let after = offset + angle.closer.len_utf8();
-        if operand.is_some_and(|operand| {
-            operand.bytes.contains(&angle.offset)
-                && text[after..operand.bytes.end].starts_with(|ch: char| ch.is_ascii_digit())
-        }) {
-            angle.numeric_close = Some(offset);
-        }
-        if angle.closes_at(text, offset, operand) {
-            pairs.extend([angle.offset, offset]);
-            open.pop();
-        }
-    }
-
-    #[cfg(feature = "roff")]
-    fn option_starts_assignment(&self, offset: usize) -> bool {
-        let tail = self.text[offset..].trim_start_matches(super::option_character);
-        tail.trim_start().starts_with('=')
-    }
-
-    #[cfg(feature = "roff")]
-    fn option_starts_native_argument(&self, offset: usize) -> bool {
-        let name = self.text[offset..].trim_start_matches(super::option_character);
-        let value = name.trim_start();
-        value.len() < name.len() && self.explicit_argument(self.text.len() - value.len())
     }
 
     #[cfg(feature = "roff")]
@@ -407,62 +262,5 @@ impl<'a> HeadView<'a> {
         self.operands[start..]
             .iter()
             .take_while(move |item| item.bytes.start < range.end)
-    }
-}
-
-#[cfg(feature = "roff")]
-struct OpenAngle {
-    offset: usize,
-    closer: char,
-    leading: bool,
-    numeric_close: Option<usize>,
-    enclosure: Option<u32>,
-    depth: usize,
-}
-
-#[cfg(feature = "roff")]
-fn retire_assignment_angles(open: &mut Vec<OpenAngle>, pairs: &mut Vec<usize>, independent: bool) {
-    while open.last().is_some_and(|angle| !angle.leading) {
-        open.pop();
-    }
-    // An independent option with its own value resolves a deferred
-    // same-word numeric close in the preceding assignment.
-    if independent
-        && let Some(offset) = open.last().and_then(|angle| angle.numeric_close)
-        && let Some(angle) = open.pop()
-    {
-        pairs.extend([angle.offset, offset]);
-    }
-}
-
-#[cfg(feature = "roff")]
-impl OpenAngle {
-    fn closes_at(&self, text: &str, offset: usize, operand: Option<&NativeOperand>) -> bool {
-        if self.enclosure != angle_enclosure(operand) {
-            return false;
-        }
-        operand.is_none_or(|operand| {
-            let tail = &text[offset + self.closer.len_utf8()..operand.bytes.end];
-            // Hold an opener across a numeric comparison within the same
-            // typed operand. A later typed >suffix can close the opener.
-            if operand.bytes.contains(&self.offset)
-                && tail.starts_with(|ch: char| ch.is_ascii_digit())
-            {
-                return false;
-            }
-            self.leading
-                || tail.is_empty()
-                || tail.starts_with(|ch| !super::parameter_token::parameter_character(ch))
-        })
-    }
-}
-
-#[cfg(feature = "roff")]
-fn angle_enclosure(operand: Option<&NativeOperand>) -> Option<u32> {
-    match operand?.role {
-        NativeOperandRole::Placeholder { enclosure, .. }
-        | NativeOperandRole::PathOperand(enclosure) => enclosure,
-        NativeOperandRole::EnclosureContent { body, .. } => Some(body),
-        _ => None,
     }
 }
