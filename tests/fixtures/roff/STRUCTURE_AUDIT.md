@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v28` successful page response requires
+The `mant.roff-structure-profile/v29` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -140,6 +140,9 @@ cell must belong to a data row in the same observation stream. The expected
 cell must own its content and the observed cell must contain blocks. A source equation
 known to be inside a table without an exact cell address is recorded for
 review. A known table-external equation has no cell address.
+When same-source expansion makes the paragraph occurrence uncertain,
+`unprovedParagraph` records local review while retaining the section-level
+equation obligation.
 
 Limited incremental scans allocate the quota to unattempted or stale source
 identities first. Failed paths then rotate in least-recently-attempted order.

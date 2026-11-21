@@ -737,3 +737,6 @@ fn equation_obligations_check_order_and_multiplicity_even_inside_one_cell() {
         );
     }
 }
+
+#[path = "observer_tests/paragraph_witnesses.rs"]
+mod paragraph_witnesses;

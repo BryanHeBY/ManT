@@ -137,8 +137,9 @@ pub(super) fn record(
                 payload,
                 hang_without_gap,
             );
-            hang_without_gap |= matches!(payload.field, Field::Hanging)
-                && matches!(node.macro_token.as_deref(), Some("br" | "sp"));
+            let clears_brind = matches!(node.macro_token.as_deref(), Some("br" | "sp"));
+            let hanging_break = clears_brind && matches!(payload.field, Field::Hanging);
+            hang_without_gap |= hanging_break;
             super::HeadPayloads::walk_part_slice(
                 std::slice::from_ref(node),
                 source,
@@ -146,7 +147,16 @@ pub(super) fn record(
                 payload,
             );
             payload.partial = true;
+            if clears_brind && matches!(payload.field, Field::Tagged(_)) {
+                // roff_term_pre_br() clears NOBREAK and BRIND after
+                // flushing. Later literal fields can now close their rows.
+                payload.field = Field::Ordinary;
+            }
+            let previous = rows.last_literal_atom;
             rows.forget(payload);
+            if hanging_break {
+                rows.last_literal_atom = previous;
+            }
             start = index + 1;
             continues = false;
             continue;
@@ -174,17 +184,21 @@ pub(super) fn record(
                 // an independent vertical row (term.c:474–496).
                 rows.end_line();
             }
-            rows.last_literal_atom = None;
+            if !continues {
+                rows.last_literal_atom = None;
+            }
             start = index + 1;
+            // The empty TEXT's term_newln() does not consume NONEWLINE.
+            // It is still active at the next actual term_word().
+            continue;
         }
-        continues = !empty_text
-            && node
-                .children
-                .last()
-                .unwrap_or(node)
-                .text
-                .as_deref()
-                .is_some_and(|text| RoffWordEvidence::read(text).has(RoffWordEffect::Continues));
+        continues = node
+            .children
+            .last()
+            .unwrap_or(node)
+            .text
+            .as_deref()
+            .is_some_and(|text| RoffWordEvidence::read(text).has(RoffWordEffect::Continues));
     }
     rows.record_literal(&body.children[start..], source, payload, hang_without_gap);
     true

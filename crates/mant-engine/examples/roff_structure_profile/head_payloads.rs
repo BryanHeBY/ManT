@@ -122,13 +122,14 @@ impl TermPayload {
     }
 
     fn compound_spellings(&self) -> HashMap<usize, HashMap<String, usize>> {
+        const PREFIX_LIMIT: usize = 32;
         let mut compounds = HashMap::new();
         for &index in self.joins.keys() {
             let first = &self.atoms[index];
             let mut stem = first.value.clone();
             // Each edge has one source-proved separator. Generate only
             // consecutive prefixes of that chain, not a product of wrappers.
-            for end in (index + 1..self.atoms.len()).take(32) {
+            for end in (index + 1..self.atoms.len()).take(PREFIX_LIMIT) {
                 let Some(separator) = self.joins.get(&(end - 1)) else {
                     break;
                 };
@@ -142,10 +143,46 @@ impl TermPayload {
                             .insert(format!("{left}{stem}{spelling}"), end - index);
                     }
                 }
+                stem.push_str(&last.wrappers.0);
                 stem.push_str(&last.value);
             }
         }
         compounds
+    }
+
+    fn match_joined(&self, index: usize, value: &str) -> Option<usize> {
+        let first = &self.atoms[index];
+        for left in ["", first.wrappers.0.as_str()] {
+            let Some(mut tail) = value
+                .strip_prefix(left)
+                .and_then(|text| text.strip_prefix(&first.value))
+            else {
+                continue;
+            };
+            // Compare the observed token directly. Never allocate the full
+            // vocabulary of suffixes of a long executed join chain.
+            for end in index + 1..self.atoms.len() {
+                let Some(next) = self
+                    .joins
+                    .get(&(end - 1))
+                    .and_then(|sep| tail.strip_prefix(sep))
+                else {
+                    break;
+                };
+                let atom = &self.atoms[end];
+                if atom.matches_spelling(next) {
+                    return Some(end - index);
+                }
+                let Some(rest) = next
+                    .strip_prefix(&atom.wrappers.0)
+                    .and_then(|text| text.strip_prefix(&atom.value))
+                else {
+                    break;
+                };
+                tail = rest;
+            }
+        }
+        None
     }
 
     fn compare(
@@ -173,27 +210,33 @@ impl TermPayload {
             observation.visit_inlines(&term.content);
             observation.end_run();
         }
-        let mut observed = observation
-            .atoms
-            .iter()
-            .filter(|item| item.equation || vocabulary.contains(item.value.as_str()));
+        let mut observed = observation.atoms.iter();
+        let relevant =
+            |item: &ObservedAtom| item.equation || vocabulary.contains(item.value.as_str());
         let mut previous_row = None;
         let mut witnesses = self.atoms.iter().enumerate();
         while let Some((index, expected)) = witnesses.next() {
             let joined = |item: &ObservedAtom| {
-                (!item.equation)
-                    .then(|| compound.get(&index)?.get(&item.value))
-                    .flatten()
+                if !item.equation && self.joins.contains_key(&index) {
+                    compound
+                        .get(&index)
+                        .and_then(|words| words.get(&item.value).copied())
+                        .or_else(|| self.match_joined(index, &item.value))
+                } else {
+                    None
+                }
             };
             let matches = |item: &ObservedAtom| {
                 item.equation == matches!(expected.origin, Origin::Equation)
-                    && expected.spellings().any(|word| word == item.value)
+                    && expected.matches_spelling(&item.value)
                     || joined(item).is_some()
             };
             let found = if self.opaque_words {
                 observed.find(|item| matches(item))
             } else {
-                observed.next().filter(|item| matches(item))
+                observed
+                    .find(|item| relevant(item) || joined(item).is_some())
+                    .filter(|item| matches(item))
             };
             let Some(found) = found else {
                 violations.push(format!(
@@ -202,7 +245,7 @@ impl TermPayload {
                 ));
                 return;
             };
-            if let Some(&extra) = joined(found) {
+            if let Some(extra) = joined(found) {
                 witnesses.nth(extra - 1);
             }
             if let Some(row) = expected.row {
@@ -235,7 +278,7 @@ impl TermPayload {
             }
         }
         if !self.opaque_words
-            && let Some(extra) = observed.next()
+            && let Some(extra) = observed.find(|item| relevant(item))
         {
             violations.push(format!(
                 "definition-head-content at {line}:{column}, occurrence {occurrence}: unexpected repeated {:?} in term",
@@ -246,6 +289,15 @@ impl TermPayload {
 }
 
 impl ExpectedAtom {
+    fn matches_spelling(&self, value: &str) -> bool {
+        ["", self.wrappers.0.as_str()].into_iter().any(|left| {
+            value
+                .strip_prefix(left)
+                .and_then(|rest| rest.strip_prefix(&self.value))
+                .is_some_and(|suffix| self.wrappers.1.starts_with(suffix))
+        })
+    }
+
     fn spellings(&self) -> impl Iterator<Item = String> + '_ {
         let (left, right) = &self.wrappers;
         ["", left.as_str()].into_iter().flat_map(move |left| {

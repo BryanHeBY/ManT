@@ -39,7 +39,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v28"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v29"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -492,6 +492,11 @@ def profile_findings(
                             for eq in topology["expected"]["equations"]
                             if eq["unprovedCell"]
                         )
+                        source_review.extend(
+                            SourceReview(eq["sourceLine"], 0, "equation has no proved paragraph owner")
+                            for eq in topology["expected"]["equations"]
+                            if eq.get("unprovedParagraph")
+                        )
                     yield Finding(
                         label,
                         "review" if violations or source_review else "clean",
@@ -640,6 +645,11 @@ def valid_equation_topology(value: object, side: str) -> bool:
     ):
         return False
     cell = value["cell"]
+    if "unprovedParagraph" in value and (
+        side != "expected" or not isinstance(value["unprovedParagraph"], bool)
+        or value["context"] != "inline"
+    ):
+        return False
     if side == "expected" and not isinstance(value.get("unprovedCell"), bool):
         return False
     unknown = side == "expected" and value["unprovedCell"]

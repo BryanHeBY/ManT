@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v28";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v29";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -211,6 +211,8 @@ struct AstEquationTopology {
     value: String,
     cell: Option<EquationCell>,
     unproved_cell: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    unproved_paragraph: bool,
     #[serde(skip)]
     section: SourceOccurrence,
     #[serde(skip)]
