@@ -178,6 +178,55 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         None,
         "C",
     ),
+    (
+        // term_field() joins the generated advance and authored word
+        // blanks into one printed run without changing their ownership.
+        include_str!("live_replay/replay-preserves-gap-and-authored-blank.1"),
+        &["A    FG"],
+        None,
+        "X",
+    ),
+    (
+        include_str!("live_replay/replay-prints-gap-before-relocated-glyph.1"),
+        &["X G"],
+        None,
+        "XG",
+    ),
+    (
+        // term.c::bufferc() advances over existing ink for a space, but
+        // encode1() can still replace its raw slot with a later glyph.
+        include_str!("live_replay/replay-overwrites-fixed-blank-after-marker.1"),
+        &["AG  X"],
+        None,
+        "ACFG",
+    ),
+    (
+        include_str!("live_replay/replay-prints-covered-padding-on-second-pass.1"),
+        &["A", "CG  X"],
+        None,
+        "CGX",
+    ),
+    (
+        include_str!("live_replay/replay-overwrites-fixed-blank-at-field-origin.1"),
+        &["G  X"],
+        None,
+        "CFG",
+    ),
+    (
+        include_str!("live_replay/replay-overwrites-fixed-zero-escape-after-motion.1"),
+        &["G  X"],
+        None,
+        "CFG",
+    ),
+    (
+        // term_field() prints buffered positioning before the word's
+        // fixed blank and its covering glyph. The positioning has no
+        // scalar in the word's accepted coverage.
+        include_str!("live_replay/replay-keeps-ink-after-covered-fixed-blank.1"),
+        &["CD     X"],
+        None,
+        "CDX",
+    ),
 ];
 
 // term.c::encode1() edits the existing buffer after termp_it_pre()

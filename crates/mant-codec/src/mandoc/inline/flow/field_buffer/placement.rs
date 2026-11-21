@@ -429,11 +429,11 @@ impl FieldBuffer {
         let mut before_ink = end;
         while before_ink >= floor + 2
             && self.cells[before_ink - 1] == FieldCell::Backline
-            && matches!(self.cells[before_ink - 2], FieldCell::Graph { .. })
-            && self.projection_length(before_ink - 2, before_ink - 1) == 0
+            && matches!(self.cells[before_ink - 2], FieldCell::Graph { text, width: 1 }
+                if text.is_whitespace() || self.projection_length(before_ink - 2, before_ink - 1) == 0)
         {
-            // The font's underline/bold prefix is a pair at the same
-            // visual column. It does not consume the preceding advance.
+            // A decoration or fixed source space followed by a backline
+            // occupies the covering glyph's column, not the earlier gap.
             before_ink -= 2;
         }
         for cell in (floor..before_ink).rev() {

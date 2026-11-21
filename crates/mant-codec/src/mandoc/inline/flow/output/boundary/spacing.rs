@@ -35,7 +35,9 @@ impl InlineBuilder {
             return None;
         }
         let replayed_gap = projection.replayed_entry_gap.filter(|_| projects_spacing);
-        if (!projects_spacing || replayed_gap.is_some())
+        let own_motion_prefix =
+            projection.retained_motion_width > 0 && projection.authored_separator.is_none();
+        if (!projects_spacing || replayed_gap.is_some() || own_motion_prefix)
             && let Some(content) = projection.first_payload_cell
         {
             // An entry advance and a word's visible payload have different
@@ -52,11 +54,14 @@ impl InlineBuilder {
             };
             if let Some(anchor) = anchor {
                 let ordinary_payload = anchor.start.saturating_add(projection.native_separator);
-                anchor.content = anchor.content.max(if replayed_gap.is_some() {
-                    content
-                } else {
-                    content.min(ordinary_payload)
-                });
+                anchor.content =
+                    anchor
+                        .content
+                        .max(if replayed_gap.is_some() || own_motion_prefix {
+                            content
+                        } else {
+                            content.min(ordinary_payload)
+                        });
             }
         }
         replayed_gap

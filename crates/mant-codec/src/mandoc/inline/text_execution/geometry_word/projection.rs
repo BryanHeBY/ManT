@@ -382,7 +382,11 @@ fn defer_retained_separator_advances(
             }
             next_ink += 1;
         };
-        let Some(owner) = owner else { continue };
+        let Some(owner) =
+            owner.or_else(|| advance_between_replayed_glyphs(slots, reading, earlier, index))
+        else {
+            continue;
+        };
         let id = reading.len();
         reading.push(ReadingCell {
             glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {
@@ -395,6 +399,32 @@ fn defer_retained_separator_advances(
         });
         slots[index].owner = Some(id);
     }
+}
+
+fn advance_between_replayed_glyphs(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    earlier: usize,
+    gap: usize,
+) -> Option<usize> {
+    if slots.len() > MAX_EDITABLE_APPEND_CELLS {
+        return None;
+    }
+    // A current glyph can land before an earlier glyph. The marker
+    // between them decides a break only if term_fill stops at a later
+    // separator. Keep the blank under term_field's accepted receipt.
+    let ink = |slot: &FillSlot| {
+        slot.owner.filter(|&owner| {
+            matches!(slot.cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+                && matches!(
+                    reading[owner].glyph,
+                    ReadingGlyph::Scalar(_) | ReadingGlyph::Earlier(1..)
+                )
+        })
+    };
+    let left = slots[..gap].iter().rev().find_map(ink)?;
+    let right = slots[gap + 1..].iter().find_map(ink)?;
+    (left >= earlier && right < earlier).then_some(left)
 }
 
 /// A short advance inside one operand is already part of its reading
@@ -821,6 +851,13 @@ fn preserve_author_separators(slots: &[FillSlot], reading: &mut [ReadingCell<'_>
                     // reading view. Preserve the boundary it establishes.
                     blank_between = true;
                 }
+            }
+            FieldCell::Graph { text, .. } if text.is_whitespace() => {
+                // A fixed source space already projects a separator. Do
+                // not put an additional lexical separator on its glyph slot:
+                // term_word() can still replace this single cell after \p.
+                after_author = false;
+                blank_between = false;
             }
             _ => {
                 if let Some(id) = slot.owner {

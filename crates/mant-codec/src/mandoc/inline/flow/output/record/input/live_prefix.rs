@@ -55,7 +55,9 @@ impl PrefixEdits {
         let mut moved = Vec::new();
         let mut earlier_ink = HashMap::<usize, usize>::new();
         let mut retained_blanks = Vec::new();
-        for (offset, (position, location)) in positions.iter().zip(locations).enumerate() {
+        for (offset, (position, location)) in
+            positions.iter().zip(locations.iter().copied()).enumerate()
+        {
             let cell = start + offset;
             let relocated = position
                 .filter(|pos| pos >= first_incoming)
@@ -122,11 +124,9 @@ impl PrefixEdits {
         }
         moved.sort_unstable_by_key(|&(position, _)| position);
         let gaps = rebase_earlier_words(
-            buffer,
-            earlier,
-            positions,
-            *start,
-            *first_incoming,
+            (buffer, earlier),
+            (positions, &locations),
+            (*start, *first_incoming),
             &earlier_ink,
         );
         // An earlier surviving write can shift the interval's start.
@@ -320,14 +320,15 @@ struct GapRemoval {
     relocate: bool,
 }
 
+type SourceProjection = Option<(usize, usize, usize)>;
+
 fn rebase_earlier_words(
-    buffer: &FieldBuffer,
-    earlier: &mut [NativeWordAnchor],
-    positions: &[Option<usize>],
-    start: usize,
-    first_incoming: usize,
+    (buffer, earlier): (&FieldBuffer, &mut [NativeWordAnchor]),
+    overlay: (&[Option<usize>], &[SourceProjection]),
+    (start, first_incoming): (usize, usize),
     earlier_ink: &HashMap<usize, usize>,
 ) -> GapEdits {
+    let (positions, _) = overlay;
     let first_touched = earlier.partition_point(|owner| owner.content < start);
     let mut gaps = GapEdits::default();
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
@@ -336,7 +337,14 @@ fn rebase_earlier_words(
                 .checked_sub(start)
                 .filter(|&offset| offset < positions.len())
         {
-            gaps.rebase(buffer, positions, owner, start, offset, first_incoming);
+            gaps.rebase(
+                buffer,
+                overlay,
+                (owner, index),
+                start,
+                offset,
+                first_incoming,
+            );
         }
         let remap = |index: usize| {
             let Some(offset) = index.checked_sub(start) else {
@@ -362,8 +370,8 @@ impl GapEdits {
     fn rebase(
         &mut self,
         buffer: &FieldBuffer,
-        positions: &[Option<usize>],
-        owner: &mut NativeWordAnchor,
+        (positions, locations): (&[Option<usize>], &[SourceProjection]),
+        (owner, owner_index): (&mut NativeWordAnchor, usize),
         start: usize,
         offset: usize,
         first_incoming: usize,
@@ -378,6 +386,13 @@ impl GapEdits {
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
                 _ => break,
             };
+            if source != offset
+                && locations[source].is_some_and(|(index, _, _)| index != owner_index)
+            {
+                // term_field() emits one run of spaces, but a source blank
+                // in that run keeps its own scalar and moves independently.
+                continue;
+            }
             if let Some(cell) = position {
                 surviving = Some((source, cell));
                 break;
@@ -466,7 +481,7 @@ fn projection_locations(
     start: usize,
     positions: &[Option<usize>],
     unpublished: Option<usize>,
-) -> Vec<Option<(usize, usize, usize)>> {
+) -> Vec<SourceProjection> {
     // The native overlay is bounded. Walk it backwards in display order
     // per word marker, including every surviving fragment of that word.
     // A moved glyph keeps its original marker even when another word now
