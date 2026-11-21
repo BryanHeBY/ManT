@@ -163,7 +163,13 @@ fn prepare_heading(
     // ordinary manual origin afterwards (man_term.c::pre_SH/pre_SS,
     // mdoc_term.c::termp_sh_pre/termp_ss_pre). No prior ti offset leaks.
     formatter.row_presentation.offset_shift = 0;
-    formatter.row_presentation.parent = 0;
+    formatter.row_presentation.parent = if node.macro_token == Some(Mdoc(MdocMacro::Ss)) {
+        // termp_ss_pre(HEAD) uses half the default five-cell origin
+        // plus one basic unit. The terminal can backspace into its pad.
+        5 * 24 / 2 + 1
+    } else {
+        0
+    };
     context.lower_section_heading(
         node,
         crate::mandoc::source_context::HeadNodes {

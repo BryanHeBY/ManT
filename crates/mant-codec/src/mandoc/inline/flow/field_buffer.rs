@@ -242,6 +242,9 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     raw_copy_aliases: Vec<(usize, usize)>,
     /// The field stays live after its run-in label is handed to another IR owner.
     projection_owner: FieldProjectionOwner,
+    /// Proven blank device columns keyed by the accepted pass start slot.
+    /// Only a real plain-field retirement supplies this paint evidence.
+    plain_paint_origins: Vec<(usize, usize)>,
     tabs: Arc<TabStops>,
     /// Persistent tcol->taboff; each pass starts with this reference.
     tab_offset: i64,

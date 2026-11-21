@@ -225,6 +225,7 @@ impl FieldBuffer {
         self.raw_tail_fonts.clear();
         self.raw_copy_aliases.clear();
         self.projection_owner = super::FieldProjectionOwner::Active;
+        self.plain_paint_origins.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
         self.pass_retreats.clear();

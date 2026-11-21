@@ -1,7 +1,7 @@
 //! Retain author ownership when an accepted terminal pass revisits columns.
 
 use super::super::placement::MAX_REPLAY_PREFIX_CELLS;
-use super::{FieldBuffer, FieldCell};
+use super::{FieldBuffer, FieldCell, FillPass};
 
 pub(super) struct DeviceOverprint {
     pub(super) covered: Vec<(usize, Option<usize>)>,
@@ -10,6 +10,42 @@ pub(super) struct DeviceOverprint {
 }
 
 impl FieldBuffer {
+    pub(in crate::mandoc::inline::flow) fn record_plain_paint_origins(
+        &mut self,
+        passes: &[FillPass],
+        first: usize,
+        rest: usize,
+    ) {
+        // A word-time pass may have used an earlier row origin. Only the
+        // real retirement knows the origins of the passes it still owns.
+        for (index, pass) in passes.iter().enumerate() {
+            if self.fresh_paint_pass(pass)
+                && emits_repeated_backspace(&self.cells[pass.start..pass.end])
+            {
+                self.plain_paint_origins
+                    .push((pass.start, if index == 0 { first } else { rest }));
+            }
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_plain_paint_origins(&self) -> bool {
+        !self.plain_paint_origins.is_empty()
+    }
+
+    pub(super) fn plain_paint_origin(&self, pass: &FillPass) -> Option<usize> {
+        let index = self
+            .plain_paint_origins
+            .binary_search_by_key(&pass.start, |&(start, _)| start)
+            .ok()?;
+        Some(self.plain_paint_origins[index].1)
+    }
+
+    fn fresh_paint_pass(&self, pass: &FillPass) -> bool {
+        pass.start >= self.raw_slot_fence
+            && pass.start >= self.resume
+            && !self.has_projected_pass(pass.end)
+    }
+
     /// `term_field()` emits backspaces and queues blanks independently of
     /// zero-width fill controls. Before acceptance, a repeated backspace
     /// may appear to leave its local graph run because a marker or blank
@@ -18,6 +54,7 @@ impl FieldBuffer {
         &self,
         start: usize,
         end: usize,
+        blank_origin: Option<usize>,
     ) -> Option<DeviceOverprint> {
         if start < self.raw_slot_fence {
             return None;
@@ -25,23 +62,36 @@ impl FieldBuffer {
         let end = self.printed_content_end(start, end);
         let cells = &self.cells[start..end];
         if self.projection_owner != super::super::FieldProjectionOwner::Detached
-            && !cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
-                .windows(2)
-                .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
+            && !if blank_origin.is_some() {
+                emits_repeated_backspace(cells)
+            } else {
+                cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
+                    .windows(2)
+                    .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
+            }
         {
             return None;
         }
         let last_backline = cells
             .iter()
             .rposition(|cell| *cell == FieldCell::Backline)?;
+        if let Some(origin) = blank_origin {
+            // term_field() releases the verified padding before emitting
+            // the backspaces. A retreat at physical column zero clips; a
+            // retreat into that padding can keep earlier ink on its right.
+            let origin = origin.min(MAX_REPLAY_PREFIX_CELLS);
+            return self
+                .paint_device_interval(start, cells, last_backline, origin, true)
+                .map(|(proof, _)| proof);
+        }
         let (mut proof, stepped_left) =
-            self.paint_device_interval(start, cells, last_backline, 1)?;
+            self.paint_device_interval(start, cells, last_backline, 1, false)?;
         if stepped_left {
             // term_field() writes the backspace (term.c:430–434). Whether
             // the terminal can step one cell before this field depends on
             // the device origin. Require the same owned ink with and
             // without that one cell. Larger retreats remain unproved.
-            let (clipped, _) = self.paint_device_interval(start, cells, last_backline, 0)?;
+            let (clipped, _) = self.paint_device_interval(start, cells, last_backline, 0, true)?;
             if proof.ordered != clipped.ordered
                 || !proof
                     .covered
@@ -67,11 +117,12 @@ impl FieldBuffer {
         cells: &[FieldCell],
         last_backline: usize,
         origin: usize,
+        clip_left: bool,
     ) -> Option<(DeviceOverprint, bool)> {
         let mut cursor = origin;
         let mut extent = origin;
         let mut stepped_left = false;
-        let mut row = [None; MAX_REPLAY_PREFIX_CELLS + 1];
+        let mut row = [None; MAX_REPLAY_PREFIX_CELLS * 2];
         let mut covered_by = [None; MAX_REPLAY_PREFIX_CELLS];
         let aliases = &self.raw_copy_aliases;
         let owner_at = |cell| {
@@ -102,7 +153,7 @@ impl FieldBuffer {
                 | FieldCell::Breakpoint
                 | FieldCell::TabReference => continue,
                 FieldCell::Backline => {
-                    cursor = if origin == 0 {
+                    cursor = if clip_left {
                         cursor.saturating_sub(1)
                     } else {
                         cursor.checked_sub(1)?
@@ -224,4 +275,21 @@ impl FieldBuffer {
             .get(index)
             .is_some_and(|run| run.start <= cell)
     }
+}
+
+fn emits_repeated_backspace(cells: &[FieldCell]) -> bool {
+    // term_field() skips these controls when writing its terminal stream
+    // (term.c:394–401). They cannot separate two physical backspaces.
+    let mut prior_backspace = false;
+    for cell in cells.iter().take(MAX_REPLAY_PREFIX_CELLS) {
+        match cell {
+            FieldCell::BreakMarker
+            | FieldCell::ZeroWidthGraph
+            | FieldCell::Breakpoint
+            | FieldCell::TabReference => {}
+            FieldCell::Backline if prior_backspace => return true,
+            cell => prior_backspace = *cell == FieldCell::Backline,
+        }
+    }
+    false
 }

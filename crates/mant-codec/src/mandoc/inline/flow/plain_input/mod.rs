@@ -206,6 +206,60 @@ fn inherited_plain_field(
     }
 }
 
+fn record_fresh_plain_paint_origins(
+    execution: &super::InlineExecutionState,
+    buffer: &mut super::field_buffer::FieldBuffer,
+    passes: &[super::field_buffer::FillPass],
+    (inherited_printed_row, inherited_minbl): (bool, usize),
+    authorless_definition: bool,
+) {
+    if inherited_printed_row
+        || authorless_definition
+        || execution.table_cell.is_some()
+        || execution.macro_set != libmandoc_rs::MacroSet::Mdoc
+        || execution.text_alignment != mant_ir::TextAlignment::Left
+    {
+        return;
+    }
+    // A fresh row has no predecessor ink to overwrite. On it,
+    // term_flushln() releases its actual offset (or minbl) as
+    // spaces before term_field() emits the first graph.
+    let device_origin = |presentation: super::presentation::RowPresentation, minbl: usize| {
+        let units = (i64::from(presentation.parent) + presentation.source_offset_units(0))
+            .max(i64::try_from(minbl.saturating_mul(24)).unwrap_or(i64::MAX));
+        usize::try_from(units.saturating_add(11).div_euclid(24)).unwrap_or_default()
+    };
+    let mut presentation = execution.row_presentation;
+    let first = device_origin(presentation, inherited_minbl);
+    presentation.endline();
+    buffer.record_plain_paint_origins(passes, first, device_origin(presentation, 0));
+}
+
+fn retire_plain_paint(
+    execution: &mut super::InlineExecutionState,
+    nodes: &mut Vec<Inline>,
+    unit: &mut PlainInputUnit,
+    passes: &[super::field_buffer::FillPass],
+    inherited: (bool, usize),
+    authorless_definition: bool,
+    operands: Option<&std::cell::RefCell<super::HeadOperandCapture>>,
+) -> OutputNodeEdits {
+    let PlainInputUnit {
+        buffer,
+        anchors,
+        output_start,
+    } = unit;
+    record_fresh_plain_paint_origins(execution, buffer, passes, inherited, authorless_definition);
+    if let Some(operands) = operands {
+        operands
+            .borrow_mut()
+            .record_accepted_covers(buffer, anchors, passes);
+    }
+    let edits = retire_plain_presentation(execution, nodes, buffer, anchors, passes, *output_start);
+    edits.remap(output_start);
+    edits
+}
+
 // BRNEVER-shaped (term.c:134,143-144). Responsive reflow owns page width.
 const PLAIN_FIELD_TARGETS: super::field_buffer::FillTargets = super::field_buffer::FillTargets {
     first: usize::MAX / 2,
@@ -273,28 +327,29 @@ impl InlineBuilder {
         operands: Option<&std::cell::RefCell<super::HeadOperandCapture>>,
     ) -> Option<PlainRetirement> {
         use super::field_buffer::FlushReceipt;
-        let (inherited_printed_row, inherited_minbl) =
-            inherited_plain_field(execution, handoff.as_deref());
-        let (authorless_definition, unit) = Self::take_plain_flush_unit(execution, nodes)?;
+        let inherited = inherited_plain_field(execution, handoff.as_deref());
+        let (inherited_printed_row, inherited_minbl) = inherited;
+        let (authorless_definition, mut unit) = Self::take_plain_flush_unit(execution, nodes)?;
         let receipt = unit.buffer.flush_receipt(PLAIN_FIELD_TARGETS, false);
         let Some(accepted) = receipt.accepted_passes() else {
             Self::retire_unmodeled_plain_flush(execution, nodes, authorless_definition, unit);
             return Some(PlainRetirement::UNMODELED);
         };
+        let passes = accepted.all();
+        let edits = retire_plain_paint(
+            execution,
+            nodes,
+            &mut unit,
+            passes,
+            inherited,
+            authorless_definition,
+            operands,
+        );
         let PlainInputUnit {
             mut buffer,
             anchors,
-            mut output_start,
+            output_start,
         } = unit;
-        let passes = accepted.all();
-        if let Some(operands) = operands {
-            operands
-                .borrow_mut()
-                .record_accepted_covers(&buffer, &anchors, passes);
-        }
-        let edits =
-            retire_plain_presentation(execution, nodes, &buffer, &anchors, passes, output_start);
-        edits.remap(&mut output_start);
         if let Some(handoff) = &mut handoff {
             handoff.note_projection_start(output_start);
         }

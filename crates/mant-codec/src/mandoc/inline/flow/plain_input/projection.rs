@@ -328,6 +328,7 @@ pub(super) fn retain_accepted_unit_output(
     // rejection; provisional IR spaces do not prove printed native content.
     let pending_start = buffer.resume_offset();
     if buffer.has_unprinted_projection(passes)
+        || buffer.has_plain_paint_origins()
         || buffer.has_pass_retreats()
         || buffer.has_unprinted_tail(passes)
     {

@@ -59,7 +59,8 @@ impl FieldBuffer {
         if !self.has_pass_retreats() {
             return None;
         }
-        self.prove_device_overprint(pass.start, pass.end)?.overhang
+        self.prove_device_overprint(pass.start, pass.end, None)?
+            .overhang
     }
     pub(in crate::mandoc::inline::flow) fn has_deferred_blanks(&self) -> bool {
         !self.deferred_blanks.is_empty()
@@ -189,6 +190,7 @@ impl FieldBuffer {
             raw_tail_fonts: Vec::new(),
             raw_copy_aliases: Vec::new(),
             projection_owner: super::FieldProjectionOwner::Active,
+            plain_paint_origins: Vec::new(),
             tabs: self.tabs.clone(),
             tab_offset: self.tab_offset,
             pass_tab_offset: self.pass_tab_offset,
@@ -320,14 +322,18 @@ impl FieldBuffer {
         mut accept: impl FnMut(usize, Option<usize>),
         mut order: impl FnMut(Vec<usize>),
     ) {
-        if !self.has_pass_retreats()
-            && self.projection_owner != super::FieldProjectionOwner::Detached
-        {
+        let can_paint_without_origin = self.has_pass_retreats()
+            || self.projection_owner == super::FieldProjectionOwner::Detached;
+        if !can_paint_without_origin && self.plain_paint_origins.is_empty() {
             return;
         }
         let mut retreats = self.pass_retreats.iter().peekable();
         for pass in passes {
-            if let Some(overprint) = self.prove_device_overprint(pass.start, pass.end) {
+            let origin = self.plain_paint_origin(pass);
+            if !can_paint_without_origin && origin.is_none() {
+                continue;
+            }
+            if let Some(overprint) = self.prove_device_overprint(pass.start, pass.end, origin) {
                 for (target, by) in overprint.covered {
                     accept(target, by);
                 }
