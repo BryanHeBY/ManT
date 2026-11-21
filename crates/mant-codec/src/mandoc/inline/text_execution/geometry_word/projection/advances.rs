@@ -316,6 +316,7 @@ pub(super) fn preserve_author_separators(slots: &[FillSlot], reading: &mut [Read
     let mut after_author = false;
     let mut blank_between = false;
     let mut break_at_next_blank = false;
+    let mut wrote_source = false;
     for slot in slots {
         match slot.cell {
             FieldCell::BreakMarker => break_at_next_blank = true,
@@ -345,8 +346,21 @@ pub(super) fn preserve_author_separators(slots: &[FillSlot], reading: &mut [Read
             }
             _ => {
                 if let Some(id) = slot.owner {
-                    reading[id].preserve_separator =
-                        after_author && (reading[id].authored_separator || blank_between);
+                    // The first incoming glyph has no prefix in
+                    // append_range(); retained ink is already represented
+                    // outside this word's scalar stream. The write receipt
+                    // must count only a separator the word can publish.
+                    if !matches!(
+                        reading[id].glyph,
+                        ReadingGlyph::Earlier(_)
+                            | ReadingGlyph::EntryBlank
+                            | ReadingGlyph::DeferredBlank(_)
+                    ) {
+                        reading[id].preserve_separator = wrote_source
+                            && after_author
+                            && (reading[id].authored_separator || blank_between);
+                        wrote_source = true;
+                    }
                     after_author = true;
                     blank_between = false;
                 }

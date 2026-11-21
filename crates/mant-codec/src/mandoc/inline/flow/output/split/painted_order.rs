@@ -115,7 +115,9 @@ impl MarkerCursor<'_> {
                     let serial = owner
                         .strip_prefix(INTERNAL_FIELD_WORD)
                         .expect("word marker");
-                    output.push(Inline::anchor(format!("{ORDER}{}:{serial}", glyph.receipt)));
+                    for receipt in &glyph.receipts {
+                        output.push(Inline::anchor(format!("{ORDER}{receipt}:{serial}")));
+                    }
                     output.push(wrap(character.into()));
                     start = byte + character.len_utf8();
                 }
@@ -151,34 +153,57 @@ pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
         &mut leaves,
     );
     let mut groups = BTreeMap::<String, Vec<Position>>::new();
-    let mut marker = None;
+    let mut markers = Vec::new();
     let mut row = 0;
-    for (index, leaf) in leaves.iter_mut().enumerate() {
+    for leaf in std::mem::take(&mut leaves) {
         let Some(node) = &leaf.node else { continue };
         if let Inline::Anchor { id, .. } = node
             && let Some(fields) = id.as_str().strip_prefix(ORDER)
         {
-            marker = parse_mark(fields);
-            leaf.node = None;
-        } else if matches!(node, Inline::Text { value } | Inline::Code { value } if value.len() == 1)
-        {
-            if let Some((group, rank, size, owner)) = marker.take() {
+            markers.extend(parse_mark(fields));
+            continue;
+        }
+        let index = leaves.len();
+        let single_glyph = matches!(
+            node,
+            Inline::Text { value } | Inline::Code { value }
+                if value.chars().take(2).count() == 1
+        );
+        if single_glyph {
+            leaves.push(leaf);
+            for (copy, (group, rank, size, owner)) in markers.drain(..).enumerate() {
+                if copy != 0 {
+                    // An accepted scalar can paint at multiple device
+                    // columns. Republish its original style and scope
+                    // only now, after all native owner counts are settled.
+                    leaves.push(leaves[index].clone());
+                }
                 groups.entry(group).or_default().push(Position {
-                    index,
+                    index: index + copy,
+                    device_copy: copy != 0,
                     row,
                     rank,
                     size,
                     owner,
                 });
             }
-        } else if !is_transparent(node) {
-            marker = None;
+            continue;
+        }
+        if !is_transparent(node) {
+            markers.clear();
             row += 1;
         }
+        leaves.push(leaf);
     }
     let mut moved = vec![false; scopes.len()];
     for group in groups.values_mut() {
-        reorder(&mut leaves, group, &mut moved);
+        if !reorder(&mut leaves, group, &mut moved) {
+            for copy in group.iter().filter(|position| position.device_copy) {
+                // Speculative copy leaves cannot outlive the placement
+                // proof that would publish their actual device positions.
+                leaves[copy.index].node = None;
+            }
+        }
     }
     let mut open = Vec::<(usize, Vec<Inline>)>::new();
     for leaf in leaves {
@@ -220,6 +245,7 @@ fn is_transparent(node: &Inline) -> bool {
 #[derive(Debug)]
 struct Position {
     index: usize,
+    device_copy: bool,
     row: usize,
     rank: usize,
     size: usize,
@@ -236,11 +262,11 @@ fn parse_mark(mark: &str) -> Option<(String, usize, usize, u64)> {
     Some((format!("{group}:{serial}"), rank, size, owner))
 }
 
-fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) {
+fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) -> bool {
     let first = &group[0];
     let last = &group[group.len() - 1];
     if group.len() != first.size || first.row != last.row {
-        return;
+        return false;
     }
     let ink = leaves[first.index..=last.index]
         .iter()
@@ -249,12 +275,12 @@ fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) {
     // Unmatched characters between marked glyphs cannot be assigned a
     // device column just because two siblings happen to have receipts.
     if ink.count() != group.len() {
-        return;
+        return false;
     }
     let destinations: Vec<_> = group.iter().map(|pos| (pos.index, pos.owner)).collect();
     group.sort_unstable_by_key(|pos| pos.rank);
     if !group.iter().enumerate().all(|(rank, pos)| rank == pos.rank) {
-        return;
+        return false;
     }
     let payload: Vec<_> = group
         .iter()
@@ -273,9 +299,10 @@ fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) {
         }
         leaves[index] = leaf;
     }
+    true
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct Leaf {
     node: Option<Inline>,
     path: Vec<usize>,

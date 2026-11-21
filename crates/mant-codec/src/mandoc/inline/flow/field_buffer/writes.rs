@@ -383,7 +383,8 @@ impl FieldBuffer {
         // Replaying a suffix cannot invalidate raw bytes before that suffix.
         match first {
             Some(FieldWrite::ReplaceLivePrefix { start, .. })
-                if self.projection_owner == super::FieldProjectionOwner::Detached
+                if (self.projection_owner == super::FieldProjectionOwner::Detached
+                    || matches!(self.word_scan, WordScanPolicy::AwaitFlush))
                     && self.raw_slot_fence < *start =>
             {
                 Some(self.raw_slot_fence)

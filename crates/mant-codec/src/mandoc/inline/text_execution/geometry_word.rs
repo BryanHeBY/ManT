@@ -215,15 +215,17 @@ fn contains_local_overwrite(
             {
                 armed = true;
             }
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
-                if value.chars().all(|ch| {
-                    ch.is_ascii_graphic() || !inherited_glyph && matches!(ch, ' ' | '\u{a0}')
-                }) =>
-            {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
                 // term.c::encode does not consume BACKAFTER on a blank.
                 // encode1 consumes BACKBEFORE before writing the next
                 // glyph. A second arm may leave another pending glyph.
-                for _ in value.bytes().filter(u8::is_ascii_graphic) {
+                for ch in value.chars() {
+                    if !inherited_glyph && matches!(ch, ' ' | '\u{a0}') {
+                        continue;
+                    }
+                    if !super::native_writes::is_single_column_ink(ch) {
+                        return false;
+                    }
                     wrote_pair |= backbefore;
                     backbefore = std::mem::take(&mut armed);
                 }

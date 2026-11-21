@@ -15,9 +15,7 @@ impl AppendedFonts {
     pub(super) fn record(&mut self, writes: &[FieldWrite], font: super::Font) -> bool {
         for write in writes {
             match write {
-                FieldWrite::Cell(FieldCell::Graph { text, width: 1 })
-                    if text.is_ascii_graphic() =>
-                {
+                FieldWrite::Cell(cell) if decorates_single_column(cell) => {
                     if self.pending {
                         return false;
                     }
@@ -76,8 +74,7 @@ pub(super) fn proved_decorated_tail(
     writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
     font: super::Font,
 ) -> Option<(usize, super::Font)> {
-    use crate::mandoc::inline::flow::field_buffer::{FieldCell, FieldWrite};
-    // A styled append proves the raw copies in its final ASCII run.
+    // A styled append proves the raw copies in its final one-column run.
     // `term_word()` can buffer marker and BACKAFTER controls before
     // that run. They do not change the decoration written by encode1.
     // Actual cursor edits require the full placement path.
@@ -100,14 +97,33 @@ pub(super) fn proved_decorated_tail(
     let count = writes
         .iter()
         .rev()
-        .take_while(|write| {
-            matches!(
-                write,
-                FieldWrite::Cell(FieldCell::Graph { text, width: 1 }) if text.is_ascii_graphic()
-            )
-        })
+        .take_while(
+            |write| matches!(write, FieldWrite::Cell(cell) if decorates_single_column(cell)),
+        )
         .count();
     (count != 0).then_some((count, font))
+}
+
+fn decorates_single_column(cell: &FieldCell) -> bool {
+    // term.c::encode1() uses the current font for ASCII graphs and
+    // codepoints above 127. The measured UTF-8 width bounds the row edit.
+    matches!(
+        cell,
+        FieldCell::Graph { text, width: 1 } if uses_native_font(*text)
+    )
+}
+
+fn uses_native_font(character: char) -> bool {
+    character.is_ascii_graphic() || !character.is_ascii()
+}
+
+pub(super) fn is_single_column_ink(character: char) -> bool {
+    if character.is_ascii() {
+        return character.is_ascii_graphic();
+    }
+    !character.is_whitespace()
+        && !character.is_control()
+        && mant_ir::geometry::text_width(character.encode_utf8(&mut [0; 4])) == 1
 }
 
 pub(super) fn has_native_decoration(font: super::Font) -> bool {

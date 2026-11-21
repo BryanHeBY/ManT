@@ -71,3 +71,81 @@ fn accepted_backspaces_use_the_actual_left_margin() {
         }
     }
 }
+
+#[test]
+fn edited_font_copies_share_their_original_style_and_each_keep_their_own_column() {
+    // term.c::encode1() writes two copies around a backspace for bold
+    // text. Overwriting that backspace with NBRZW keeps both copies in
+    // the accepted buffer. term_field() skips NBRZW, so each copy has
+    // its own visible column, whereas the untouched bold pair has one.
+    // UTF-8 width-one operands can also complete BACKBEFORE within a word
+    // before a later operand overwrites the native backspace (term.c:903).
+    for (words, expected) in [
+        (r#".Sy "C\zJ" No "\h'-5n'\&""#, "CCJ"),
+        (r#".Sy "C\zJ" No "\h'-2n'\&""#, "CJJ"),
+        (r#".Sy "é\zJ" No "\h'-5n'\&""#, "ééJ"),
+        (r#".Sy "C\zé" No "\h'-2n'\&""#, "Céé"),
+        (r#".Sy "é\zJX" No "\h'-5n'\&""#, "éJX"),
+        (r#".Sy "é\zJX""#, "éX"),
+        (r#".Sy "C\zéX" No "\h'-2n'\&""#, "CX"),
+        (".Sy CJ", "CJ"),
+    ] {
+        let source = format!("{HEADER}{words}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&content);
+        assert!(markdown.contains(&format!("**{expected}**")), "{markdown}");
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        for document in [content, readback] {
+            let text = mant_render::render_query_man(&document);
+            assert_eq!(
+                description_rows(&text, &source).join("\n").trim(),
+                expected,
+                "{source}"
+            );
+            let found = mant_query::search_query(
+                &document,
+                &SearchQuery {
+                    pattern: expected.to_owned(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(found.total, 1, "{source}");
+        }
+    }
+}
+
+#[test]
+fn suffix_replay_preserves_earlier_accepted_rows_with_covered_glyphs() {
+    // term.c::term_field() releases padding ahead of a backspace. The
+    // following bold G still covers F in that same column. A later edit
+    // to the field suffix cannot detach the already proved earlier slots.
+    let words = r#".Sy "AB" No "\h'3n'\h'-6n'\z\p\:C" Sy "\zFG\h'2n'\p\~" Ns Sy "\h'1n'\h'-2n'\fPX\h'-4n'""#;
+    let source = format!("{HEADER}{words}{END}");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    assert_eq!(
+        description_rows(&text, &source),
+        ["AB", "CG  X"],
+        "{source}"
+    );
+}
+
+#[test]
+fn accepted_rewind_can_cover_ink_after_a_nonbreaking_blank() {
+    // term.c::encode1() decorates U+00A0 on the UTF-8 device. The
+    // overprint keeps its blank column while J covers C to its right.
+    let words = r#".Sy "\~C\zJ" No "\h'-3n'\&""#;
+    let source = format!("{HEADER}{words}{END}");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    assert_eq!(description_rows(&text, &source), ["\u{a0}J"], "{source}");
+}

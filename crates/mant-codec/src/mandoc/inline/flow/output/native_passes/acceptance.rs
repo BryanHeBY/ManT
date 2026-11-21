@@ -31,7 +31,7 @@ pub(in crate::mandoc::inline::flow) struct OwnerAcceptance {
 pub(in crate::mandoc::inline::flow::output) struct OrderedGlyph {
     pub(in crate::mandoc::inline::flow::output) scalar: usize,
     pub(in crate::mandoc::inline::flow::output) character: char,
-    pub(in crate::mandoc::inline::flow::output) receipt: String,
+    pub(in crate::mandoc::inline::flow::output) receipts: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -48,12 +48,12 @@ impl OwnerAcceptance {
     fn collect_ordered_glyphs(
         &mut self,
         buffer: &FieldBuffer,
-        order: &BTreeMap<usize, String>,
+        order: &BTreeMap<usize, Vec<String>>,
         interval: std::ops::Range<usize>,
         offset: usize,
     ) {
         let start = interval.start;
-        for (&cell, receipt) in order.range(interval) {
+        for (&cell, receipts) in order.range(interval) {
             let character = match buffer.cells()[cell] {
                 FieldCell::Graph { text, .. } => text,
                 FieldCell::Hyphen => '-',
@@ -62,7 +62,7 @@ impl OwnerAcceptance {
             self.ordered_glyphs.push(OrderedGlyph {
                 scalar: offset + buffer.projection_length(start, cell),
                 character,
-                receipt: receipt.clone(),
+                receipts: receipts.clone(),
             });
         }
     }
@@ -281,9 +281,9 @@ fn collect_native_overprints(
     buffer: &FieldBuffer,
     anchors: &[NativeWordAnchor],
     passes: &[FillPass],
-) -> (Vec<usize>, BTreeMap<usize, String>) {
+) -> (Vec<usize>, BTreeMap<usize, Vec<String>>) {
     let mut covered = Vec::new();
-    let mut order = BTreeMap::new();
+    let mut order = BTreeMap::<_, Vec<_>>::new();
     if let Some(first_word) = anchors
         .first()
         .and_then(|anchor| anchor.owner.strip_prefix(INTERNAL_FIELD_WORD))
@@ -299,7 +299,10 @@ fn collect_native_overprints(
             |ordered| {
                 let size = ordered.len();
                 for (rank, cell) in ordered.into_iter().enumerate() {
-                    order.insert(cell, format!("{first_word}:{group}:{rank}:{size}"));
+                    order
+                        .entry(cell)
+                        .or_default()
+                        .push(format!("{first_word}:{group}:{rank}:{size}"));
                 }
                 group += 1;
             },

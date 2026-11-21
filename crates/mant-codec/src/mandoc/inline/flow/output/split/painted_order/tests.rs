@@ -54,3 +54,20 @@ fn only_the_moved_glyphs_change_link_positions() {
         ]
     );
 }
+
+#[test]
+fn an_incomplete_paint_group_cannot_publish_a_speculative_copy() {
+    let mut nodes = vec![link(
+        "https://kept.test",
+        vec![
+            owner(7),
+            Inline::anchor(format!("{ORDER}6:0:0:3:7")),
+            Inline::anchor(format!("{ORDER}6:0:2:3:7")),
+            Inline::Text { value: "F".into() },
+        ],
+    )];
+    apply(&mut nodes);
+    assert_eq!(inline_plain_text(&nodes), "F");
+    assert_eq!(nodes.len(), 1);
+    assert!(matches!(nodes[0], Inline::Link { .. }));
+}

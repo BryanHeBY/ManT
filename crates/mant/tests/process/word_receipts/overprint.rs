@@ -78,11 +78,14 @@ fn replay_retires_or_moves_the_exact_gap_and_retains_surviving_bold_copies() {
     }
     // term.c::encode1() writes both bold copies. When the original
     // projection cell is replaced, its earlier copy can still own ink.
+    // In the last case the second rewind removes the backspace between
+    // them and both fixed terminal devices print the two Ms separately.
+    // The two copies still share one authored link occurrence.
     let word = r#".Sy "P\X'tty: link https://x.io'M\X'tty: link'AB""#;
     for (tail, result, label) in [
         (r#"No "\h'-9n'T" No "\h'-6n'Y""#, "YTAB", ""),
         (r#"Ns No "\h'-7n'T" Ns No "\h'-6n'Y""#, "YMTAB", "M"),
-        (r#"Ns No "\h'-9n'T" Ns No "\h'-4n'Y""#, "YMTAB", "M"),
+        (r#"Ns No "\h'-9n'T" Ns No "\h'-4n'Y""#, "YMTMAB", "M"),
     ] {
         let source = format!("{header}{word} {tail}\n");
         let plain = render(&source, "roff", "text", "never", false);
@@ -98,6 +101,9 @@ fn replay_retires_or_moves_the_exact_gap_and_retains_surviving_bold_copies() {
         );
         assert_link(&markdown, "markdown", label);
         assert_eq!(search_visible_word(&source, result), 1, "{source}");
+        if result == "YMTMAB" {
+            assert_eq!(search_visible_word(&source, "YMTAB"), 0, "{source}");
+        }
     }
 }
 
