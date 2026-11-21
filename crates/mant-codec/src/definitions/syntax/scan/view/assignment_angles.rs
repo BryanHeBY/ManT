@@ -6,101 +6,152 @@ use super::super::{
 use super::{HeadView, NativeOperand, NativeOperandRole};
 
 pub(super) fn paired_offsets(view: &HeadView<'_>) -> Vec<usize> {
-    // A leading angle can contain native Fl operands. An
-    // interior comparison cannot claim a later declaration's
-    // closing angle. Use accepted native operand starts, which
-    // can follow a space owned by the same operand.
     let mut pairs = Vec::new();
-    let mut open: Vec<OpenAngle> = Vec::new();
-    let mut escaped = false;
-    let mut quote = None;
-    let mut groups = Vec::new();
-    let mut previous = None;
+    let mut scopes = vec![AngleScope::default()];
     let mut operands = view.operands.iter().peekable();
     for (offset, ch) in view.text.char_indices() {
-        while let Some(operand) = operands.peek().filter(|item| item.bytes.end <= offset) {
-            if let NativeOperandRole::EnclosureEnd(body) = operand.role {
-                open.retain(|angle| angle.enclosure != Some(body));
-            }
+        while operands.peek().is_some_and(|item| item.bytes.end <= offset) {
             operands.next();
         }
         let operand = operands
             .peek()
             .copied()
             .filter(|item| item.bytes.contains(&offset));
-        if std::mem::take(&mut escaped) {
-            continue;
-        }
-        if ch == '\\' {
-            escaped = true;
-            continue;
-        }
-        if let Some(closer) = quote {
-            if ch == closer {
-                quote = None;
-                previous = Some((ch, offset + ch.len_utf8()));
+        let scope = scopes.last_mut().expect("root angle scope");
+        match operand.map(|item| item.role) {
+            Some(NativeOperandRole::EnclosureStart { body, parent, .. }) => {
+                if operand.is_some_and(|item| item.bytes.start == offset) {
+                    // termp_quote_pre/post own the generated delimiters and
+                    // enclose a native BODY or ELEM. Its lexical state cannot
+                    // modify the parent assignment, even for identical glyphs.
+                    if parent != scope.body || scopes.len() > MAX_NESTING {
+                        break;
+                    }
+                    scopes.last_mut().expect("root angle scope").previous = None;
+                    scopes.push(AngleScope {
+                        body: Some(body),
+                        ..AngleScope::default()
+                    });
+                }
             }
-            continue;
-        }
-        quote = quote_closer(ch);
-        if ch == '\n' {
-            open.clear();
-            groups.clear();
-        } else if ch == '-' && assignment_alias_boundary(view, offset, previous) {
-            retire_assignment_angles(
-                &mut open,
-                &mut pairs,
-                option_starts_assignment(view, offset)
-                    || matches!(previous, Some((',', _)))
-                        && option_starts_native_argument(view, offset),
-            );
-        }
-        if !ch.is_whitespace() {
-            previous = Some((ch, offset + ch.len_utf8()));
-        }
-        if operand.is_some_and(|item| {
-            matches!(
-                item.role,
-                NativeOperandRole::EnclosureStart { .. } | NativeOperandRole::EnclosureEnd(_)
-            )
-        }) {
-            continue;
-        }
-        match ch {
-            '(' | '[' | '{' if groups.len() < MAX_NESTING => {
-                groups.push(closing(ch).expect("opening bracket"));
+            Some(NativeOperandRole::EnclosureEnd(body)) => {
+                if operand.is_some_and(|item| item.bytes.start == offset) {
+                    if scope.body != Some(body) {
+                        break;
+                    }
+                    scopes.pop();
+                }
             }
-            ')' | ']' | '}' if groups.last() == Some(&ch) => {
-                open.retain(|angle| angle.depth < groups.len());
-                groups.pop();
+            _ => {
+                if angle_enclosure(operand).is_none_or(|body| scope.body == Some(body)) {
+                    scope.observe(view, offset, ch, operand, &mut pairs);
+                }
             }
-            '<' | '⟨' if open.len() < MAX_NESTING => {
-                let leading = operand.is_none_or(|operand| {
-                    let prefix = view.text[operand.bytes.start..offset].trim();
-                    prefix.is_empty() || prefix.ends_with('=')
-                });
-                open.push(OpenAngle {
-                    offset,
-                    closer: closing(ch).expect("angle opener"),
-                    leading,
-                    numeric_close: None,
-                    enclosure: angle_enclosure(operand),
-                    depth: groups.len(),
-                });
-            }
-            '>' | '⟩' => close_assignment_angle(
-                &view.text,
-                &mut open,
-                operand,
-                offset,
-                groups.len(),
-                &mut pairs,
-            ),
-            _ => {}
         }
     }
     pairs.sort_unstable();
     pairs
+}
+
+#[derive(Default)]
+struct AngleScope {
+    body: Option<u32>,
+    open: Vec<OpenAngle>,
+    escaped: bool,
+    quote: Option<char>,
+    groups: Vec<char>,
+    previous: Option<(char, usize)>,
+}
+
+impl AngleScope {
+    fn observe(
+        &mut self,
+        view: &HeadView<'_>,
+        offset: usize,
+        ch: char,
+        operand: Option<&NativeOperand>,
+        pairs: &mut Vec<usize>,
+    ) {
+        if std::mem::take(&mut self.escaped) {
+            return;
+        }
+        if ch == '\\' {
+            self.escaped = true;
+            return;
+        }
+        if let Some(closer) = self.quote {
+            if ch == closer {
+                self.quote = None;
+                self.previous = Some((ch, offset + ch.len_utf8()));
+            }
+            return;
+        }
+        self.quote = quote_closer(ch);
+        if ch == '\n' {
+            self.open.clear();
+            self.groups.clear();
+        } else if ch == '-' && assignment_alias_boundary(view, offset, self.previous) {
+            // Only an independent option with an executed value can resolve
+            // a deferred numeric close, and only in the same lexical scope.
+            self.retire_assignment_angles(
+                pairs,
+                option_starts_assignment(view, offset)
+                    || option_starts_native_argument(view, offset),
+            );
+        }
+        if !ch.is_whitespace() {
+            self.previous = Some((ch, offset + ch.len_utf8()));
+        }
+        match ch {
+            '(' | '[' | '{' if self.groups.len() < MAX_NESTING => {
+                self.groups.push(closing(ch).expect("opening bracket"));
+            }
+            ')' | ']' | '}' if self.groups.last() == Some(&ch) => {
+                self.open.retain(|angle| angle.depth < self.groups.len());
+                self.groups.pop();
+            }
+            '<' | '⟨' if self.open.len() < MAX_NESTING => {
+                let leading = operand.is_none_or(|operand| {
+                    let prefix = view.text[operand.bytes.start..offset].trim();
+                    prefix.is_empty() || prefix.ends_with('=')
+                });
+                self.open.push(OpenAngle {
+                    offset,
+                    closer: closing(ch).expect("angle opener"),
+                    leading,
+                    numeric_close: None,
+                    depth: self.groups.len(),
+                });
+            }
+            '>' | '⟩' => close_assignment_angle(
+                &view.text,
+                &mut self.open,
+                operand,
+                offset,
+                self.groups.len(),
+                pairs,
+            ),
+            _ => {}
+        }
+    }
+
+    fn retire_assignment_angles(&mut self, pairs: &mut Vec<usize>, independent: bool) {
+        let depth = self.groups.len();
+        while self
+            .open
+            .last()
+            .is_some_and(|angle| angle.depth == depth && !angle.leading)
+        {
+            self.open.pop();
+        }
+        if independent
+            && let Some(angle) = self.open.last().filter(|angle| angle.depth == depth)
+            && let Some(offset) = angle.numeric_close
+        {
+            pairs.extend([angle.offset, offset]);
+            self.open.pop();
+        }
+    }
 }
 
 fn assignment_alias_boundary(
@@ -149,7 +200,13 @@ fn option_starts_assignment(view: &HeadView<'_>, offset: usize) -> bool {
 fn option_starts_native_argument(view: &HeadView<'_>, offset: usize) -> bool {
     let name = view.text[offset..].trim_start_matches(option_character);
     let value = name.trim_start();
-    value.len() < name.len() && view.explicit_argument(view.text.len() - value.len())
+    value.len() < name.len()
+        && view
+            .operand(view.text.len() - value.len())
+            .is_some_and(|operand| {
+                operand.role.is_parameter()
+                    || matches!(operand.role, NativeOperandRole::PathOperand(_))
+            })
 }
 
 struct OpenAngle {
@@ -157,29 +214,11 @@ struct OpenAngle {
     closer: char,
     leading: bool,
     numeric_close: Option<usize>,
-    enclosure: Option<u32>,
     depth: usize,
-}
-
-fn retire_assignment_angles(open: &mut Vec<OpenAngle>, pairs: &mut Vec<usize>, independent: bool) {
-    while open.last().is_some_and(|angle| !angle.leading) {
-        open.pop();
-    }
-    // An independent option with its own value resolves a deferred
-    // same-word numeric close in the preceding assignment.
-    if independent
-        && let Some(offset) = open.last().and_then(|angle| angle.numeric_close)
-        && let Some(angle) = open.pop()
-    {
-        pairs.extend([angle.offset, offset]);
-    }
 }
 
 impl OpenAngle {
     fn closes_at(&self, text: &str, offset: usize, operand: Option<&NativeOperand>) -> bool {
-        if self.enclosure != angle_enclosure(operand) {
-            return false;
-        }
         operand.is_none_or(|operand| {
             let tail = &text[offset + self.closer.len_utf8()..operand.bytes.end];
             // Hold an opener across a numeric comparison within the same

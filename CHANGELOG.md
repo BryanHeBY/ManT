@@ -47,6 +47,9 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Keep nested mdoc enclosure operands from changing an outer option's
+  declaration scope. Recognize independent options with executed argument
+  or path values after a numeric comparison.
 - Keep the surviving glyphs, link labels, printed spaces and hard rows from
   accepted roff fields after horizontal motion. Run-in definition labels and
   bodies retain the order painted by the shared field.

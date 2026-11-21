@@ -43,6 +43,10 @@ mod quick_references;
 #[path = "process/document_scopes.rs"]
 mod document_scopes;
 
+#[cfg(feature = "roff")]
+#[path = "process/declaration_scopes.rs"]
+mod declaration_scopes;
+
 #[cfg(feature = "update")]
 #[path = "process/source_updates.rs"]
 mod source_updates;
