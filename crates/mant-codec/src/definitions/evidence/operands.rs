@@ -441,17 +441,6 @@ impl CapturedHeadOperands {
                         )
                 })
                 .is_some_and(|operand| operand.role.is_operand_label());
-        if !check_scopes {
-            for operand in &mut self.operands {
-                if matches!(
-                    operand.role,
-                    NativeOperandRole::FlDash(_) | NativeOperandRole::FlWord(_)
-                ) {
-                    operand.role = NativeOperandRole::ExplicitOption;
-                }
-            }
-            return;
-        }
         if !self.operands.iter().any(|operand| {
             matches!(
                 operand.role,
@@ -461,6 +450,11 @@ impl CapturedHeadOperands {
             return;
         }
         let mut raw = std::mem::take(&mut self.operands).into_iter().peekable();
+        let unpaired = if check_scopes {
+            NativeOperandRole::Argument
+        } else {
+            NativeOperandRole::ExplicitOption
+        };
         while let Some(mut operand) = raw.next() {
             match operand.role {
                 NativeOperandRole::FlDash(scope) => {
@@ -475,9 +469,9 @@ impl CapturedHeadOperands {
                         self.operands.push(operand);
                         continue;
                     }
-                    operand.role = NativeOperandRole::Argument;
+                    operand.role = unpaired;
                 }
-                NativeOperandRole::FlWord(_) => operand.role = NativeOperandRole::Argument,
+                NativeOperandRole::FlWord(_) => operand.role = unpaired,
                 _ => {}
             }
             self.operands.push(operand);

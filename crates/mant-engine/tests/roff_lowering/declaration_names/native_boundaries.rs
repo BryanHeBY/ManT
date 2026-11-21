@@ -967,3 +967,126 @@ fn dotted_values_require_a_native_join_and_a_typed_terminal_operand() {
         );
     }
 }
+
+#[test]
+fn assignment_delimiters_follow_native_operands_across_accepted_fragments() {
+    // mdoc_macro.c gives each Fl an independent owner, even if Ns removes
+    // the separating space. Ar typography does not close quotes or groups.
+    for (head, label, names, hidden) in [
+        (r"Fl a=x,\& Fl b", "-a=x, -b", &["-a", "-b"][..], &[][..]),
+        (r"Fl a=x\(ba Fl b", "-a=x| -b", &["-a", "-b"][..], &[][..]),
+        (
+            r"Fl a=x\[u002C] Fl b",
+            "-a=x, -b",
+            &["-a", "-b"][..],
+            &[][..],
+        ),
+        (
+            "Fl a=x,--fake,y",
+            "-a=x,--fake,y",
+            &["-a"][..],
+            &["--fake"][..],
+        ),
+        ("Fl a=x , Fl b", "-a=x, -b", &["-a", "-b"][..], &[][..]),
+        (
+            r"Fl a= Ns Ar x,\& Fl b",
+            "-a=x, -b",
+            &["-a", "-b"][..],
+            &[][..],
+        ),
+        (
+            "Fl a= Ns Ar x<1024 , Ns Fl b= Ns Ar x> , Fl c",
+            "-a=x<1024,-b=x>, -c",
+            &["-a", "-b", "-c"][..],
+            &[][..],
+        ),
+        (
+            "Fl a= Ns Ar x<1024 | Ns Fl b= Ns Ar x> , Fl c",
+            "-a=x<1024 |-b=x>, -c",
+            &["-a", "-b", "-c"][..],
+            &[][..],
+        ),
+        (
+            "Fl a= Ns Ar x<1024 , Fl b= Ns Ar x> , Fl c",
+            "-a=x<1024, -b=x>, -c",
+            &["-a", "-b", "-c"][..],
+            &[][..],
+        ),
+    ] {
+        check("OPTIONS", head, names, label, true, hidden);
+    }
+}
+
+#[test]
+fn native_groups_keep_inner_names_private_through_suffixes_and_paths() {
+    for (head, label, names, hidden) in [
+        (
+            "Fl a= Ns Ar <x | Fl v Ns Ar >suffix , Fl b",
+            "-a=<x | -v>suffix, -b",
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+        (
+            "Fl a= Ns Ar <x | Fl v Ns Ar > Ns Ar suffix , Fl b",
+            "-a=<x | -v>suffix, -b",
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+        (
+            "Fl a= Ns Ar <x Ns | Ns Fl v Ns Ar >suffix , Fl b",
+            "-a=<x|-v>suffix, -b",
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+        (
+            "Fl a= Ns Ar x Op Ar <left Ns | Ns Fl v Ns Ar >",
+            "-a=x [<left|-v>]",
+            &["-a"][..],
+            &["-v"][..],
+        ),
+        (
+            "Fl a= Ns Ar x Bq Ar <left Ns | Ns Fl v Ns Ar >",
+            "-a=x [<left|-v>]",
+            &["-a"][..],
+            &["-v"][..],
+        ),
+        (
+            "Fl a= Ns Ar x Op Ar <left Ns | Ns Li v Ns Ar >",
+            "-a=x [<left|v>]",
+            &["-a"][..],
+            &[][..],
+        ),
+        (
+            r"Fl a= Ns Ar x Pq Ar value | No \&../ Ns Pa config",
+            "-a=x (value | ../config)",
+            &["-a"][..],
+            &[][..],
+        ),
+        (
+            "Fl a= Ns Ar x Pq Ar value | Pa ../config",
+            "-a=x (value | ../config)",
+            &["-a"][..],
+            &[][..],
+        ),
+        (
+            r"Fl a= Ns Ar <file Ns Li \(dq<\(dq Ns | Ns Fl v Ns Ar > , Fl b",
+            r#"-a=<file"<"|-v>, -b"#,
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <file Ns Li \(dqx\(dq Ns | Ns Fl v Ns Ar > , Fl b",
+            r#"-a=<file"x"|-v>, -b"#,
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+        (
+            r"Fl a= Ns Ar <file Ns Li \(dq<\(dq | Fl v Ns Ar > , Fl b",
+            r#"-a=<file"<" | -v>, -b"#,
+            &["-a", "-b"][..],
+            &["-v"][..],
+        ),
+    ] {
+        check("OPTIONS", head, names, label, true, hidden);
+    }
+}

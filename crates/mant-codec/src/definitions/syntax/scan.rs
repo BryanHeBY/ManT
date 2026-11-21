@@ -518,6 +518,9 @@ impl<'a> Scanner<'a> {
                         operand.bytes.contains(&argument.bytes.start)
                             && self.view.text[argument.bytes.start..].starts_with('=')
                     })
+                    && !self.view.native_option_starts(
+                        self.view.skip_space(self.cursor + character.len_utf8()),
+                    )
             })
     }
 

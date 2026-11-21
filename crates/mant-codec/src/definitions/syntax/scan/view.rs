@@ -130,6 +130,11 @@ impl<'a> HeadView<'a> {
         self.explicit_option(offset) && self.literal_operand_starts(offset)
     }
 
+    pub(super) fn skip_space(&self, offset: usize) -> usize {
+        let tail = &self.text[offset..];
+        offset + tail.len() - tail.trim_start().len()
+    }
+
     #[cfg(feature = "roff")]
     pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
         self.assignment_angles
@@ -141,6 +146,7 @@ impl<'a> HeadView<'a> {
                 let mut pairs = Vec::new();
                 let mut open: Vec<OpenAngle> = Vec::new();
                 let mut escaped = false;
+                let mut quote = None;
                 let mut previous = None;
                 let mut operands = self.operands.iter().peekable();
                 for (offset, ch) in self.text.char_indices() {
@@ -156,11 +162,27 @@ impl<'a> HeadView<'a> {
                         .peek()
                         .copied()
                         .filter(|item| item.bytes.contains(&offset));
+                    if std::mem::take(&mut escaped) {
+                        continue;
+                    }
+                    if ch == '\\' {
+                        escaped = true;
+                        continue;
+                    }
+                    if let Some(closer) = quote {
+                        if ch == closer {
+                            quote = None;
+                            previous = Some((ch, offset + ch.len_utf8()));
+                        }
+                        continue;
+                    }
+                    quote = super::quote_closer(ch);
                     if ch == '\n' {
                         open.clear();
                     } else if ch == '-'
-                        && matches!(previous, Some((',' | '|', end)) if end < offset)
                         && self.native_option_starts(offset)
+                        && matches!(previous, Some((',' | '|', end)) if end < offset
+                            || self.option_starts_assignment(offset))
                     {
                         while open.last().is_some_and(|angle| !angle.leading) {
                             open.pop();
@@ -168,9 +190,6 @@ impl<'a> HeadView<'a> {
                     }
                     if !ch.is_whitespace() {
                         previous = Some((ch, offset + ch.len_utf8()));
-                    }
-                    if std::mem::take(&mut escaped) {
-                        continue;
                     }
                     if operand.is_some_and(|item| {
                         matches!(
@@ -182,7 +201,6 @@ impl<'a> HeadView<'a> {
                         continue;
                     }
                     match ch {
-                        '\\' => escaped = true,
                         '<' if open.len() < super::MAX_NESTING => {
                             let leading = operand.is_none_or(|operand| {
                                 let prefix = self.text[operand.bytes.start..offset].trim();
@@ -194,11 +212,12 @@ impl<'a> HeadView<'a> {
                                 enclosure: angle_enclosure(operand),
                             });
                         }
-                        '>' if operand.is_none_or(|operand| {
-                            self.text[offset + 1..operand.bytes.end].starts_with(|ch: char| {
-                                !super::parameter_token::parameter_character(ch)
-                            }) || offset + 1 == operand.bytes.end
-                        }) =>
+                        '>' if open.last().is_some_and(|angle| angle.leading)
+                            || operand.is_none_or(|operand| {
+                                self.text[offset + 1..operand.bytes.end].starts_with(|ch: char| {
+                                    !super::parameter_token::parameter_character(ch)
+                                }) || offset + 1 == operand.bytes.end
+                            }) =>
                         {
                             let enclosure = angle_enclosure(operand);
                             if let Some(angle) = open.pop_if(|angle| angle.enclosure == enclosure) {
@@ -213,6 +232,12 @@ impl<'a> HeadView<'a> {
             })
             .binary_search(&offset)
             .is_ok()
+    }
+
+    #[cfg(feature = "roff")]
+    fn option_starts_assignment(&self, offset: usize) -> bool {
+        let tail = self.text[offset..].trim_start_matches(super::option_character);
+        tail.trim_start().starts_with('=')
     }
 
     #[cfg(feature = "roff")]

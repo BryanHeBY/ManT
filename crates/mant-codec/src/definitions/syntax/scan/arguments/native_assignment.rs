@@ -333,7 +333,7 @@ impl AssignmentSyntax {
                 // A Bq with the same terminal glyphs makes no such claim.
                 // A No dot can finish a pending choice together with the
                 // adjacent part of a Pa in the same generated enclosure.
-                let path_prefix = value.trim() == "."
+                let path_prefix = relative_path_prefix(value.trim())
                     && piece.tail == OperandTail::Joined
                     && self
                         .group()
@@ -655,4 +655,11 @@ impl AssignmentSyntax {
 
 fn is_operand_connector(character: char) -> bool {
     matches!(character, '=' | '|' | ',' | ':' | '@')
+}
+
+fn relative_path_prefix(value: &str) -> bool {
+    value == "."
+        || value
+            .strip_suffix('/')
+            .is_some_and(|path| path.split('/').all(|part| matches!(part, "." | "..")))
 }
