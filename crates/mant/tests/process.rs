@@ -65,5 +65,5 @@ mod deferred_ownership;
 mod table_execution;
 
 #[cfg(feature = "roff")]
-#[path = "process/word_receipts.rs"]
+#[path = "process/word_receipts/mod.rs"]
 mod word_receipts;
