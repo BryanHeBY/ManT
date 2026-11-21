@@ -39,6 +39,14 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "FX",
     ),
     (
+        // CVS term_field() leaves trailing padding buffered. A replayed
+        // gap owned by the next word cannot consume this row's scalar.
+        include_str!("live_replay/replay-keeps-break-before-detached-gap-owner.1"),
+        &["ACFG   FG", "X"],
+        None,
+        "FG X",
+    ),
+    (
         include_str!("live_replay/replay-keeps-two-accepted-gap-columns.1"),
         &["A  X"],
         None,
@@ -79,6 +87,26 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         &["A   GX"],
         Some("G"),
         "X",
+    ),
+    (
+        // term_word() writes X into the first marker, before the
+        // surviving authored blank. term_field() prints both separators.
+        include_str!("live_replay/replay-overwrites-buffer-origin.1"),
+        &["X  Y"],
+        None,
+        "XY",
+    ),
+    (
+        include_str!("live_replay/replay-keeps-deferred-space-after-tight-rewind.1"),
+        &["X Y"],
+        None,
+        "XY",
+    ),
+    (
+        include_str!("live_replay/replay-keeps-deferred-space-after-clipped-rewind.1"),
+        &["X Y"],
+        None,
+        "XY",
     ),
     (
         include_str!("live_replay/run-in-replays-across-font-overwrite.1"),
@@ -394,29 +422,16 @@ fn rejected_or_covered_links_publish_no_label() {
 
 #[test]
 fn replayed_separators_preserve_all_accepted_words() {
-    for (source, words) in [
-        (
-            include_str!("live_replay/replay-keeps-interleaved-ink-after-gap.1"),
-            ["AX", "FG"],
-        ),
-        (
-            // term_word() can write X into the first marker even while a
-            // deferred source-space receipt covers the subsequent slot.
-            include_str!("live_replay/replay-overwrites-buffer-origin.1"),
-            ["X", "Y"],
-        ),
-    ] {
-        let mut content =
-            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
-        for _ in 0..3 {
-            let rendered = mant_render::render_query_man(&content);
-            let rows = description_rows(&rendered, source);
-            // Protect the words and native row independently of gap width.
-            assert_eq!(rows.len(), 1, "{source}");
-            assert!(rows[0].split_whitespace().eq(words), "{rows:?}: {source}");
-            let markdown = mant_codec::encode::render_markdown(&content);
-            content =
-                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
-        }
+    let source = include_str!("live_replay/replay-keeps-interleaved-ink-after-gap.1");
+    let mut content =
+        json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    for _ in 0..3 {
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, source);
+        // Protect the words and native row independently of gap width.
+        assert_eq!(rows.len(), 1, "{source}");
+        assert!(rows[0].split_whitespace().eq(["AX", "FG"]), "{rows:?}");
+        let markdown = mant_codec::encode::render_markdown(&content);
+        content = json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
     }
 }

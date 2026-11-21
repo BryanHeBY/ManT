@@ -17,6 +17,7 @@ pub(super) struct PrefixEdits {
     edits: Vec<GlyphEdit>,
     gaps: GapEdits,
     retained_blanks: Vec<(usize, usize, RewoundGlyph)>,
+    deferred_blanks: BTreeMap<usize, String>,
 }
 
 #[derive(Clone, Copy)]
@@ -104,12 +105,8 @@ impl PrefixEdits {
                 // The word projector releases it at the accepted slot.
                 continue;
             }
-            let scalar = match buffer.cells()[cell] {
-                FieldCell::Graph { text, .. } => text,
-                FieldCell::Hyphen => '-',
-                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => ' ',
-                FieldCell::Tab => '\t',
-                _ => continue,
+            let Some(scalar) = rewound_scalar(&buffer.cells()[cell]) else {
+                continue;
             };
             edits.push(GlyphEdit {
                 owner,
@@ -131,6 +128,7 @@ impl PrefixEdits {
         );
         // An earlier surviving write can shift the interval's start.
         let word_start = word_start_after_overlay(positions, *start, *first_incoming);
+        let deferred_blanks = buffer.relocated_blank_markers(*start, positions, *first_incoming);
         Self {
             first_incoming: Some(*first_incoming),
             first_incoming_ink: *first_incoming_ink,
@@ -142,6 +140,7 @@ impl PrefixEdits {
             edits,
             gaps,
             retained_blanks,
+            deferred_blanks,
         }
     }
 
@@ -265,36 +264,104 @@ impl PrefixEdits {
             )
         });
         if self.first_incoming.is_some() {
-            let payload = std::mem::take(incoming);
-            for node in payload {
-                let Inline::Anchor { id, .. } = &node else {
-                    incoming.push(node);
-                    continue;
-                };
-                let Some(slot) = id
-                    .as_str()
-                    .strip_prefix(crate::mandoc::inline::flow::RELOCATED_GLYPH)
-                else {
-                    incoming.push(node);
-                    continue;
-                };
-                let Ok(slot) = slot.parse::<usize>() else {
-                    continue;
-                };
-                if let Some(marker) = self.gaps.relocate.get(&slot)
-                    && let Some(value) = removed_gaps.remove(marker.as_str())
-                {
-                    incoming.push(Inline::anchor(marker.as_str()));
-                    incoming.push(Inline::Text { value });
-                    incoming.push(Inline::anchor(incoming_owner));
-                } else if let Some((owner, glyph)) = relocated.remove(&slot) {
-                    incoming.push(Inline::anchor(owner));
-                    incoming.push(glyph);
-                    incoming.push(Inline::anchor(incoming_owner));
-                }
+            Self::relocate_payload(
+                (&self.gaps.relocate, &mut self.deferred_blanks),
+                nodes,
+                incoming,
+                incoming_owner,
+                removed_gaps,
+                relocated,
+            );
+        }
+    }
+
+    fn relocate_payload(
+        (gap_markers, deferred_blanks): (&BTreeMap<usize, String>, &mut BTreeMap<usize, String>),
+        nodes: &mut [Inline],
+        incoming: &mut Vec<Inline>,
+        incoming_owner: &str,
+        mut removed_gaps: BTreeMap<&str, String>,
+        mut relocated: BTreeMap<usize, (String, Inline)>,
+    ) {
+        let payload = std::mem::take(incoming);
+        for node in payload {
+            let Inline::Anchor { id, .. } = &node else {
+                incoming.push(node);
+                continue;
+            };
+            let Some(slot) = id
+                .as_str()
+                .strip_prefix(crate::mandoc::inline::flow::RELOCATED_GLYPH)
+            else {
+                incoming.push(node);
+                continue;
+            };
+            let Ok(slot) = slot.parse::<usize>() else {
+                continue;
+            };
+            if let Some(marker) = gap_markers.get(&slot)
+                && let Some(value) = removed_gaps.remove(marker.as_str())
+            {
+                incoming.push(Inline::anchor(marker.as_str()));
+                incoming.push(Inline::Text { value });
+                incoming.push(Inline::anchor(incoming_owner));
+            } else if let Some(marker) = deferred_blanks.remove(&slot)
+                && let Some(blank) = take_deferred_blank_marker(nodes, &marker)
+            {
+                // The source marker remains zero-width until
+                // term_field's accepted pass actually prints it.
+                incoming.push(blank);
+            } else if let Some((owner, glyph)) = relocated.remove(&slot) {
+                incoming.push(Inline::anchor(owner));
+                incoming.push(glyph);
+                incoming.push(Inline::anchor(incoming_owner));
             }
         }
     }
+}
+
+fn rewound_scalar(cell: &FieldCell) -> Option<char> {
+    match cell {
+        FieldCell::Graph { text, .. } => Some(*text),
+        FieldCell::Hyphen => Some('-'),
+        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => Some(' '),
+        FieldCell::Tab => Some('\t'),
+        _ => None,
+    }
+}
+
+fn take_deferred_blank_marker(nodes: &mut [Inline], marker: &str) -> Option<Inline> {
+    for node in nodes.iter_mut().rev() {
+        match node {
+            Inline::Anchor { id, .. } if id.as_str() == marker => {
+                return Some(std::mem::replace(
+                    node,
+                    Inline::anchor("\0mant:output-scope:retired-blank"),
+                ));
+            }
+            Inline::Link {
+                target,
+                title,
+                children,
+            } => {
+                if let Some(blank) = take_deferred_blank_marker(children, marker) {
+                    return Some(Inline::Link {
+                        target: target.clone(),
+                        title: title.clone(),
+                        children: vec![blank],
+                    });
+                }
+            }
+            Inline::Strong { children } | Inline::Emphasis { children } => {
+                // Font belongs to DeferredSourceBlank's receipt.
+                if let Some(blank) = take_deferred_blank_marker(children, marker) {
+                    return Some(blank);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: usize) -> usize {

@@ -7,6 +7,63 @@ use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 64;
 
 impl FieldBuffer {
+    /// Find source blank markers whose first surviving slot follows the
+    /// incoming word. A marker still owns the accepted count at flush.
+    pub(in crate::mandoc::inline::flow) fn relocated_blank_markers(
+        &self,
+        start: usize,
+        positions: &[Option<usize>],
+        first_incoming: usize,
+    ) -> BTreeMap<usize, String> {
+        if !positions
+            .iter()
+            .flatten()
+            .any(|&slot| slot >= first_incoming)
+        {
+            return BTreeMap::new();
+        }
+        let edited = self.deferred_blanks.partition_point(|run| run.end <= start);
+        let mut sources = BTreeMap::<_, ((usize, usize), super::cells::DeferredSourceBlank)>::new();
+        for run in &self.deferred_blanks[edited..] {
+            let Some(offset) = run.start.checked_sub(start) else {
+                sources.insert(
+                    (run.source.owner, run.source.write),
+                    ((run.start, run.start), run.source),
+                );
+                continue;
+            };
+            let first = (offset..run.end - start)
+                .filter_map(|offset| {
+                    Some((positions.get(offset).copied().flatten()?, start + offset))
+                })
+                .min();
+            if let Some(first) = first {
+                sources
+                    .entry((run.source.owner, run.source.write))
+                    .and_modify(|(seen, _)| *seen = (*seen).min(first))
+                    .or_insert((first, run.source));
+            }
+        }
+        sources.retain(|_, ((position, _), _)| *position >= first_incoming);
+        // An edited run can share a source marker with an earlier fixed
+        // piece. A marker already preceding the new word stays there.
+        if !sources.is_empty() {
+            for run in &self.deferred_blanks[..edited] {
+                sources.remove(&(run.source.owner, run.source.write));
+                if sources.is_empty() {
+                    break;
+                }
+            }
+        }
+        sources
+            .into_values()
+            .filter_map(|((_, cell), source)| {
+                let slot = cell.checked_sub(start)?;
+                Some((slot, source.marker()))
+            })
+            .collect()
+    }
+
     pub(super) fn apply_slot_placement(
         &mut self,
         write: &FieldWrite,

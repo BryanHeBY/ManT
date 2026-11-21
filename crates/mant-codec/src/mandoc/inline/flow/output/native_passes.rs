@@ -39,6 +39,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     let start = output_start.min(nodes.len());
     let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
     let mut positions = BTreeMap::new();
+    let first_owners = std::cell::OnceCell::new();
     let has_drawing_advance = buffer.has_deferred_drawing_advances();
     let mut preceding = 0;
     for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
@@ -73,6 +74,18 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                         buffer, pass.start..pass.end, anchors[index].content,
                     )
             );
+            if handoff.is_none()
+                && project_detached_gap_restart(
+                    buffer,
+                    anchors,
+                    pass,
+                    (cell, owner),
+                    &first_owners,
+                    &mut boundaries,
+                )
+            {
+                continue;
+            }
             let mut cut = cell;
             let (span_end, accepted_end) = if has_drawing_advance {
                 let end = buffer.printed_content_end(pass.start, pass.end);
@@ -112,14 +125,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 }
             }
             let anchor = &anchors[index];
-            if buffer.projects_skipped_gap(pass.end, next.start)
-                && anchor.content < pass.end
-                && pass.end < cut
-            {
-                // Keep skipped source positions until the acceptance pass
-                // removes them; the row ends before that discarded run.
-                cut = pass.end;
-            }
+            cut = exclude_skipped_gap(buffer, anchor.content, cut, pass.end..next.start);
             // Native replay can move part of one word after another
             // owner's glyph. The projection cursor counts an owner's
             // scalars across all of its fragments, not just this span.
@@ -149,6 +155,66 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         let pending = nodes.split_off(start);
         nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
     }
+}
+
+fn exclude_skipped_gap(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    content: usize,
+    cut: usize,
+    gap: std::ops::Range<usize>,
+) -> usize {
+    // Keep skipped source positions until owner acceptance removes them.
+    // The row ends before that discarded run.
+    if buffer.projects_skipped_gap(gap.start, gap.end) && content < gap.start {
+        cut.min(gap.start)
+    } else {
+        cut
+    }
+}
+
+fn project_detached_gap_restart<'a>(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &'a [super::super::NativeWordAnchor],
+    pass: &super::super::field_buffer::FillPass,
+    (restart, owner): (usize, usize),
+    first_owners: &std::cell::OnceCell<std::collections::HashMap<&'a str, usize>>,
+    boundaries: &mut BTreeMap<String, Vec<RecordedRowSplit>>,
+) -> bool {
+    let Some(following) = anchors.get(owner) else {
+        return false;
+    };
+    let Some(gap) = following.projected_gap_cell else {
+        return false;
+    };
+    if gap >= restart
+        || following.start < restart
+        || gap < buffer.printed_content_end(pass.start, pass.end)
+    {
+        return false;
+    }
+    // term_field() defers trailing padding. If replay assigned it to a
+    // fresh next owner, the cut belongs before that owner's first scalar.
+    // A raw count on the old owner can include several writes to one glyph.
+    let first = first_owners.get_or_init(|| {
+        let mut first = std::collections::HashMap::new();
+        for (index, anchor) in anchors.iter().enumerate() {
+            first.entry(anchor.owner.as_str()).or_insert(index);
+        }
+        first
+    });
+    if first[following.owner.as_str()] != owner {
+        return false;
+    }
+    boundaries
+        .entry(following.owner.clone())
+        .or_default()
+        .push(RecordedRowSplit {
+            offset: 0,
+            pass_end: pass.end,
+            before_cached_glyph: false,
+            section_seam: false,
+        });
+    true
 }
 
 fn project_definition_handoff(
