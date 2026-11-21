@@ -15,6 +15,7 @@ from unittest.mock import patch
 
 from scripts.roff.audit import audit_roff_semantics as semantic
 from scripts.roff.audit import audit_roff_structure as structure
+from scripts.roff.audit import audit_roff_layout as layout
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
@@ -101,11 +102,72 @@ class AuditProfileMigrationTests(unittest.TestCase):
                         self.assertEqual([Path(row.path).name for row in structure.read_structure_database(ledger).values()],
                                          [healthy.name])
                         damaged.write_bytes(packed)
+                        if suffix in {'xz', 'bz2'}:
+                            self.assertEqual(structure.main([*args, '--max-pages-per-section', '1']), 1)
+                            self.assertEqual(profile.call_args.args[0], [])
+                            self.assertEqual(len(structure.read_structure_database(ledger)), 1)
+                            continue
                         self.assertEqual(structure.main([*args, '--max-pages-per-section', '1']), 0)
                         self.assertEqual(profile.call_args.args[0], [damaged])
                         rows = list(structure.read_structure_database(ledger).values())
                         self.assertEqual([Path(row.path).name for row in rows], [healthy.name, damaged.name])
                         self.assertEqual(rows[1].digest, rows[0].digest)
+
+    def test_unchanged_recovery_clears_the_retry_and_filtered_report_is_fresh(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(directory)
+            page, ledger, report = (root / name for name in ('a.1.gz', 'audit.csv', 'scan.json'))
+            retry = ledger.with_suffix('.csv.retries.json')
+            source = gzip.compress(b'.TH TEST 1\n.SH DESCRIPTION\nBODY\n')
+            page.write_bytes(source)
+            args = ['--manpath', str(root), '--profiler', str(page), '--audit-db', str(ledger), '--json', str(report)]
+
+            def scan(selected, *_args):
+                return [structure.Finding(structure.relative_label(path, [root]), 'clean', []) for path in selected]
+
+            with patch.object(structure, 'profile_findings', side_effect=scan) as profiler:
+                self.assertEqual(structure.main(args), 0)
+                self.assertTrue(json.loads(report.read_text())['findings'])
+                page.write_bytes(b'')
+                self.assertEqual(structure.main([*args, '--source-pattern', 'BODY']), 0)
+                current = json.loads(report.read_text())
+                self.assertFalse(current['findings'])
+                self.assertEqual(len(current['uncovered_sources']), 1)
+                self.assertEqual(structure.main(args), 1)
+                self.assertTrue(retry.exists())
+                page.write_bytes(source)
+                calls = profiler.call_count
+                self.assertEqual(structure.main(args), 0)
+                self.assertEqual(profiler.call_count, calls)
+                self.assertFalse(retry.exists())
+                self.assertFalse(json.loads(report.read_text())['uncovered_sources'])
+
+    def test_layout_does_not_send_unverified_transport_to_the_renderer(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(directory)
+            page, bad, misnamed, ledger, report = (root / name for name in (
+                'a.1.gz', 'b.1.gz', 'c.1', 'layout.csv', 'layout.json',
+            ))
+            encoded = gzip.compress(b'.TH TEST 1\n.SH DESCRIPTION\nBODY\n')
+            page.write_bytes(encoded)
+            bad.write_bytes(encoded[:-1])
+            misnamed.write_bytes(encoded)
+            args = ['--manpath', str(root), '--mant', str(page), '--audit-db', str(ledger), '--json', str(report)]
+
+            def scan(selected, _roots, _arguments):
+                self.assertEqual(selected, [page])
+                label = layout.relative_label(page, [root])
+                return {label: layout.Finding(label, 'clean', 'clean', [], None)}, None
+
+            with patch.object(layout, 'run_layout_auditor', side_effect=scan) as render:
+                self.assertEqual(layout.main(args), 1)
+                render.assert_called_once()
+                result = json.loads(report.read_text())
+                self.assertEqual(result['summary'], {'clean': 1, 'hard-failure': 2})
+                self.assertEqual(len(result['uncovered_sources']), 2)
+                self.assertEqual(layout.main([*args, '--source-pattern', '^NEVER$']), 0)
+                self.assertFalse(json.loads(report.read_text())['findings'])
+                render.assert_called_once()
 
     def test_retry_pruning_requires_complete_enumeration_of_the_same_scope(self):
         with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):

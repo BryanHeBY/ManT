@@ -1043,6 +1043,11 @@ defines the narrow signal and review lifecycle. Do not add it to daily CI;
 only its self-check and focused regressions derived from confirmed findings
 belong there.
 
+Structure and renderer-layout scans verify the source transport before
+selecting candidates or assigning a decoded digest. They cover plain input
+and gzip or Zstandard with matching headers and suffixes. Their JSON reports
+list inaccessible, corrupt, and unsupported inputs under `uncovered_sources`.
+
 ### Pinned-reference content and geometry audit
 
 For a full-corpus replay of the existing structural, projection, target and

@@ -339,6 +339,77 @@ def read_source(path: Path) -> tuple[bytes | None, str | None]:
         return None, " ".join(str(error).splitlines()) or type(error).__name__
 
 
+def read_verified_manual(path: Path) -> tuple[bytes | None, str | None]:
+    """Accept only transport identities shared by the file-based audit backends."""
+    try:
+        with path.open("rb", buffering=0) as stream:
+            header = stream.read(6)
+            detected = manual_compression(header)
+            if error := manual_transport_error(path, detected):
+                return None, error
+            if detected is None:
+                return header + stream.read(), None
+            stream.seek(0)
+            if detected == ".gz":
+                with gzip.GzipFile(fileobj=stream) as decoded:
+                    return decoded.read(), None
+            zstd = shutil.which("zstd")
+            if zstd is None:
+                return None, "zstd decompressor not found"
+            result = subprocess.run([zstd, "--decompress", "--stdout"], stdin=stream,
+                                    capture_output=True, check=False)
+            if result.returncode == 0:
+                return result.stdout, None
+            return None, result.stderr.decode("utf-8", errors="replace").strip()
+    except (OSError, EOFError, zlib.error) as error:
+        return None, " ".join(str(error).splitlines()) or type(error).__name__
+
+
+MANUAL_COMPRESSION = {".gz": b"\x1f\x8b", ".zst": b"\x28\xb5\x2f\xfd",
+                      ".xz": b"\xfd7zXZ\x00", ".bz2": b"BZh"}
+
+
+def manual_compression(header: bytes) -> str | None:
+    if len(header) >= 4 and 0x50 <= header[0] <= 0x5f and header[1:4] == b"\x2a\x4d\x18":
+        return ".zst"
+    return next((suffix for suffix, magic in MANUAL_COMPRESSION.items() if header.startswith(magic)), None)
+
+
+def manual_transport_error(path: Path, detected: str | None) -> str | None:
+    suffix = path.suffix if path.suffix in MANUAL_COMPRESSION else None
+    if detected != suffix:
+        return "compression header does not match the manual's suffix"
+    if detected in {".xz", ".bz2"}:
+        return f"the audit backends cannot verify {detected} input"
+    return None
+
+
+def observe_sources(
+    pages: Sequence[Path], roots: Sequence[Path], patterns: Sequence[re.Pattern[str]],
+) -> tuple[dict[Path, tuple[str, str | None]], dict[Path, str]]:
+    records, failures = {}, {}
+    for path in pages:
+        source, error = read_verified_manual(path)
+        label = relative_label(path, roots)
+        if source is None:
+            failures[path] = error or "source is unavailable"
+            if not patterns:
+                records[path] = label, None
+            continue
+        if not patterns or all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
+            records[path] = label, hashlib.sha256(source).hexdigest()
+    return records, failures
+
+
+def verify_source_digest(path: Path, digest: str) -> bool:
+    source, _ = read_verified_manual(path)
+    return source is not None and hashlib.sha256(source).hexdigest() == digest
+
+
+def uncovered_sources(failures: dict[Path, str], roots: Sequence[Path]) -> list[dict[str, str]]:
+    return [{"path": relative_label(path, roots), "reason": reason} for path, reason in failures.items()]
+
+
 def source_bytes(path: Path) -> bytes | None:
     return read_source(path)[0]
 

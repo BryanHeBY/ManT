@@ -153,6 +153,12 @@ pattern cannot inspect a damaged page, the audit reports that uncertainty
 and continues with the readable candidates. Per-section limits follow the
 same order within each section. Removing stale retries requires a complete
 enumeration of the same corpus and roots.
+The file backends verify plain sources and matching gzip or Zstandard
+headers and suffixes. Inputs in unsupported formats or with mismatched
+headers have no decoded ledger identity. The structure and layout reports
+record them in `uncovered_sources`, including successful scans with no
+selected pages. A source that returns to a current completed identity
+clears the resolved retry in its own corpus and root scope.
 The source ordinal observer retains overwrite evidence across node boundaries,
 including styled pieces and source continuations, and records an uncertain
 owner with its original coordinates instead of inventing a definite shape.

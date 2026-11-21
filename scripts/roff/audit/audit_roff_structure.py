@@ -30,7 +30,9 @@ from typing import Iterable, Sequence
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
     SourceReview, discover_pages, is_nonnegative_integer, manual_section, ordinal_source_reviews,
-    read_source, run_jsonl_profile_batch, source_digest, source_reviews,
+    compile_source_patterns, manual_compression, manual_transport_error, observe_sources,
+    relative_label, run_jsonl_profile_batch,
+    source_digest, source_reviews, uncovered_sources, verify_source_digest,
 )
 
 
@@ -233,18 +235,6 @@ def positive_integer(value: str) -> int:
     return parsed
 
 
-def relative_label(path: Path, roots: Sequence[Path]) -> str:
-    common = Path(os.path.commonpath(roots)) if len(roots) > 1 else None
-    for root in roots:
-        try:
-            relative = path.relative_to(root)
-        except ValueError:
-            continue
-        prefix = root.relative_to(common) if common is not None else Path(root.name)
-        return (prefix / relative).as_posix()
-    return path.as_posix()
-
-
 def manual_hierarchy_root(path: Path, roots: Sequence[Path]) -> Path | None:
     """Return the narrow hierarchy owning one exact leaf and its `.so` targets."""
     section = manual_section(path)
@@ -262,31 +252,6 @@ def manual_hierarchy_root(path: Path, roots: Sequence[Path]) -> Path | None:
         ]
         return root.joinpath(*relative.parts[: candidates[-1]]) if candidates else root
     return None
-
-
-def compile_source_patterns(values: Sequence[str] | None) -> list[re.Pattern[str]]:
-    patterns = []
-    for value in values or []:
-        try:
-            patterns.append(re.compile(value, re.MULTILINE))
-        except re.error as error:
-            raise ValueError(f"invalid --source-pattern {value!r}: {error}") from error
-    return patterns
-
-
-def observe_sources(pages: Sequence[Path], roots: Sequence[Path], patterns: Sequence[re.Pattern[str]]):
-    records, failures = {}, {}
-    for path in pages:
-        source, error = read_source(path)
-        label = relative_label(path, roots)
-        if error is not None:
-            failures[path] = error
-            if not patterns:
-                records[path] = label, None
-        elif source is not None:
-            if not patterns or all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
-                records[path] = label, hashlib.sha256(source).hexdigest()
-    return records, failures
 
 
 def stable_sample(pages: Sequence[Path], maximum: int) -> list[Path]:
@@ -455,6 +420,15 @@ def profile_findings(
     for path in pages:
         hierarchy_root = exact_roots[path] if exact_roots is not None else manual_hierarchy_root(path, roots)
         label = relative_label(path, roots)
+        try:
+            with path.open("rb") as stream:
+                transport_error = manual_transport_error(path, manual_compression(stream.read(6)))
+        except OSError:
+            # The profiler owns file errors, including its include root.
+            transport_error = None
+        if transport_error:
+            yield Finding(label, "hard-failure", [], transport_error)
+            continue
         if hierarchy_root is None:
             yield Finding(label, "hard-failure", [], "manual hierarchy is unknown")
             continue
@@ -741,6 +715,14 @@ def main(argv: Sequence[str]) -> int:
             all_pages = [page for page in all_pages if manual_section(page) in sections]
         patterns = compile_source_patterns(arguments.source_pattern)
         records, unreadable = observe_sources(all_pages, roots, patterns)
+        recovered = {
+            label for label, digest in records.values()
+            if digest is not None
+            and (previous := database.get((corpus, label, digest))) is not None
+            and previous.profile_schema == PROFILE_SCHEMA and previous.scan_status != "hard-failure"
+        }
+        retries = {key: None for key in retries
+                   if key[0] != corpus or key[3] != root_scope or key[1] not in recovered}
         pages = list(records)
         if arguments.replay_fidelity_records:
             identities = read_fidelity_identities(arguments.fidelity_db, corpus)
@@ -793,9 +775,9 @@ def main(argv: Sequence[str]) -> int:
             file=sys.stderr,
         )
     if not pages:
-        if complete:
-            write_retry_order(retry_path, retries)
+        write_retry_order(retry_path, retries)
         print("audit-roff-structure: no selected manual pages")
+        write_report(arguments.json, corpus, roots, [], unreadable)
         return 0
 
     print("ManT roff structure audit")
@@ -816,6 +798,12 @@ def main(argv: Sequence[str]) -> int:
     except ValueError as error:
         print(f"audit-roff-structure: {error}", file=sys.stderr)
         return 2
+    changed = {records[path][0] for path in readable if not verify_source_digest(path, records[path][1])}
+    if changed:
+        findings = [
+            Finding(finding.path, "hard-failure", [], "source changed during audit")
+            if finding.path in changed else finding for finding in findings
+        ]
     summary = Counter(finding.status for finding in findings)
     source_review_count = sum(len(finding.source_review) for finding in findings)
     by_label = {finding.path: finding for finding in findings}
@@ -833,7 +821,7 @@ def main(argv: Sequence[str]) -> int:
                 *(source_review_label(review) for review in finding.source_review),
             ])
             print(f"{finding.status.upper():12} {label}{detail}{': ' + observations if observations else ''}")
-        if digest is not None:
+        if digest is not None and label not in changed:
             key = (corpus, label, digest)
             previous = database.get(key)
             database[key] = AuditRecord(
@@ -856,26 +844,25 @@ def main(argv: Sequence[str]) -> int:
     write_structure_database(arguments.audit_db, database.values())
     write_retry_order(retry_path, retries)
     print(f"structure database: {arguments.audit_db}")
-    if arguments.json:
-        arguments.json.parent.mkdir(parents=True, exist_ok=True)
-        arguments.json.write_text(
-            json.dumps(
-                {
-                    "schema": PROFILE_SCHEMA,
-                    "corpus": corpus,
-                    "roots": [str(root) for root in roots],
-                    "summary": dict(summary),
-                    "source_review_occurrences": source_review_count,
-                    "findings": [asdict(finding) for finding in findings],
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"report: {arguments.json}")
+    write_report(arguments.json, corpus, roots, findings, unreadable)
     return 1 if summary["hard-failure"] else 0
+
+
+def write_report(path: Path | None, corpus, roots, findings, unreadable) -> None:
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "schema": PROFILE_SCHEMA,
+        "corpus": corpus,
+        "roots": [str(root) for root in roots],
+        "summary": dict(Counter(finding.status for finding in findings)),
+        "source_review_occurrences": sum(len(finding.source_review) for finding in findings),
+        "uncovered_sources": uncovered_sources(unreadable, roots),
+        "findings": [asdict(finding) for finding in findings],
+    }
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"report: {path}")
 
 
 if __name__ == "__main__":

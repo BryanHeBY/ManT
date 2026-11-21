@@ -11,15 +11,9 @@ Existing content and structure rows are never rewritten or made stale.
 from __future__ import annotations
 
 import argparse
-import bz2
 import csv
-import gzip
-import hashlib
 import json
-import lzma
-import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -31,7 +25,10 @@ from typing import Iterable, Sequence
 from scripts.roff.oracle import mandoc_oracle
 from scripts.roff.lib.roff_reference import module_command
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
-from scripts.roff.lib.roff_audit_common import discover_pages, manual_section
+from scripts.roff.lib.roff_audit_common import (
+    compile_source_patterns, discover_pages, manual_section, observe_sources,
+    relative_label, uncovered_sources, verify_source_digest,
+)
 
 ROOT = Path(__file__).resolve().parents[3]
 FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
@@ -245,73 +242,6 @@ def positive_integer(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be one or greater")
     return parsed
-
-
-def source_bytes(path: Path) -> bytes | None:
-    try:
-        if path.name.endswith(".gz"):
-            return gzip.open(path, "rb").read()
-        if path.name.endswith(".bz2"):
-            return bz2.open(path, "rb").read()
-        if path.name.endswith(".xz"):
-            return lzma.open(path, "rb").read()
-        if path.name.endswith(".zst"):
-            zstd = shutil.which("zstd")
-            if zstd is None:
-                return None
-            result = subprocess.run(
-                [zstd, "--decompress", "--stdout", str(path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
-                check=False,
-            )
-            return result.stdout if result.returncode == 0 else None
-        return path.read_bytes()
-    except OSError:
-        return None
-
-
-def source_digest(path: Path) -> str | None:
-    source = source_bytes(path)
-    return hashlib.sha256(source).hexdigest() if source is not None else None
-
-
-def relative_label(path: Path, roots: Sequence[Path]) -> str:
-    common = Path(os.path.commonpath(roots)) if len(roots) > 1 else None
-    for root in roots:
-        try:
-            relative = path.relative_to(root)
-        except ValueError:
-            continue
-        prefix = root.relative_to(common) if common is not None else Path(root.name)
-        return (prefix / relative).as_posix()
-    return path.as_posix()
-
-
-def compile_source_patterns(values: Sequence[str] | None) -> list[re.Pattern[str]]:
-    patterns = []
-    for value in values or []:
-        try:
-            patterns.append(re.compile(value, re.MULTILINE))
-        except re.error as error:
-            raise ValueError(f"invalid --source-pattern {value!r}: {error}") from error
-    return patterns
-
-
-def filter_pages_by_source(
-    pages: Sequence[Path], patterns: Sequence[re.Pattern[str]]
-) -> tuple[list[Path], list[Path]]:
-    if not patterns:
-        return list(pages), []
-    selected = []
-    unreadable = []
-    for path in pages:
-        source = source_bytes(path)
-        if source is None:
-            unreadable.append(path)
-        elif all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
-            selected.append(path)
-    return selected, unreadable
 
 
 def stable_sample(pages: Sequence[Path], maximum: int) -> list[Path]:
@@ -685,8 +615,9 @@ def main(argv: Sequence[str]) -> int:
         if arguments.man_section:
             sections = set(arguments.man_section)
             pages = [path for path in pages if manual_section(path) in sections]
-        pages, unreadable = filter_pages_by_source(pages, compile_source_patterns(arguments.source_pattern))
-        records = {path: (relative_label(path, roots), source_digest(path)) for path in pages}
+        patterns = compile_source_patterns(arguments.source_pattern)
+        records, unreadable = observe_sources(pages, roots, patterns)
+        pages = list(records)
         database = read_database(
             arguments.audit_db,
             arguments.reference_kind,
@@ -731,10 +662,12 @@ def main(argv: Sequence[str]) -> int:
     except ValueError as error:
         print(f"audit-roff-layout: {error}", file=sys.stderr)
         return 2
-    for path in unreadable:
-        print(f"audit-roff-layout: source pattern could not inspect unreadable path: {path}", file=sys.stderr)
+    for path, reason in (unreadable.items() if patterns else ()):
+        print(f"audit-roff-layout: source pattern could not inspect unreadable path: {path}: {reason}",
+              file=sys.stderr)
     if not pages:
         print("audit-roff-layout: no selected manual pages")
+        write_report(arguments, corpus, roots, reference_id, [], unreadable)
         return 0
 
     print("ManT roff renderer-layout audit")
@@ -751,7 +684,15 @@ def main(argv: Sequence[str]) -> int:
     print("  contract:  source-gated line boundaries, spacing, and relative indentation")
     print()
 
-    findings, child_error = run_layout_auditor(pages, roots, arguments)
+    readable = [path for path in pages if path not in unreadable]
+    findings, child_error = run_layout_auditor(readable, roots, arguments) if readable else ({}, None)
+    for path in pages:
+        label, digest = records[path]
+        reason = (f"could not decode source: {unreadable[path]}" if digest is None
+                  else None if verify_source_digest(path, digest) else "source changed during audit")
+        if reason is not None:
+            findings[label] = Finding(label, "hard-failure", None, [], None, reason)
+            records[path] = label, None
     summary = Counter(finding.status for finding in findings.values())
     for path in pages:
         label, digest = records[path]
@@ -800,32 +741,30 @@ def main(argv: Sequence[str]) -> int:
         reference_id,
     )
     print(f"layout database: {arguments.audit_db}")
-    if arguments.json:
-        arguments.json.parent.mkdir(parents=True, exist_ok=True)
-        arguments.json.write_text(
-            json.dumps(
-                {
-                    "schema": LAYOUT_SCHEMA,
-                    "corpus": corpus,
-                    "roots": [str(root) for root in roots],
-                    "reference": arguments.reference,
-                    "referenceKind": arguments.reference_kind,
-                    "referenceId": reference_id,
-                    "replay_fidelity_records": arguments.replay_fidelity_records,
-                    "fidelity_db": str(arguments.fidelity_db)
-                    if arguments.replay_fidelity_records
-                    else None,
-                    "summary": dict(summary),
-                    "findings": [asdict(findings[relative_label(path, roots)]) for path in pages],
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
-        print(f"report: {arguments.json}")
+    write_report(arguments, corpus, roots, reference_id, [findings[records[path][0]] for path in pages], unreadable)
     return 1 if summary["hard-failure"] else 0
+
+
+def write_report(arguments, corpus, roots, reference_id, findings, unreadable) -> None:
+    path = arguments.json
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    report = {
+        "schema": LAYOUT_SCHEMA,
+        "corpus": corpus,
+        "roots": [str(root) for root in roots],
+        "reference": arguments.reference,
+        "referenceKind": arguments.reference_kind,
+        "referenceId": reference_id,
+        "replay_fidelity_records": arguments.replay_fidelity_records,
+        "fidelity_db": str(arguments.fidelity_db) if arguments.replay_fidelity_records else None,
+        "summary": dict(Counter(finding.status for finding in findings)),
+        "uncovered_sources": uncovered_sources(unreadable, roots),
+        "findings": [asdict(finding) for finding in findings],
+    }
+    path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"report: {path}")
 
 
 if __name__ == "__main__":
