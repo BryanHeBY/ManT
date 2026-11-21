@@ -129,10 +129,24 @@ pub(in crate::mandoc::inline) enum ReplayDomain {
     Filled,
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum EntryCursor {
+    #[default]
+    Empty,
+    AtEnd,
+    NeedsReplay,
+}
+
+impl EntryCursor {
+    pub(in crate::mandoc::inline) const fn has_input(self) -> bool {
+        !matches!(self, Self::Empty)
+    }
+}
+
 #[derive(Default)]
 pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) domain: ReplayDomain,
-    pub(in crate::mandoc::inline) prior_input: bool,
+    pub(in crate::mandoc::inline) cursor: EntryCursor,
     pub(in crate::mandoc::inline) automatic_blanks: usize,
     pub(in crate::mandoc::inline) kept_blanks: bool,
     pub(in crate::mandoc::inline) trailing_tab_reference: bool,

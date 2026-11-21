@@ -118,10 +118,16 @@ impl FieldBuffer {
     }
 
     pub(in crate::mandoc::inline::flow) fn has_pending_break_markers(&self) -> bool {
+        self.has_break_marker_at_or_after(self.resume)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_break_marker_at_or_after(
+        &self,
+        from: usize,
+    ) -> bool {
         self.break_markers
             .last()
-            .copied()
-            .is_some_and(|marker| marker >= self.resume)
+            .is_some_and(|&marker| marker >= from)
     }
 
     /// A committed scan prefix is still part of this field until a real
@@ -129,6 +135,13 @@ impl FieldBuffer {
     /// survives scanning past it, but never survives field retirement.
     pub(in crate::mandoc::inline::flow) fn has_break_markers(&self) -> bool {
         !self.break_markers.is_empty()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn writes_at_buffer_end(&self) -> bool {
+        self.write_cursor.retreat() == 0
+            && !self.backbefore_armed
+            && !self.backafter_armed
+            && !matches!(self.word_scan, WordScanPolicy::UnmodeledRewind)
     }
 
     /// The live pass scanner, rather than projected glyph booleans, proves

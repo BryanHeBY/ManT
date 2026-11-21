@@ -1,5 +1,5 @@
 use super::definition::PendingFieldGapOrigin;
-use super::native_slots::{PrefixExtension, ReplayDomain};
+use super::native_slots::{EntryCursor, PrefixExtension, ReplayDomain};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
     InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
@@ -659,7 +659,13 @@ impl super::InlineExecutionState {
             PrefixExtension::LeadingMarker => true,
         };
         super::native_slots::SlotEntry {
-            prior_input: !input.is_empty(),
+            cursor: if input.is_empty() {
+                EntryCursor::Empty
+            } else if input.writes_at_buffer_end() {
+                EntryCursor::AtEnd
+            } else {
+                EntryCursor::NeedsReplay
+            },
             domain,
             automatic_blanks,
             kept_blanks,

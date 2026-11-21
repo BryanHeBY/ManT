@@ -20,7 +20,7 @@ fn rewound_word_entry_walks_over_the_invisible_tail_before_filling() {
     use super::{FillTargets, FlushReceipt};
     use crate::mandoc::inline::{
         Font, FontState,
-        flow::native_slots::{ReplayDomain, SlotEntry},
+        flow::native_slots::{EntryCursor, ReplayDomain, SlotEntry},
         text_execution::{
             TextExecutionContext, TextExecutionPolicy, ZeroAdvanceState,
             parse_roff_text_with_zero_advance,
@@ -43,7 +43,11 @@ fn rewound_word_entry_walks_over_the_invisible_tail_before_filling() {
     .enumerate()
     {
         let slot_entry = SlotEntry {
-            prior_input: !buffer.is_empty(),
+            cursor: if buffer.is_empty() {
+                EntryCursor::Empty
+            } else {
+                EntryCursor::NeedsReplay
+            },
             domain: ReplayDomain::Filled,
             automatic_blanks: blanks,
             device_tail: buffer.device_tail(),

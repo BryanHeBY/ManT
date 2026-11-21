@@ -47,6 +47,9 @@ that crate was not published for that change.
 
 ### mant-codec
 
+- Preserve the live cursor when a word retreats over unprinted source cells.
+  Keep gap positioning separate from word scalars so accepted rows and
+  surviving link labels follow the terminal field.
 - Preserve authored no-fill row boundaries before invisible mdoc nodes,
   including explicit targets that validation moves to a visible operand.
 - Keep nested mdoc enclosure operands from changing an outer option's

@@ -3,7 +3,7 @@
 use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecution};
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite},
-    native_slots::{NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass},
+    native_slots::{EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass},
 };
 use crate::mandoc::roff_escape::{PresentationKind, RoffFont};
 
@@ -115,9 +115,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
-                || relative_retreat && can_replay_relative_retreat(context, has_zero_advance)
-                || armed_overstrike
-                || replay_empty_overstrike
+                || relative_retreat
+                    && can_replay_relative_retreat(events, context, has_zero_advance)
+                || has_armed_overlap
                 || tight_word_can_carry_glyph(events, context)
                 || replayable_device_tail(context, edits, !events.is_empty()))
 }
@@ -128,14 +128,38 @@ fn motion_columns(value: &str) -> Option<(bool, i32)> {
         .map(|(units, _)| (absolute.is_some(), units))
 }
 
+fn trailing_relative_retreat(events: &[RoffInlineEvent]) -> bool {
+    let Some((last, preceding)) = events.split_last() else {
+        return false;
+    };
+    matches!(last, RoffInlineEvent::HorizontalMotion { argument: Some(value), .. }
+        if motion_columns(value).is_some_and(|(absolute, units)| !absolute && units < 0))
+        && preceding.iter().all(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::Font(_)
+                    | RoffInlineEvent::PreviousFont
+                    | RoffInlineEvent::Text(_)
+                    | RoffInlineEvent::Glyph(_)
+                    | RoffInlineEvent::ZeroWidthGlyph
+            )
+        })
+}
+
 fn has_prior_retreat(context: &TextExecutionContext<'_>) -> bool {
     context.zero_advance.has_buffered_glyph() || context.slot_entry.retreat_blanks > 0
 }
 
-fn can_replay_relative_retreat(context: &TextExecutionContext<'_>, local_advance: bool) -> bool {
+fn can_replay_relative_retreat(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+    local_advance: bool,
+) -> bool {
     // A local BACKBEFORE write can establish the cursor before the retreat
     // even when the previous word defers its final blank (term.c::encode1).
-    has_proved_overstrike_entry(context) || local_advance && !has_prior_retreat(context)
+    has_proved_overstrike_entry(context)
+        || local_advance && !has_prior_retreat(context)
+        || context.slot_entry.cursor == EntryCursor::AtEnd && trailing_relative_retreat(events)
 }
 
 fn replayable_device_tail(
@@ -164,7 +188,7 @@ fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
     }
     // The inherited BACK pair may own an earlier operand or its entry
     // blank. Leave that receipt with the live word executor.
-    if context.slot_entry.prior_input
+    if context.slot_entry.cursor.has_input()
         && context.zero_advance.is_armed()
         && context.zero_advance.has_buffered_glyph()
     {
@@ -284,7 +308,7 @@ fn marker_replay(
     // field. A pending run-in or source-blank receipt still owns its
     // earlier spans and must finish through the shared word path.
     let filled = context.slot_entry.domain == ReplayDomain::Filled
-        && !context.slot_entry.prior_input
+        && !context.slot_entry.cursor.has_input()
         && !context.defer_leading_blanks
         && !context.zero_advance.has_annotation_output_owner();
     // Plain source blanks already have an incremental pass receipt.
@@ -375,7 +399,7 @@ fn has_live_raw_cursor(context: &TextExecutionContext<'_>) -> bool {
 }
 
 fn has_proved_overstrike_entry(context: &TextExecutionContext<'_>) -> bool {
-    !context.slot_entry.prior_input
+    !context.slot_entry.cursor.has_input()
         || context.slot_entry.prefix.is_some()
         || context.slot_entry.device_tail.is_some()
         || context.slot_entry.automatic_blanks > 0
@@ -385,7 +409,7 @@ fn has_unproved_armed_entry(context: &TextExecutionContext<'_>) -> bool {
     // A blank overstrike's input and the native entry blank can bound an
     // edit even when the earlier cursor is opaque. An empty overstrike
     // also needs a proved source-row reference to trim the required pair.
-    context.slot_entry.prior_input
+    context.slot_entry.cursor.has_input()
         && context.zero_advance.is_armed()
         && context.slot_entry.prefix.is_none()
 }
@@ -761,13 +785,21 @@ impl GeometrySeed<'_> {
                 editable_pass: false,
             }
         } else {
-            let mut placement =
-                Placement::empty(NativeSlots::after_entry(context.slot_entry.prior_input));
+            let mut placement = Placement::empty(NativeSlots::after_entry(
+                context.slot_entry.cursor.has_input(),
+            ));
             let mut replace_tail = context.slot_entry.retreat_blanks;
+            // An ordinary entry SP written at lastcol belongs to the
+            // current operand's editable suffix before a relative HORIZ.
+            // Earlier opaque slots need no replay if the retreat stays
+            // within this suffix (term.c:573–582 and 704–714).
+            let replay_entry_retreat = context.slot_entry.cursor == EntryCursor::AtEnd
+                && trailing_relative_retreat(events);
             let replayed_entry = replace_tail == 0
-                && context.slot_entry.prior_input
+                && context.slot_entry.cursor.has_input()
                 && context.slot_entry.automatic_blanks > 0
-                && (context.zero_advance.is_armed()
+                && (replay_entry_retreat
+                    || context.zero_advance.is_armed()
                     || events
                         .iter()
                         .any(|event| matches!(event, RoffInlineEvent::Overstrike { .. }))
@@ -854,6 +886,11 @@ fn execute_seed<'a>(
     // native segment, even when the old tail still holds glyphs.
     let live_cursor = slots.cursor_before_end()
         && (seed.prefix_start > 0
+            // An initial control-only word can leave the cursor before
+            // a marker. The next word must be able to overwrite it.
+            || !context.slot_entry.cursor.has_input()
+                && slots.cursor_before_invisible_tail()
+                && !slots.contains_ink_from(0)
             || seed.earlier != 0
                 && (slots.cursor_before_invisible_tail()
                     || slots.has_unpainted_marker_tail()
@@ -908,10 +945,11 @@ fn execute_seed<'a>(
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
+        && (seed.prefix_start != 0 || seed.earlier == 0)
     {
-        // A cursor inside an earlier owner has no detachable slot suffix.
-        // Preserve the text rather than implying that the cursor can be
-        // carried forward at the end of that earlier word.
+        // A partial replay cannot carry a cursor inside an earlier owner.
+        // When the whole field is available, keep col and lastcol even
+        // when a leading \p makes term_flushln() accept none of its ink.
         return Err(PriorSlotEdit::Unresolved);
     }
     let placed = PlacedWord::prepare(

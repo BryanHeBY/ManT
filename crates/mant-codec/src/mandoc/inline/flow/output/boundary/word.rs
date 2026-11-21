@@ -5,6 +5,11 @@ use super::{Inline, InlineBuilder, PendingBoundary, push_text, trim_trailing_bre
 use super::super::native_passes;
 use super::super::record::{SeparatorDisposition, WordPassProjection};
 
+struct ReplayedMotionPadding {
+    device: usize,
+    separator: usize,
+}
+
 impl InlineBuilder {
     pub(super) fn append_recorded_word_boundary(
         &mut self,
@@ -23,15 +28,12 @@ impl InlineBuilder {
         // Plain words anchor into the same native flush unit the field
         // path uses; the marker routes by session exactly like the cell
         // recording in `record_native_word`.
-        let native_anchor_marker = if self.in_definition_field() {
-            self.execution
-                .definition
-                .as_ref()
-                .and_then(|state| state.field_word_anchors.last())
-        } else {
-            self.execution.plain_input.anchors.last()
-        }
-        .map(|anchor| anchor.owner.clone());
+        let native_anchor_marker = self
+            .execution
+            .word_input()
+            .1
+            .last()
+            .map(|anchor| anchor.owner.clone());
         if !accepted_row_break {
             // The new word's owner starts after earlier buffered glyphs,
             // even on a tight join. A deferred term_fill() pass can restart
@@ -100,22 +102,27 @@ impl InlineBuilder {
                     native_anchor_marker.as_deref(),
                     projection.authored_separator.take(),
                 );
-            let prefix_marker = native_anchor_marker.filter(|_| {
-                word && (field_padding
-                    || virtual_padding
-                    || replayed_gap.is_some()
-                    || projection.retained_motion_width > 0)
-            });
-            if let Some(marker) = &prefix_marker {
-                self.mark_native_field_prefix(
-                    marker,
-                    replayed_gap.or(projection.projected_gap(field_padding)),
-                );
-            }
+            let motion_padding = (!field_padding && projection.retained_motion_width > 0)
+                .then(|| self.replayed_motion_padding(projection, payload, replayed_gap));
+            let prefix_prints = motion_padding
+                .as_ref()
+                .map_or(virtual_padding || replayed_gap.is_some(), |padding| {
+                    padding.device > 0
+                });
+            let prefix_marker =
+                native_anchor_marker.filter(|_| word && (field_padding || prefix_prints));
+            self.begin_word_padding(
+                prefix_marker.as_deref(),
+                replayed_gap,
+                projection,
+                field_padding,
+            );
             if field_padding {
                 self.append_device_field_padding();
-            } else if projection.retained_motion_width > 0 {
-                self.materialize_replayed_motion_gap(projection.retained_motion_width, payload);
+            } else if let Some(padding) = &motion_padding {
+                if padding.device > 0 {
+                    self.push_field_owned_breakable_space(" ".repeat(padding.device));
+                }
             } else {
                 self.append_boundary_spacing(
                     spacing_boundary,
@@ -129,16 +136,43 @@ impl InlineBuilder {
                     authored_in_payload,
                 );
             }
-            if let Some(marker) = prefix_marker {
-                // Device minbl is field geometry, not a native buffer cell.
-                // The word's accepted scalar interval begins after that pad.
-                self.nodes.push(Inline::anchor(marker));
-            }
+            self.end_word_padding(prefix_marker, motion_padding);
             layout_start
         }
     }
 
-    fn materialize_replayed_motion_gap(&mut self, width: usize, payload: &[Inline]) {
+    fn begin_word_padding(
+        &mut self,
+        owner: Option<&str>,
+        replayed_gap: Option<usize>,
+        projection: &WordPassProjection,
+        field_padding: bool,
+    ) {
+        if let Some(owner) = owner {
+            self.mark_native_field_prefix(
+                owner,
+                replayed_gap.or(projection.projected_gap(field_padding)),
+            );
+        }
+    }
+
+    fn end_word_padding(&mut self, owner: Option<String>, motion: Option<ReplayedMotionPadding>) {
+        if let Some(owner) = owner {
+            // The word's scalar interval starts after device positioning.
+            self.nodes.push(Inline::anchor(owner));
+        }
+        if let Some(padding) = motion.filter(|padding| padding.separator > 0) {
+            self.push_field_owned_breakable_space(" ".repeat(padding.separator));
+        }
+    }
+
+    fn replayed_motion_padding(
+        &mut self,
+        projection: &WordPassProjection,
+        payload: &[Inline],
+        replayed_gap: Option<usize>,
+    ) -> ReplayedMotionPadding {
+        let width = projection.retained_motion_width;
         // A replay can move an earlier blank into the leading payload.
         // Count both sides of the seam before projecting the remaining advance.
         let mut before_ink = true;
@@ -154,8 +188,47 @@ impl InlineBuilder {
         let represented = trailing.saturating_add(leading);
         if represented > width {
             trim_trailing_breakable_spaces(&mut self.nodes, trailing.min(represented - width));
-        } else if represented < width {
-            self.push_field_owned_breakable_space(" ".repeat(width - represented));
+        }
+        let remaining = width.saturating_sub(represented);
+        // The prefix's geometric advance is outside the source scalar
+        // stream. A contiguous separator with a proved slot in the
+        // incoming word still needs its own scalar when neither a prior
+        // replay receipt nor the payload already accounts for it.
+        let separator = if leading == 0 && replayed_gap.is_none() {
+            projection.first_payload_cell.map_or(0, |first| {
+                use super::super::super::field_buffer::FieldCell;
+                let (buffer, owners) = self.execution.word_input();
+                owners.last().map_or(0, |owner| {
+                    let prefix = owner.content.min(first)..first;
+                    let writes = &buffer.cells()[prefix.clone()];
+                    // A leading HORIZ can be part of the current word's
+                    // prefix. Keep that device run cohesive. Likewise an
+                    // internal pending break with no preceding projected
+                    // space cannot yet divide its entry advance.
+                    let owns_motion = trailing > 0
+                        && writes.iter().any(|cell| {
+                            matches!(
+                                cell,
+                                FieldCell::FixedDrawingAdvance(_) | FieldCell::DrawnSpaces(_)
+                            )
+                        });
+                    let owns_break = trailing == 0 && buffer.has_break_marker_at_or_after(first);
+                    if owns_motion || owns_break {
+                        0
+                    } else {
+                        buffer
+                            .projection_length(prefix.start, prefix.end)
+                            .min(projection.native_separator)
+                            .min(remaining)
+                    }
+                })
+            })
+        } else {
+            0
+        };
+        ReplayedMotionPadding {
+            device: remaining - separator,
+            separator,
         }
     }
 

@@ -145,9 +145,12 @@ impl FieldBuffer {
         kept: bool,
         live_replay: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
+        let control_prefix = self.has_editable_control_prefix();
         if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
             || self.resume == 0 && !self.projected_pass_ends.is_empty()
-            || !live_replay && (self.resume != 0 || !self.deferred_blanks.is_empty())
+            || !live_replay
+                && !control_prefix
+                && (self.resume != 0 || !self.deferred_blanks.is_empty())
         {
             return None;
         }
@@ -156,7 +159,9 @@ impl FieldBuffer {
         // too. Preserve their deferred source ownership through replay.
         let detached_replay =
             live_replay && self.projection_owner == super::FieldProjectionOwner::Detached;
-        let fence = if detached_replay {
+        let fence = if control_prefix {
+            0
+        } else if detached_replay {
             // term.c::encode1() can overwrite only part of a decoration.
             // A generated run-in blank may attach projection metadata inside
             // that pair, but both slots still belong to the live buffer.
@@ -164,6 +169,7 @@ impl FieldBuffer {
         } else {
             self.replay_fence(live_replay)
         };
+        let fence = self.retained_cursor_fence(fence);
         let floor = fence
             .max(self.resume)
             .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
@@ -242,6 +248,40 @@ impl FieldBuffer {
                 super::super::native_slots::ReplayPass::Incremental
             },
         })
+    }
+
+    fn retained_cursor_fence(&self, fence: usize) -> usize {
+        // A placed cursor can be to the left of the newest deferred
+        // blank. The earlier raw edit proof still owns that slot, and
+        // ReplaceLivePrefix will map each surviving blank's source.
+        let landing = self.cells.len().saturating_sub(self.write_cursor.retreat());
+        if let WriteCursor::Placed(1..) = self.write_cursor
+            && (self.raw_edit_fence..fence).contains(&landing)
+        {
+            self.raw_edit_fence
+        } else {
+            fence
+        }
+    }
+
+    fn has_editable_control_prefix(&self) -> bool {
+        // A leading marker and authored spaces can share a buffered word
+        // without printing anything. Their exact raw slots remain editable
+        // before the first graph, including a deferred source-space owner.
+        self.resume == 0
+            && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+            && self.has_pending_break_markers()
+            && self.cells.iter().all(|cell| {
+                matches!(
+                    cell,
+                    FieldCell::BreakMarker
+                        | FieldCell::BreakableBlank
+                        | FieldCell::NonBreakingBlank
+                        | FieldCell::Breakpoint
+                        | FieldCell::TabReference
+                        | FieldCell::ZeroWidthGraph
+                )
+            })
     }
 
     fn replay_fence(&self, live_replay: bool) -> usize {

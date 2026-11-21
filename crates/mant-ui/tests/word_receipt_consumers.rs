@@ -43,6 +43,65 @@ const LINK_SPACES: [&str; 3] = [
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-2.1"),
     include_str!("../../mant-engine/tests/roff_lowering/word_projection/link-source-spaces-3.1"),
 ];
+const COVERED_FIELD_LINK: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-retires-covered-link-label.1"
+);
+const SURVIVING_FIELD_LINK: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-keeps-final-link-label.1"
+);
+const SECOND_ROW_FIELD_LINK: &str = include_str!(
+    "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-owns-link-on-second-accepted-row.1"
+);
+
+#[test]
+fn replayed_links_follow_the_surviving_native_glyph() {
+    // In the two fixed CVS terminal profiles, term_field() overwrites the
+    // first link label with G. The second label itself supplies the final G.
+    for (source, row_text, target) in [
+        (COVERED_FIELD_LINK, "A   G", None),
+        (SURVIVING_FIELD_LINK, "A   XG", Some("https://k.test")),
+    ] {
+        let content = json_roundtrip::json_string_roundtrip(
+            &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+        );
+        for width in [28, 40, 78] {
+            let (mut app, terminal) = paint(&content, width);
+            let (column, row) = only_position(terminal.backend().buffer(), row_text);
+            let glyph = column + u16::try_from(row_text.width()).unwrap() - 1;
+            copy(&mut app, (column, row), row_text);
+            for at in glyph - 1..=glyph + 1 {
+                click(&mut app, at, row);
+                assert_eq!(
+                    opened_targets(&mut app),
+                    target
+                        .filter(|_| at == glyph)
+                        .into_iter()
+                        .collect::<Vec<_>>(),
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn replayed_link_is_clickable_only_on_its_accepted_row() {
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(SECOND_ROW_FIELD_LINK.as_bytes()).unwrap(),
+    );
+    for width in [28, 40, 78] {
+        let (mut app, terminal) = paint(&content, width);
+        let buffer = terminal.backend().buffer();
+        let (column, row) = only_position(buffer, "X");
+        let (_, prior_row) = only_position(buffer, "F");
+        // term_flushln() accepted two separate native intervals.
+        assert_eq!(prior_row + 1, row);
+        click(&mut app, column, prior_row);
+        assert_eq!(opened_targets(&mut app), Vec::<String>::new());
+        click(&mut app, column, row);
+        assert_eq!(opened_targets(&mut app), ["https://k.test"]);
+        copy(&mut app, (column, row), "X");
+    }
+}
 
 fn only_position(buffer: &Buffer, text: &str) -> (u16, u16) {
     let hits = positions(buffer, text);

@@ -11,6 +11,76 @@ type FieldHandoffCase = (
 );
 const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
     (
+        // term_word() overwrites the first slot with a marker after
+        // absolute HORIZ; term_flushln() stops on zero accepted cells.
+        include_str!("live_replay/replay-rejects-absolute-motion-to-field-origin.1"),
+        &[""],
+        None,
+        "CD",
+    ),
+    (
+        // term_field() sends covering glyphs to the same device cell in
+        // native order. The gap does not spend an earlier owner's scalar.
+        include_str!("live_replay/replay-selects-last-covering-glyph.1"),
+        &["A   G"],
+        None,
+        "F",
+    ),
+    (
+        include_str!("live_replay/replay-retires-covered-source-glyph.1"),
+        &["A   X"],
+        None,
+        "GX",
+    ),
+    (
+        include_str!("live_replay/replay-closes-before-relocated-word.1"),
+        &["A   F", "X"],
+        None,
+        "FX",
+    ),
+    (
+        include_str!("live_replay/replay-keeps-two-accepted-gap-columns.1"),
+        &["A  X"],
+        None,
+        "A X",
+    ),
+    (
+        include_str!("live_replay/replay-preserves-leading-motion-before-marker.1"),
+        &["A     FG"],
+        None,
+        "X",
+    ),
+    (
+        // term_word() still writes at col after the first operand has
+        // moved col back, leaving lastcol beyond the unprinted marker.
+        include_str!("live_replay/replay-replaces-unprinted-leading-marker.1"),
+        &["Y"],
+        None,
+        "YY",
+    ),
+    (
+        // Moving col back after Y preserves the earlier marker and
+        // lastcol. term_flushln() rejects the complete all-blank prefix.
+        include_str!("live_replay/replay-rejects-trailing-retreat-after-marker.1"),
+        &[""],
+        None,
+        "Y",
+    ),
+    (
+        // A later tight word replaces the earlier authored space. The
+        // surviving separator gives term_fill() two accepted passes.
+        include_str!("live_replay/replay-revisits-unprinted-authored-space.1"),
+        &["X", "Y"],
+        None,
+        "XY",
+    ),
+    (
+        include_str!("live_replay/replay-keeps-accepted-adjacent-link.1"),
+        &["A   GX"],
+        Some("G"),
+        "X",
+    ),
+    (
         include_str!("live_replay/run-in-replays-across-font-overwrite.1"),
         &["-", "Y"],
         None,
@@ -283,6 +353,67 @@ fn field_edits_keep_native_passes_and_reading_owners() {
                 .unwrap();
                 assert_eq!(hits.total, expected, "{pattern}: {source}");
             }
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content =
+                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        }
+    }
+}
+
+#[test]
+fn rejected_or_covered_links_publish_no_label() {
+    // term_flushln() accepts no glyph in the first page. In the second,
+    // term_field() overwrites F before the terminal leaves the cell.
+    for (source, expected) in [
+        (
+            include_str!("live_replay/replay-rejects-link-after-absolute-motion.1"),
+            &[""][..],
+        ),
+        (
+            include_str!("live_replay/replay-retires-covered-link-label.1"),
+            &["A   G"][..],
+        ),
+    ] {
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let rendered = mant_render::render_query_man(&content);
+            assert_eq!(description_rows(&rendered, source), expected, "{source}");
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            assert!(
+                labels.0.iter().all(|(_, label)| label.is_empty()),
+                "{source}"
+            );
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content =
+                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        }
+    }
+}
+
+#[test]
+fn replayed_separators_preserve_all_accepted_words() {
+    for (source, words) in [
+        (
+            include_str!("live_replay/replay-keeps-interleaved-ink-after-gap.1"),
+            ["AX", "FG"],
+        ),
+        (
+            // term_word() can write X into the first marker even while a
+            // deferred source-space receipt covers the subsequent slot.
+            include_str!("live_replay/replay-overwrites-buffer-origin.1"),
+            ["X", "Y"],
+        ),
+    ] {
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let rendered = mant_render::render_query_man(&content);
+            let rows = description_rows(&rendered, source);
+            // Protect the words and native row independently of gap width.
+            assert_eq!(rows.len(), 1, "{source}");
+            assert!(rows[0].split_whitespace().eq(words), "{rows:?}: {source}");
             let markdown = mant_codec::encode::render_markdown(&content);
             content =
                 json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
