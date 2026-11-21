@@ -468,6 +468,17 @@ impl GapEdits {
         }
         owner.projected_gap_cell = surviving.map(|(_, cell)| cell);
         let relocate = surviving.is_some_and(|(_, cell)| cell >= first_incoming);
+        if relocate {
+            // term_field() queues a single run before its graph. Some
+            // consumed columns can precede the recorded separator cell.
+            // Charge those only when moving that run through new ink.
+            lost_columns = lost_columns.saturating_add(clipped_gap_prefix(
+                buffer,
+                (positions, locations),
+                owner.start.max(start)..start + offset,
+                start,
+            ));
+        }
         if lost_columns == 0 && !relocate && surviving.is_some() {
             return;
         }
@@ -488,6 +499,33 @@ impl GapEdits {
             },
         );
     }
+}
+
+fn clipped_gap_prefix(
+    buffer: &FieldBuffer,
+    (positions, locations): (&[Option<usize>], &[SourceProjection]),
+    prefix: std::ops::Range<usize>,
+    start: usize,
+) -> usize {
+    prefix
+        .rev()
+        .map_while(|cell| {
+            let offset = cell - start;
+            if positions[offset].is_some()
+                || locations[offset].is_some()
+                || buffer.has_deferred_blank_at(cell)
+            {
+                return None;
+            }
+            match buffer.cells()[cell] {
+                FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => {
+                    Some(width)
+                }
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => Some(1),
+                _ => None,
+            }
+        })
+        .fold(0, usize::saturating_add)
 }
 
 fn take_overwritten_gaps<'a>(

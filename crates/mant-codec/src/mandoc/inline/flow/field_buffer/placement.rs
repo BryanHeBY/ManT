@@ -6,6 +6,13 @@ use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 
 pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 64;
 
+pub(in crate::mandoc::inline::flow) struct RetainedMotionGap {
+    pub(in crate::mandoc::inline::flow) marker: usize,
+    pub(in crate::mandoc::inline::flow) width: usize,
+    pub(in crate::mandoc::inline::flow) previous_graph: usize,
+    pub(in crate::mandoc::inline::flow) projection_is_complete: bool,
+}
+
 impl FieldBuffer {
     /// Find source blank markers whose first surviving slot follows the
     /// incoming word. A marker still owns the accepted count at flush.
@@ -500,7 +507,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn retained_motion_gap(
         &self,
         end: usize,
-    ) -> Option<(usize, usize)> {
+    ) -> Option<RetainedMotionGap> {
         let end = (end..self.cells.len())
             .take(MAX_REPLAY_PREFIX_CELLS)
             .find(|&cell| {
@@ -521,6 +528,11 @@ impl FieldBuffer {
         // right-hand glyph and its reading separator.
         let mut width = 0usize;
         let mut saw_motion = false;
+        // A run-in BODY can borrow the HEAD's native columns even when
+        // their reading owner has already been detached. Its projection
+        // counters cannot prove an internal gap in this payload.
+        let mut projection_is_complete =
+            self.projection_owner == super::FieldProjectionOwner::Active;
         let mut gap = end;
         let floor = self.resume.max(end.saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         let mut before_ink = end;
@@ -547,9 +559,11 @@ impl FieldBuffer {
                         continue;
                     }
                     width = width.saturating_add(count);
+                    projection_is_complete &= self.projection_length(cell, cell + 1) == count;
                 }
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
                     width += 1;
+                    projection_is_complete &= self.projection_length(cell, cell + 1) == 1;
                 }
                 FieldCell::BreakMarker
                 | FieldCell::ZeroWidthGraph
@@ -557,7 +571,12 @@ impl FieldBuffer {
                 | FieldCell::Breakpoint => {}
                 FieldCell::Graph { text, .. } if !text.is_whitespace() => {
                     return (saw_motion && (1..=MAX_REPLAY_PREFIX_CELLS).contains(&width))
-                        .then_some((gap, width));
+                        .then_some(RetainedMotionGap {
+                            marker: gap,
+                            width,
+                            previous_graph: cell,
+                            projection_is_complete,
+                        });
                 }
                 _ => return None,
             }

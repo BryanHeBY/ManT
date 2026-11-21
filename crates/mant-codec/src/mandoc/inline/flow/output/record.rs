@@ -100,6 +100,7 @@ impl WordPassProjection {
         word_start: usize,
         entry: &ExecutedWordEntry,
         keep: bool,
+        plain_output: bool,
     ) {
         // The earlier \h cell is already in the live word buffer. Reuse
         // the virtual space projection when the new word would print it.
@@ -110,11 +111,22 @@ impl WordPassProjection {
             word_start
         };
         if let Some(ink) = entry.incoming_ink()
-            && let Some((gap, width)) = buffer.retained_motion_gap(ink)
-            && width >= self.native_separator
+            && let Some(gap) = buffer.retained_motion_gap(ink)
+            && gap.width >= self.native_separator
         {
-            self.separator = SeparatorDisposition::DeviceAdvance(gap);
-            self.retained_motion_width = width;
+            if plain_output
+                && replayed
+                && gap.previous_graph >= entry.receipt.first_content_cell
+                && gap.projection_is_complete
+            {
+                // The replay payload already includes an earlier graph
+                // and this complete separator. Printing the gap before
+                // that payload would put a second copy on its left.
+                self.separator = SeparatorDisposition::Consumed;
+            } else {
+                self.separator = SeparatorDisposition::DeviceAdvance(gap.marker);
+                self.retained_motion_width = gap.width;
+            }
         } else if self.native_separator == 0
             && entry.receipt.prints_padding
             && entry.receipt.first_content_cell >= word_start
@@ -240,18 +252,28 @@ impl InlineBuilder {
         let input = self.execution.word_input();
         projection.record_separator(input.0, native_word_start, separator, native_separator);
         entry.record_projection(&mut projection);
-        projection.record_separator_effects(input, native_word_start, &entry, projected_keep);
+        projection.record_separator_effects(
+            input,
+            native_word_start,
+            &entry,
+            projected_keep,
+            false,
+        );
+        self.align_last_definition_separator(&projection, receipt.first_content_cell);
+        projection.prints_padding = receipt.prints_padding;
+        projection.authored_separator = authored_separator;
+        projection
+    }
+
+    fn align_last_definition_separator(&mut self, projection: &WordPassProjection, content: usize) {
         if let Some(anchor) = self
             .execution
             .definition
             .as_mut()
             .and_then(|definition| definition.field_word_anchors.last_mut())
         {
-            projection.align_separator_owner(anchor, receipt.first_content_cell);
+            projection.align_separator_owner(anchor, content);
         }
-        projection.prints_padding = receipt.prints_padding;
-        projection.authored_separator = authored_separator;
-        projection
     }
 
     /// Plain-flow word recording: the paragraph's flush unit takes the same
@@ -356,6 +378,7 @@ impl InlineBuilder {
             native_word_start,
             &entry,
             projected_keep,
+            true,
         );
         if let Some(anchor) = unit.anchors.last_mut() {
             result.align_separator_owner(anchor, receipt.first_content_cell);

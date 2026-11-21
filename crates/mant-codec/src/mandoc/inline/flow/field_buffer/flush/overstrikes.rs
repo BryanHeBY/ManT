@@ -269,7 +269,7 @@ impl FieldBuffer {
         ) && self.projection_length(cell, cell + 1) == 1
     }
 
-    fn has_deferred_blank_at(&self, cell: usize) -> bool {
+    pub(in crate::mandoc::inline::flow) fn has_deferred_blank_at(&self, cell: usize) -> bool {
         let index = self.deferred_blanks.partition_point(|run| run.end <= cell);
         self.deferred_blanks
             .get(index)

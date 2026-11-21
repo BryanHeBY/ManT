@@ -47,6 +47,22 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "FG X",
     ),
     (
+        // The accepting term_field() pass places this gap after the
+        // relocated word, within the replay's accepted scalar stream.
+        include_str!("live_replay/replay-keeps-gap-after-relocated-ink.1"),
+        &["A  EEm   X"],
+        None,
+        "EEmX",
+    ),
+    (
+        // The retained separator's first displayed cell originally
+        // included a two-column advance before its native anchor.
+        include_str!("live_replay/replay-keeps-only-surviving-gap-columns.1"),
+        &["AX FG"],
+        None,
+        "AXFG",
+    ),
+    (
         include_str!("live_replay/replay-keeps-two-accepted-gap-columns.1"),
         &["A  X"],
         None,
