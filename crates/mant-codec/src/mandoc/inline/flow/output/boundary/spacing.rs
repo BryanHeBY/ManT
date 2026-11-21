@@ -35,8 +35,18 @@ impl InlineBuilder {
             return None;
         }
         let replayed_gap = projection.replayed_entry_gap.filter(|_| projects_spacing);
-        let own_motion_prefix =
-            projection.retained_motion_width > 0 && projection.authored_separator.is_none();
+        let own_motion_prefix = projection.retained_motion_width > 0
+            && projection.authored_separator.is_none()
+            && projection.first_payload_cell.is_some_and(|content| {
+                use super::super::super::field_buffer::FieldCell;
+                // This word begins by painting a fixed blank and then
+                // covering it. The replayed advance belongs to the gap;
+                // the blank and covering glyph own the payload scalars.
+                let (buffer, _) = self.execution.word_input();
+                matches!(buffer.cells().get(content..content.saturating_add(2)),
+                    Some([FieldCell::Graph { text, width: 1 }, FieldCell::Backline])
+                        if text.is_whitespace())
+            });
         if (!projects_spacing || replayed_gap.is_some() || own_motion_prefix)
             && let Some(content) = projection.first_payload_cell
         {

@@ -227,6 +227,14 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         None,
         "CDX",
     ),
+    (
+        // Replayed positioning can coexist with an authored word blank.
+        // Only the independent advance is outside the scalar stream.
+        include_str!("live_replay/replay-keeps-authored-scalar-in-advance.1"),
+        &["A   KXG"],
+        None,
+        "AKXG",
+    ),
 ];
 
 // term.c::encode1() edits the existing buffer after termp_it_pre()
