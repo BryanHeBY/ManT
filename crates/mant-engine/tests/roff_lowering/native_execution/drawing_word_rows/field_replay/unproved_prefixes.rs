@@ -1,4 +1,5 @@
-use mant_ir::{Block, inline_plain_text};
+use super::OwnedLabels;
+use mant_ir::{Block, inline_plain_text, visit::Visit};
 
 const HEADER: &str = concat!(
     ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n",
@@ -179,17 +180,20 @@ fn a_bounded_slot_replay_cannot_split_an_unresolved_overstrike() {
 
 #[test]
 fn field_edits_keep_the_complete_short_prefix_around_styled_operands() {
-    // Exact pinned ASCII and UTF-8 agree on the remaining author text.
+    // Exact pinned ASCII and UTF-8 agree on the remaining nonempty rows.
     // termp_in_pre/post and termp_lk_pre place regular punctuation around
     // an underlined operand. encode1()'s underline and backspace occupy
     // raw slots, so a rewind can cut the prefix, the glyph or its suffix.
-    for (operand, expected) in [
-        ("Ar X", ["X", "", "", ""]),
-        ("In x", ["x>", "x>", "", ""]),
-        ("Lk u t", ["t: u", ": u", "u", ""]),
-        ("Fn x", ["x()", "()", "", ""]),
-        (r"Xr \& \&", ["()", ")", "", ""]),
-    ] {
+    // termp_lk_pre() writes the target as a separate word. A surviving
+    // separator then realizes a buffered \p in term_fill()/term_flushln().
+    let cases: &[(&str, [&[&str]; 4])] = &[
+        ("Ar X", [&["X"], &[], &[], &[]]),
+        ("In x", [&["x>"], &["x>"], &[], &[]]),
+        ("Lk u t", [&["t:", "u"], &[":", "u"], &["u"], &[]]),
+        ("Fn x", [&["x()"], &["()"], &[], &[]]),
+        (r"Xr \& \&", [&["()"], &[")"], &[], &[]]),
+    ];
+    for &(operand, expected) in cases {
         for motion in [r"\h'|0n'", r"\h'-12n'"] {
             for (count, expected) in [1, 3, 5, 12].into_iter().zip(expected) {
                 let word = format!(r#"{operand} Ns No "{motion}{}""#, r"\p".repeat(count));
@@ -202,22 +206,28 @@ fn field_edits_keep_the_complete_short_prefix_around_styled_operands() {
                     );
                     let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
                     let restored = crate::json_roundtrip::json_string_roundtrip(&loaded);
+                    if operand == "Lk u t" {
+                        let mut labels = OwnedLabels::default();
+                        labels.visit_document(restored.document.as_ref().unwrap());
+                        let label = match count {
+                            1 => "t",
+                            3 | 5 => "u",
+                            _ => "",
+                        };
+                        assert_eq!(labels.0, [("u".into(), label.into())], "{source}");
+                    }
                     let markdown = mant_codec::encode::render_markdown(&restored);
                     let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
                     for content in [&restored, &readback] {
                         let text = mant_render::render_query_text(content);
                         let (_, tail) = text.split_once("STARTPROBE\n").unwrap();
                         let (region, _) = tail.split_once("STOPPROBE").unwrap();
-                        let mut rows = region
+                        let rows: Vec<_> = region
                             .lines()
                             .map(str::trim)
-                            .filter(|line| !line.is_empty());
-                        assert_eq!(
-                            rows.next(),
-                            (!expected.is_empty()).then_some(expected),
-                            "{source}\n{text}"
-                        );
-                        assert_eq!(rows.next(), None, "{source}\n{text}");
+                            .filter(|line| !line.is_empty())
+                            .collect();
+                        assert_eq!(rows, expected, "{source}\n{text}");
                     }
                 }
             }

@@ -981,7 +981,8 @@ fn retains_word_cursor(
 
 /// A complete replay can place `\p` or another control inside a field
 /// without contributing a new scalar. `bufferc()` can advance `col` within
-/// the existing `lastcol` extent (term.c:860–873).
+/// the existing `lastcol` extent (term.c:860–873). Both an absolute target
+/// and a negative relative motion can start that edit (term.c:678–719).
 fn slots_rewritten_by_controls(events: &[RoffInlineEvent]) -> bool {
     let mut rewound = false;
     let mut marker = false;
@@ -991,7 +992,7 @@ fn slots_rewritten_by_controls(events: &[RoffInlineEvent]) -> bool {
                 rewound |= argument
                     .as_deref()
                     .and_then(motion_columns)
-                    .is_some_and(|(absolute, units)| !absolute && units < 0);
+                    .is_some_and(|(absolute, units)| absolute || units < 0);
             }
             RoffInlineEvent::LineBreak => marker = true,
             RoffInlineEvent::Font(_)
