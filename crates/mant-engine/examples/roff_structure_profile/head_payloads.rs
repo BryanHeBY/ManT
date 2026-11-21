@@ -203,16 +203,12 @@ impl TermPayload {
             .flat_map(ExpectedAtom::spellings)
             .chain(compound.values().flat_map(|words| words.keys().cloned()))
             .collect();
-        let mut observation = TermObservation::default();
-        for (index, term) in terms.iter().enumerate() {
-            observation.term = index;
-            observation.row = 0;
-            observation.visit_inlines(&term.content);
-            observation.end_run();
-        }
+        let observation = TermObservation::from_terms(terms);
         let mut observed = observation.atoms.iter();
         let relevant =
             |item: &ObservedAtom| item.equation || vocabulary.contains(item.value.as_str());
+        let mut proved_compounds = HashSet::new();
+        let mut skipped = Vec::new();
         let mut previous_row = None;
         let mut witnesses = self.atoms.iter().enumerate();
         while let Some((index, expected)) = witnesses.next() {
@@ -235,7 +231,14 @@ impl TermPayload {
                 observed.find(|item| matches(item))
             } else {
                 observed
-                    .find(|item| relevant(item) || joined(item).is_some())
+                    .find(|item| {
+                        if relevant(item) || joined(item).is_some() {
+                            true
+                        } else {
+                            skipped.push(*item);
+                            false
+                        }
+                    })
                     .filter(|item| matches(item))
             };
             let Some(found) = found else {
@@ -246,6 +249,7 @@ impl TermPayload {
                 return;
             };
             if let Some(extra) = joined(found) {
+                proved_compounds.insert(found.value.as_str());
                 witnesses.nth(extra - 1);
             }
             if let Some(row) = expected.row {
@@ -278,7 +282,10 @@ impl TermPayload {
             }
         }
         if !self.opaque_words
-            && let Some(extra) = observed.find(|item| relevant(item))
+            && let Some(extra) = skipped
+                .into_iter()
+                .chain(observed)
+                .find(|item| relevant(item) || proved_compounds.contains(item.value.as_str()))
         {
             violations.push(format!(
                 "definition-head-content at {line}:{column}, occurrence {occurrence}: unexpected repeated {:?} in term",
@@ -326,6 +333,17 @@ struct ObservedAtom {
 }
 
 impl TermObservation {
+    fn from_terms(terms: &[DefinitionTerm]) -> Self {
+        let mut result = Self::default();
+        for (index, term) in terms.iter().enumerate() {
+            result.term = index;
+            result.row = 0;
+            result.visit_inlines(&term.content);
+            result.end_run();
+        }
+        result
+    }
+
     fn end_run(&mut self) {
         self.atoms
             .extend(self.text.split_ascii_whitespace().map(|word| ObservedAtom {

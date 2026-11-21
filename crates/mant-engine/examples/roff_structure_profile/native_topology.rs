@@ -151,13 +151,7 @@ impl ParagraphWitness {
         for child in children {
             let token = child.macro_token.as_deref();
             if matches!(token, Some("Pp" | "PP" | "P" | "LP")) {
-                if self.uncertain_start.take() == Some(child.line) {
-                    // An earlier, unproved paragraph at this same source
-                    // coordinate would shift the IR occurrence ordinal.
-                    self.unproved_lines.insert(child.line);
-                }
-                self.simple = true;
-                self.owner = None;
+                self.begin_paragraph(child.line);
                 // man_term.c::pre_PP enters the actual BODY. Its first
                 // printed node supplies the same source identity as prose.
                 if child.kind == NodeKind::Block
@@ -169,6 +163,11 @@ impl ParagraphWitness {
                     self.observe(&body.children, topology);
                     self.owner = None;
                 }
+                continue;
+            }
+            if child.flags.no_print || matches!(token, Some("Sm" | "Tg")) {
+                // termp_sm_pre changes flags, and Tg emits no prose.
+                // The next printed node can still prove this occurrence.
                 continue;
             }
             let prose = !child.flags.no_fill
@@ -185,18 +184,20 @@ impl ParagraphWitness {
             } else if child.kind == NodeKind::Equation {
                 match child.equation_inline {
                     Some(false) if has_equation => {
-                        self.simple = true;
-                        self.owner = None;
+                        self.begin_paragraph(child.line);
                     }
                     Some(true) if has_equation && !child.flags.no_fill => {
                         if self.simple {
                             self.start(child.line);
                         }
-                        if let Some(owner) = self
-                            .owner
-                            .filter(|owner| !self.unproved_lines.contains(&owner.line))
-                        {
-                            topology.paragraphs.insert(child.id, owner);
+                        if let Some(owner) = self.owner {
+                            // An inline equation can be authored on a
+                            // later line than its active paragraph.
+                            if self.unproved_lines.contains(&owner.line) {
+                                topology.unproved_paragraphs.insert(child.id);
+                            } else {
+                                topology.paragraphs.insert(child.id, owner);
+                            }
                         } else if self.unproved_lines.contains(&child.line) {
                             topology.unproved_paragraphs.insert(child.id);
                         }
@@ -211,6 +212,16 @@ impl ParagraphWitness {
                 self.owner = None;
             }
         }
+    }
+
+    fn begin_paragraph(&mut self, line: u32) {
+        if self.uncertain_start.take() == Some(line) {
+            // An unseen predecessor at this coordinate can shift the
+            // paragraph occurrence after either kind of content boundary.
+            self.unproved_lines.insert(line);
+        }
+        self.simple = true;
+        self.owner = None;
     }
 
     fn start(&mut self, line: u32) {

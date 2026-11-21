@@ -130,14 +130,20 @@ pub(super) fn record(
                 .text
                 .as_deref()
                 .is_some_and(|text| text.starts_with(' '));
-        if !simple_node(node) {
+        let state_only = matches!(node.macro_token.as_deref(), Some("ft" | "ta" | "Sm" | "Tg"));
+        if !simple_node(node) && !state_only {
             rows.record_literal(
                 &body.children[start..index],
                 source,
                 payload,
                 hang_without_gap,
             );
-            let clears_brind = matches!(node.macro_token.as_deref(), Some("br" | "sp"));
+            // roff_term_pre_br(), including the requests that call it,
+            // flushes before clearing the tag's NOBREAK/BRIND field.
+            let clears_brind = matches!(
+                node.macro_token.as_deref(),
+                Some("br" | "sp" | "ce" | "rj" | "fi" | "nf")
+            );
             let hanging_break = clears_brind && matches!(payload.field, Field::Hanging);
             hang_without_gap |= hanging_break;
             super::HeadPayloads::walk_part_slice(
@@ -161,7 +167,7 @@ pub(super) fn record(
             continues = false;
             continue;
         }
-        if node.flags.line_start && (!continues || empty_text) {
+        if node.flags.no_fill && node.flags.line_start && (!continues || empty_text) {
             rows.record_literal(
                 &body.children[start..index],
                 source,
@@ -170,7 +176,7 @@ pub(super) fn record(
             );
             start = index;
         }
-        if !continues && (empty_text || space_started) {
+        if node.flags.no_fill && !continues && (empty_text || space_started) {
             // print_mdoc_node() can flush a second time for an empty or
             // space-started TEXT after the NODE_NOFILL line-start flush.
             rows.flush_empty_field(payload.field, 0);
@@ -190,6 +196,11 @@ pub(super) fn record(
             start = index + 1;
             // The empty TEXT's term_newln() does not consume NONEWLINE.
             // It is still active at the next actual term_word().
+            continue;
+        }
+        if state_only {
+            // ft/ta and the mdoc state handlers do not call term_word().
+            // The earlier NONEWLINE survives until a printed operand.
             continue;
         }
         continues = node

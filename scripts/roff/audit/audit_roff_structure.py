@@ -41,7 +41,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v29"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v30"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -714,7 +714,8 @@ def main(argv: Sequence[str]) -> int:
             sections = set(arguments.man_section)
             all_pages = [page for page in all_pages if manual_section(page) in sections]
         patterns = compile_source_patterns(arguments.source_pattern)
-        records, unreadable = observe_sources(all_pages, roots, patterns)
+        refresh: set[Path] = set()
+        records, unreadable = observe_sources(all_pages, roots, patterns, refresh=refresh)
         recovered = {
             label for label, digest in records.values()
             if digest is not None
@@ -742,7 +743,8 @@ def main(argv: Sequence[str]) -> int:
             pages = [
                 page
                 for page in pages
-                if (previous := database.get((corpus, *records[page]))) is None
+                if page in refresh
+                or (previous := database.get((corpus, *records[page]))) is None
                 or previous.profile_schema != PROFILE_SCHEMA
                 or previous.scan_status == "hard-failure"
             ]
@@ -757,7 +759,8 @@ def main(argv: Sequence[str]) -> int:
                     previous = database.get(key)
                     legacy_retry = (previous is not None and previous.profile_schema == PROFILE_SCHEMA
                                     and previous.scan_status == "hard-failure")
-                    return order.get((*key, root_scope), int(legacy_retry))
+                    refresh_observed = page in refresh and previous is not None
+                    return order.get((*key, root_scope), int(legacy_retry or refresh_observed))
 
                 pages.sort(key=priority)
         pages = (

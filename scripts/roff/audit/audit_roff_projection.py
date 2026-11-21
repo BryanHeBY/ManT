@@ -28,7 +28,6 @@ from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
     compile_source_patterns,
     discover_pages,
-    filter_pages_by_source,
     manual_hierarchy_root,
     manual_section,
     non_negative_integer,
@@ -36,7 +35,9 @@ from scripts.roff.lib.roff_audit_common import (
     read_fidelity_identities,
     relative_label,
     run_jsonl_profile_batch,
-    source_digest,
+    observe_sources,
+    uncovered_sources,
+    verified_profile_findings,
     stable_sample,
     stable_sample_by_section,
 )
@@ -385,10 +386,11 @@ def main(argv: Sequence[str]) -> int:
         if arguments.man_section:
             sections = set(arguments.man_section)
             pages = [page for page in pages if manual_section(page) in sections]
-        pages, unreadable = filter_pages_by_source(
-            pages, compile_source_patterns(arguments.source_pattern)
+        refresh = set()
+        records, unreadable = observe_sources(
+            pages, roots, compile_source_patterns(arguments.source_pattern), refresh=refresh,
         )
-        records = {page: (relative_label(page, roots), source_digest(page)) for page in pages}
+        pages = list(records)
         database = read_database(arguments.audit_db)
         if arguments.replay_fidelity_records:
             identities = read_fidelity_identities(arguments.fidelity_db, corpus)
@@ -408,11 +410,12 @@ def main(argv: Sequence[str]) -> int:
             pages = [
                 page
                 for page in pages
-                if records[page][1] is None
+                if page in refresh or records[page][1] is None
                 or (corpus, records[page][0], records[page][1]) not in database
                 or database[(corpus, records[page][0], records[page][1])].profile_schema
                 != PROFILE_SCHEMA
             ]
+        pages.sort(key=unreadable.__contains__)
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section
@@ -422,11 +425,8 @@ def main(argv: Sequence[str]) -> int:
         print(f"audit-roff-projection: {error}", file=sys.stderr)
         return 2
 
-    for path in unreadable:
-        print(f"audit-roff-projection: unreadable source: {path}", file=sys.stderr)
-    if not pages:
-        print("audit-roff-projection: no selected manual pages")
-        return 0
+    for path, reason in unreadable.items():
+        print(f"audit-roff-projection: unreadable source: {path}: {reason}", file=sys.stderr)
 
     print("ManT roff CommonMark projection audit")
     print(f"  profiler:  {arguments.profiler}")
@@ -437,7 +437,11 @@ def main(argv: Sequence[str]) -> int:
     print()
 
     try:
-        findings = list(profile_findings(pages, roots, arguments.timeout, arguments.profiler))
+        findings = verified_profile_findings(
+            pages, records, unreadable,
+            lambda readable: profile_findings(readable, roots, arguments.timeout, arguments.profiler),
+            lambda label, reason: Finding(label, "hard-failure", [], reason),
+        )
     except ValueError as error:
         print(f"audit-roff-projection: {error}", file=sys.stderr)
         return 2
@@ -485,6 +489,7 @@ def main(argv: Sequence[str]) -> int:
                     "roots": [str(root) for root in roots],
                     "summary": dict(summary),
                     "findings": [asdict(finding) for finding in findings],
+                    "uncovered_sources": uncovered_sources(unreadable, roots),
                 },
                 ensure_ascii=False,
                 indent=2,

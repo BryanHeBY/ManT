@@ -616,7 +616,8 @@ def main(argv: Sequence[str]) -> int:
             sections = set(arguments.man_section)
             pages = [path for path in pages if manual_section(path) in sections]
         patterns = compile_source_patterns(arguments.source_pattern)
-        records, unreadable = observe_sources(pages, roots, patterns)
+        refresh: set[Path] = set()
+        records, unreadable = observe_sources(pages, roots, patterns, refresh=refresh)
         pages = list(records)
         database = read_database(
             arguments.audit_db,
@@ -651,9 +652,16 @@ def main(argv: Sequence[str]) -> int:
         elif not arguments.recheck_recorded:
             pages = [
                 path for path in pages
-                if records[path][1] is None
-                or (corpus, records[path][0], records[path][1]) not in database
+                if path in refresh
+                or (previous := database.get((corpus, *records[path]))) is None
+                or previous.scan_status == "hard-failure"
             ]
+            # Uncovered sources remain in the report, but must not take
+            # every slot of a limited scan while observable pages wait.
+            pages.sort(key=lambda path: (
+                path in unreadable,
+                (corpus, *records[path]) in database,
+            ))
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section

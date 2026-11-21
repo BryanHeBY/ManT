@@ -22,10 +22,11 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 import zlib
 from collections import Counter
 from pathlib import Path
-from typing import Sequence
+from typing import BinaryIO, Callable, Iterable, Protocol, Sequence, TypeVar
 
 
 MANUAL_SUFFIX = re.compile(
@@ -347,26 +348,58 @@ def read_verified_manual(path: Path) -> tuple[bytes | None, str | None]:
             detected = manual_compression(header)
             if error := manual_transport_error(path, detected):
                 return None, error
+            if os.fstat(stream.fileno()).st_size > MAX_MANUAL_BYTES:
+                return None, "stored manual exceeds the loader input limit"
             if detected is None:
                 return header + stream.read(), None
             stream.seek(0)
             if detected == ".gz":
-                with gzip.GzipFile(fileobj=stream) as decoded:
-                    return decoded.read(), None
-            zstd = shutil.which("zstd")
-            if zstd is None:
-                return None, "zstd decompressor not found"
-            result = subprocess.run([zstd, "--decompress", "--stdout"], stdin=stream,
-                                    capture_output=True, check=False)
-            if result.returncode == 0:
-                return result.stdout, None
-            return None, result.stderr.decode("utf-8", errors="replace").strip()
+                return decode_verified_gzip(stream), None
+            return decode_verified_zstd(stream), None
     except (OSError, EOFError, zlib.error) as error:
         return None, " ".join(str(error).splitlines()) or type(error).__name__
+
+def decode_verified_gzip(stream: BinaryIO) -> bytes:
+    # MultiGzDecoder requires each group of bytes after a member to start
+    # another member. GzipFile would silently consume a zero-padded tail.
+    member = zlib.decompressobj(31)
+    decoded = bytearray()
+    while chunk := stream.read(64 * 1024):
+        while chunk:
+            if member.eof:
+                member = zlib.decompressobj(31)
+            decoded.extend(member.decompress(chunk, MAX_MANUAL_BYTES + 1 - len(decoded)))
+            if len(decoded) > MAX_MANUAL_BYTES:
+                raise OSError("decoded manual exceeds the loader input limit")
+            chunk = member.unused_data
+    if not member.eof:
+        raise EOFError("incomplete gzip member")
+    return bytes(decoded)
+
+
+def decode_verified_zstd(stream: BinaryIO) -> bytes:
+    zstd = shutil.which("zstd")
+    if zstd is None:
+        raise OSError("zstd decompressor not found")
+    with tempfile.TemporaryFile() as errors, subprocess.Popen(
+        [zstd, "--decompress", "--stdout"], stdin=stream, stdout=subprocess.PIPE, stderr=errors,
+    ) as decoder:
+        assert decoder.stdout is not None
+        source = decoder.stdout.read(MAX_MANUAL_BYTES + 1)
+        if len(source) > MAX_MANUAL_BYTES:
+            decoder.kill()
+            raise OSError("decoded manual exceeds the loader input limit")
+        if decoder.wait() != 0:
+            errors.seek(0)
+            reason = errors.read(4096).decode("utf-8", errors="replace").strip()
+            raise OSError(reason or "zstd failed to decode the source")
+        return source
 
 
 MANUAL_COMPRESSION = {".gz": b"\x1f\x8b", ".zst": b"\x28\xb5\x2f\xfd",
                       ".xz": b"\xfd7zXZ\x00", ".bz2": b"BZh"}
+MAX_MANUAL_BYTES = 16 * 1024 * 1024
+MANUAL_INCLUDE = re.compile(rb"(?:^|[\s\\])[.'][ \t]*m?so(?:[ \t]|$)")
 
 
 def manual_compression(header: bytes) -> str | None:
@@ -386,6 +419,7 @@ def manual_transport_error(path: Path, detected: str | None) -> str | None:
 
 def observe_sources(
     pages: Sequence[Path], roots: Sequence[Path], patterns: Sequence[re.Pattern[str]],
+    *, refresh: set[Path] | None = None,
 ) -> tuple[dict[Path, tuple[str, str | None]], dict[Path, str]]:
     records, failures = {}, {}
     for path in pages:
@@ -398,6 +432,10 @@ def observe_sources(
             continue
         if not patterns or all(pattern.search(source.decode("utf-8", errors="replace")) for pattern in patterns):
             records[path] = label, hashlib.sha256(source).hexdigest()
+            if refresh is not None and (path.is_symlink() or MANUAL_INCLUDE.search(source)):
+                # The entry digest says nothing about the current include
+                # target. Until dependencies are recorded, observe it again.
+                refresh.add(path)
     return records, failures
 
 
@@ -408,6 +446,37 @@ def verify_source_digest(path: Path, digest: str) -> bool:
 
 def uncovered_sources(failures: dict[Path, str], roots: Sequence[Path]) -> list[dict[str, str]]:
     return [{"path": relative_label(path, roots), "reason": reason} for path, reason in failures.items()]
+
+
+class _ProfileFinding(Protocol):
+    @property
+    def path(self) -> str: ...
+
+
+_Finding = TypeVar("_Finding", bound=_ProfileFinding)
+
+
+def verified_profile_findings(
+    pages: Sequence[Path],
+    sources: dict[Path, tuple[str, str | None]],
+    failures: dict[Path, str],
+    profile: Callable[[list[Path]], Iterable[_Finding]],
+    reject: Callable[[str, str], _Finding],
+) -> list[_Finding]:
+    """Observe compatible files, with transport failures outside ledger identity."""
+    readable = [page for page in pages if page not in failures]
+    findings = {item.path: item for item in profile(readable)} if readable else {}
+    result = []
+    for page in pages:
+        label, digest = sources[page]
+        if page in failures:
+            result.append(reject(label, f"could not decode source: {failures[page]}"))
+        elif digest is None or not verify_source_digest(page, digest):
+            sources[page] = label, None
+            result.append(reject(label, "source changed during audit"))
+        else:
+            result.append(findings[label])
+    return result
 
 
 def source_bytes(path: Path) -> bytes | None:

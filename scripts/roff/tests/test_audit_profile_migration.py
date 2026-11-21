@@ -16,9 +16,98 @@ from unittest.mock import patch
 from scripts.roff.audit import audit_roff_semantics as semantic
 from scripts.roff.audit import audit_roff_structure as structure
 from scripts.roff.audit import audit_roff_layout as layout
+from scripts.roff.audit import audit_roff_projection as projection
+from scripts.roff.audit import audit_roff_targets as targets
+from scripts.roff.lib.roff_audit_common import source_digest
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_file_profilers_reject_unsupported_and_incompatible_containers(self):
+        for audit in (projection, semantic, targets):
+            with (self.subTest(driver=audit.__name__),
+                  tempfile.TemporaryDirectory() as directory,
+                  contextlib.redirect_stdout(io.StringIO()),
+                  contextlib.redirect_stderr(io.StringIO())):
+                root = Path(directory)
+                source = b'.TH PROBE 1 "November 21, 2026"\n.SH DESCRIPTION\nBODY\n'
+                valid = root / 'ordinary.1.gz'
+                compressed = gzip.compress(source)
+                valid.write_bytes(compressed)
+                invalid = {
+                    root / 'a.1.xz': lzma.compress(source),
+                    root / 'b.1.bz2': bz2.compress(source),
+                    root / 'c.1': compressed,
+                }
+                for page, payload in invalid.items():
+                    page.write_bytes(payload)
+                ledger, report = root / 'audit.csv', root / 'audit.json'
+                args = ['--manpath', str(root), '--profiler', str(valid),
+                        '--audit-db', str(ledger), '--json', str(report)]
+
+                def profile(selected, *_args):
+                    self.assertEqual(selected, [valid])
+                    return [audit.Finding(audit.relative_label(valid, [root]), 'clean', [])]
+
+                with patch.object(audit, 'profile_findings', side_effect=profile) as profiler:
+                    audit.main(args)
+                    self.assertEqual(len(audit.read_database(ledger)), 1)
+                    self.assertEqual(len(json.loads(report.read_text())['uncovered_sources']), 3)
+                    clean = ledger.read_bytes()
+                    valid.write_bytes(compressed + bytes(4))
+                    self.assertEqual(audit.main([*args, '--recheck-recorded']), 1)
+                    self.assertEqual(profiler.call_count, 1)
+                    self.assertEqual(ledger.read_bytes(), clean)
+                    valid.write_bytes(compressed)
+                    self.assertEqual(audit.main([*args, '--source-pattern', 'NEVER']), 0)
+                    self.assertEqual(json.loads(report.read_text())['findings'], [])
+
+    def test_layout_budget_reaches_observable_pages_before_unreadable_sources(self):
+        for quota in ('--max-pages', '--max-pages-per-section'):
+            with (self.subTest(quota=quota), tempfile.TemporaryDirectory() as directory,
+                  contextlib.redirect_stdout(io.StringIO())):
+                root = Path(directory)
+                source = b'.TH PROBE 1 "November 21, 2026"\n.SH DESCRIPTION\nBODY\n'
+                (root / 'a.1.xz').write_bytes(lzma.compress(source))
+                b, c = root / 'b.1', root / 'c.1'
+                b.write_bytes(source)
+                c.write_bytes(source)
+                args = ['--manpath', str(root), '--mant', str(b), '--audit-db', str(root / 'layout.csv'),
+                        quota, '1']
+                visits = []
+
+                def scan(selected, _roots, _arguments):
+                    visits.extend(selected)
+                    label = layout.relative_label(selected[0], [root])
+                    return {label: layout.Finding(label, 'clean', 'clean', [], None)}, None
+
+                with patch.object(layout, 'run_layout_auditor', side_effect=scan):
+                    self.assertEqual(layout.main(args), 0)
+                    self.assertEqual(layout.main(args), 0)
+                    self.assertEqual(layout.main(args), 1)
+                    self.assertEqual(visits, [b, c])
+
+    def test_alias_with_unchanged_entry_bytes_is_rechecked_when_target_disappears(self):
+        with tempfile.TemporaryDirectory() as directory, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(directory)
+            man = root / 'man1'
+            man.mkdir()
+            alias, target = man / 'a.1', man / 'b.1'
+            alias.write_bytes(b'.so man1/b.1\n')
+            target.write_bytes(b'.TH PROBE 1 "November 21, 2026"\n.SH DESCRIPTION\nBODY\n')
+            args = ['--manpath', str(root), '--profiler', str(alias),
+                    '--audit-db', str(root / 'structure.csv'), '--source-pattern', r'^\.so\b']
+
+            def profile(selected, *_args):
+                self.assertEqual(selected, [alias])
+                status = 'clean' if target.exists() else 'hard-failure'
+                return [structure.Finding(structure.relative_label(alias, [root]), status, [])]
+
+            with patch.object(structure, 'profile_findings', side_effect=profile) as profiler:
+                self.assertEqual(structure.main(args), 0)
+                target.unlink()
+                self.assertEqual(structure.main(args), 1)
+                self.assertEqual(profiler.call_count, 2)
+
     def test_structure_retry_rotation_survives_a_permanent_failure(self):
         for quota in ('--max-pages', '--max-pages-per-section'):
             for undecodable in (False, True):
@@ -313,7 +402,7 @@ class AuditProfileMigrationTests(unittest.TestCase):
                 report = root / 'report.json'
                 previous = [audit.AuditRecord(
                     corpus='test', path=audit.relative_label(root / page, [root]), section='1',
-                    digest=audit.source_digest(root / page),
+                    digest=source_digest(root / page),
                     profile_schema=old_schema, scan_status=scan, review_status=status, note=note,
                 ) for page, scan, status, note in [
                     (pages[0], 'clean', 'not-required', ''),

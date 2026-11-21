@@ -983,6 +983,15 @@ python3 -m scripts.roff.audit.audit_roff_structure --manpath /usr/share/man \
 
 [`STRUCTURE_AUDIT.csv`](../tests/fixtures/roff/STRUCTURE_AUDIT.csv) is an independent incremental ledger, while its [guide](../tests/fixtures/roff/STRUCTURE_AUDIT.md) defines the review lifecycle. The batch profilers and audit scripts are development tools: no host corpus, renderer, or batch profile is part of normal CI. CI runs only their dependency-free self-checks and the focused Rust regressions that follow a confirmed finding.
 
+Path-based structure, projection, target and semantic audits verify the source
+transport before attributing a profiler result to its decoded digest. They
+accept plain sources, gzip and zstd when their suffix and contents agree with
+the loader. Unsupported or invalid containers are reported as uncovered and
+cannot supply clean coverage for the decoded page. Structure rechecks redirects
+and symlinks even if the entry bytes match a ledger row, because the target may
+have changed. Bounded layout scans give readable pages priority over transport
+failures, so an unreadable file cannot consume every subsequent scan's budget.
+
 The separate CommonMark projection oracle catches valid-but-wrong Markdown
 topology after lowering has already succeeded:
 

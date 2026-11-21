@@ -151,3 +151,128 @@ fn an_unproved_same_line_predecessor_keeps_a_local_review() {
     assert!(equation.unproved_paragraph);
     assert!(equation.paragraph.is_none());
 }
+
+#[test]
+fn cross_line_equations_keep_the_evidence_of_their_active_paragraph() {
+    for (source, uncertain) in [
+        (include_str!("paragraph_witnesses/cross-known.1"), false),
+        (include_str!("paragraph_witnesses/cross-unproved.1"), true),
+        (include_str!("paragraph_witnesses/display-boundary.1"), true),
+    ] {
+        // roff_eqndelim() leaves the inline equation at the physical
+        // source line, which can differ from the active prose owner.
+        let (expected, native, mut document) = parsed(source);
+        let (observed, topology) = ir_profile(&document);
+        assert!(
+            compare_structure(&expected, &observed, &native, &topology).is_empty(),
+            "{source}"
+        );
+        let equation = document
+            .sections
+            .iter_mut()
+            .flat_map(|sec| &mut sec.blocks)
+            .find_map(|block| {
+                let Block::Paragraph { children, .. } = block else {
+                    return None;
+                };
+                let index = children.iter().position(
+                    |part| matches!(part, Inline::Equation { value, .. } if value == "x"),
+                )?;
+                Some(children.remove(index))
+            })
+            .unwrap();
+        let tail = document
+            .sections
+            .iter_mut()
+            .flat_map(|sec| &mut sec.blocks)
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. }
+                    if mant_ir::inline_plain_text(children) == "TAIL" =>
+                {
+                    Some(children)
+                }
+                _ => None,
+            })
+            .unwrap();
+        tail.push(equation);
+        let (observed, topology) = ir_profile(&document);
+        let moved = compare_structure(&expected, &observed, &native, &topology);
+        assert!(
+            moved.iter().any(|issue| issue.contains("in paragraph"))
+                || uncertain
+                    && native
+                        .equations
+                        .iter()
+                        .any(|equation| equation.unproved_paragraph),
+            "{source}: {moved:?}"
+        );
+    }
+}
+
+#[test]
+fn an_extra_occurrence_of_a_proved_long_compound_is_reported() {
+    // termp_it_pre() and roff_term_pre_br() leave the HANG field open,
+    // allowing a compound longer than the precomputed spelling prefix.
+    let source = include_str!("paragraph_witnesses/long-repeated-field.1");
+    let (_, native, mut document) = parsed(source);
+    let mut issues = Vec::new();
+    native.head_payloads.compare(&document, &mut issues);
+    assert!(issues.is_empty(), "{issues:?}");
+    let term = first_term(&mut document);
+    let text = mant_ir::inline_plain_text(term);
+    let word = text
+        .split_whitespace()
+        .max_by_key(|word| word.len())
+        .unwrap();
+    assert!(word.len() > 32);
+    term.push(Inline::Text {
+        value: format!(" {word}"),
+    });
+    native.head_payloads.compare(&document, &mut issues);
+    assert!(
+        issues
+            .iter()
+            .any(|issue| issue.contains("unexpected repeated")),
+        "{issues:?}"
+    );
+}
+
+#[test]
+fn literal_alignment_and_fill_requests_bound_the_observed_rows() {
+    for (source, expects_hard_row) in [
+        (
+            include_str!("paragraph_witnesses/literal-aligned-field.1"),
+            true,
+        ),
+        (
+            include_str!("paragraph_witnesses/literal-filled-field.1"),
+            false,
+        ),
+    ] {
+        // roff_term_pre_ce() and ROFF_fi both enter roff_term_pre_br().
+        // Only the latter makes the following TEXT nodes filled.
+        let (_, native, mut document) = parsed(source);
+        let mut issues = Vec::new();
+        native.head_payloads.compare(&document, &mut issues);
+        assert!(issues.is_empty(), "{source}: {issues:?}");
+        let term = first_term(&mut document);
+        if expects_hard_row {
+            let at = term
+                .iter()
+                .rposition(|node| matches!(node, Inline::LineBreak { .. }))
+                .unwrap();
+            term[at] = Inline::Text { value: " ".into() };
+        } else {
+            let at = term
+                .iter()
+                .rposition(|node| matches!(node, Inline::Text { value } if value.trim() == "C"))
+                .unwrap();
+            term.insert(at, Inline::line_break());
+        }
+        native.head_payloads.compare(&document, &mut issues);
+        assert!(
+            issues.iter().any(|issue| issue.contains("hard line")),
+            "{source}: {issues:?}"
+        );
+    }
+}

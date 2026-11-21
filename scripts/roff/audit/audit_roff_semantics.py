@@ -22,7 +22,6 @@ from scripts.roff.lib.roff_audit_common import (
     merge_clean_review_state,
     compile_source_patterns,
     discover_pages,
-    filter_pages_by_source,
     manual_hierarchy_root,
     manual_section,
     is_nonnegative_integer,
@@ -30,7 +29,9 @@ from scripts.roff.lib.roff_audit_common import (
     ordinal_source_reviews,
     relative_label,
     run_jsonl_profile_batch,
-    source_digest,
+    observe_sources,
+    uncovered_sources,
+    verified_profile_findings,
     stable_sample,
 )
 
@@ -621,10 +622,11 @@ def main(argv: Sequence[str]) -> int:
         )
         corpus = arguments.corpus or ("local-manpath" if arguments.manpath else "fixtures")
         pages = discover_pages(roots)
-        pages, unreadable = filter_pages_by_source(
-            pages, compile_source_patterns(arguments.source_pattern)
+        refresh = set()
+        records, unreadable = observe_sources(
+            pages, roots, compile_source_patterns(arguments.source_pattern), refresh=refresh,
         )
-        records = {page: (relative_label(page, roots), source_digest(page)) for page in pages}
+        pages = list(records)
         database = read_database(arguments.audit_db)
         if arguments.recorded_only:
             pages = [
@@ -637,9 +639,10 @@ def main(argv: Sequence[str]) -> int:
             pages = [
                 page
                 for page in pages
-                if (previous := database.get((corpus, *records[page]))) is None
+                if page in refresh or (previous := database.get((corpus, *records[page]))) is None
                 or previous.profile_schema != PROFILE_SCHEMA
             ]
+        pages.sort(key=unreadable.__contains__)
         pages = stable_sample(pages, arguments.max_pages)
         if arguments.verify and not pages:
             raise ValueError("verification selected no pages")
@@ -647,15 +650,19 @@ def main(argv: Sequence[str]) -> int:
         print(f"audit-roff-semantics: {error}", file=sys.stderr)
         return 2
 
-    for path in unreadable:
-        print(f"audit-roff-semantics: unreadable source: {path}", file=sys.stderr)
+    for path, reason in unreadable.items():
+        print(f"audit-roff-semantics: unreadable source: {path}: {reason}", file=sys.stderr)
     print("ManT roff semantic-entry precision audit")
     print(f"  pages:  {len(pages)}")
     print(f"  corpus: {corpus}")
     print("  contract: ordinal structure never leaks into semantic definitions or entries")
     print()
 
-    findings = list(profile_findings(pages, roots, arguments.profiler, arguments.timeout))
+    findings = verified_profile_findings(
+        pages, records, unreadable,
+        lambda readable: profile_findings(readable, roots, arguments.profiler, arguments.timeout),
+        lambda label, reason: Finding(label, "hard-failure", [], reason),
+    )
     by_label = {finding.path: finding for finding in findings}
     summary = Counter(finding.status for finding in findings)
     source_review_count = sum(len(finding.source_review) for finding in findings)
@@ -759,6 +766,7 @@ def main(argv: Sequence[str]) -> int:
                     "sourceReviewOccurrences": source_review_count,
                     "summary": dict(summary),
                     "findings": [asdict(finding) for finding in findings],
+                    "uncovered_sources": uncovered_sources(unreadable, roots),
                 },
                 ensure_ascii=False,
                 indent=2,
