@@ -230,9 +230,23 @@ fn defer_retained_separator_advances(
     earlier: usize,
     word_owner: Option<u64>,
 ) {
-    let Some(word_owner) = word_owner else { return };
-    for index in 1..slots.len() {
+    let Some(word_owner) = word_owner.filter(|_| earlier != 0) else {
+        return;
+    };
+    let is_replayed_marker = |slot: &FillSlot| {
+        slot.cell == FieldCell::BreakMarker && slot.owner.is_some_and(|owner| owner < earlier)
+    };
+    let Some(last_marker) = slots.iter().rposition(is_replayed_marker) else {
+        return;
+    };
+    let mut after_marker = false;
+    let mut next_ink = 0;
+    for index in 0..slots.len() {
         let motion = &slots[index];
+        let follows_marker = after_marker;
+        if !motion.drawing_advance {
+            after_marker = is_replayed_marker(motion);
+        }
         if motion.cell != FieldCell::NonBreakingBlank
             || motion.count != 1
             || !motion
@@ -250,23 +264,34 @@ fn defer_retained_separator_advances(
             && slots[index - 2]
                 .owner
                 .is_some_and(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(1)));
-        if !motion.drawing_advance && !after_authored_break {
+        let follows_marker = follows_marker && (motion.drawing_advance || after_authored_break);
+        // HORIZ can also land the new word before an older marker. A
+        // surviving motion then separates ink before that same marker.
+        // Its placement is still decided by the accepted term_field pass.
+        let precedes_marker = index < last_marker
+            && (motion.drawing_advance || motion.owner.is_some_and(|owner| owner < earlier));
+        if !follows_marker && !precedes_marker {
             continue;
         }
-        if !slots[..index]
-            .iter()
-            .rev()
-            .find(|slot| !slot.drawing_advance)
-            .is_some_and(|slot| {
-                slot.cell == FieldCell::BreakMarker
-                    && slot.owner.is_some_and(|owner| owner < earlier)
-            })
-        {
-            continue;
-        }
-        let Some(owner) = slots[index + 1..].iter().find_map(|slot| {
-            slot.owner.filter(|&owner| owner >= earlier && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace()))
-        }) else { continue };
+        let ink_end = if follows_marker {
+            slots.len()
+        } else {
+            last_marker
+        };
+        next_ink = next_ink.max(index + 1);
+        let owner = loop {
+            if next_ink >= ink_end {
+                break None;
+            }
+            if let Some(owner) = slots[next_ink].owner.filter(|&owner| {
+                owner >= earlier
+                    && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+            }) {
+                break Some(owner);
+            }
+            next_ink += 1;
+        };
+        let Some(owner) = owner else { continue };
         let id = reading.len();
         reading.push(ReadingCell {
             glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {

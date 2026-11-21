@@ -1011,7 +1011,12 @@ fn assert_device_row(body: &str, rows: &[&str], link: Option<(&str, &str)>) {
             .iter()
             .filter(|line| !line.trim().is_empty())
             .map(|&word| (word, 1))
-            .chain(["FX", "CDFHX", "CDJFHX"].map(|word| (word, 0)))
+            .chain(
+                ["FX", "CDFHX", "CDJFHX", "HX", "DFH X"]
+                    .into_iter()
+                    .filter(|word| !rows.contains(word))
+                    .map(|word| (word, 0)),
+            )
         {
             let hits = mant_query::search_query(
                 &content,
@@ -1110,6 +1115,26 @@ fn accepted_drawing_cells_keep_their_rows_through_motion_and_appended_styles() {
         ),
         (
             r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\&\p\h'2n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\h'1n' \p\h'-1n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Em "H\h'1n'\h'-1n'  \p\h'-1n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\h'1n' \p\h'-1n'" Ns No "\h'-1n'X""#,
+            &["H X"][..],
+            None,
+        ),
+        (
+            r#".Sy "\zC\pD\zJ" No "\:\h'-6n'\&\p\zF" Sy "H\h'1n'\h'-1n'  \p\h'-1n'" Ns No "\h'-1n'X""#,
             &["H X"][..],
             None,
         ),
