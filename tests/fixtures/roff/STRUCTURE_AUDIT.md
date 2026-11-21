@@ -121,7 +121,7 @@ fields. A fallback macro that expands `MR` into styled `IR` operands, as in
 `addftinfo(1)`, can yield extra manual links through the product's independent
 manual-reference recognition. The native count follows the expanded tree.
 
-The `mant.roff-structure-profile/v30` successful page response requires
+The `mant.roff-structure-profile/v31` successful page response requires
 `ordinalCasesForReview`, `literalDisplaysForReview`, `definitionHeadsForReview`, and
 `sourceLinkOrigins.sectionLabelsForReview`. Their
 arrays keep all source occurrences, and an empty array records conclusive
@@ -153,6 +153,10 @@ pattern cannot inspect a damaged page, the audit reports that uncertainty
 and continues with the readable candidates. Per-section limits follow the
 same order within each section. Removing stale retries requires a complete
 enumeration of the same corpus and roots.
+Paths with possible external includes also rotate under a page quota,
+including after a clean result. The `.refresh.json` file records their last
+attempt order by audit profile, corpus and roots. The decoded-source ledger
+continues to record observations under their original identities.
 The file backends verify plain sources and matching gzip or Zstandard
 headers and suffixes. Inputs in unsupported formats or with mismatched
 headers have no decoded ledger identity. The structure and layout reports

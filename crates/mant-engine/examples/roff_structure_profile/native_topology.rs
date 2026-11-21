@@ -150,10 +150,11 @@ impl ParagraphWitness {
     fn observe(&mut self, children: &[Node], topology: &mut TopologyOwners) {
         for child in children {
             let token = child.macro_token.as_deref();
-            if matches!(token, Some("Pp" | "PP" | "P" | "LP")) {
+            if matches!(token, Some("Pp" | "PP" | "P" | "LP" | "RS")) {
                 self.begin_paragraph(child.line);
-                // man_term.c::pre_PP enters the actual BODY. Its first
-                // printed node supplies the same source identity as prose.
+                // pre_PP and pre_RS enter their actual BODY. RS owns an
+                // indented run of the same paragraph sequence, with a
+                // term_newln() on both entry and exit (man_term.c).
                 if child.kind == NodeKind::Block
                     && let Some(body) = child
                         .children
@@ -165,21 +166,37 @@ impl ParagraphWitness {
                 }
                 continue;
             }
-            if child.flags.no_print || matches!(token, Some("Sm" | "Tg")) {
-                // termp_sm_pre changes flags, and Tg emits no prose.
-                // The next printed node can still prove this occurrence.
+            if token == Some("Tg") {
+                // mdoc_validate.c::post_tg either keeps the target here
+                // or installs it on a later node. A retained target can
+                // give the current IR paragraph its first source owner.
+                if self.simple && !child.flags.no_fill && child.flags.deep_link_target {
+                    self.start(child.line);
+                }
+                continue;
+            }
+            if child.flags.no_print || token == Some("Sm") {
                 continue;
             }
             let prose = !child.flags.no_fill
                 && (child.kind == NodeKind::Text && starts_prose(child)
                     || child.kind == NodeKind::Element
-                        && matches!(
+                        && (matches!(
                             token,
                             Some("No" | "Em" | "Sy" | "Li" | "B" | "I" | "SB" | "SM")
-                        )
-                        && matches!(child.children.as_slice(), [text] if starts_prose(text)));
+                        ) && matches!(child.children.as_slice(), [text] if starts_prose(text))
+                            // termp_an_pre() and termp_lk_pre() can supply
+                            // the first printed operand of this paragraph.
+                            || matches!(token, Some("An" | "Lk"))
+                                && child.children.first().is_some_and(starts_prose)));
             let has_equation = child.equation.as_ref().is_some_and(equation_has_payload);
             if prose && self.simple {
+                if self.owner.is_none() && matches!(token, Some("An" | "Lk")) {
+                    // When an expanded macro also begins a paragraph at
+                    // these coordinates, the source line no longer proves
+                    // which occurrence owns the equation.
+                    self.uncertain_start = Some(child.line);
+                }
                 self.start(child.line);
             } else if child.kind == NodeKind::Equation {
                 match child.equation_inline {
@@ -198,7 +215,7 @@ impl ParagraphWitness {
                             } else {
                                 topology.paragraphs.insert(child.id, owner);
                             }
-                        } else if self.unproved_lines.contains(&child.line) {
+                        } else {
                             topology.unproved_paragraphs.insert(child.id);
                         }
                     }
@@ -383,13 +400,18 @@ fn record_equation(
             .as_ref()
             .filter(|equation| equation_has_payload(equation))
     {
+        let context = equation_context(node, inside_table, !blocks);
         equations.push(AstEquationTopology {
             source_line: node.line,
-            context: equation_context(node, inside_table, !blocks),
+            context,
             value: equation_visible_text(&equation.readable_text()),
             cell,
             unproved_cell: inside_table && cell.is_none(),
-            unproved_paragraph,
+            unproved_paragraph: unproved_paragraph
+                || blocks
+                    && context == EquationContext::Inline
+                    && !node.flags.no_fill
+                    && paragraph.is_none(),
             section: section_owner,
             paragraph,
         });

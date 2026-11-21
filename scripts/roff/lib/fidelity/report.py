@@ -64,6 +64,7 @@ def write_json_report(
     layout_signals: bool,
     summary: AuditSummary,
     findings: Sequence[Finding],
+    uncovered_sources: Sequence[dict[str, str]] = (),
 ) -> None:
     report = {
         "tool": "mant-roff-fidelity-audit/v1",
@@ -75,6 +76,7 @@ def write_json_report(
         "layout_signals": layout_signals,
         "summary": asdict(summary),
         "findings": [asdict(finding) for finding in findings],
+        "uncovered_sources": list(uncovered_sources),
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

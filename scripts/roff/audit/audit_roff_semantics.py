@@ -18,6 +18,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
+    RefreshQueue,
     SourceReview,
     merge_clean_review_state,
     compile_source_patterns,
@@ -643,6 +644,11 @@ def main(argv: Sequence[str]) -> int:
                 or previous.profile_schema != PROFILE_SCHEMA
             ]
         pages.sort(key=unreadable.__contains__)
+        queue = RefreshQueue(
+            arguments.audit_db, PROFILE_SCHEMA, corpus, roots,
+            refresh | unreadable.keys(), enabled=not arguments.verify and bool(arguments.max_pages),
+        )
+        queue.order(pages)
         pages = stable_sample(pages, arguments.max_pages)
         if arguments.verify and not pages:
             raise ValueError("verification selected no pages")
@@ -746,6 +752,7 @@ def main(argv: Sequence[str]) -> int:
         print("semantic database verification: " + ("failed" if verification_failed else "passed"))
     else:
         write_database(arguments.audit_db, database.values())
+        queue.record(pages)
         print(f"semantic database: {arguments.audit_db}")
     if arguments.json:
         arguments.json.parent.mkdir(parents=True, exist_ok=True)

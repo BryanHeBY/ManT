@@ -26,6 +26,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
+    RefreshQueue,
     compile_source_patterns,
     discover_pages,
     manual_hierarchy_root,
@@ -416,6 +417,11 @@ def main(argv: Sequence[str]) -> int:
                 != PROFILE_SCHEMA
             ]
         pages.sort(key=unreadable.__contains__)
+        queue = RefreshQueue(
+            arguments.audit_db, PROFILE_SCHEMA, corpus, roots,
+            refresh | unreadable.keys(), enabled=not arguments.verify and bool(arguments.max_pages or arguments.max_pages_per_section),
+        )
+        queue.order(pages)
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section
@@ -478,6 +484,7 @@ def main(argv: Sequence[str]) -> int:
         print("projection database: unchanged (verification mode)")
     else:
         write_database(arguments.audit_db, database.values())
+        queue.record(pages)
         print(f"projection database: {arguments.audit_db}")
     if arguments.json:
         arguments.json.parent.mkdir(parents=True, exist_ok=True)

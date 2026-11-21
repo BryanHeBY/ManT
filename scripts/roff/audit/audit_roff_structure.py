@@ -29,6 +29,7 @@ from typing import Iterable, Sequence
 
 from scripts.roff.lib.roff_ledger_paths import audit_ledger_path
 from scripts.roff.lib.roff_audit_common import (
+    RefreshQueue,
     SourceReview, discover_pages, is_nonnegative_integer, manual_section, ordinal_source_reviews,
     compile_source_patterns, manual_compression, manual_transport_error, observe_sources,
     relative_label, run_jsonl_profile_batch,
@@ -41,7 +42,7 @@ FIXTURE_ROOT = ROOT / "tests/fixtures/roff/real"
 DEFAULT_PROFILER = ROOT / "target/debug/examples/roff_structure_profile"
 DEFAULT_AUDIT_DB = ROOT / "tests/fixtures/roff/STRUCTURE_AUDIT.csv"
 DEFAULT_FIDELITY_DB = ROOT / "tests/fixtures/roff/FIDELITY_AUDIT.csv"
-PROFILE_SCHEMA = "mant.roff-structure-profile/v30"
+PROFILE_SCHEMA = "mant.roff-structure-profile/v31"
 PROFILE_SCHEMA_PATTERN = re.compile(r"mant\.roff-structure-profile/v[1-9][0-9]*$")
 STRUCTURE_DATABASE_FIELDS = [
     "corpus",
@@ -763,6 +764,12 @@ def main(argv: Sequence[str]) -> int:
                     return order.get((*key, root_scope), int(legacy_retry or refresh_observed))
 
                 pages.sort(key=priority)
+        queue = RefreshQueue(
+            arguments.audit_db, PROFILE_SCHEMA, corpus, roots,
+            refresh | unreadable.keys() if refresh else (),
+            enabled=bool(arguments.max_pages or arguments.max_pages_per_section),
+        )
+        queue.order(pages)
         pages = (
             stable_sample_by_section(pages, arguments.max_pages_per_section)
             if arguments.max_pages_per_section
@@ -845,6 +852,7 @@ def main(argv: Sequence[str]) -> int:
     )
     print("REVIEW is an AST-to-IR candidate, not a regression until source and IR are inspected.")
     write_structure_database(arguments.audit_db, database.values())
+    queue.record(pages)
     write_retry_order(retry_path, retries)
     print(f"structure database: {arguments.audit_db}")
     write_report(arguments.json, corpus, roots, findings, unreadable)

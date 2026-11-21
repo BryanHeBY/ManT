@@ -276,3 +276,97 @@ fn literal_alignment_and_fill_requests_bound_the_observed_rows() {
         );
     }
 }
+
+#[test]
+fn literal_request_entry_and_word_execution_are_independent() {
+    // print_mdoc_node() processes NODE_LINE before ft/ta/Sm/Tg.
+    // roff_term_pre_ti() adds an explicit term_newln/BRIND transition.
+    for source in [
+        include_str!("paragraph_witnesses/literal-font-request.1"),
+        include_str!("paragraph_witnesses/literal-tabs-request.1"),
+        include_str!("paragraph_witnesses/literal-spacing-request.1"),
+        include_str!("paragraph_witnesses/literal-tag-request.1"),
+        include_str!("paragraph_witnesses/literal-indent-request.1"),
+    ] {
+        let (_, native, mut document) = parsed(source);
+        let mut issues = Vec::new();
+        native.head_payloads.compare(&document, &mut issues);
+        assert!(issues.is_empty(), "{source}: {issues:?}");
+        let term = first_term(&mut document);
+        let break_node = |node: &Inline| matches!(node, Inline::LineBreak { .. });
+        let index = if source.contains(".ti 0") {
+            term.iter().rposition(break_node).unwrap()
+        } else {
+            let first_ink = term
+                .iter()
+                .position(|node| mant_ir::has_printable_character(std::slice::from_ref(node)))
+                .unwrap();
+            term.iter()
+                .enumerate()
+                .skip(first_ink + 1)
+                .find(|(_, node)| break_node(node))
+                .unwrap()
+                .0
+        };
+        term[index] = Inline::Text { value: " ".into() };
+        native.head_payloads.compare(&document, &mut issues);
+        assert!(
+            issues.iter().any(|issue| issue.contains("line")),
+            "{source}: {issues:?}"
+        );
+    }
+}
+
+#[test]
+fn retained_tags_and_inline_macro_operands_confer_equation_owners() {
+    for source in [
+        include_str!("paragraph_witnesses/paragraph-start-tag.1"),
+        include_str!("paragraph_witnesses/paragraph-start-author.1"),
+        include_str!("paragraph_witnesses/paragraph-start-link.1"),
+        include_str!("paragraph_witnesses/paragraph-start-tag-expanded.1"),
+        include_str!("paragraph_witnesses/paragraph-start-author-expanded.1"),
+        include_str!("paragraph_witnesses/paragraph-start-link-expanded.1"),
+        include_str!("paragraph_witnesses/paragraph-start-indented.1"),
+    ] {
+        // CVS post_tg() gives a retained Tg its own destination. Inline
+        // An/Lk operands can own an active paragraph before roff_eqndelim().
+        let (expected, native, mut document) = parsed(source);
+        let (observed, topology) = ir_profile(&document);
+        let issues = compare_structure(&expected, &observed, &native, &topology);
+        assert!(issues.is_empty(), "{source}: {issues:?}");
+        let eqn = document
+            .sections
+            .iter_mut()
+            .flat_map(|section| &mut section.blocks)
+            .find_map(|block| {
+                let Block::Paragraph { children, .. } = block else {
+                    return None;
+                };
+                let at = children
+                    .iter()
+                    .position(|node| matches!(node, Inline::Equation { .. }))?;
+                Some(children.remove(at))
+            })
+            .unwrap();
+        let tail = document
+            .sections
+            .iter_mut()
+            .flat_map(|section| &mut section.blocks)
+            .find_map(|block| match block {
+                Block::Paragraph { children, .. }
+                    if mant_ir::inline_plain_text(children) == "TAIL" =>
+                {
+                    Some(children)
+                }
+                _ => None,
+            })
+            .unwrap();
+        tail.push(eqn);
+        let (observed, topology) = ir_profile(&document);
+        let issues = compare_structure(&expected, &observed, &native, &topology);
+        assert!(
+            issues.iter().any(|issue| issue.contains("in paragraph")),
+            "{source}: {issues:?}"
+        );
+    }
+}

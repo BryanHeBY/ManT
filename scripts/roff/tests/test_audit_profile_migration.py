@@ -22,6 +22,38 @@ from scripts.roff.lib.roff_audit_common import source_digest
 
 
 class AuditProfileMigrationTests(unittest.TestCase):
+    def test_refresh_candidates_rotate_with_a_one_page_budget(self):
+        for audit in (projection, semantic, targets, structure):
+            for text in (b'.so man1/target.1\n', b'.TH TEST 1\nThis documents .so syntax.\n'):
+                with (self.subTest(driver=audit.__name__, source=text),
+                      tempfile.TemporaryDirectory() as directory,
+                      contextlib.redirect_stdout(io.StringIO())):
+                    root = Path(directory)
+                    first, second, stable = [root / f'{name}.1' for name in 'abz']
+                    first.write_bytes(text)
+                    second.write_bytes(text)
+                    stable.write_bytes(b'.TH TEST 1\nStable.\n')
+                    db = root / 'audit.csv'
+                    args = ['--manpath', str(root), '--profiler', str(first), '--audit-db', str(db)]
+                    seen = []
+                    failed = set()
+
+                    def profile(selected, *_args):
+                        seen.extend(selected)
+                        return [audit.Finding(audit.relative_label(path, [root]),
+                                              'hard-failure' if path in failed else 'clean', [])
+                                for path in selected]
+
+                    with patch.object(audit, 'profile_findings', side_effect=profile):
+                        for _ in range(3):
+                            self.assertEqual(audit.main([*args, '--max-pages', '1']), 0)
+                        self.assertCountEqual(seen, [first, second, stable])
+                        failed.add(second)
+                        seen.clear()
+                        statuses = [audit.main([*args, '--max-pages', '1']) for _ in range(2)]
+                        self.assertCountEqual(seen, [first, second])
+                        self.assertCountEqual(statuses, [0, 1])
+
     def test_file_profilers_reject_unsupported_and_incompatible_containers(self):
         for audit in (projection, semantic, targets):
             with (self.subTest(driver=audit.__name__),

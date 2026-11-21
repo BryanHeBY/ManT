@@ -142,7 +142,7 @@ pub(super) fn record(
             // flushes before clearing the tag's NOBREAK/BRIND field.
             let clears_brind = matches!(
                 node.macro_token.as_deref(),
-                Some("br" | "sp" | "ce" | "rj" | "fi" | "nf")
+                Some("br" | "sp" | "ce" | "rj" | "fi" | "nf" | "ti")
             );
             let hanging_break = clears_brind && matches!(payload.field, Field::Hanging);
             hang_without_gap |= hanging_break;
@@ -168,12 +168,19 @@ pub(super) fn record(
             continue;
         }
         if node.flags.no_fill && node.flags.line_start && (!continues || empty_text) {
-            rows.record_literal(
-                &body.children[start..index],
-                source,
-                payload,
-                hang_without_gap,
-            );
+            if start == index {
+                // A state-only source row may leave viscol without any
+                // input cells. term_newln() still calls term_flushln()
+                // in that state (term.c:474–481).
+                rows.flush_empty_field(payload.field, 0);
+            } else {
+                rows.record_literal(
+                    &body.children[start..index],
+                    source,
+                    payload,
+                    hang_without_gap,
+                );
+            }
             start = index;
         }
         if node.flags.no_fill && !continues && (empty_text || space_started) {
@@ -200,7 +207,12 @@ pub(super) fn record(
         }
         if state_only {
             // ft/ta and the mdoc state handlers do not call term_word().
-            // The earlier NONEWLINE survives until a printed operand.
+            // The node entry already closed the preceding field above.
+            // An otherwise empty run of requests has no word to submit;
+            // the next payload reads their updated SourceContext.
+            if start == index {
+                start += 1;
+            }
             continue;
         }
         continues = node

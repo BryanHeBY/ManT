@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 from scripts.roff.oracle import mandoc_oracle
-from scripts.roff.lib.roff_audit_common import discover_pages, manual_section, relative_label, source_digest
+from scripts.roff.lib.roff_audit_common import discover_pages, manual_section, observe_sources
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -77,7 +77,7 @@ DEVIATION_FIELDS = [
     "note",
 ]
 
-CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v30"
+CURRENT_STRUCTURE_SCHEMA = "mant.roff-structure-profile/v31"
 CURRENT_PROJECTION_SCHEMA = "mant.roff-projection-profile/v3"
 CURRENT_LAYOUT_SCHEMA = "mant.roff-layout-audit/v3"
 CURRENT_TARGET_SCHEMA = "mant.roff-target-profile/v4"
@@ -408,13 +408,14 @@ def validate_current_mandoc_deviations(
 
 
 def fixture_identities() -> frozenset[Identity]:
-    found = set()
-    for page in discover_pages([FIXTURE_ROOT]):
-        digest = source_digest(page)
-        if digest is None:
-            raise ValueError(f"cannot decompress checked-in fixture: {page}")
-        found.add(Identity("fixtures", relative_label(page, [FIXTURE_ROOT]), digest))
-    return frozenset(found)
+    roots = [FIXTURE_ROOT]
+    records, failures = observe_sources(discover_pages(roots, strict=True), roots, [])
+    if failures:
+        path, reason = next(iter(failures.items()))
+        raise ValueError(f"cannot read checked-in fixture {path}: {reason}")
+    return frozenset(
+        Identity("fixtures", label, digest) for label, digest in records.values() if digest is not None
+    )
 
 
 def load_coverage(arguments: argparse.Namespace) -> Coverage:

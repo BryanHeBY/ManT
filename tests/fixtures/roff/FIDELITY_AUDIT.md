@@ -26,6 +26,11 @@ rechecks update `scan_status` but preserve a human disposition; a clean
 recheck therefore does not erase the evidence that a page once exposed a real
 regression.
 
+Before a recorded observation is reused, the audit validates the currently
+stored manual with the file loader's compression contract. A failed read
+appears in the current report and leaves the recorded observation untouched.
+Restoring the valid member permits reuse of the original decoded identity.
+
 The advanced `--pages-file FILE` input accepts a newline-delimited set of
 absolute manual paths below the selected `--fixtures` or `--manpath` roots. It
 bypasses sampling and ledger selection while retaining normal hierarchy and

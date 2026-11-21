@@ -59,6 +59,9 @@ from scripts.roff.lib.fidelity.report import (
 )
 
 from scripts.roff.oracle import mandoc_oracle
+from scripts.roff.lib.roff_audit_common import (
+    observe_sources, read_verified_manual, uncovered_sources, verify_source_digest,
+)
 from scripts.roff.lib.roff_reference import reference_environment, run_renderer
 from scripts.roff.lib.roff_reference import self_check as reference_runner_self_check
 
@@ -118,6 +121,10 @@ def self_check() -> None:
     run_self_check()
 
 
+def verified_reference_source(path: Path) -> bytes | None:
+    return read_verified_manual(path)[0]
+
+
 def audit_page(
     path: Path,
     label: str,
@@ -129,13 +136,16 @@ def audit_page(
     ngram: int,
     layout_signals: bool,
 ) -> AuditArtifact:
-    """Use the facade's source reader for hierarchy selection and reference input."""
+    """Compare inputs whose stored representation the product can read."""
     environment = reference_environment()
-    raw_source = source_bytes(path)
-    # An unavailable initial read provides no .so evidence. Avoid a helper
-    # re-read for hierarchy selection while retaining None in the audit input.
+    raw_source, transport_error = read_verified_manual(path)
+    if raw_source is None:
+        return AuditArtifact(
+            Finding(label, "hard-failure", detail=f"could not read source: {transport_error}"),
+            None, None, None,
+        )
     mant_command, hierarchy_root = mant_render_command(
-        path, roots, mant, source=raw_source if raw_source is not None else b"",
+        path, roots, mant, source=raw_source,
     )
     if hierarchy_root is not None:
         environment["MANT_MANPATH"] = str(hierarchy_root)
@@ -150,7 +160,7 @@ def audit_page(
         reference_kind,
         hierarchy_root,
         raw_source,
-        source_reader=source_bytes,
+        source_reader=verified_reference_source,
     )
     if reference_command is None:
         return AuditArtifact(
@@ -404,7 +414,6 @@ def main(argv: Sequence[str]) -> int:
         roots = [path.resolve() for path in arguments.manpath] if arguments.manpath else [FIXTURE_ROOT]
         if explicit_page_set:
             all_pages = explicit_pages(arguments.pages_file, roots)
-            source_filter_errors: list[Path] = []
         else:
             all_pages = discover_pages(roots)
             if arguments.man_section:
@@ -412,11 +421,6 @@ def main(argv: Sequence[str]) -> int:
                 all_pages = [
                     path for path in all_pages if manual_section(path) in selected_sections
                 ]
-            source_patterns = compile_source_patterns(arguments.source_pattern)
-            all_pages, source_filter_errors = filter_pages_by_source(
-                all_pages, source_patterns
-            )
-        pages = list(all_pages)
         corpus = arguments.corpus or (
             "fixtures" if not arguments.manpath else "local-manpath"
         )
@@ -430,9 +434,17 @@ def main(argv: Sequence[str]) -> int:
             if arguments.audit_db
             else {}
         )
-        page_records = {
-            path: (relative_label(path, roots), source_digest(path)) for path in pages
-        }
+        source_patterns = compile_source_patterns(arguments.source_pattern)
+        page_records, unreadable = observe_sources(all_pages, roots, source_patterns)
+        recorded_labels = {label for scope, label, _ in database if scope == corpus}
+        for path in unreadable:
+            label = relative_label(path, roots)
+            # A historical observation cannot cover a failed current read.
+            # With a source filter, previously selected paths still belong
+            # in the report even if their source can no longer be tested.
+            if label in recorded_labels:
+                page_records[path] = label, None
+        pages = all_pages = list(page_records)
         replay_targets: set[tuple[str, str]] = set()
         if arguments.replay_source_records:
             replay_targets = read_source_identities(arguments.source_ledger, corpus)
@@ -563,13 +575,15 @@ def main(argv: Sequence[str]) -> int:
         print(f"syntax report: {arguments.syntax_report}")
     if arguments.syntax_cache:
         print(f"syntax cache:  {arguments.syntax_cache}")
-    for path in source_filter_errors:
-        print(
-            "audit-roff-fidelity: source pattern could not inspect unreadable path: "
-            f"{path}",
-            file=sys.stderr,
-        )
+    for path, reason in unreadable.items():
+        print(f"audit-roff-fidelity: unreadable source: {path}: {reason}", file=sys.stderr)
     if not pages and arguments.audit_db and (completed or cross_corpus_duplicates):
+        if arguments.json:
+            write_json_report(
+                arguments.json, roots, arguments.mant, arguments.reference,
+                arguments.reference_kind, reference_id, arguments.layout_signals,
+                AuditSummary(), [], uncovered_sources(unreadable, roots),
+            )
         print(
             "audit-roff-fidelity: no new or changed manual pages; "
             f"{len(completed)} unchanged pages are already complete and "
@@ -615,17 +629,23 @@ def main(argv: Sequence[str]) -> int:
     summary = AuditSummary()
     for path in pages:
         label, digest = page_records[path]
-        artifact = audit_page(
-            path,
-            label,
-            roots,
-            arguments.mant,
-            arguments.reference,
-            arguments.reference_kind,
-            arguments.timeout,
-            arguments.ngram,
-            arguments.layout_signals,
-        )
+        if path in unreadable:
+            artifact = AuditArtifact(
+                Finding(label, "hard-failure", detail=f"could not read source: {unreadable[path]}"),
+                None, None, None,
+            )
+        else:
+            artifact = audit_page(
+                path, label, roots, arguments.mant, arguments.reference,
+                arguments.reference_kind, arguments.timeout, arguments.ngram,
+                arguments.layout_signals,
+            )
+            if digest is not None and not verify_source_digest(path, digest):
+                digest = None
+                artifact = AuditArtifact(
+                    Finding(label, "hard-failure", detail="source changed during audit"),
+                    None, None, None,
+                )
         finding = artifact.finding
         findings.append(finding)
         if arguments.review_dir is not None:
@@ -677,6 +697,7 @@ def main(argv: Sequence[str]) -> int:
             arguments.layout_signals,
             summary,
             findings,
+            uncovered_sources(unreadable, roots),
         )
         print(f"report: {arguments.json}")
     if arguments.review_dir:

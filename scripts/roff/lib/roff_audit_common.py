@@ -531,6 +531,53 @@ def stable_sample_by_section(pages: Sequence[Path], maximum: int) -> list[Path]:
     return selected
 
 
+class RefreshQueue:
+    """Age repeated observations without changing the source-identity ledger."""
+
+    def __init__(self, database: Path, profile: str, corpus: str, roots: Sequence[Path],
+                 repeated: Iterable[Path], *, enabled: bool):
+        self.path = database.with_suffix(database.suffix + ".refresh.json")
+        self.scope = json.dumps([profile, corpus, *map(str, roots)])
+        self.labels = {page: relative_label(page, roots) for page in repeated} if enabled else {}
+        self.scopes: dict[str, list[str]] = {}
+        if self.labels and self.path.exists():
+            try:
+                data = json.loads(self.path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError) as error:
+                raise ValueError(f"cannot read refresh order: {self.path}: {error}") from error
+            if not isinstance(data, dict) or any(
+                not isinstance(labels, list) or not all(isinstance(label, str) for label in labels)
+                for labels in data.values()
+            ):
+                raise ValueError(f"invalid refresh order: {self.path}")
+            self.scopes = data
+
+    def order(self, pages: list[Path]) -> None:
+        ages = {label: index for index, label in enumerate(self.scopes.get(self.scope, []))}
+        # Keep each driver's priority among unseen inputs. Repeated inputs
+        # then run least recently attempted first, including failures.
+        pages.sort(key=lambda page: ages.get(self.labels.get(page, ""), -1))
+
+    def record(self, pages: Sequence[Path]) -> None:
+        attempted = dict.fromkeys(self.labels[page] for page in pages if page in self.labels)
+        if not attempted:
+            return
+        # Use logical names so replacing or restoring the stored bytes does
+        # not reset a path's turn. Keep previously filtered paths in order.
+        order = self.scopes.get(self.scope, [])
+        self.scopes[self.scope] = [*(label for label in order if label not in attempted), *attempted]
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.path.parent,
+                                         prefix=f".{self.path.name}.", delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                json.dump(self.scopes, stream, ensure_ascii=False)
+                stream.write("\n")
+                stream.close()
+                temporary.replace(self.path)
+            finally:
+                temporary.unlink(missing_ok=True)
+
+
 def read_fidelity_identities(path: Path, corpus: str) -> set[tuple[str, str]]:
     import csv
 
