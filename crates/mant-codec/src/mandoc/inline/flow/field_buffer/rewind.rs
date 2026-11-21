@@ -28,6 +28,7 @@ pub(in crate::mandoc::inline::flow) enum EntryRewind {
     Unmodeled,
 }
 
+#[derive(Clone)]
 pub(in crate::mandoc::inline::flow) struct RewoundGlyph {
     pub(in crate::mandoc::inline::flow) cell: usize,
     pub(in crate::mandoc::inline::flow) scalar: char,
@@ -87,10 +88,12 @@ impl FieldWrite {
                 count: 1,
                 projected: false,
             },
-            Self::DeferredBlanks { count, .. } => EntryWrite::Advance {
-                count: *count,
-                projected: false,
-            },
+            Self::AdvanceOverBufferedBlanks(count) | Self::DeferredBlanks { count, .. } => {
+                EntryWrite::Advance {
+                    count: *count,
+                    projected: false,
+                }
+            }
             Self::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen) => EntryWrite::Overwrite {
                 encode: true,
                 scalars: 1,

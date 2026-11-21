@@ -85,13 +85,16 @@ impl ExecutedWordEntry {
     }
 
     pub(super) fn project_rewind(
-        &self,
+        &mut self,
         nodes: &mut [Inline],
         incoming: &mut Vec<Inline>,
         owner: &str,
         earlier: &[super::super::super::NativeWordAnchor],
+        head: Option<
+            &crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection,
+        >,
     ) {
-        self.prefix.project(nodes, incoming, owner, earlier);
+        self.prefix.project(nodes, incoming, owner, earlier, head);
         remove_rewound_source_blanks(incoming, owner, &self.receipt.consumed_motion_padding);
         let EntryRewind::Executed {
             ref traversed_source_blanks,
@@ -153,6 +156,10 @@ impl ExecutedWordEntry {
 
     pub(super) fn has_replayed_slots(&self) -> bool {
         self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some()
+    }
+
+    pub(super) fn retains_blank(&self, cell: usize) -> bool {
+        self.prefix.retains_blank(cell)
     }
 }
 

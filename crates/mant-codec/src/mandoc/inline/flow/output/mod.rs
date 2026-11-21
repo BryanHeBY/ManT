@@ -76,7 +76,7 @@ pub(super) mod row_observation;
 mod section_handoff;
 pub(super) use section_handoff::SectionHandoff;
 mod scopes;
-mod source_blanks;
+pub(in crate::mandoc::inline::flow) mod source_blanks;
 mod words;
 
 pub(in crate::mandoc) use projection::consume_one_row_ending;

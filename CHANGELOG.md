@@ -47,11 +47,12 @@ that crate was not published for that change.
 
 ### mant-codec
 
-- Keep surviving roff glyphs, link labels and printed spaces attached to
-  their accepted field rows. An open definition HEAD retains its ink until
+- Keep native field replay's surviving glyphs, link labels, printed spaces
+  and hard rows together. An open definition HEAD retains its ink until
   later BODY output paints over it.
-- Keep declaration separators at their executed macro boundaries, including
-  tight aliases, quoted angle groups and split relative paths.
+- Resolve declaration aliases at native parameter boundaries, including
+  nested brackets, tight separators and split relative paths. Flag spellings
+  inside the parameter group remain part of the form.
 - Keep the accepted space count and surviving links when a word-end marker
   is followed by a continuation, horizontal move, or breakpoint. Appended
   font runs preserve earlier overprint coverage.

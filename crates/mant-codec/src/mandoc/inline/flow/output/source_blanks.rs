@@ -22,6 +22,8 @@ struct ReverseOwnerCursor<'a, 'b> {
     group: usize,
     candidate: Option<(&'b mut String, usize)>,
     retain_style: bool,
+    trailing_only: bool,
+    crossed_ink: bool,
     projection: Option<Inline>,
     generation: usize,
 }
@@ -85,8 +87,14 @@ impl<'b> ReverseOwnerCursor<'_, 'b> {
                 }
                 Inline::Text { value } | Inline::Code { value } => {
                     let scalars = value.chars().count();
+                    let has_ink = self.trailing_only && value.chars().any(|ch| !ch.is_whitespace());
                     if let Some(relative) = self.remaining.checked_sub(self.group)
                         && let Some((byte, scalar)) = value.char_indices().rev().nth(relative)
+                        && (!self.trailing_only
+                            || !self.crossed_ink
+                                && value[byte + scalar.len_utf8()..]
+                                    .chars()
+                                    .all(char::is_whitespace))
                     {
                         self.generation += 1;
                         self.projection = self.retain_style.then(|| {
@@ -99,30 +107,73 @@ impl<'b> ReverseOwnerCursor<'_, 'b> {
                         });
                         self.candidate = Some((value, byte));
                     }
+                    self.crossed_ink |= has_ink;
                     self.group += scalars;
                 }
                 Inline::Equation { value, .. } => {
                     // Never change the cache of an already published equation.
                     self.group += value.chars().count();
+                    self.crossed_ink |= !value.is_empty();
                 }
+                Inline::LineBreak { .. } => self.crossed_ink = true,
                 Inline::Anchor { id, .. }
                     if id.as_str().starts_with(super::INTERNAL_FIELD_PREFIX) =>
                 {
                     self.reset_group();
                 }
-                _ => {}
+                Inline::Anchor { .. } => {}
+            }
+            if self.trailing_only && self.crossed_ink && self.candidate.is_none() {
+                return false;
             }
         }
         false
     }
 }
 
-pub(super) fn take_rewound_glyph(
+pub(in crate::mandoc::inline::flow) fn take_rewound_glyph(
     nodes: &mut [Inline],
     incoming: &mut [Inline],
     owner: &str,
     receipt: &super::super::field_buffer::RewoundGlyph,
     retain_style: bool,
+) -> Option<Inline> {
+    rewound_glyph(
+        nodes,
+        incoming,
+        owner,
+        receipt,
+        RewindProjection::Remove { retain_style },
+    )
+}
+
+pub(super) fn has_trailing_rewound_blank(
+    nodes: &mut [Inline],
+    owner: &str,
+    receipt: &super::super::field_buffer::RewoundGlyph,
+) -> bool {
+    rewound_glyph(
+        nodes,
+        &mut [],
+        owner,
+        receipt,
+        RewindProjection::CheckTrailingBlank,
+    )
+    .is_some()
+}
+
+#[derive(Clone, Copy)]
+enum RewindProjection {
+    Remove { retain_style: bool },
+    CheckTrailingBlank,
+}
+
+fn rewound_glyph(
+    nodes: &mut [Inline],
+    incoming: &mut [Inline],
+    owner: &str,
+    receipt: &super::super::field_buffer::RewoundGlyph,
+    mode: RewindProjection,
 ) -> Option<Inline> {
     // A delayed glyph may re-enter the prior word after its earlier output
     // marker. Count the owner's scalar suffix backwards through all wrappers.
@@ -131,7 +182,12 @@ pub(super) fn take_rewound_glyph(
         remaining: receipt.following_scalars,
         group: 0,
         candidate: None,
-        retain_style,
+        retain_style: match mode {
+            RewindProjection::Remove { retain_style } => retain_style,
+            RewindProjection::CheckTrailingBlank => true,
+        },
+        trailing_only: matches!(mode, RewindProjection::CheckTrailingBlank),
+        crossed_ink: false,
         projection: None,
         generation: 0,
     };
@@ -144,7 +200,9 @@ pub(super) fn take_rewound_glyph(
         && let Some((value, byte)) = cursor.candidate
         && value[byte..].starts_with(receipt.scalar)
     {
-        value.remove(byte);
+        if matches!(mode, RewindProjection::Remove { .. }) {
+            value.remove(byte);
+        }
         return cursor.projection;
     }
     None

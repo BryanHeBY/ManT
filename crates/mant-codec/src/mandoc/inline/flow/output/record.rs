@@ -112,6 +112,7 @@ impl WordPassProjection {
             && entry.receipt.prints_padding
             && entry.receipt.first_content_cell >= word_start
             && let Some((gap, previous)) = buffer.device_gap_before(gap_end, replayed)
+            && !entry.retains_blank(gap)
             // A scalar-bearing SP within the earlier ink's word is
             // already represented. An intervening invisible word's is not.
             && (buffer.projection_length(gap, gap + 1) == 0
@@ -178,7 +179,7 @@ impl InlineBuilder {
         // BACKBEFORE retreat (term.c:901-908) can pop the separator blank
         // recorded above, and a pre-execution content start would put
         // already-accepted cells into a later rejected interval.
-        let entry = ExecutedWordEntry::execute(
+        let mut entry = ExecutedWordEntry::execute(
             &mut definition.field_buffer,
             native_writes.expect("formatter word native writes"),
             native_word_start,
@@ -190,6 +191,7 @@ impl InlineBuilder {
             incoming,
             &anchor_ir_start,
             &definition.field_word_anchors,
+            definition.deferred_head_projection.as_ref(),
         );
         let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;
@@ -276,7 +278,7 @@ impl InlineBuilder {
             .native_word_owner
             .take()
             .expect("native word owner");
-        let entry = ExecutedWordEntry::execute(
+        let mut entry = ExecutedWordEntry::execute(
             &mut self.execution.plain_input.buffer,
             native_writes.unwrap_or_default(),
             native_word_start,
@@ -288,6 +290,7 @@ impl InlineBuilder {
             incoming,
             &anchor_ir_start,
             &self.execution.plain_input.anchors,
+            None,
         );
         let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;

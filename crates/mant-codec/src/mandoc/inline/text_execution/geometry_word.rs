@@ -812,9 +812,15 @@ fn execute_seed<'a>(
     // operand does not reset that cursor (term.c:659-660,678-714).
     // Carry the exact cursor if the next word must still write there.
     let slots = &seed.placement.slots;
-    let whole_field = seed.prefix_start == 0 && seed.earlier != 0;
+    // A marker after new ink leaves an open cursor at the end of that
+    // native segment, even when the old tail still holds glyphs.
     let live_cursor = slots.cursor_before_end()
-        && (seed.prefix_start > 0 || whole_field && slots.cursor_before_invisible_tail());
+        && (seed.prefix_start > 0
+            || seed.earlier != 0
+                && (slots.cursor_before_invisible_tail()
+                    || slots.has_unpainted_marker_tail()
+                        && !events.iter().any(absolute_motion)
+                        && slots.contains_ink_from(seed.earlier)));
     // A placed glyph can still be waiting under BACKBEFORE after a marker.
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
@@ -839,6 +845,9 @@ fn execute_seed<'a>(
         && (!has_marker || marker.is_some() || live_cursor || pending_glyph || terminal_marker);
     let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
         || has_marker && live_cursor
+        // BACKBEFORE can hold a glyph inside material still following
+        // col. Leave the marker editable until a real device flush.
+        || has_marker && pending_glyph && seed.earlier != 0 && slots.cursor_before_end()
         // term_fill() advances past buffered blanks before the next graph.
         // Leave that separator to the real flush while keeping the raw
         // cursor and its owners available to intervening native writes.

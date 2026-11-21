@@ -192,6 +192,7 @@ impl FieldBuffer {
             word_scan: super::WordScanPolicy::Incremental,
             break_markers: Vec::new(),
             projected_pass_ends: BTreeSet::new(),
+            deferred_projected_gaps: BTreeSet::new(),
             scan: None,
             word_first_content: None,
             completed_empty_pass_end: None,

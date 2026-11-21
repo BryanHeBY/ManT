@@ -130,6 +130,10 @@ impl InlineBuilder {
                             &anchors[anchor_count - 1].owner,
                         ) {
                             record_row_split(&mut inside_splits, owner, pass.end, offset, false);
+                        } else if incoming.is_empty()
+                            && restart_in_earlier_output(buffer, anchors, boundary)
+                        {
+                            buffer.defer_projected_gap(pass.end, boundary);
                         } else {
                             closes_before.push(pass_start..pass.end);
                         }
@@ -189,6 +193,29 @@ fn starts_with_borrowed_output(
     })
 }
 
+fn restart_in_earlier_output(
+    buffer: &super::super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::super::NativeWordAnchor],
+    boundary: usize,
+) -> bool {
+    let Some((incoming, earlier)) = anchors.split_last() else {
+        return false;
+    };
+    // The pass can restart inside a published word after live slot replay.
+    // Retire the break at the actual owner in the final field projection.
+    incoming.content > boundary
+        && buffer.has_pass_retreats()
+        && earlier
+            .get(
+                earlier
+                    .partition_point(|anchor| anchor.content <= boundary)
+                    .saturating_sub(1),
+            )
+            .is_some_and(|anchor| {
+                anchor.content < boundary && buffer.projection_length(boundary, incoming.start) > 0
+            })
+}
+
 fn restart_inside_borrowed_fragment<'a>(
     buffer: &super::super::super::field_buffer::FieldBuffer,
     boundary: usize,
@@ -209,8 +236,6 @@ fn restart_inside_borrowed_fragment<'a>(
         return Some((owner, 0));
     }
     let offset = prefix.offset(buffer, boundary);
-    // With zero earlier scalars, close before the whole fragment so it
-    // can transfer padding already projected by a graphless word once.
     (offset > 0).then_some((&prefix.owner, offset))
 }
 

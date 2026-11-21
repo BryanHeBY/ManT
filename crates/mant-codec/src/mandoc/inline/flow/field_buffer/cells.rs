@@ -79,6 +79,8 @@ pub(in crate::mandoc) enum FieldWrite {
     OwnedBlank {
         projected: bool,
     },
+    /// A generated nonbreaking blank traversed an existing raw cell.
+    AdvanceOverBufferedBlanks(usize),
     /// A drawn stroke occupies terminal cells without adding author text.
     /// Adjacent identical strokes with no intervening break are one run.
     UnprojectedGraph {

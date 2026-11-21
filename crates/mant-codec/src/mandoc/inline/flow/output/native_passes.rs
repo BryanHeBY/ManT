@@ -40,6 +40,7 @@ impl OwnerAcceptance {
         buffer: &super::super::field_buffer::FieldBuffer,
         order: &BTreeMap<usize, String>,
         interval: std::ops::Range<usize>,
+        offset: usize,
     ) {
         use super::super::field_buffer::FieldCell;
 
@@ -51,7 +52,7 @@ impl OwnerAcceptance {
                 _ => continue,
             };
             self.ordered_glyphs.push(OrderedGlyph {
-                scalar: self.scalars + buffer.projection_length(start, cell),
+                scalar: offset + buffer.projection_length(start, cell),
                 character,
                 receipt: receipt.clone(),
             });
@@ -61,12 +62,17 @@ impl OwnerAcceptance {
     fn omit_cell(
         &mut self,
         buffer: &super::super::field_buffer::FieldBuffer,
-        start: usize,
+        origin: (usize, usize),
         cell: usize,
         covered: bool,
     ) {
-        let first = self.scalars + buffer.projection_length(start, cell);
-        let last = self.scalars + buffer.projection_length(start, cell + 1);
+        let (start, offset) = origin;
+        let first = offset + buffer.projection_length(start, cell);
+        let last = offset + buffer.projection_length(start, cell + 1);
+        self.omit(first, last, covered);
+    }
+
+    fn omit(&mut self, first: usize, last: usize, covered: bool) {
         if first < last {
             if let Some(previous) = self.omitted_scalars.last_mut()
                 && previous.range.end == first
@@ -81,6 +87,36 @@ impl OwnerAcceptance {
             }
         }
     }
+}
+
+fn pass_projection_end(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    pass: &super::super::field_buffer::FillPass,
+) -> (usize, bool, usize, bool) {
+    use super::super::field_buffer::FieldCell;
+
+    let printed_end = buffer.printed_content_end(pass.start, pass.end);
+    let printed = printed_end > pass.start;
+    let projected = buffer.has_projected_pass(pass.end);
+    // Acknowledged endlines already removed trailing SP from the
+    // projection. Do not charge those old scalar slots to later
+    // output when term_field's receipt retires unprinted padding.
+    // Preserve any intervening authored recovery spelling.
+    let mut projected_end = pass.end;
+    if projected {
+        while projected_end > printed_end {
+            let cell = projected_end - 1;
+            if !matches!(
+                buffer.cells()[cell],
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+            ) && buffer.projection_length(cell, projected_end) != 0
+            {
+                break;
+            }
+            projected_end = cell;
+        }
+    }
+    (printed_end, printed, projected_end, projected)
 }
 
 /// Accepted projection range of each stable source word. A delayed glyph
@@ -98,30 +134,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
     let (covered, order) = collect_native_overprints(buffer, anchors, passes);
     let printed_ends: Vec<_> = passes
         .iter()
-        .map(|pass| {
-            let printed_end = buffer.printed_content_end(pass.start, pass.end);
-            let printed = printed_end > pass.start;
-            let projected = buffer.has_projected_pass(pass.end);
-            // Acknowledged endlines already removed trailing SP from the
-            // projection. Do not charge those old scalar slots to later
-            // output when term_field's receipt retires unprinted padding.
-            // Preserve any intervening authored recovery spelling.
-            let mut projected_end = pass.end;
-            if projected {
-                while projected_end > printed_end {
-                    let cell = projected_end - 1;
-                    if !matches!(
-                        buffer.cells()[cell],
-                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
-                    ) && buffer.projection_length(cell, projected_end) != 0
-                    {
-                        break;
-                    }
-                    projected_end = cell;
-                }
-            }
-            (printed_end, printed, projected_end, projected)
-        })
+        .map(|pass| pass_projection_end(buffer, pass))
         .collect();
     let mut pass_index = 0;
     for (index, anchor) in anchors.iter().enumerate() {
@@ -151,6 +164,7 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             pass_index += 1;
         }
         let acceptance: &mut OwnerAcceptance = lengths.entry(owner.clone()).or_default();
+        let mut cursor = *content;
         while let Some(pass) = passes.get(pass_index) {
             #[cfg(test)]
             OWNER_PASS_INTERSECTIONS.with(|work| work.set(work.get().saturating_add(1)));
@@ -159,13 +173,28 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
             let (printed_end, printed, projected_end, projected) = printed_ends[pass_index];
             if start < accepted_end {
                 let projected_end = projected_end.min(accepted_end);
-                acceptance.collect_ordered_glyphs(buffer, &order, start..projected_end.max(start));
+                // term_flushln() can skip SP between accepted passes of the
+                // same word. Preserve its source position so the following
+                // accepted glyph retains its full scalar quota.
+                if cursor < start && buffer.projects_skipped_gap(cursor, start) {
+                    let next = acceptance.scalars + buffer.projection_length(cursor, start);
+                    acceptance.omit(acceptance.scalars, next, false);
+                    acceptance.scalars = next;
+                }
+                let offset = acceptance.scalars;
+                let origin = (start, offset);
+                acceptance.collect_ordered_glyphs(
+                    buffer,
+                    &order,
+                    start..projected_end.max(start),
+                    offset,
+                );
                 let covered_start = covered.partition_point(|&cell| cell < start);
                 for &cell in covered[covered_start..]
                     .iter()
                     .take_while(|&&cell| cell < projected_end)
                 {
-                    acceptance.omit_cell(buffer, start, cell, true);
+                    acceptance.omit_cell(buffer, origin, cell, true);
                 }
                 let source_literal = preserve_literal_whitespace
                     && anchor.projection
@@ -190,10 +219,11 @@ pub(in crate::mandoc::inline::flow) fn accepted_owner_lengths(
                         buffer.cells()[cell],
                         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank | FieldCell::Tab
                     ) {
-                        acceptance.omit_cell(buffer, start, cell, false);
+                        acceptance.omit_cell(buffer, origin, cell, false);
                     }
                 }
                 acceptance.scalars += buffer.projection_length(start, projected_end);
+                cursor = accepted_end;
                 acceptance.native_cells = true;
                 if start == *content {
                     acceptance.prefix_printed |=
@@ -342,6 +372,14 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 }
             }
             let anchor = &anchors[index];
+            if buffer.projects_skipped_gap(pass.end, next.start)
+                && anchor.content < pass.end
+                && pass.end < cut
+            {
+                // Keep skipped source positions until the acceptance pass
+                // removes them; the row ends before that discarded run.
+                cut = pass.end;
+            }
             let section_seam = section.is_some_and(|section| {
                 section.closes_at_section_seam(buffer, pass.start..pass.end, anchor.content)
             });

@@ -273,6 +273,10 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Accepted native row events already projected. A .ta change restarts
     /// width scanning, but cannot execute the same marker pass twice.
     projected_pass_ends: std::collections::BTreeSet<usize>,
+    // A word-time restart landed inside an already emitted owner. The
+    // final projection ends the row before the skipped blank run and
+    // explicitly removes its projected scalars.
+    deferred_projected_gaps: std::collections::BTreeSet<(usize, usize)>,
     /// The tail sweep needs only the last graph (term.c:177-198). A leading
     /// HORIZ can also replace one live BACKBEFORE glyph, so keep its
     /// predecessor without storing an ordered entry for each source cell.

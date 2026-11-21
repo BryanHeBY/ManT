@@ -384,6 +384,19 @@ impl NativeSlots {
                 })
     }
 
+    /// An operand wrote ink before leaving the cursor inside a live
+    /// prefix. Its next operand can still overwrite the old tail.
+    pub(in crate::mandoc::inline) fn contains_ink_from(&self, first_owner: usize) -> bool {
+        self.runs.values().any(|run| {
+            run.owner.is_some_and(|owner| owner >= first_owner)
+                && matches!(
+                    run.pattern,
+                    Pattern::Plain(FieldCell::Graph { .. } | FieldCell::Hyphen)
+                        | Pattern::Overstrike { .. }
+                )
+        })
+    }
+
     /// Padding written by `tbl_number()` before the actual cell word.
     pub(in crate::mandoc::inline) fn prepend_fixed_blanks(&mut self, count: usize) {
         self.advance(count, FieldCell::NonBreakingBlank, None);

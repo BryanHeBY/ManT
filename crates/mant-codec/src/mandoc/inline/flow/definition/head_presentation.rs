@@ -9,7 +9,7 @@ use std::{
 use mant_ir::{Inline, RowLayoutHint};
 
 use super::super::NativeWordAnchor;
-use super::super::field_buffer::DeferredSourceBlank;
+use super::super::field_buffer::{DeferredSourceBlank, RewoundGlyph};
 use super::super::output::native_passes::OwnerAcceptance;
 use super::super::output::tab_projection::{self, TabExpansion};
 use super::super::output::{INTERNAL_FIELD_WORD, deferred_blanks};
@@ -22,6 +22,7 @@ struct PendingRows {
     tabs: Vec<TabExpansion>,
     blanks: Vec<(DeferredSourceBlank, usize)>,
     coverage: BTreeMap<String, OwnerAcceptance>,
+    rewinds: Vec<(String, RewoundGlyph)>,
     operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
 }
 
@@ -41,6 +42,7 @@ impl Clone for DeferredHeadProjection {
             tabs: source.tabs.clone(),
             blanks: source.blanks.clone(),
             coverage: source.coverage.clone(),
+            rewinds: source.rewinds.clone(),
             operands: source
                 .operands
                 .as_ref()
@@ -64,6 +66,7 @@ impl DeferredHeadProjection {
             tabs: Vec::new(),
             blanks: Vec::new(),
             coverage: BTreeMap::new(),
+            rewinds: Vec::new(),
             operands,
         })))
     }
@@ -94,10 +97,26 @@ impl DeferredHeadProjection {
         let tabs = std::mem::take(&mut pending.tabs);
         let blanks = std::mem::take(&mut pending.blanks);
         let coverage = std::mem::take(&mut pending.coverage);
+        let rewinds = std::mem::take(&mut pending.rewinds);
         let operands = pending.operands.clone();
         drop(pending);
         if let Some(capture) = &operands {
             let _ = capture.borrow_mut().take();
+        }
+        for (owner, glyph) in rewinds {
+            for term in terms.iter_mut().rev() {
+                if super::super::output::source_blanks::take_rewound_glyph(
+                    term,
+                    &mut [],
+                    &owner,
+                    &glyph,
+                    true,
+                )
+                .is_some()
+                {
+                    break;
+                }
+            }
         }
         for term in terms.iter_mut() {
             super::super::output::split::remove_covered_native_glyphs(term, &coverage);
@@ -150,6 +169,13 @@ impl DeferredHeadProjection {
                 pending.coverage.insert(owner.clone(), acceptance.clone());
             }
         }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn accept_rewind(&self, owner: &str, glyph: &RewoundGlyph) {
+        self.0
+            .borrow_mut()
+            .rewinds
+            .push((owner.to_owned(), glyph.clone()));
     }
 }
 

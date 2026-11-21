@@ -225,6 +225,7 @@ impl FieldBuffer {
         self.word_scan = WordScanPolicy::Incremental;
         self.break_markers.clear();
         self.projected_pass_ends.clear();
+        self.deferred_projected_gaps.clear();
         self.word_first_content = None;
         self.completed_empty_pass_end = None;
         self.last_graph_position = None;
@@ -300,6 +301,9 @@ impl FieldBuffer {
                         *projected,
                         &mut first_graph,
                     ));
+                }
+                FieldWrite::AdvanceOverBufferedBlanks(count) => {
+                    self.write_cursor = WriteCursor::Placed(self.write_cursor.retreat() - count);
                 }
                 FieldWrite::Cell(cell) | FieldWrite::DecoratedGraph { cell, .. } => {
                     self.push_cell(cell.clone());
@@ -427,6 +431,12 @@ impl FieldBuffer {
 
     fn begin_word_writes(&mut self, writes: &[FieldWrite]) {
         if matches!(
+            writes.first(),
+            Some(FieldWrite::AdvanceOverBufferedBlanks(_))
+        ) {
+            return;
+        }
+        if matches!(
             std::mem::take(&mut self.write_cursor),
             WriteCursor::Retreated(1..)
         ) && !matches!(
@@ -435,6 +445,17 @@ impl FieldBuffer {
         ) {
             self.word_scan = WordScanPolicy::UnmodeledRewind;
             self.scan = None;
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn generated_blank_overlap(&self, count: usize) -> usize {
+        // termp_it_pre() uses a nonbreaking blank word. encode1() leaves
+        // the existing raw cell intact when this blank lands before lastcol.
+        match self.write_cursor {
+            WriteCursor::Placed(retreat) if !self.backbefore_armed && !self.backafter_armed => {
+                retreat.min(count)
+            }
+            _ => 0,
         }
     }
 
@@ -473,6 +494,22 @@ impl FieldBuffer {
             leading_retreat,
         }
     }
+    pub(in crate::mandoc::inline::flow) fn defer_projected_gap(
+        &mut self,
+        end: usize,
+        restart: usize,
+    ) {
+        self.deferred_projected_gaps.insert((end, restart));
+    }
+
+    pub(in crate::mandoc::inline::flow) fn projects_skipped_gap(
+        &self,
+        end: usize,
+        restart: usize,
+    ) -> bool {
+        self.deferred_projected_gaps.contains(&(end, restart))
+    }
+
     pub(in crate::mandoc::inline::flow) fn has_projected_pass(&self, end: usize) -> bool {
         self.projected_pass_ends.contains(&end)
     }

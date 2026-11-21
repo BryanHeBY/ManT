@@ -1251,3 +1251,169 @@ fn an_append_proof_cannot_authorize_a_rewind_across_opaque_field_bytes() {
         }
     }
 }
+
+const LIVE_REPLAY_CASES: &[(&str, &[&str], Option<&str>)] = &[
+    (
+        include_str!("live_replay/replay-loss-single-D.1"),
+        &["D", "J"],
+        None,
+    ),
+    (include_str!("live_replay/replay-letter.1"), &["A FX"], None),
+    (
+        include_str!("live_replay/replay-letter-link-F.1"),
+        &["A FX"],
+        Some("F"),
+    ),
+    (
+        include_str!("live_replay/replay-letter-link-X.1"),
+        &["A FX"],
+        Some("X"),
+    ),
+    (include_str!("live_replay/replay-gap.1"), &["A  XG"], None),
+    (
+        include_str!("live_replay/replay-occupied-tail.1"),
+        &["C", "F", "JXG"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-overwritten-tail.1"),
+        &["C", "F", "XG"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-marker-with-suffix.1"),
+        &["FGD", " X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-blank-before-ink.1"),
+        &[" D X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-two-spaces.1"),
+        &["AFG", "FG  X"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-marker-then-strong.1"),
+        &["CD", "J"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-marker-then-emphasis.1"),
+        &["D", "J"],
+        None,
+    ),
+    (
+        include_str!("live_replay/replay-gap-link-X.1"),
+        &["A  X"],
+        Some("X"),
+    ),
+    (
+        include_str!("live_replay/replay-pending-glyph-tail.1"),
+        &["X", "D"],
+        None,
+    ),
+];
+
+#[test]
+fn live_field_replay_preserves_passes_and_scalar_owners() {
+    // CVS term_flushln() prints each accepted pass separately and skips
+    // ordinary SP at the restart. encode1() can retain an earlier glyph
+    // between the replayed separator and the new word's first graph.
+    for &(source, rows, label) in LIVE_REPLAY_CASES {
+        let original =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let mut content = original;
+        for _ in 0..3 {
+            assert_eq!(
+                description_rows(&mant_render::render_query_man(&content), source),
+                rows,
+                "{source}"
+            );
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            assert_eq!(
+                labels.0,
+                label
+                    .map(|label| ("https://f.test".into(), label.into()))
+                    .into_iter()
+                    .collect::<Vec<_>>()
+            );
+            for word in ["D", "J", "DJ", "F", "FX", "X", "XG", "G"] {
+                let hits = mant_query::search_query(
+                    &content,
+                    &SearchQuery {
+                        pattern: word.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 10,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(
+                    hits.total,
+                    u32::from(
+                        rows.iter()
+                            .any(|row| row.split_whitespace().any(|part| part == word))
+                    ),
+                    "{word}: {source}"
+                );
+            }
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content =
+                json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        }
+    }
+}
+
+#[test]
+fn inset_body_writes_can_replace_an_open_head_cell() {
+    // CVS termp_it_pre() calls term_word() for the generated inset
+    // separator. encode1() does not replace an occupied cell with NBRSP;
+    // the following BODY NBRZW then replaces the glyph at its real cursor.
+    // The same source words without the list's separator retain J instead.
+    for (source, row, label) in [
+        (include_str!("live_replay/handoff-normal-zero.1"), "C", None),
+        (
+            include_str!("live_replay/handoff-before-link-zero.1"),
+            "C",
+            Some("C"),
+        ),
+        (
+            include_str!("live_replay/handoff-without-z-zero.1"),
+            "CJ",
+            None,
+        ),
+        (include_str!("live_replay/replay-short-3.1"), "J", None),
+    ] {
+        let mut content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        for _ in 0..3 {
+            let painted = mant_render::render_query_man(&content);
+            let rows = description_rows(&painted, source);
+            assert_eq!(rows.len(), 1, "{painted}");
+            assert_eq!(
+                rows[0].strip_prefix("• ").unwrap_or(rows[0]),
+                row,
+                "{source}"
+            );
+            let mut labels = Labels::default();
+            labels.visit_document(content.document.as_ref().unwrap());
+            assert_eq!(
+                labels.0,
+                label
+                    .map(|label| ("https://c.test".into(), label.into()))
+                    .into_iter()
+                    .collect::<Vec<_>>()
+            );
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        }
+    }
+}

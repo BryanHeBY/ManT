@@ -709,6 +709,7 @@ fn append_range(
     mut prior: Option<(usize, Vec<mant_ir::Inline>)>,
 ) {
     let mut wrote_source = false;
+    let mut entered_word = false;
     let mut previous_source = None;
     for slot in slots {
         let Some(id) = slot.owner else { continue };
@@ -722,10 +723,13 @@ fn append_range(
         if let ReadingGlyph::DeferredBlank(blank) = current.glyph {
             word.flush_segment();
             word.output.push(mant_ir::Inline::anchor(blank.marker()));
+            // The native owner interval starts here even though the blank
+            // will not acquire a visible scalar until the accepted pass.
+            entered_word = true;
             continue;
         }
         if let ReadingGlyph::Earlier(scalars) = current.glyph {
-            if wrote_source
+            if entered_word
                 && (scalars != 0
                     || matches!(
                         slot.cell,
@@ -754,6 +758,7 @@ fn append_range(
         }
         current.glyph.append(&mut word.buffer);
         wrote_source = true;
+        entered_word = true;
         if current.sphinx_marker && previous_source == id.checked_sub(1) {
             let eligible = context.policy.recognize_generated_references
                 && link.is_none()

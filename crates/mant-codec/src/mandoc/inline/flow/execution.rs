@@ -465,16 +465,27 @@ impl InlineBuilder {
         native_count: usize,
         generated_word: bool,
     ) {
+        use super::field_buffer::FieldWrite;
+
         if !generated_word {
             return;
         }
-        self.execution.native_word_writes = Some(
-            (0..native_count)
-                .map(|index| super::field_buffer::FieldWrite::OwnedBlank {
-                    projected: index >= native_count.saturating_sub(count),
-                })
-                .collect(),
-        );
+
+        let traversed = self
+            .execution
+            .word_input()
+            .0
+            .generated_blank_overlap(native_count);
+        let native_count = native_count - traversed;
+        let count = count.min(native_count);
+        let mut writes = Vec::new();
+        if traversed != 0 {
+            writes.push(FieldWrite::AdvanceOverBufferedBlanks(traversed));
+        }
+        writes.extend((0..native_count).map(|index| FieldWrite::OwnedBlank {
+            projected: index >= native_count.saturating_sub(count),
+        }));
+        self.execution.native_word_writes = Some(writes);
         self.execution.native_word_boundary = Some(PendingBoundary::Tight);
         self.note_produced_formatter_cell(native_count > 0);
         self.tighten_next_boundary();

@@ -324,3 +324,44 @@ Done.
         }
     });
 }
+
+#[test]
+fn replayed_passes_and_relocated_links_keep_their_painted_cells() {
+    let hard_row = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-loss-single-D.1"
+    );
+    let mut content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(hard_row.as_bytes()).unwrap(),
+    );
+    for _ in 0..3 {
+        for width in [32, 78, 100] {
+            let (mut app, terminal) = paint(&content, width);
+            let buffer = terminal.backend().buffer();
+            let at = only_position(buffer, "J");
+            assert_eq!(buffer[(at.0, at.1 - 1)].symbol(), "D");
+            assert_eq!(buffer[(at.0 + 1, at.1 - 1)].symbol(), " ");
+            copy(&mut app, at, "J");
+        }
+        let markdown = render_markdown_with_options(&content, MarkdownOptions::default());
+        content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    }
+
+    let linked = include_str!(
+        "../../mant-engine/tests/roff_lowering/word_receipts/live_replay/replay-letter-link-F.1"
+    );
+    visit_readbacks(linked, |content| {
+        for width in [32, 78, 100] {
+            let (mut app, terminal) = paint(content, width);
+            let (first, row) = only_position(terminal.backend().buffer(), "A FX");
+            copy(&mut app, (first, row), "A FX");
+            for offset in 0..u16::try_from("A FX".len()).unwrap() {
+                click(&mut app, first + offset, row);
+                let expected = (offset == 2).then_some("https://f.test");
+                assert_eq!(
+                    opened_targets(&mut app),
+                    expected.into_iter().collect::<Vec<_>>()
+                );
+            }
+        }
+    });
+}

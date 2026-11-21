@@ -2,6 +2,7 @@
 
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
+use crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Default)]
@@ -13,6 +14,7 @@ pub(super) struct PrefixEdits {
     moved: Vec<(usize, usize)>,
     edits: Vec<(usize, RewoundGlyph, Option<usize>)>,
     gaps: GapEdits,
+    retained_blanks: Vec<(usize, usize, RewoundGlyph)>,
 }
 
 impl PrefixEdits {
@@ -36,12 +38,28 @@ impl PrefixEdits {
         let mut edits = Vec::new();
         let mut moved = Vec::new();
         let mut earlier_ink = HashMap::<usize, usize>::new();
+        let mut retained_blanks = Vec::new();
         for (offset, (position, location)) in positions.iter().zip(locations).enumerate() {
             let cell = start + offset;
             let relocated = position.filter(|pos| pos >= first_incoming).map(|_| offset);
-            if let (Some(position), Some((owner, _))) = (position, location)
+            if let (Some(position), Some((owner, following_scalars))) = (position, location)
                 && relocated.is_none()
             {
+                if matches!(
+                    buffer.cells()[cell],
+                    FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                ) && *unpublished != Some(cell)
+                {
+                    retained_blanks.push((
+                        *position,
+                        owner,
+                        RewoundGlyph {
+                            cell,
+                            scalar: ' ',
+                            following_scalars,
+                        },
+                    ));
+                }
                 // A surviving decoration copy can be written before the
                 // original owner interval. Retain its real landing.
                 earlier_ink
@@ -101,6 +119,7 @@ impl PrefixEdits {
             moved,
             edits,
             gaps,
+            retained_blanks,
         }
     }
 
@@ -135,24 +154,38 @@ impl PrefixEdits {
         self.first_incoming
     }
 
+    pub(super) fn retains_blank(&self, cell: usize) -> bool {
+        self.retained_blanks
+            .iter()
+            .any(|&(position, _, _)| position == cell)
+    }
+
     pub(super) fn project(
-        &self,
+        &mut self,
         nodes: &mut [Inline],
         incoming: &mut Vec<Inline>,
         incoming_owner: &str,
         earlier: &[NativeWordAnchor],
+        head: Option<&DeferredHeadProjection>,
     ) {
         // Suffix-relative offsets of later drops survive earlier removals.
         let mut relocated = std::collections::BTreeMap::new();
         for (owner, glyph, slot) in &self.edits {
             let owner = &earlier[*owner].owner;
+            let detached = head.filter(|head| head.owns_word(owner));
             let projection = super::super::super::source_blanks::take_rewound_glyph(
                 nodes,
                 incoming,
                 owner,
                 glyph,
-                slot.is_some(),
+                slot.is_some() || detached.is_some(),
             );
+            if projection.is_none()
+                && slot.is_none()
+                && let Some(head) = detached
+            {
+                head.accept_rewind(owner, glyph);
+            }
             if let (Some(slot), Some(projection)) = (slot, projection) {
                 relocated.insert(*slot, (owner, projection));
             }
@@ -162,6 +195,15 @@ impl PrefixEdits {
             // to detach surviving glyphs from their source words.
             remove_overwritten_gaps(nodes, &self.gaps.remove, &mut false);
         }
+        // A slot can survive in source order before an already painted
+        // graph. Only a trailing reading blank can satisfy the new seam.
+        self.retained_blanks.retain(|(_, owner, glyph)| {
+            super::super::super::source_blanks::has_trailing_rewound_blank(
+                nodes,
+                &earlier[*owner].owner,
+                glyph,
+            )
+        });
         if self.first_incoming.is_some() {
             let payload = std::mem::take(incoming);
             for node in payload {
