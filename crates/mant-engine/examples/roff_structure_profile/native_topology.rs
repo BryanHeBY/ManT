@@ -1,14 +1,19 @@
 //! Collect normalized shapes from the owned native execution tree.
 use libmandoc_rs::{Node, NodeKind, NormalizedListKind};
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use super::{
     AstEquationTopology, AstListTopology, AstTableCellTopology, AstTableRowTopology, AstTopology,
-    EquationCell, EquationContext, ListTopologyKind, SourceOccurrence,
+    DefinitionOccurrence, EquationCell, EquationContext, EquationOwner, FlowOccurrence,
+    ListTopologyKind, SourceOccurrence,
     native::{equation_has_payload, equation_visible_text},
     next_table_occurrence, ordinal_labels,
 };
 use ordinal_labels::{OrdinalDisposition, SourceDestination};
+
+#[path = "native_topology/paragraphs.rs"]
+mod paragraphs;
+use paragraphs::ParagraphWitness;
 
 pub(super) fn collect(root: &Node, spacing: &ordinal_labels::SourceContext) -> AstTopology {
     let mut topology = AstTopology::default();
@@ -105,8 +110,10 @@ struct TopologyOwners {
     occurrences: BTreeMap<(u32, u32), usize>,
     addresses: HashMap<u32, EquationCell>,
     sections: BTreeMap<u32, usize>,
-    paragraphs: HashMap<u32, SourceOccurrence>,
-    unproved_paragraphs: BTreeSet<u32>,
+    inline_owners: HashMap<u32, EquationOwner>,
+    definitions: BTreeMap<(u32, u32), usize>,
+    literal_occurrences:
+        HashMap<(SourceOccurrence, Option<DefinitionOccurrence>), BTreeMap<u32, usize>>,
 }
 
 impl TopologyOwners {
@@ -137,123 +144,6 @@ impl TopologyOwners {
     }
 }
 
-/// Local provenance for simple prose directly inside a section.
-struct ParagraphWitness {
-    simple: bool,
-    owner: Option<SourceOccurrence>,
-    occurrences: BTreeMap<u32, usize>,
-    unproved_lines: BTreeSet<u32>,
-    uncertain_start: Option<u32>,
-}
-
-impl ParagraphWitness {
-    fn observe(&mut self, children: &[Node], topology: &mut TopologyOwners) {
-        for child in children {
-            let token = child.macro_token.as_deref();
-            if matches!(token, Some("Pp" | "PP" | "P" | "LP" | "RS")) {
-                self.begin_paragraph(child.line);
-                // pre_PP and pre_RS enter their actual BODY. RS owns an
-                // indented run of the same paragraph sequence, with a
-                // term_newln() on both entry and exit (man_term.c).
-                if child.kind == NodeKind::Block
-                    && let Some(body) = child
-                        .children
-                        .iter()
-                        .find(|part| part.kind == NodeKind::Body)
-                {
-                    self.observe(&body.children, topology);
-                    self.owner = None;
-                }
-                continue;
-            }
-            if token == Some("Tg") {
-                // mdoc_validate.c::post_tg either keeps the target here
-                // or installs it on a later node. A retained target can
-                // give the current IR paragraph its first source owner.
-                if self.simple && !child.flags.no_fill && child.flags.deep_link_target {
-                    self.start(child.line);
-                }
-                continue;
-            }
-            if child.flags.no_print || token == Some("Sm") {
-                continue;
-            }
-            let prose = !child.flags.no_fill
-                && (child.kind == NodeKind::Text && starts_prose(child)
-                    || child.kind == NodeKind::Element
-                        && (matches!(
-                            token,
-                            Some("No" | "Em" | "Sy" | "Li" | "B" | "I" | "SB" | "SM")
-                        ) && matches!(child.children.as_slice(), [text] if starts_prose(text))
-                            // termp_an_pre() and termp_lk_pre() can supply
-                            // the first printed operand of this paragraph.
-                            || matches!(token, Some("An" | "Lk"))
-                                && child.children.first().is_some_and(starts_prose)));
-            let has_equation = child.equation.as_ref().is_some_and(equation_has_payload);
-            if prose && self.simple {
-                if self.owner.is_none() && matches!(token, Some("An" | "Lk")) {
-                    // When an expanded macro also begins a paragraph at
-                    // these coordinates, the source line no longer proves
-                    // which occurrence owns the equation.
-                    self.uncertain_start = Some(child.line);
-                }
-                self.start(child.line);
-            } else if child.kind == NodeKind::Equation {
-                match child.equation_inline {
-                    Some(false) if has_equation => {
-                        self.begin_paragraph(child.line);
-                    }
-                    Some(true) if has_equation && !child.flags.no_fill => {
-                        if self.simple {
-                            self.start(child.line);
-                        }
-                        if let Some(owner) = self.owner {
-                            // An inline equation can be authored on a
-                            // later line than its active paragraph.
-                            if self.unproved_lines.contains(&owner.line) {
-                                topology.unproved_paragraphs.insert(child.id);
-                            } else {
-                                topology.paragraphs.insert(child.id, owner);
-                            }
-                        } else {
-                            topology.unproved_paragraphs.insert(child.id);
-                        }
-                    }
-                    _ => {}
-                }
-            } else if child.kind != NodeKind::Text || child.flags.line_start {
-                if self.owner.is_none() && child.flags.line_start {
-                    self.uncertain_start = Some(child.line);
-                }
-                self.simple = false;
-                self.owner = None;
-            }
-        }
-    }
-
-    fn begin_paragraph(&mut self, line: u32) {
-        if self.uncertain_start.take() == Some(line) {
-            // An unseen predecessor at this coordinate can shift the
-            // paragraph occurrence after either kind of content boundary.
-            self.unproved_lines.insert(line);
-        }
-        self.simple = true;
-        self.owner = None;
-    }
-
-    fn start(&mut self, line: u32) {
-        self.owner
-            .get_or_insert_with(|| SourceOccurrence::next(&mut self.occurrences, line));
-    }
-}
-
-fn starts_prose(node: &Node) -> bool {
-    node.kind == NodeKind::Text
-        && node.text.as_deref().is_some_and(|text| {
-            !text.trim_start().is_empty() && !text.trim_start().starts_with('\\')
-        })
-}
-
 fn collect_ast_topology(
     node: &Node,
     inside_table: bool,
@@ -269,7 +159,7 @@ fn collect_ast_topology(
     let blocks = destination == SourceDestination::Blocks;
     let cell = owners.addresses.remove(&node.id).or(cell);
     let section = matches!(node.macro_token.as_deref(), Some("Sh" | "Ss" | "SH" | "SS"));
-    let paragraph = owners.paragraphs.remove(&node.id);
+    let owner = owners.inline_owners.remove(&node.id);
     let section_owner = if section && node.kind == NodeKind::Block {
         SourceOccurrence::next(&mut owners.sections, node.line)
     } else {
@@ -280,8 +170,7 @@ fn collect_ast_topology(
         inside_table,
         blocks,
         cell,
-        (section_owner, paragraph),
-        owners.unproved_paragraphs.remove(&node.id),
+        (section_owner, owner),
         &mut topology.equations,
     );
     if blocks && node.kind == NodeKind::Block && node.line > 0 {
@@ -291,14 +180,7 @@ fn collect_ast_topology(
     let mut table_origin = None;
     let mut row_index = 0;
     if section && node.kind == NodeKind::Body && blocks {
-        ParagraphWitness {
-            simple: true,
-            owner: None,
-            occurrences: BTreeMap::new(),
-            unproved_lines: BTreeSet::new(),
-            uncertain_start: None,
-        }
-        .observe(&node.children, owners);
+        let _ = ParagraphWitness::new(section_owner, None).observe(&node.children, owners);
     }
     for child in &node.children {
         if blocks
@@ -388,8 +270,7 @@ fn record_equation(
     inside_table: bool,
     blocks: bool,
     cell: Option<EquationCell>,
-    (section_owner, paragraph): (SourceOccurrence, Option<SourceOccurrence>),
-    unproved_paragraph: bool,
+    (section_owner, owner): (SourceOccurrence, Option<EquationOwner>),
     equations: &mut Vec<AstEquationTopology>,
 ) {
     // CVS roff_parseln bypasses equation delimiters while tbl consumes a
@@ -407,13 +288,16 @@ fn record_equation(
             value: equation_visible_text(&equation.readable_text()),
             cell,
             unproved_cell: inside_table && cell.is_none(),
-            unproved_paragraph: unproved_paragraph
-                || blocks
-                    && context == EquationContext::Inline
-                    && !node.flags.no_fill
-                    && paragraph.is_none(),
+            unproved_paragraph: blocks
+                && context == EquationContext::Inline
+                && !node.flags.no_fill
+                && owner.is_none(),
+            unproved_literal_owner: blocks
+                && context == EquationContext::Inline
+                && node.flags.no_fill
+                && matches!(owner, None | Some(EquationOwner::Literal(None))),
             section: section_owner,
-            paragraph,
+            owner,
         });
     }
 }

@@ -59,7 +59,7 @@ mod observer_tests;
 #[path = "roff_structure_profile/tests.rs"]
 mod tests;
 
-const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v31";
+const PROFILE_SCHEMA: &str = "mant.roff-structure-profile/v32";
 
 #[derive(Default, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -161,7 +161,7 @@ struct IrTopology {
     #[serde(skip)]
     section: SourceOccurrence,
     #[serde(skip)]
-    paragraph: Option<SourceOccurrence>,
+    definition_occurrences: BTreeMap<(u32, u32), usize>,
     #[serde(skip)]
     table_occurrences: BTreeMap<(u32, u32), usize>,
     #[serde(skip)]
@@ -183,6 +183,37 @@ impl SourceOccurrence {
             occurrence: *index,
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct DefinitionOccurrence {
+    line: u32,
+    column: u32,
+    occurrence: usize,
+}
+
+impl DefinitionOccurrence {
+    fn next(occurrences: &mut BTreeMap<(u32, u32), usize>, line: u32, column: u32) -> Self {
+        let occurrence = occurrences.entry((line, column)).or_default();
+        *occurrence += 1;
+        Self {
+            line,
+            column,
+            occurrence: *occurrence,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct FlowOccurrence {
+    definition: Option<DefinitionOccurrence>,
+    source: SourceOccurrence,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum EquationOwner {
+    Paragraph(FlowOccurrence),
+    Literal(Option<FlowOccurrence>),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]
@@ -213,10 +244,12 @@ struct AstEquationTopology {
     unproved_cell: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     unproved_paragraph: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    unproved_literal_owner: bool,
     #[serde(skip)]
     section: SourceOccurrence,
     #[serde(skip)]
-    paragraph: Option<SourceOccurrence>,
+    owner: Option<EquationOwner>,
 }
 
 #[derive(Eq, PartialEq, Serialize)]
@@ -229,7 +262,7 @@ struct IrEquationTopology {
     #[serde(skip)]
     section: SourceOccurrence,
     #[serde(skip)]
-    paragraph: Option<SourceOccurrence>,
+    owner: Option<EquationOwner>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize)]

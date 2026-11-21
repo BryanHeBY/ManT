@@ -132,3 +132,36 @@ class StructureSourceReviewTests(unittest.TestCase):
                     [path], [], 1, Path('unused'), exact_roots={path: path.parent}, batch_runner=transport,
                 )
                 self.assertEqual(finding.status, 'hard-failure')
+
+    def test_literal_equation_uncertainty_is_a_local_review(self):
+        path = Path('/fixture/probe.1')
+        equation = {'sourceLine': 14, 'context': 'inline', 'value': 'x', 'cell': None}
+        expected = {**equation, 'unprovedCell': False, 'unprovedLiteralOwner': True}
+        topology = {'lists': [], 'tableRows': []}
+
+        def transport(_bin, requests, _timeout):
+            return {key: {
+                'schema': audit.PROFILE_SCHEMA,
+                'violations': [],
+                'expected': {}, 'observed': {},
+                'topology': {
+                    'expected': {**topology, 'equations': [expected]},
+                    'observed': {**topology, 'equations': [equation]},
+                },
+                'ordinalCasesForReview': [],
+                'sourceLinkOrigins': {'sectionLabelsForReview': []},
+                'literalDisplaysForReview': [],
+                'definitionHeadsForReview': [],
+            } for key in requests}
+
+        finding, = audit.profile_findings(
+            [path], [], 1, Path('unused'), exact_roots={path: path.parent}, batch_runner=transport,
+        )
+        self.assertEqual(finding.status, 'review')
+        self.assertEqual(finding.violations, [])
+        observation, = finding.source_review
+        self.assertEqual((observation.line, observation.column), (14, 0))
+        self.assertIn('literal owner', observation.reason)
+        self.assertFalse(audit.valid_equation_topology(
+            {**equation, 'unprovedLiteralOwner': True}, 'observed',
+        ))

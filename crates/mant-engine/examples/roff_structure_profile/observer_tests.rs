@@ -4,6 +4,9 @@ use super::*;
 #[path = "observer_tests/head_witnesses.rs"]
 mod head_witnesses;
 
+#[path = "observer_tests/equation_owners.rs"]
+mod equation_owners;
+
 #[test]
 fn a_definition_head_equation_cannot_be_relocated_to_another_ordinal_item() {
     let (source, _) = super::ordinal_labels::cases::inputs()

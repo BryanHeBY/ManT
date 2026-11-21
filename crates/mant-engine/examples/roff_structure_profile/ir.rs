@@ -1,8 +1,8 @@
 //! IR observations using the same structure counters.
 use super::{
-    Block, Document, EquationCell, EquationContext, Inline, IrEquationTopology, IrListTopology,
-    IrStructure, IrTableCellTopology, IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind,
-    Section, SourceOccurrence,
+    Block, DefinitionOccurrence, Document, EquationCell, EquationContext, EquationOwner,
+    FlowOccurrence, Inline, IrEquationTopology, IrListTopology, IrStructure, IrTableCellTopology,
+    IrTableRowTopology, IrTopology, LinkTarget, ListTopologyKind, Section, SourceOccurrence,
 };
 
 pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
@@ -18,7 +18,7 @@ pub(super) fn ir_profile(document: &Document) -> (IrStructure, IrTopology) {
         }
     }
     let mut topology = IrTopology::default();
-    collect_blocks(&document.blocks, None, &mut profile, &mut topology);
+    collect_blocks(&document.blocks, None, None, &mut profile, &mut topology);
     for section in &document.sections {
         collect_section(section, &mut profile, &mut topology);
     }
@@ -37,20 +37,11 @@ fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut 
         &section.heading.content,
         section.source.map_or(0, |source| source.line),
         None,
+        None,
         profile,
         topology,
     );
-    let mut paragraphs = std::collections::BTreeMap::new();
-    for block in &section.blocks {
-        topology.paragraph = match block {
-            Block::Paragraph {
-                source: Some(span), ..
-            } => Some(SourceOccurrence::next(&mut paragraphs, span.line)),
-            _ => None,
-        };
-        collect_blocks(std::slice::from_ref(block), None, profile, topology);
-    }
-    topology.paragraph = None;
+    collect_blocks(&section.blocks, None, None, profile, topology);
     for child in &section.children {
         collect_section(child, profile, topology);
     }
@@ -59,17 +50,36 @@ fn collect_section(section: &Section, profile: &mut IrStructure, topology: &mut 
 fn collect_blocks(
     blocks: &[Block],
     cell: Option<EquationCell>,
+    definition: Option<DefinitionOccurrence>,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
+    let mut paragraphs = std::collections::BTreeMap::new();
+    let mut literals = std::collections::BTreeMap::new();
     for block in blocks {
         match block {
             Block::Paragraph {
-                children, layout, ..
+                children,
+                layout,
+                source,
+                ..
             } => {
                 profile.paragraph_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
-                collect_flow_inlines(block, children, cell, profile, topology);
+                let owner = source.map(|span| {
+                    EquationOwner::Paragraph(FlowOccurrence {
+                        definition,
+                        source: SourceOccurrence::next(&mut paragraphs, span.line),
+                    })
+                });
+                collect_inlines(
+                    children,
+                    source.map_or(0, |span| span.line),
+                    cell,
+                    owner,
+                    profile,
+                    topology,
+                );
             }
             Block::Unsupported { layout, .. } => {
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
@@ -81,21 +91,13 @@ fn collect_blocks(
                 source,
                 ..
             } => {
-                profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
-                if *display {
-                    profile.display_equations += 1;
-                    topology.equations.push(IrEquationTopology {
-                        source_line: source.map_or(0, |span| span.line),
-                        context: EquationContext::Display,
-                        value: value.clone(),
-                        cell,
-                        section: topology.section,
-                        paragraph: topology.paragraph,
-                    });
-                }
+                collect_display_equation(value, *display, layout, *source, cell, profile, topology);
             }
             Block::Preformatted {
-                children, layout, ..
+                children,
+                layout,
+                source,
+                ..
             } => {
                 profile.preformatted_blocks += 1;
                 profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
@@ -103,7 +105,17 @@ fn collect_blocks(
                     profile.preformatted_lines += 1;
                 }
                 profile.preformatted_lines += line_break_count(children);
-                collect_flow_inlines(block, children, cell, profile, topology);
+                collect_inlines(
+                    children,
+                    source.map_or(0, |span| span.line),
+                    cell,
+                    Some(EquationOwner::Literal(source.map(|span| FlowOccurrence {
+                        definition,
+                        source: SourceOccurrence::next(&mut literals, span.line),
+                    }))),
+                    profile,
+                    topology,
+                );
             }
             Block::List {
                 kind,
@@ -112,19 +124,15 @@ fn collect_blocks(
                 source,
                 ..
             } => {
-                profile.generic_list_items += items.len();
-                record_list_layout(
-                    items.len(),
-                    layout.indent_columns,
+                collect_list(
+                    kind,
+                    items,
+                    layout,
                     *source,
-                    ListTopologyKind::Generic,
-                    matches!(kind, mant_ir::ListKind::Ordered { .. }),
+                    (cell, definition),
                     profile,
                     topology,
                 );
-                for item in items {
-                    collect_blocks(&item.blocks, cell, profile, topology);
-                }
             }
             Block::DefinitionList {
                 items,
@@ -132,22 +140,7 @@ fn collect_blocks(
                 source,
                 ..
             } => {
-                profile.definition_items += items.len();
-                record_list_layout(
-                    items.len(),
-                    layout.indent_columns,
-                    *source,
-                    ListTopologyKind::Definition,
-                    false,
-                    profile,
-                    topology,
-                );
-                for item in items {
-                    for term in &item.terms {
-                        collect_inlines(term, 0, cell, profile, topology);
-                    }
-                    collect_blocks(&item.description, cell, profile, topology);
-                }
+                collect_definitions(items, layout, *source, cell, profile, topology);
             }
             Block::Table {
                 rows,
@@ -159,6 +152,82 @@ fn collect_blocks(
             }
             Block::VerticalSpace { .. } | Block::ThematicBreak { .. } => {}
         }
+    }
+}
+
+fn collect_list(
+    kind: &mant_ir::ListKind,
+    items: &[mant_ir::ListItem],
+    layout: &mant_ir::LayoutHint,
+    source: Option<mant_ir::SourceSpan>,
+    (cell, definition): (Option<EquationCell>, Option<DefinitionOccurrence>),
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
+    profile.generic_list_items += items.len();
+    record_list_layout(
+        items.len(),
+        layout.indent_columns,
+        source,
+        ListTopologyKind::Generic,
+        matches!(kind, mant_ir::ListKind::Ordered { .. }),
+        profile,
+        topology,
+    );
+    for item in items {
+        collect_blocks(&item.blocks, cell, definition, profile, topology);
+    }
+}
+
+fn collect_definitions(
+    items: &[mant_ir::DefinitionItem],
+    layout: &mant_ir::LayoutHint,
+    source: Option<mant_ir::SourceSpan>,
+    cell: Option<EquationCell>,
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
+    profile.definition_items += items.len();
+    record_list_layout(
+        items.len(),
+        layout.indent_columns,
+        source,
+        ListTopologyKind::Definition,
+        false,
+        profile,
+        topology,
+    );
+    for item in items {
+        for term in &item.terms {
+            collect_inlines(term, 0, cell, None, profile, topology);
+        }
+        let definition = item.source.map(|span| {
+            DefinitionOccurrence::next(&mut topology.definition_occurrences, span.line, span.column)
+        });
+        collect_blocks(&item.description, cell, definition, profile, topology);
+    }
+}
+
+fn collect_display_equation(
+    value: &str,
+    display: bool,
+    layout: &mant_ir::LayoutHint,
+    source: Option<mant_ir::SourceSpan>,
+    cell: Option<EquationCell>,
+    profile: &mut IrStructure,
+    topology: &mut IrTopology,
+) {
+    profile.max_indent_columns = profile.max_indent_columns.max(layout.indent_columns);
+    if display {
+        profile.display_equations += 1;
+        topology.equations.push(IrEquationTopology {
+            source_line: source.map_or(0, |span| span.line),
+            context: EquationContext::Display,
+            value: value.to_owned(),
+            cell,
+            section: topology.section,
+            owner: None,
+        });
     }
 }
 
@@ -178,13 +247,14 @@ fn collect_inlines(
     inlines: &[Inline],
     source_line: u32,
     cell: Option<EquationCell>,
+    owner: Option<EquationOwner>,
     profile: &mut IrStructure,
     topology: &mut IrTopology,
 ) {
     for inline in inlines {
         match inline {
             Inline::Strong { children } | Inline::Emphasis { children } => {
-                collect_inlines(children, source_line, cell, profile, topology);
+                collect_inlines(children, source_line, cell, owner, profile, topology);
             }
             Inline::Link {
                 target, children, ..
@@ -211,7 +281,7 @@ fn collect_inlines(
                 ) {
                     profile.known_links.record_target(target);
                 }
-                collect_inlines(children, source_line, cell, profile, topology);
+                collect_inlines(children, source_line, cell, owner, profile, topology);
             }
             Inline::LineBreak { .. } => profile.hard_breaks += 1,
             Inline::Equation { value, .. } => {
@@ -230,7 +300,7 @@ fn collect_inlines(
                     value: value.clone(),
                     cell,
                     section: topology.section,
-                    paragraph: topology.paragraph,
+                    owner,
                 });
             }
             Inline::Text { .. } | Inline::Code { .. } | Inline::Anchor { .. } => {}
@@ -252,20 +322,6 @@ fn line_break_count(inlines: &[Inline]) -> usize {
             | Inline::Anchor { .. } => 0,
         })
         .sum()
-}
-
-fn source_line(block: &Block) -> u32 {
-    match block {
-        Block::Paragraph { source, .. }
-        | Block::Preformatted { source, .. }
-        | Block::List { source, .. }
-        | Block::DefinitionList { source, .. }
-        | Block::Table { source, .. }
-        | Block::Equation { source, .. }
-        | Block::VerticalSpace { source, .. }
-        | Block::ThematicBreak { source, .. }
-        | Block::Unsupported { source, .. } => source.map_or(0, |span| span.line),
-    }
 }
 
 fn collect_table(
@@ -313,7 +369,7 @@ fn collect_table(
                 row_index,
                 cell_index,
             };
-            collect_blocks(&cell.blocks, Some(address), profile, topology);
+            collect_blocks(&cell.blocks, Some(address), None, profile, topology);
         }
     }
 }
@@ -340,14 +396,4 @@ fn record_list_layout(
             ordered,
         });
     }
-}
-
-fn collect_flow_inlines(
-    block: &Block,
-    children: &[Inline],
-    cell: Option<EquationCell>,
-    profile: &mut IrStructure,
-    topology: &mut IrTopology,
-) {
-    collect_inlines(children, source_line(block), cell, profile, topology);
 }

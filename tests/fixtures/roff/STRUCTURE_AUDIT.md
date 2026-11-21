@@ -223,8 +223,13 @@ Equation topology is source-addressed by line and context. Native
 of physical input-line position. Older snapshots use their original line-start
 fallback. An inline equation stays in its complete paragraph or literal owner,
 and display equations retain their independent blocks. Normalized values and
-placement are checked together. Empty configuration equations contribute only
-to the parser-state count.
+placement are checked together. Proven continuation paragraphs retain their
+definition item address, including an indented man `.RS` following a named
+tag. Simple literal runs also retain their first contributing source line and
+occurrence. An unproved paragraph or literal owner produces a Review at that
+equation's source line. Section, value, order and any known owner kind remain
+obligations. Empty configuration equations contribute only to the parser-state
+count.
 
 Only executed native equation nodes establish mathematical obligations. CVS
 `roff_parseln` keeps tbl words opaque while the table parser owns their input.

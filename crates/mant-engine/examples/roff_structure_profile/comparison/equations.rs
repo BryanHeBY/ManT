@@ -2,7 +2,9 @@
 
 use std::collections::{HashMap, VecDeque};
 
-use super::super::{AstEquationTopology, EquationContext, IrEquationTopology};
+use super::super::{
+    AstEquationTopology, EquationContext, EquationOwner, FlowOccurrence, IrEquationTopology,
+};
 
 pub(super) fn compare_equation_topology(
     violations: &mut Vec<String>,
@@ -23,27 +25,39 @@ pub(super) fn compare_equation_topology(
     let mut known = HashMap::<_, VecDeque<_>>::new();
     for (index, equation) in observed.iter().enumerate() {
         let key = signature(equation.context, &equation.value, equation.source_line);
-        for paragraph in std::iter::once(None).chain(equation.paragraph.map(Some)) {
+        let any_literal = matches!(equation.owner, Some(EquationOwner::Literal(Some(_))))
+            .then_some(Some(EquationOwner::Literal(None)));
+        for owner in std::iter::once(None)
+            .chain(equation.owner.map(Some))
+            .chain(any_literal)
+        {
             known
-                .entry((equation.cell, equation.section, paragraph, key))
+                .entry((equation.cell, equation.section, owner, key))
                 .or_default()
                 .push_back(index);
         }
     }
     let mut used = vec![false; observed.len()];
     let mut matched = vec![None; expected.len()];
-    // Reserve exact owner occurrences before comparing source equations
-    // whose AST proves they belong to a table without an exact address.
-    let known_equations = expected
-        .iter()
-        .enumerate()
-        .filter(|(_, eq)| !eq.unproved_cell);
-    let uncertain_equations = expected
-        .iter()
-        .enumerate()
-        .filter(|(_, eq)| eq.unproved_cell);
+    // Weaker proofs must not consume an occurrence with an exact owner.
+    let ordered = [0, 1, 2, 3].into_iter().flat_map(|priority| {
+        expected.iter().enumerate().filter(move |(_, eq)| {
+            let rank = if eq.unproved_cell {
+                3
+            } else if eq.cell.is_some() {
+                0
+            } else {
+                match eq.owner {
+                    Some(EquationOwner::Paragraph(_) | EquationOwner::Literal(Some(_))) => 0,
+                    Some(EquationOwner::Literal(None)) => 1,
+                    None => 2,
+                }
+            };
+            rank == priority
+        })
+    });
     let mut uncertain = None;
-    for (expected_index, equation) in known_equations.chain(uncertain_equations) {
+    for (expected_index, equation) in ordered {
         let key = signature(
             equation.context,
             equation.value.as_str(),
@@ -74,7 +88,7 @@ pub(super) fn compare_equation_topology(
                 .and_then(VecDeque::pop_front)
         } else {
             known
-                .get_mut(&(equation.cell, equation.section, equation.paragraph, key))
+                .get_mut(&(equation.cell, equation.section, equation.owner, key))
                 .and_then(|indices| {
                     std::iter::from_fn(|| indices.pop_front()).find(|&index| !used[index])
                 })
@@ -128,21 +142,19 @@ fn check_equation_order(
 
 fn report_missing_equation(violations: &mut Vec<String>, equation: &AstEquationTopology) {
     let owner = equation.cell.map_or_else(
-        || {
-            equation.paragraph.map_or_else(
-                || {
-                    format!(
-                        " in section at line {}, occurrence {}",
-                        equation.section.line, equation.section.occurrence
-                    )
-                },
-                |paragraph| {
-                    format!(
-                        " in paragraph at line {}, occurrence {}",
-                        paragraph.line, paragraph.occurrence
-                    )
-                },
-            )
+        || match equation.owner {
+            Some(EquationOwner::Paragraph(address)) => describe_flow_owner("paragraph", address),
+            Some(EquationOwner::Literal(Some(address))) => {
+                describe_flow_owner("literal owner", address)
+            }
+            Some(EquationOwner::Literal(None)) => format!(
+                " in literal owner within section at line {}, occurrence {}",
+                equation.section.line, equation.section.occurrence
+            ),
+            None => format!(
+                " in section at line {}, occurrence {}",
+                equation.section.line, equation.section.occurrence
+            ),
         },
         |cell| {
             format!(
@@ -161,4 +173,20 @@ fn report_missing_equation(violations: &mut Vec<String>, equation: &AstEquationT
         equation.source_line,
         equation.value,
     ));
+}
+
+fn describe_flow_owner(kind: &str, address: FlowOccurrence) -> String {
+    use std::fmt::Write;
+    let mut owner = format!(
+        " in {kind} at line {}, occurrence {}",
+        address.source.line, address.source.occurrence
+    );
+    if let Some(definition) = address.definition {
+        let _ = write!(
+            owner,
+            " in definition description at {}:{}, occurrence {}",
+            definition.line, definition.column, definition.occurrence
+        );
+    }
+    owner
 }

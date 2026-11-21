@@ -149,7 +149,7 @@ fn an_unproved_same_line_predecessor_keeps_a_local_review() {
         panic!("expected a single inline equation");
     };
     assert!(equation.unproved_paragraph);
-    assert!(equation.paragraph.is_none());
+    assert!(equation.owner.is_none());
 }
 
 #[test]
