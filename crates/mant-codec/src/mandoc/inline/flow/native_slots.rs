@@ -552,7 +552,9 @@ impl NativeSlots {
         // index cannot establish that relationship until expansion.
         self.cursor_before_end()
             && self.backbefore
-            && self.backbefore_slot == self.cursor.checked_sub(1)
+            && self
+                .backbefore_slot
+                .is_none_or(|slot| Some(slot) == self.cursor.checked_sub(1))
             && matches!(
                 self.previous_cell(self.cursor),
                 Some(FieldCell::Graph { width: 1, .. })

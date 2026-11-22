@@ -396,6 +396,12 @@ fn inherited_overprints_keep_advances_after_publishing_the_prior_glyph() {
             // The ASCII branch prints '-' for this surviving hyphen.
             "Named hyphen with no later motion",
             "G  ‐",
+            "",
+            "Advance after relocated earlier ink",
+            "GB X",
+            "",
+            "Plain glyph after relocated earlier ink",
+            "GB X",
         ]
     );
 }

@@ -427,7 +427,10 @@ fn has_retained_advance_entry(context: &TextExecutionContext<'_>, seed: &Geometr
     let slots = &seed.placement.slots;
     match context.slot_entry.automatic_blanks {
         0 => {
-            matches!(seed.prior_pending, Some(PriorPendingSlot::Buffered(_)))
+            // Published ink can still leave native BACKBEFORE. Require
+            // the complete slot proof when no pending reading owner remains.
+            (!context.zero_advance.has_pending_glyph()
+                || matches!(seed.prior_pending, Some(PriorPendingSlot::Buffered(_))))
                 && slots.cursor_follows_retained_glyph()
         }
         1 => {

@@ -260,6 +260,13 @@ fn publish_inner_advances(
                 && matches!(slot.cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
         });
         if ink.is_none() {
+            // HORIZ can traverse an earlier graph without replacing it.
+            // When incoming ink already began this interval, that retained
+            // graph is the nearest ink before newly written advances.
+            // Keep those cells distinct from the following graph's scalar.
+            if preceding.is_some() && reading_ink(slot, reading).is_some() {
+                preceding = Some(index);
+            }
             continue;
         }
         if let Some(at) = preceding {
@@ -327,6 +334,14 @@ fn publish_inner_advances(
             slot.owner = None;
         }
     }
+    assign_inner_advance_spaces(slots, reading, replacements);
+}
+
+fn assign_inner_advance_spaces(
+    slots: &mut Vec<FillSlot>,
+    reading: &mut Vec<ReadingCell<'_>>,
+    replacements: Vec<(usize, usize, usize)>,
+) {
     for (index, owner, projected) in replacements.into_iter().rev() {
         let read = reading[owner];
         let slot = &slots[index];
