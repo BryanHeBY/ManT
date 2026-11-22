@@ -243,6 +243,44 @@ fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
     verify_rows(cases);
 }
 
+#[test]
+fn marked_replay_keeps_only_surviving_positioning_cells() {
+    // term.c::term_field queues both term_word's automatic separator and
+    // ESCAPE_HORIZ's fixed advances before print. Replaying those writes
+    // preserves individual surviving slots, independently of their owners'
+    // accrued prefixes and the authored spaces that follow them.
+    verify_rows(&[
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'\h'3n'" Em "F\p\h'-1n'G\p\h'-1n'\c" Em "\h'-10n'X""#,
+            &["A  X FG"][..],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" No "F\pG\p\c\h'-2n'" Sy "\h'-9n'X""#,
+            &["A K FG"][..],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" Ns No "F\pG\p\c" Ns Em "\h'-9n'X""#,
+            &["A KFG"][..],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" Ns No "F\pG\&\p\~\c" No "\h'-4n'X""#,
+            &["A   KFX"][..],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" No "F\pG\p\c" No "\h'-4n'X""#,
+            &["A   K XG"][..],
+        ),
+        (
+            r#".Sy "A\fP" Em "\z\h'-1n'\h'1n' K" Ns No " F\pG\p\c" No "\h'-4n'X""#,
+            &["A   K XG"][..],
+        ),
+        (
+            r#".Em "A" Ns Em "\z\h'-1n'\h'1n'\z" Em "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A  G"][..],
+        ),
+    ]);
+}
+
 fn verify_rows(cases: &[(&str, &[&str])]) {
     for &(words, expected) in cases {
         let source = format!("{HEADER}{words}\n{END}");

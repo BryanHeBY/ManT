@@ -1,5 +1,6 @@
 //! Apply the validated slot overlay to the previous word owners.
 
+use super::super::super::super::ProjectedNativeGap;
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
 use crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection;
@@ -160,7 +161,7 @@ impl PrefixEdits {
             resumed.start = position + 1;
             resumed.content = position + 1;
             resumed.projected_field_prefix = false;
-            resumed.projected_gap_cell = None;
+            resumed.projected_gap = ProjectedNativeGap::default();
             resumed.projected_device_padding = 0;
             anchors.push(NativeWordAnchor {
                 owner: self
@@ -171,7 +172,7 @@ impl PrefixEdits {
                 start: position,
                 content: position,
                 projected_field_prefix: false,
-                projected_gap_cell: None,
+                projected_gap: ProjectedNativeGap::default(),
                 projected_device_padding: 0,
                 ..old
             });
@@ -438,7 +439,7 @@ fn rebase_earlier_words(
     let first_touched = earlier.partition_point(|owner| owner.content < start);
     let mut gaps = GapEdits::default();
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
-        if let Some(old) = owner.projected_gap_cell
+        if let Some(old) = owner.projected_gap_cell()
             && let Some(offset) = old
                 .checked_sub(start)
                 .filter(|&offset| offset < positions.len())
@@ -482,58 +483,40 @@ impl GapEdits {
         offset: usize,
         first_incoming: usize,
     ) {
-        let GapOverlay(positions, locations, retained_advances) = overlay;
-        let mut lost_columns = 0usize;
-        let mut surviving = None;
-        // A prefix can represent several consecutive cells. Overwriting
-        // its first slot does not invalidate an independently retained one.
-        for (source, &position) in positions.iter().enumerate().skip(offset) {
-            let width = match buffer.cells()[start + source] {
-                FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => width,
-                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
-                _ => break,
-            };
-            if source != offset
-                && locations[source].is_some_and(|(index, _, _)| index != owner_index)
-            {
-                // term_field() emits one run of spaces, but a source blank
-                // in that run keeps its own scalar and moves independently.
-                continue;
-            }
-            if let Some(&(cell, kept)) = retained_advances.get(&(start + source)) {
-                // Imported device-only advances have no glyph owner.
-                // Count any original columns still before incoming ink.
-                lost_columns = lost_columns.saturating_add(width.saturating_sub(kept));
-                surviving = Some((source, cell));
-                break;
-            }
-            if let Some(cell) = position {
-                surviving = Some((source, cell));
-                break;
-            }
-            lost_columns = lost_columns.saturating_add(width);
-        }
-        owner.projected_gap_cell = surviving.map(|(_, cell)| cell);
-        let relocate = surviving.is_some_and(|(_, cell)| cell >= first_incoming);
-        if relocate {
-            // term_field() queues a single run before its graph. Some
-            // consumed columns can precede the recorded separator cell.
-            // Charge those only when moving that run through new ink.
-            lost_columns = lost_columns.saturating_add(clipped_gap_prefix(
+        let GapOverlay(_, locations, _) = overlay;
+        let precise = owner
+            .projected_gap
+            .motion_span
+            .take()
+            .and_then(|span| rebase_motion_span(buffer, overlay, span, start, first_incoming));
+        let has_exact_span = precise.is_some();
+        let RebasedMotionSpan {
+            lost_columns,
+            landing: surviving,
+            span,
+        } = precise.unwrap_or_else(|| {
+            infer_gap_landing(
                 buffer,
-                (positions, locations),
-                owner.start.max(start)..start + offset,
+                overlay,
+                (owner, owner_index),
                 start,
-            ));
-        }
-        if lost_columns == 0
+                offset,
+                first_incoming,
+            )
+        });
+        owner.projected_gap.motion_span = span;
+        owner.projected_gap.cell = surviving.map(|(_, cell)| cell);
+        let relocate = surviving.is_some_and(|(_, cell)| cell >= first_incoming);
+        if (lost_columns == 0 || has_exact_span)
             && !relocate
             && let Some((_, cell)) = surviving
         {
             // This native slot still has its earlier geometry marker.
             // term_field() releases the blank only once before new ink.
             self.retained_before_incoming = self.retained_before_incoming.max(Some(cell));
-            return;
+            if lost_columns == 0 {
+                return;
+            }
         }
         let serial = owner
             .owner
@@ -558,6 +541,127 @@ impl GapEdits {
                 relocate,
             },
         );
+    }
+}
+
+struct RebasedMotionSpan {
+    lost_columns: usize,
+    landing: Option<(usize, usize)>,
+    span: Option<std::ops::Range<usize>>,
+}
+
+fn rebase_motion_span(
+    buffer: &FieldBuffer,
+    GapOverlay(positions, _, retained): GapOverlay<'_>,
+    span: std::ops::Range<usize>,
+    start: usize,
+    first_incoming: usize,
+) -> Option<RebasedMotionSpan> {
+    if span.start < start || span.end > start + positions.len() {
+        return None;
+    }
+    let mut result = RebasedMotionSpan {
+        lost_columns: 0,
+        landing: None,
+        span: None,
+    };
+    let mut exact_landing = true;
+    for source in span {
+        let offset = source - start;
+        let slot = &buffer.cells()[source];
+        let width = match slot {
+            FieldCell::FixedDrawingAdvance(width) | FieldCell::DrawnSpaces(width) => *width,
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
+            _ => return None,
+        };
+        let (position, columns) = if let Some(&(cell, kept)) = retained.get(&source) {
+            // This receipt knows the total and first slot of a retained
+            // advance, but not whether its width was split into later slots.
+            exact_landing &= kept <= 1;
+            (Some(cell), kept.min(width))
+        } else {
+            (positions[offset], positions[offset].map_or(0, |_| width))
+        };
+        result.lost_columns += width - columns;
+        if let Some(position) = position.filter(|_| columns > 0) {
+            if let Some(span) = &mut result.span {
+                if position != span.end
+                    || (position < first_incoming) != (span.start < first_incoming)
+                {
+                    return None;
+                }
+                span.end += 1;
+            } else {
+                result.span = Some(position..position + 1);
+            }
+            let can_insert = positions[offset].is_some()
+                && matches!(
+                    slot,
+                    FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                );
+            if position < first_incoming || can_insert {
+                // Only a surviving SP/NBRSP supplies a relocation marker.
+                // An earlier landing already owns the preceding seam.
+                result.landing = Some((offset, position));
+            }
+        }
+    }
+    if result.span.is_some() && result.landing.is_none() {
+        return None;
+    }
+    if !exact_landing {
+        result.span = None;
+    }
+    Some(result)
+}
+
+fn infer_gap_landing(
+    buffer: &FieldBuffer,
+    GapOverlay(positions, locations, retained_advances): GapOverlay<'_>,
+    (owner, owner_index): (&NativeWordAnchor, usize),
+    start: usize,
+    offset: usize,
+    first_incoming: usize,
+) -> RebasedMotionSpan {
+    let mut lost_columns = 0usize;
+    let mut landing = None;
+    // Without an exact mapping, retain the established neighboring-cell
+    // proof for projected separators and device fields.
+    for (source, &position) in positions.iter().enumerate().skip(offset) {
+        let width = match buffer.cells()[start + source] {
+            FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => width,
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
+            _ => break,
+        };
+        if source != offset && locations[source].is_some_and(|(index, _, _)| index != owner_index) {
+            // A source blank keeps its own scalar and moves independently.
+            continue;
+        }
+        if let Some(&(cell, kept)) = retained_advances.get(&(start + source)) {
+            lost_columns = lost_columns.saturating_add(width.saturating_sub(kept));
+            landing = Some((source, cell));
+            break;
+        }
+        if let Some(cell) = position {
+            landing = Some((source, cell));
+            break;
+        }
+        lost_columns = lost_columns.saturating_add(width);
+    }
+    if landing.is_some_and(|(_, cell)| cell >= first_incoming) {
+        // term_field() queues one run before a graph. Some consumed
+        // columns can precede the location of the recorded separator.
+        lost_columns = lost_columns.saturating_add(clipped_gap_prefix(
+            buffer,
+            (positions, locations),
+            owner.start.max(start)..start + offset,
+            start,
+        ));
+    }
+    RebasedMotionSpan {
+        lost_columns,
+        landing,
+        span: None,
     }
 }
 

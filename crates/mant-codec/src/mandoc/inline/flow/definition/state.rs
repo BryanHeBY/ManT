@@ -502,7 +502,7 @@ mod buffer_handoff_tests {
                 owner: "source-owner".into(),
                 projected_device_padding: 0,
                 projected_field_prefix: false,
-                projected_gap_cell: None,
+                projected_gap: crate::mandoc::inline::flow::ProjectedNativeGap::default(),
                 projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
             });
     }

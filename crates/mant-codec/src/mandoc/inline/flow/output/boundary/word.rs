@@ -163,12 +163,65 @@ impl InlineBuilder {
                     .buffer
                     .transfer_positioning_slot(slot);
             }
+            let span = motion.and_then(|padding| self.motion_prefix_span(projection, padding));
             self.mark_native_field_prefix(
                 owner,
                 replayed_gap.or(projection.projected_gap(field_padding)),
+                span,
             );
         }
         owner
+    }
+
+    fn motion_prefix_span(
+        &self,
+        projection: &WordPassProjection,
+        padding: &ReplayedMotionPadding,
+    ) -> Option<std::ops::Range<usize>> {
+        use super::super::super::field_buffer::FieldCell;
+
+        if padding.separator != 0 || projection.native_separator != 1 {
+            return None;
+        }
+        let motion = projection.projected_gap(false)?;
+        let separator = projection.automatic_separator_slot?;
+        // Use source execution coordinates, not the resulting spaces.
+        // This prefix can only own a contiguous motion run and the one
+        // separator term_word actually wrote.
+        let span = motion.min(separator)..motion.max(separator) + 1;
+        if span.len() > super::super::super::field_buffer::MAX_EDITABLE_APPEND_CELLS {
+            return None;
+        }
+        let (buffer, _) = self.execution.word_input();
+        if !matches!(
+            buffer.cells().get(separator),
+            Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
+        ) {
+            return None;
+        }
+        let width = buffer
+            .cells()
+            .get(span.clone())?
+            .iter()
+            .enumerate()
+            .try_fold(0usize, |width, (offset, cell)| {
+                if buffer.has_deferred_blank_at(span.start + offset) {
+                    return None;
+                }
+                let columns = match cell {
+                    FieldCell::FixedDrawingAdvance(columns) | FieldCell::DrawnSpaces(columns) => {
+                        *columns
+                    }
+                    FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                        if span.start + offset == separator =>
+                    {
+                        1
+                    }
+                    _ => return None,
+                };
+                Some(width.saturating_add(columns))
+            })?;
+        (width == padding.device).then_some(span)
     }
 
     fn adjacent_motion_separator(

@@ -436,7 +436,7 @@ mod row_origin_tests {
             content: 9,
             projected_device_padding: 2,
             projected_field_prefix: false,
-            projected_gap_cell: None,
+            projected_gap: crate::mandoc::inline::flow::ProjectedNativeGap::default(),
             projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
         });
         definition.no_break = Some(NoBreakField {

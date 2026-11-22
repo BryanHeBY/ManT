@@ -279,7 +279,7 @@ fn project_detached_gap_restart<'a>(
     let Some(following) = anchors.get(owner) else {
         return false;
     };
-    let Some(gap) = following.projected_gap_cell else {
+    let Some(gap) = following.projected_gap_cell() else {
         return false;
     };
     if gap >= restart

@@ -65,9 +65,7 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     /// The word's generated field prefix was written before its content
     /// marker. This receipt owns positioning, not a native buffer scalar.
     projected_field_prefix: bool,
-    /// Buffered native padding represented by the private prefix marker.
-    /// A subsequent edit can replace that exact slot before the flush.
-    projected_gap_cell: Option<usize>,
+    projected_gap: ProjectedNativeGap,
     /// Native cells projected before the owner marker during PREKEEP.
     /// They can print with a later graph, even if this word is empty.
     /// A raw no-fill source line retains its authored whitespace even when
@@ -75,9 +73,21 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     projection: WordProjectionPolicy,
 }
 
+/// Buffered positioning represented by the private prefix marker.
+#[derive(Clone, Debug, Default)]
+struct ProjectedNativeGap {
+    cell: Option<usize>,
+    /// Exact positioning slots, when their total equals the generated advance.
+    motion_span: Option<std::ops::Range<usize>>,
+}
+
 impl NativeWordAnchor {
+    fn projected_gap_cell(&self) -> Option<usize> {
+        self.projected_gap.cell
+    }
+
     fn entry_gap_cell(&self) -> Option<usize> {
-        self.projected_gap_cell
+        self.projected_gap_cell()
             .filter(|&gap| (self.start..self.content).contains(&gap))
     }
 }

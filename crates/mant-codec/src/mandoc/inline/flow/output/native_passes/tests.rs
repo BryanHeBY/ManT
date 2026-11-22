@@ -1,3 +1,4 @@
+use super::super::super::ProjectedNativeGap;
 use super::acceptance::OWNER_PASS_INTERSECTIONS;
 use super::rows::{OWNER_NODES_VISITED, split_native_field_passes};
 use super::{BTreeMap, Inline};
@@ -46,7 +47,7 @@ fn accepted_owner_receipt_intersects_each_ordered_range_once() {
                 content: start,
                 projected_device_padding: 0,
                 projected_field_prefix: false,
-                projected_gap_cell: None,
+                projected_gap: ProjectedNativeGap::default(),
                 projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
             });
         }
@@ -368,7 +369,7 @@ fn incremental_pass_acknowledges_only_its_materialized_owner_boundary() {
         content: 0,
         projected_device_padding: 0,
         projected_field_prefix: false,
-        projected_gap_cell: None,
+        projected_gap: ProjectedNativeGap::default(),
         projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
     }];
     let mut settled = vec![Inline::anchor(word.clone()), text("ALPHAX")];

@@ -28,7 +28,7 @@ fn retain_projected_advances(
             .rev()
             .take(prefix.cells.len())
             .take_while(|anchor| anchor.content >= prefix.start)
-            .filter_map(|anchor| anchor.projected_gap_cell)
+            .filter_map(super::NativeWordAnchor::projected_gap_cell)
             .filter_map(|gap| {
                 let relative = gap.checked_sub(prefix.start)?;
                 (prefix.cells.get(relative) == Some(&(FieldCell::NonBreakingBlank, 0))

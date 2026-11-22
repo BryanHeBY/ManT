@@ -1,6 +1,8 @@
 //! Record source words before projecting their accepted native passes.
 
-use super::super::{Inline, InlineBuilder, PendingBoundary, WordProjectionPolicy};
+use super::super::{
+    Inline, InlineBuilder, PendingBoundary, ProjectedNativeGap, WordProjectionPolicy,
+};
 use super::source_blanks::take_retreated_source_blank;
 
 mod input;
@@ -244,7 +246,7 @@ impl InlineBuilder {
                 }
                 .max(materialized_field_padding),
                 projected_field_prefix: false,
-                projected_gap_cell: None,
+                projected_gap: ProjectedNativeGap::default(),
                 projection,
             });
         entry.append_owner_intervals(&mut definition.field_word_anchors);
@@ -352,7 +354,7 @@ impl InlineBuilder {
                 },
                 projected_device_padding: 0,
                 projected_field_prefix: false,
-                projected_gap_cell: None,
+                projected_gap: ProjectedNativeGap::default(),
                 projection,
             });
         entry.append_owner_intervals(&mut self.execution.plain_input.anchors);

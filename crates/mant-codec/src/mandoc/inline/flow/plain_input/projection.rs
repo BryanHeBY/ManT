@@ -48,7 +48,7 @@ pub(super) fn retire_plain_presentation(
                 projected_gaps.get_or_init(|| {
                     anchors
                         .iter()
-                        .filter_map(|owner| owner.projected_gap_cell)
+                        .filter_map(super::super::NativeWordAnchor::projected_gap_cell)
                         .collect()
                 })
             });

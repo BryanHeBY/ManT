@@ -327,7 +327,7 @@ fn resolve_buffered_prefixes(
     // original glyph was overwritten. Gaps skipped between passes never
     // reach term_field(), even if the original owner still has ink.
     for anchor in anchors {
-        if let Some(gap) = anchor.projected_gap_cell {
+        if let Some(gap) = anchor.projected_gap_cell() {
             let pass = passes.partition_point(|pass| pass.end <= gap);
             let printed = passes
                 .get(pass)

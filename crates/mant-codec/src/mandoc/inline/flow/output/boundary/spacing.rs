@@ -77,7 +77,12 @@ impl InlineBuilder {
         replayed_gap
     }
 
-    pub(super) fn mark_native_field_prefix(&mut self, owner: &str, gap: Option<usize>) {
+    pub(super) fn mark_native_field_prefix(
+        &mut self,
+        owner: &str,
+        gap: Option<usize>,
+        span: Option<std::ops::Range<usize>>,
+    ) {
         let serial = owner
             .strip_prefix(super::super::INTERNAL_FIELD_WORD)
             .expect("native word owner");
@@ -95,7 +100,8 @@ impl InlineBuilder {
         };
         if let Some(anchor) = anchor {
             anchor.projected_field_prefix = true;
-            anchor.projected_gap_cell = gap;
+            anchor.projected_gap.cell = gap;
+            anchor.projected_gap.motion_span = span;
         }
     }
 
