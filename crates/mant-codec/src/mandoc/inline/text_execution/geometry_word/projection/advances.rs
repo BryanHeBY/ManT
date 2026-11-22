@@ -64,6 +64,7 @@ fn split_buffered_advance(
             owner: None,
             drawing_advance: true,
             advance_source: None,
+            underline_decoration: false,
         }),
     );
     Some(start..start + count)
@@ -358,6 +359,7 @@ fn assign_inner_advance_spaces(
                     owner: Some(id),
                     drawing_advance: false,
                     advance_source: None,
+                    underline_decoration: false,
                 }
             })
             .collect::<Vec<_>>();

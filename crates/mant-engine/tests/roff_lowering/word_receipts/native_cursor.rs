@@ -267,3 +267,48 @@ fn absolute_motion_can_revisit_ink_written_into_a_fresh_field() {
         ]
     );
 }
+
+#[test]
+fn overwritten_underline_control_releases_the_surviving_ink() {
+    // encode1() writes '_' then BS for emphasis. A later HORIZ
+    // can replace BS without replacing '_', so term_field() emits the
+    // underscore at its own column. An intact pair remains a style.
+    const PAGE: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Ss CASE0CASE\n";
+    let mut cases = Vec::new();
+    for first in ["No", "Em", "Sy"] {
+        for (last, expected) in [("No", "A   F_XG"), ("Em", "A   F_X")] {
+            cases.push((format!(
+                r#".{first} "A" No "\z\h'-1n'\h'1n'" Em "F\pG\p\c\h'-3n'" {last} "\h'3n'\h'-4n'X""#
+            ), expected));
+        }
+    }
+    cases.extend([
+        (r#".Sy "AB" No " \h'1n'\h'-6n'\z\pC" Ns Em "\zFG\h'2n'\h'-4n'\p\0" Ns Sy "\h'1n'\h'-2n'\fPX""#.into(), "A_X"),
+        // The UTF-8 device writes \0 through encode1(), unlike the ASCII sentinel.
+        (r#".Sy "AB" No " \h'1n'\h'-6n'\z\pC" Ns Em "\zFG\h'2n'\p\0\z" Ns Sy "\h'1n'\h'-2n'\fPX""#.into(), "AG  _X"),
+        (r#".Sy "AB" Em " \h'1n'\h'-6n'\z\pC " Em "\zFG\h'2n'\p\0\z" Ns Sy "\h'1n'\h'-2n'\fPX\p""#.into(), "AC\nG  _X"),
+        (r#".Em "F" Em "G""#.into(), "F G"),
+        (r#".Sy "_" No "X""#.into(), "_ X"),
+    ]);
+    for (words, expected) in cases {
+        let source = format!("{PAGE}{words}\n.Ss CASE999CASE\nDone.\n");
+        let document =
+            super::json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&document);
+        let readback = super::json_string_roundtrip(
+            &mant_loader::load_markdown_text(&markdown, None).unwrap(),
+        );
+        for output in [
+            mant_render::render_query_man(&document),
+            mant_render::render_query_text(&readback),
+        ] {
+            let (_, body) = output.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            assert_eq!(
+                body.trim().lines().map(str::trim).collect::<Vec<_>>(),
+                expected.lines().collect::<Vec<_>>(),
+                "{source}\n{output}"
+            );
+        }
+    }
+}

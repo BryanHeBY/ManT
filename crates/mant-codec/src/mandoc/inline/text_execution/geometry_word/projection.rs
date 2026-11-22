@@ -64,6 +64,9 @@ impl<'a> PlacedWord<'a> {
         let (extent, cursor_retreat) = slots.extent_and_retreat();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
+        if retain_suffix && editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS {
+            release_unpaired_underlines(&mut slots, &mut reading);
+        }
         let replaced_advance_marker = advance_marker.filter(|_| {
             retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS && word_owner.is_some()
         });
@@ -273,6 +276,27 @@ fn settle_prior_slot(
     ))
 }
 
+fn release_unpaired_underlines(slots: &mut [FillSlot], reading: &mut Vec<ReadingCell<'_>>) {
+    // encode1() writes '_' then BS. If a proved edit overwrote that BS,
+    // term_field() can print the surviving underscore at its own column.
+    // Its new reading owner participates in the same accepted-pass rules
+    // as other graph cells.
+    for index in 0..slots.len() {
+        if slots[index].underline_decoration
+            && !slots
+                .get(index + 1)
+                .is_some_and(|next| next.cell == FieldCell::Backline)
+        {
+            slots[index].owner = Some(Placement::push_reading(
+                reading,
+                ReadingGlyph::Scalar('_'),
+                Font::Regular,
+                None,
+            ));
+        }
+    }
+}
+
 fn settle_replay_slots(
     slots: &mut Vec<FillSlot>,
     keep_raw_advances: bool,
@@ -300,6 +324,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
                     owner: None,
                     drawing_advance: true,
                     advance_source,
+                    underline_decoration: false,
                 }),
             );
         }

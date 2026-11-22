@@ -16,11 +16,13 @@ pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) owner: Option<usize>,
     pub(in crate::mandoc::inline) drawing_advance: bool,
     pub(in crate::mandoc::inline) advance_source: Option<usize>,
+    pub(in crate::mandoc::inline) underline_decoration: bool,
 }
 
 #[derive(Clone, Debug)]
 enum Pattern {
     Plain(FieldCell),
+    UnderlineDecoration,
     DrawingAdvance,
     ImportedAdvance {
         cell: FieldCell,
@@ -38,6 +40,10 @@ impl Pattern {
         match self {
             Self::Plain(cell) | Self::ImportedAdvance { cell, .. } => cell,
             Self::DrawingAdvance => &FieldCell::NonBreakingBlank,
+            Self::UnderlineDecoration => &FieldCell::Graph {
+                text: '_',
+                width: 1,
+            },
             Self::Overstrike { cells, phase } => {
                 &cells[(phase + offset % cells.len()) % cells.len()]
             }
@@ -46,7 +52,10 @@ impl Pattern {
 
     fn shifted(&self, offset: usize) -> Self {
         match self {
-            Self::Plain(_) | Self::DrawingAdvance | Self::ImportedAdvance { .. } => self.clone(),
+            Self::Plain(_)
+            | Self::UnderlineDecoration
+            | Self::DrawingAdvance
+            | Self::ImportedAdvance { .. } => self.clone(),
             Self::Overstrike { cells, phase } => Self::Overstrike {
                 cells: Arc::clone(cells),
                 phase: (phase + offset % cells.len()) % cells.len(),
@@ -72,6 +81,7 @@ impl Pattern {
                     owner: previous.owner,
                     drawing_advance: previous.drawing_advance,
                     advance_source: previous.advance_source,
+                    underline_decoration: previous.underline_decoration,
                 };
                 out.push(tail);
             }
@@ -81,6 +91,7 @@ impl Pattern {
                 owner,
                 drawing_advance: self.is_fixed_advance(),
                 advance_source,
+                underline_decoration: matches!(self, Self::UnderlineDecoration),
             });
         };
         let Self::Overstrike { cells, phase } = self else {
@@ -328,7 +339,7 @@ impl NativeSlots {
         let mut aliases = prefix.duplicates.iter().peekable();
         let mut fonts = prefix.tail_fonts.iter().peekable();
         let mut pending_slot = None;
-        for (index, (cell, _)) in prefix.cells.iter().enumerate() {
+        for (index, (cell, scalars)) in prefix.cells.iter().enumerate() {
             if fonts.peek().is_some_and(|(range, _)| range.end == index) {
                 fonts.next();
             }
@@ -383,6 +394,15 @@ impl NativeSlots {
                         },
                         Some(owner),
                     );
+                }
+                FieldCell::Graph {
+                    text: '_',
+                    width: 1,
+                } if *scalars == 0
+                    && owner == index
+                    && matches!(prefix.cells.get(index + 1), Some((FieldCell::Backline, _))) =>
+                {
+                    slots.write_pattern(Pattern::UnderlineDecoration, 1, Some(index));
                 }
                 _ => slots.write_run(cell.clone(), 1, Some(owner)),
             }
@@ -850,7 +870,16 @@ impl NativeSlots {
             _ => None,
         };
         for (index, value) in decoration_prefix(cell, font).enumerate() {
-            self.write_run(value, 1, owner.filter(|_| Some(index) == duplicate));
+            if index == 0
+                && matches!(
+                    font,
+                    RoffFont::Emphasis | RoffFont::CodeEmphasis | RoffFont::StrongEmphasis
+                )
+            {
+                self.write_pattern(Pattern::UnderlineDecoration, 1, None);
+            } else {
+                self.write_run(value, 1, owner.filter(|_| Some(index) == duplicate));
+            }
         }
     }
 
