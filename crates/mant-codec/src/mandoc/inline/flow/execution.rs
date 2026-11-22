@@ -479,7 +479,7 @@ impl InlineBuilder {
             return;
         }
 
-        let traversed = self
+        let (traversed, armed_overlap) = self
             .execution
             .word_input()
             .0
@@ -522,9 +522,12 @@ impl InlineBuilder {
                 projected.push(Inline::anchor(source.marker()));
             }
         }
-        self.execution
-            .zero_advance
-            .append_generated_cells(count, &mut projected, font);
+        self.execution.zero_advance.append_generated_cells(
+            count,
+            armed_overlap,
+            &mut projected,
+            font,
+        );
         self.append_word(projected);
         if count > 0 {
             self.execution.trailing_output = TrailingOutput::FixedBlank;

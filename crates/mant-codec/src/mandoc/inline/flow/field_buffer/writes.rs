@@ -319,7 +319,7 @@ impl FieldBuffer {
                     ));
                 }
                 FieldWrite::AdvanceOverBufferedBlanks(count) => {
-                    self.write_cursor = WriteCursor::Placed(self.write_cursor.retreat() - count);
+                    self.advance_run_in_blanks(*count);
                 }
                 FieldWrite::Cell(cell) | FieldWrite::DecoratedGraph { cell, .. } => {
                     self.push_cell(cell.clone());
@@ -485,15 +485,43 @@ impl FieldBuffer {
         }
     }
 
-    pub(in crate::mandoc::inline::flow) fn generated_blank_overlap(&self, count: usize) -> usize {
+    pub(in crate::mandoc::inline::flow) fn generated_blank_overlap(
+        &self,
+        count: usize,
+    ) -> (usize, bool) {
         // termp_it_pre() uses a nonbreaking blank word, including the
         // native slots it rewrites before lastcol.
         match self.write_cursor {
-            WriteCursor::Placed(retreat) if !self.backbefore_armed && !self.backafter_armed => {
-                retreat.min(count)
+            WriteCursor::Placed(retreat) if !self.backbefore_armed => {
+                if !self.backafter_armed {
+                    return (retreat.min(count), false);
+                }
+                if count > 0
+                    && retreat == 1
+                    && self.cells.last() == Some(&FieldCell::BreakableBlank)
+                {
+                    // The first generated graph consumes BACKAFTER; any
+                    // second write then starts at the true end of the buffer.
+                    return (1, true);
+                }
             }
-            _ => 0,
+            _ => {}
         }
+        (0, false)
+    }
+
+    fn advance_run_in_blanks(&mut self, count: usize) {
+        let retreat = self.write_cursor.retreat();
+        if std::mem::take(&mut self.backafter_armed) {
+            // encode1 writes the generated fixed blank at the retained
+            // cursor, then arms BACKBEFORE (term.c:920-929). An old SP
+            // must not remain before it.
+            let cell = self.cells.len() - retreat;
+            self.backbefore_armed = true;
+            self.backbefore_graph = Some(cell);
+            self.backline_projection_target = Some(cell);
+        }
+        self.write_cursor = WriteCursor::Placed(retreat - count);
     }
 
     pub(in crate::mandoc::inline::flow) fn defer_run_in_overlap(
@@ -509,7 +537,7 @@ impl FieldBuffer {
         // still print it when a subsequent BODY graph reaches the field.
         let printed_end = self.printed_content_end(self.resume, self.cells.len());
         let projected_start = end.saturating_sub(projected);
-        let pending_break = self.has_pending_break_markers();
+        let pending_break = self.has_pending_break_markers() || self.backafter_armed;
         let mut added = false;
         let mut previous_font_copy = false;
         for cell in cursor..end {

@@ -43,8 +43,9 @@ pub(super) fn apply_executed_definition_body_layout(
         ));
         geometry.gap = 0;
     }
+    let materialized_run_in = observed.materialized_run_in_boundary();
     if flow.head.generated_cells().is_some_and(|count| count > 0)
-        && (observed.materialized_run_in_boundary() || observed.joined_run_in_word())
+        && (materialized_run_in || observed.joined_run_in_word())
         && !matches!(
             geometry.placement,
             crate::mandoc::layout::TermPlacement::Stacked
@@ -53,12 +54,17 @@ pub(super) fn apply_executed_definition_body_layout(
         && !definition_field_exited
         && !observed.placement_breaks()
     {
-        // The actual generated BODY word already owns this accepted scalar
-        // seam. Adding a second generic word separator would duplicate it.
-        geometry.relation_override = Some((
-            mant_ir::HeadBodyRelation::joined(),
-            mant_ir::DefinitionBodyAlignment::AfterTerm,
-        ));
+        // A projected run-in scalar already separates the visible words.
+        // If replay preserved only the native gap, carry the proven
+        // separation in the layout instead of losing it at the seam.
+        let gap = observed.unprojected_run_in_gap();
+        let relation = if !materialized_run_in && gap > 0 {
+            geometry.gap = gap;
+            mant_ir::HeadBodyRelation::separated()
+        } else {
+            mant_ir::HeadBodyRelation::joined()
+        };
+        geometry.relation_override = Some((relation, mant_ir::DefinitionBodyAlignment::AfterTerm));
     }
     if matches!(description.first(), Some(Block::Preformatted { .. }))
         && !observed

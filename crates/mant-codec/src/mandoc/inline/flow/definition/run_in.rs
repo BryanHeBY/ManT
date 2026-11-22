@@ -2,6 +2,7 @@
 
 use std::{cell::Cell, rc::Rc};
 
+use super::super::field_buffer::{FieldBuffer, FieldCell, FlushReceipt, MAX_EDITABLE_APPEND_CELLS};
 use super::super::{InlineBuilder, InlineExecutionState};
 use super::NativeFieldDevice;
 
@@ -19,6 +20,7 @@ pub(in crate::mandoc) struct RunInBoundaryReceipt {
 #[derive(Clone, Copy, Debug, Default)]
 struct RunInBoundaryFacts {
     materialized: bool,
+    unprojected_gap: u16,
     following_word_joined: bool,
 }
 
@@ -45,6 +47,10 @@ impl RunInBoundaryReceipt {
 
     pub(in crate::mandoc) fn materialized(&self) -> bool {
         self.facts.get().materialized
+    }
+
+    pub(in crate::mandoc) fn unprojected_gap(&self) -> u16 {
+        self.facts.get().unprojected_gap
     }
 
     pub(in crate::mandoc) fn following_word_joined(&self) -> bool {
@@ -99,7 +105,6 @@ impl InlineBuilder {
         &mut self,
         device: &NativeFieldDevice,
     ) {
-        use super::super::field_buffer::FlushReceipt;
         let Some(state) = &mut self.execution.definition else {
             return;
         };
@@ -109,21 +114,23 @@ impl InlineBuilder {
             FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
         };
         let mut pass = 0;
+        let buffer = &state.field_buffer;
+        let mut covered = None;
         for boundary in boundaries {
             #[cfg(test)]
             RECEIPT_WORK.with(|work| work.set(work.get() + 1));
+            let mut facts = boundary.receipt.facts.get();
             // The generated word enters with NOSPACE and writes only one
             // or two encode1(U+00A0) glyphs plus possible backlines. The
             // post-write content anchor excludes automatic separators and
             // device padding; the cell check excludes pairing backlines.
-            for cell in boundary.start..boundary.end.min(state.field_buffer.cells().len()) {
+            for cell in boundary.start..boundary.end.min(buffer.cells().len()) {
                 #[cfg(test)]
                 RECEIPT_WORK.with(|work| work.set(work.get() + 1));
                 if !matches!(
-                    state.field_buffer.cells()[cell],
-                    super::super::field_buffer::FieldCell::Graph { text: '\u{a0}', .. }
-                ) || state.field_buffer.projection_length(cell, cell + 1) == 0
-                {
+                    buffer.cells()[cell],
+                    FieldCell::Graph { text: '\u{a0}', .. }
+                ) {
                     continue;
                 }
                 while pass < passes.len() && passes[pass].end <= cell {
@@ -131,17 +138,62 @@ impl InlineBuilder {
                     RECEIPT_WORK.with(|work| work.set(work.get() + 1));
                     pass += 1;
                 }
-                if pass < passes.len() {
-                    // term_flushln skips breakable blanks between accepted
-                    // passes, never an encode1 U+00A0 graph (term.c:205-207).
-                    let mut facts = boundary.receipt.facts.get();
+                let Some(printed) = passes.get(pass).filter(|printed| printed.start <= cell) else {
+                    continue;
+                };
+                // term_flushln skips breakable blanks between accepted
+                // passes, never an encode1 U+00A0 graph (term.c:205-207).
+                if buffer.projection_length(cell, cell + 1) > 0 {
                     facts.materialized = true;
-                    boundary.receipt.facts.set(facts);
                     break;
                 }
+                let covered = covered.get_or_insert_with(|| buffer.covered_pass_retreats(passes));
+                // An accepted U+00A0 can outlive its projection, for
+                // example when later input rewrites the tail after an
+                // escape marker (term.c:659-661,701-714). It contributes
+                // reading separation only between surviving HEAD/BODY
+                // ink of the same pass. A BACKBEFORE before the next
+                // glyph covers the space even when it owns no scalar.
+                if covered.binary_search(&cell).is_err()
+                    && gap_reaches_next_graph(&buffer.cells()[cell + 1..printed.end])
+                    && has_local_ink(buffer, covered, (printed.start..boundary.start).rev())
+                    && has_local_ink(buffer, covered, boundary.end..printed.end)
+                {
+                    facts.unprojected_gap = facts.unprojected_gap.saturating_add(1);
+                }
             }
+            boundary.receipt.facts.set(facts);
         }
     }
+}
+
+fn gap_reaches_next_graph(cells: &[FieldCell]) -> bool {
+    // term_field() skips the native controls but emits either a glyph or
+    // the backspace that can cover the generated cell (term.c:389-434).
+    cells
+        .iter()
+        .take(MAX_EDITABLE_APPEND_CELLS)
+        .find(|cell| {
+            matches!(
+                cell,
+                FieldCell::Graph { .. } | FieldCell::Hyphen | FieldCell::Backline
+            )
+        })
+        .is_some_and(|cell| *cell != FieldCell::Backline)
+}
+
+fn has_local_ink(
+    buffer: &FieldBuffer,
+    covered: &[usize],
+    positions: impl Iterator<Item = usize>,
+) -> bool {
+    positions.take(MAX_EDITABLE_APPEND_CELLS).any(|cell| {
+        matches!(
+            buffer.cells()[cell],
+            FieldCell::Graph { text, .. } if !text.is_whitespace()
+        ) && buffer.projection_length(cell, cell + 1) > 0
+            && covered.binary_search(&cell).is_err()
+    })
 }
 
 impl InlineExecutionState {

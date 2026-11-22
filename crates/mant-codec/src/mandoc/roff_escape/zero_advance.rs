@@ -96,6 +96,13 @@ impl<T> ZeroAdvanceMachine<T> {
         std::mem::take(&mut self.armed)
     }
 
+    /// Consume BACKAFTER while the native field tracks the written glyph.
+    pub(in crate::mandoc) fn write_projection_owned_glyph(&mut self) {
+        if self.cancel_armed() {
+            self.pending = Some(PendingGlyph::Projected);
+        }
+    }
+
     pub(in crate::mandoc) fn project_glyph(&mut self, glyph: T) -> Option<(T, bool)> {
         if self.pending.is_some() {
             self.recoveries_before_pending = self.recoveries.len();

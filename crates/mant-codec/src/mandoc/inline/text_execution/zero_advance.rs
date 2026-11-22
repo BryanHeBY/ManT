@@ -505,9 +505,17 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc) fn append_generated_cells(
         &mut self,
         count: usize,
+        deferred_retreat: bool,
         output: &mut Vec<Inline>,
         font: Font,
     ) {
+        if deferred_retreat {
+            // encode1() moved BACKAFTER to BACKBEFORE on the old slot.
+            // Its projection now follows the field receipt, which also
+            // sees motion that preserves the early slot and overwrites
+            // that never accept it.
+            self.machine.write_projection_owned_glyph();
+        }
         for _ in 0..count {
             if self.machine.has_pending() && !self.held.is_empty() {
                 self.settle_pending_before_graph(output);

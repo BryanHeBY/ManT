@@ -475,6 +475,106 @@ fn replayed_separators_preserve_all_accepted_words() {
 }
 
 #[test]
+fn armed_run_in_word_keeps_the_retained_cursor() {
+    const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    // termp_it_pre(BODY) writes the generated fixed blank at the retained
+    // cursor. term.c::encode1() consumes BACKAFTER after writing it, so
+    // attaching a bare \z to either end of the marker leaves one pass.
+    // ASCII preserves only an underline stroke there; UTF-8 has no
+    // readable glyph. A real BODY break closes the same retained row.
+    for marker in [r"\p", r"\p\z", r"\z\p"] {
+        for (body, rows) in [
+            (".br\n.No X", &["", "X"][..]),
+            (".Pp\n.No X", &["", "", "X"][..]),
+            (".Bd -literal\n.No X\n.Ed", &["", "", "X"][..]),
+            (".No X", &["X"][..]),
+            (".No \\cX", &["X"][..]),
+        ] {
+            let source = format!(
+                "{HEADER}.Bl -inset\n.It Em \"\\zC\\pJ\" No \"\\h'-2n'{marker}\"\n{body}\n.El\n.Sh ENDTEST\nDone.\n"
+            );
+            let content =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let rendered = mant_render::render_query_man(&content);
+            let actual = description_rows(&rendered, &source);
+            assert!(
+                actual
+                    .iter()
+                    .map(|row| row.trim_start())
+                    .eq(rows.iter().copied()),
+                "{source}: {actual:?}"
+            );
+        }
+    }
+}
+
+#[test]
+fn motion_preserves_the_run_in_gap_written_before_invisible_cells() {
+    let source = r#".Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Bl -inset
+.It No "\X'tty: link https://k.test'C\X'tty: link'V" Em "\h'-1n'\z"
+.No ""
+.No "\h'-1n'Y"
+.El
+.Sh ENDTEST
+Done.
+"#;
+    // The generated BODY NBSP consumes BACKAFTER at the retained cursor.
+    // The later HORIZ clears BACKBEFORE after intervening zero-width cells,
+    // leaving the earlier gap inside the native pass (term.c:701-714).
+    // ASCII and UTF-8 encode different gap widths; both preserve the words.
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    let rows = description_rows(&rendered, source);
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].split_whitespace().eq(["CV", "Y"]), "{rows:?}");
+    let mut labels = Labels::default();
+    labels.visit_document(content.document.as_ref().unwrap());
+    assert_eq!(labels.0, [("https://k.test".into(), "C".into())]);
+}
+
+#[test]
+fn accepted_run_in_gap_separates_words_after_projection_replay() {
+    let source = r#".Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Bl -diag
+.It Em "V" No "\h'-1n'\z\:"
+.No "\h'-5n'\p"
+.Sy "\pZ"
+.El
+.Sh ENDTEST
+Done.
+"#;
+    // term_fill()/term_field() accept the UTF-8 generated NBSP between
+    // the replayed markers. ASCII ends a row at that point. Both preserve
+    // the lexical boundary between the final label word and the BODY.
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    let rows = description_rows(&rendered, source);
+    assert!(
+        rows.iter()
+            .flat_map(|row| row.split_whitespace())
+            .eq(["Em", "V", "No", "Z"])
+    );
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let markdown = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let rendered = mant_render::render_query_man(&markdown);
+    assert!(rendered.split_whitespace().any(|word| word == "Z"));
+    assert!(!rendered.contains("NoZ"));
+}
+
+#[test]
 fn replayed_retreats_keep_their_native_replacement_order() {
     const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
     // encode1() buffers C, a backspace, and the italic X's paint. Another

@@ -139,6 +139,12 @@ impl DefinitionBodyObservation {
             .is_some_and(super::inline::RunInBoundaryReceipt::materialized)
     }
 
+    pub(super) fn unprojected_run_in_gap(&self) -> u16 {
+        self.run_in_boundary
+            .as_ref()
+            .map_or(0, super::inline::RunInBoundaryReceipt::unprojected_gap)
+    }
+
     pub(super) fn joined_run_in_word(&self) -> bool {
         self.run_in_boundary
             .as_ref()
