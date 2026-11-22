@@ -56,10 +56,11 @@ const SECOND_ROW_FIELD_LINK: &str = include_str!(
 #[test]
 fn replayed_links_follow_the_surviving_native_glyph() {
     // In the two fixed CVS terminal profiles, term_field() overwrites the
-    // first link label with G. The second label itself supplies the final G.
+    // first link label with G. The second label supplies the final G and
+    // the overwritten font backspace leaves an exposed underscore.
     for (source, row_text, target) in [
         (COVERED_FIELD_LINK, "A   G", None),
-        (SURVIVING_FIELD_LINK, "A   XG", Some("https://k.test")),
+        (SURVIVING_FIELD_LINK, "A   _XG", Some("https://k.test")),
     ] {
         let content = json_roundtrip::json_string_roundtrip(
             &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
@@ -69,7 +70,7 @@ fn replayed_links_follow_the_surviving_native_glyph() {
             let (column, row) = only_position(terminal.backend().buffer(), row_text);
             let glyph = column + u16::try_from(row_text.width()).unwrap() - 1;
             copy(&mut app, (column, row), row_text);
-            for at in glyph - 1..=glyph + 1 {
+            for at in column..=glyph + 1 {
                 click(&mut app, at, row);
                 assert_eq!(
                     opened_targets(&mut app),
