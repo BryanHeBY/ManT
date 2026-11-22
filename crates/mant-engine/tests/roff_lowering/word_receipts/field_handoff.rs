@@ -473,3 +473,51 @@ fn replayed_separators_preserve_all_accepted_words() {
         content = json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
     }
 }
+
+#[test]
+fn replayed_retreats_keep_their_native_replacement_order() {
+    const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
+    // encode1() buffers C, a backspace, and the italic X's paint. Another
+    // cursor rewrite restates the coverage events in a different order.
+    // term_field() still paints X over C, independent of replay order.
+    let source = format!(
+        r#"{HEADER}.Bl -inset
+.It Sy "C\zJ" Em "\h'-4n'\&X"
+.No "\h'-1n' B\zY" Ns No "X"
+.El
+.Sh ENDTEST
+Done.
+"#
+    );
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let markup = mant_codec::encode::render_markdown(&content);
+    let readback = mant_loader::load_markdown_text(&markup, None).unwrap();
+    for content in [&content, &readback] {
+        let rendered = mant_render::render_query_man(content);
+        assert_eq!(description_rows(&rendered, &source), ["X BX"]);
+    }
+
+    // The second rewind accepts the clipped first word and its separator.
+    // Both fixed devices agree on these words, including the literal
+    // annotation spelling after the initial escaped backslash.
+    let source = format!(
+        r#"{HEADER}.Bl -inset
+.It Em "\\0X'tty: link https://k.test'C\X'tty: link' D" Sy "\h'-6n'\h'-6n'\&\&"
+.No "\p"
+.br
+.No "\h'-1n'Y"
+.El
+.Sh ENDTEST
+Done.
+"#
+    );
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    assert!(
+        description_rows(&rendered, &source)
+            .iter()
+            .flat_map(|row| row.split_whitespace())
+            .eq(["X'tty:", "link", "https://k.testC", "D", "Y"]),
+        "{rendered}"
+    );
+}

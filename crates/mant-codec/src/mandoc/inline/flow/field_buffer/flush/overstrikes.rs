@@ -231,13 +231,14 @@ impl FieldBuffer {
                 ordered[first..ordered.len() - tail].to_vec()
             });
         }
+        let retreat_targets = self.paint_retreat_targets(start, cells.len());
         let proof = DeviceOverprint {
             covered: covered_by
                 .into_iter()
                 .enumerate()
                 .filter_map(|(offset, by)| {
                     let target = start + offset;
-                    by.filter(|_| self.projected_coverable_cell(target))
+                    by.filter(|_| self.projected_coverable_cell(target, retreat_targets[offset]))
                         .map(|by| (target, Some(by)))
                 })
                 .collect(),
@@ -247,7 +248,27 @@ impl FieldBuffer {
         Some((proof, stepped_left))
     }
 
-    fn projected_coverable_cell(&self, cell: usize) -> bool {
+    fn paint_retreat_targets(&self, start: usize, cells: usize) -> [bool; MAX_REPLAY_PREFIX_CELLS] {
+        let end = start + cells.min(MAX_REPLAY_PREFIX_CELLS);
+        let first = self
+            .pass_retreats
+            .partition_point(|&(_, mark)| mark < start);
+        let mut targets = [false; MAX_REPLAY_PREFIX_CELLS];
+        for &(target, _) in self.pass_retreats[first..]
+            .iter()
+            .take_while(|&&(_, mark)| mark < end)
+        {
+            if let Some(offset) = target
+                .checked_sub(start)
+                .filter(|&offset| offset < targets.len())
+            {
+                targets[offset] = true;
+            }
+        }
+        targets
+    }
+
+    fn projected_coverable_cell(&self, cell: usize, recorded_retreat: bool) -> bool {
         self.projected_ink(cell)
             || self.has_deferred_blank_at(cell)
             // A recorded retreat may target an automatic separator
@@ -255,10 +276,7 @@ impl FieldBuffer {
             // term_field() first emits that advance, then backs over it
             // (term.c:420-434). Native paint owns the accepted cover
             // even when the input slot has no independent scalar.
-            || self
-                .pass_retreats
-                .binary_search_by_key(&cell, |&(target, _)| target)
-                .is_ok()
+            || recorded_retreat
             || self.projection_owner == super::super::FieldProjectionOwner::Detached
                 && self.projection_length(cell, cell + 1) > 0
                 && matches!(

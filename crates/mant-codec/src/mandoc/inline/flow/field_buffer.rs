@@ -256,7 +256,8 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     projection_prefix: Vec<usize>,
     deferred_blanks: Vec<cells::DeferredBlankRun>,
     /// A backline can cover a provisional projection only when its
-    /// replacement advance is accepted in the same pass.
+    /// replacement advance is accepted in the same pass. Native replacement
+    /// slots are ordered even when a replay revisits an earlier target.
     pass_retreats: Vec<(usize, usize)>,
     staged_backline_projection: bool,
     /// Latest occupied cell that an emitted backline could overwrite in

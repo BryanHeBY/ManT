@@ -121,8 +121,7 @@ impl FieldBuffer {
                 mark_from_end,
             } => {
                 let end = self.cells.len();
-                self.pass_retreats
-                    .push((end - target_from_end, end - mark_from_end));
+                self.record_pass_retreat(end - target_from_end, end - mark_from_end);
             }
             _ => unreachable!("only resolved slot writes reach this path"),
         }
@@ -431,7 +430,9 @@ impl FieldBuffer {
         } else {
             self.replace_placed_tail(self.cells.len() - start);
         }
-        self.pass_retreats.extend(crossing);
+        for (target, mark) in crossing {
+            self.record_pass_retreat(target, mark);
+        }
         surviving.sort_unstable_by_key(|run| run.start);
         self.deferred_blanks.extend(surviving);
     }
@@ -694,7 +695,14 @@ pub(in crate::mandoc::inline) fn isolated_passes(
     }
     let covered = field.covered_pass_retreats(&passes);
     let mut covered_iter = covered.iter().copied().peekable();
-    let mut retreats = field.pass_retreats.iter().copied().peekable();
+    let mut retreat_targets: Vec<_> = field
+        .pass_retreats
+        .iter()
+        .map(|&(target, _)| target)
+        .collect();
+    retreat_targets.sort_unstable();
+    retreat_targets.dedup();
+    let mut retreats = retreat_targets.into_iter().peekable();
     let mut ranges = Vec::new();
     let mut start = 0;
     for (i, pass) in passes.iter().enumerate() {
@@ -702,7 +710,8 @@ pub(in crate::mandoc::inline) fn isolated_passes(
         // previous glyph. Ordinary width folds retain their source spaces
         // in the same reading range, including their styles and links.
         let mut split_retreat = false;
-        while let Some((old, _)) = retreats.next_if(|&(old, _)| old < pass.end) {
+        while let Some(old) = retreats.next_if(|&old| old < pass.end) {
+            while covered_iter.next_if(|&cover| cover < old).is_some() {}
             split_retreat |= covered_iter.next_if_eq(&old).is_none() && old >= pass.start;
         }
         let last = i + 1 == passes.len();

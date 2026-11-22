@@ -305,6 +305,8 @@ impl FieldBuffer {
                 covered.push(target);
             }
         });
+        covered.sort_unstable();
+        covered.dedup();
         covered
     }
 
@@ -340,18 +342,15 @@ impl FieldBuffer {
                 if !overprint.ordered.is_empty() {
                     order(overprint.ordered);
                 }
-                while retreats
-                    .peek()
-                    .is_some_and(|&&(target, _)| target < pass.end)
-                {
+                while retreats.peek().is_some_and(|&&(_, mark)| mark < pass.end) {
                     retreats.next();
                 }
                 continue;
             }
-            let Some(&&(target, _)) = retreats.peek() else {
+            let Some(&&(_, mark)) = retreats.peek() else {
                 continue;
             };
-            if target < pass.end {
+            if mark < pass.end {
                 let start = pass.start;
                 let printed_end = self.printed_content_end(start, pass.end);
                 let last_advance = self.cells[start.min(printed_end)..printed_end]
@@ -369,7 +368,7 @@ impl FieldBuffer {
                         )
                     })
                     .map(|index| start + index);
-                while let Some(&&(target, mark)) = retreats.peek().filter(|pair| pair.0 < pass.end)
+                while let Some(&&(target, mark)) = retreats.peek().filter(|pair| pair.1 < pass.end)
                 {
                     // The original mark has no width. A leading HORIZ can
                     // overwrite its cell with an advancing graph while the

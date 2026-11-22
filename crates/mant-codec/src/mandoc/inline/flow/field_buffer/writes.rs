@@ -827,6 +827,27 @@ impl FieldBuffer {
         }
     }
 
+    pub(super) fn record_pass_retreat(&mut self, target: usize, mark: usize) {
+        let key = (mark, target);
+        if self
+            .pass_retreats
+            .last()
+            .is_none_or(|&(target, mark)| (mark, target) < key)
+        {
+            // Ordinary encode1() writes advance to a new slot.
+            self.pass_retreats.push((target, mark));
+            return;
+        }
+        // Prefix replay can restate a retreat or add an earlier mark.
+        // Ordered retirement must see a surviving mark exactly once.
+        let index = self
+            .pass_retreats
+            .partition_point(|&(target, mark)| (mark, target) < key);
+        if self.pass_retreats.get(index) != Some(&(target, mark)) {
+            self.pass_retreats.insert(index, (target, mark));
+        }
+    }
+
     fn project_backline_retreat(&mut self, cell: usize, incoming_width: usize, staged: bool) {
         if matches!(self.cells[cell], FieldCell::Graph { width: 0, .. }) {
             // A cached zero-width graph was emitted by term_field() and
@@ -843,7 +864,7 @@ impl FieldBuffer {
             // encode1() still writes the backline before the mark. A mark
             // emits no advancing cell at term_field()421-439. Keep the
             // old scalar quota until the accepted pass proves a cover.
-            self.pass_retreats.push((cell, self.cells.len() + 1));
+            self.record_pass_retreat(cell, self.cells.len() + 1);
             return;
         }
         // term_field() advances to a pending blank and can rewind over it

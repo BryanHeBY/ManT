@@ -308,6 +308,10 @@ fn collect_native_overprints(
             },
         );
     }
+    // Device encounter order belongs to the paint groups above. Coverage
+    // queries use raw target positions even when a replay retreats left.
+    covered.sort_unstable();
+    covered.dedup();
     (covered, order)
 }
 
