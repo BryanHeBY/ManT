@@ -149,3 +149,37 @@ fn accepted_rewind_can_cover_ink_after_a_nonbreaking_blank() {
     let text = mant_render::render_query_man(&content);
     assert_eq!(description_rows(&text, &source), ["\u{a0}J"], "{source}");
 }
+
+#[test]
+fn replay_keeps_accepted_columns_of_compact_motion_runs() {
+    // term.c::term_word() can revisit native advances which have no
+    // reading scalar. term_field() still emits their columns alongside
+    // the surviving ink, including a gap that covers an earlier glyph.
+    for (words, expected) in [
+        (
+            r#".Em "A\zC\fPD" No "\h'-1n'\z\h'1n'F\fRG\h'-1n'" No "\h'3n'F\zG\h'2n'\:" No "\p\h'-1n'\fPX""#,
+            "ADFG   FG  X",
+        ),
+        (
+            r#".No "A\zC\fPD" Em "\:\h'-3n'\:" No "\h'3n'D  " Em "\h'-1n'\fPX""#,
+            "A   D  X",
+        ),
+    ] {
+        let source = format!("{HEADER}{words}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}
+
+#[test]
+fn replayed_motion_after_a_word_end_keeps_the_preceding_glyph_and_row() {
+    // term.c::term_fill() consumes the `\p` at a word boundary. Spaces
+    // on the next row cannot cover C after the first pass backspaces.
+    let words = r#".No "A\zC\fPD" Em "\:\h'-3n'\p\:" No "\h'3n'D  " Em "\h'-1n'\fPX""#;
+    let source = format!("{HEADER}{words}{END}");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    assert_eq!(description_rows(&text, &source), ["AC", "D  X"], "{source}");
+}

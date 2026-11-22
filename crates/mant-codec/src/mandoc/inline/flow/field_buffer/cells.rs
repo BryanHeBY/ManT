@@ -127,6 +127,8 @@ pub(in crate::mandoc) enum FieldWrite {
     ReplaceLivePrefix {
         start: usize,
         positions: Vec<Option<usize>>,
+        /// Old advance slot to first surviving slot and columns before new ink.
+        retained_advances: std::collections::BTreeMap<usize, (usize, usize)>,
         first_incoming: usize,
         first_incoming_ink: Option<usize>,
         entry_blanks: usize,

@@ -111,7 +111,7 @@ impl WordPassProjection {
             word_start
         };
         if let Some(ink) = entry.incoming_ink()
-            && let Some(gap) = buffer.retained_motion_gap(ink)
+            && let Some(gap) = buffer.retained_motion_gap(ink, plain_output)
             && gap.width >= self.native_separator
         {
             if plain_output

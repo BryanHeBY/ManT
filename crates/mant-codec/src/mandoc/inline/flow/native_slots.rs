@@ -9,17 +9,23 @@ const EN: usize = 24;
 
 /// A populated span in the final native buffer. Repeated device strokes
 /// can be scanned in bulk without adding an author scalar to the span.
+#[derive(Clone)]
 pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) cell: FieldCell,
     pub(in crate::mandoc::inline) count: usize,
     pub(in crate::mandoc::inline) owner: Option<usize>,
     pub(in crate::mandoc::inline) drawing_advance: bool,
+    pub(in crate::mandoc::inline) advance_source: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
 enum Pattern {
     Plain(FieldCell),
     DrawingAdvance,
+    ImportedAdvance {
+        cell: FieldCell,
+        source: usize,
+    },
     Overstrike {
         cells: Arc<[FieldCell]>,
         phase: usize,
@@ -29,7 +35,7 @@ enum Pattern {
 impl Pattern {
     fn cell(&self, offset: usize) -> &FieldCell {
         match self {
-            Self::Plain(cell) => cell,
+            Self::Plain(cell) | Self::ImportedAdvance { cell, .. } => cell,
             Self::DrawingAdvance => &FieldCell::NonBreakingBlank,
             Self::Overstrike { cells, phase } => {
                 &cells[(phase + offset % cells.len()) % cells.len()]
@@ -39,7 +45,7 @@ impl Pattern {
 
     fn shifted(&self, offset: usize) -> Self {
         match self {
-            Self::Plain(_) | Self::DrawingAdvance => self.clone(),
+            Self::Plain(_) | Self::DrawingAdvance | Self::ImportedAdvance { .. } => self.clone(),
             Self::Overstrike { cells, phase } => Self::Overstrike {
                 cells: Arc::clone(cells),
                 phase: (phase + offset % cells.len()) % cells.len(),
@@ -48,6 +54,10 @@ impl Pattern {
     }
 
     fn append_fill_slots(&self, out: &mut Vec<FillSlot>, count: usize, owner: Option<usize>) {
+        let advance_source = match self {
+            Self::ImportedAdvance { source, .. } => Some(*source),
+            _ => None,
+        };
         let mut push = |cell: &FieldCell, count| {
             if *cell == FieldCell::Backline
                 && let Some(previous) = out.last_mut().filter(|previous| previous.count > 1)
@@ -60,6 +70,7 @@ impl Pattern {
                     count: 1,
                     owner: previous.owner,
                     drawing_advance: previous.drawing_advance,
+                    advance_source: previous.advance_source,
                 };
                 out.push(tail);
             }
@@ -67,7 +78,8 @@ impl Pattern {
                 cell: cell.clone(),
                 count,
                 owner,
-                drawing_advance: matches!(self, Self::DrawingAdvance),
+                drawing_advance: self.is_fixed_advance(),
+                advance_source,
             });
         };
         let Self::Overstrike { cells, phase } = self else {
@@ -89,6 +101,28 @@ impl Pattern {
         }
         for cell in &cells[..remaining % period] {
             push(cell, 1);
+        }
+    }
+
+    fn is_fixed_advance(&self) -> bool {
+        matches!(
+            self,
+            Self::DrawingAdvance
+                | Self::ImportedAdvance {
+                    cell: FieldCell::NonBreakingBlank,
+                    ..
+                }
+        )
+    }
+
+    fn into_independent_tail(self) -> Self {
+        match self {
+            Self::ImportedAdvance {
+                cell: FieldCell::NonBreakingBlank,
+                ..
+            } => Self::DrawingAdvance,
+            Self::ImportedAdvance { cell, .. } => Self::Plain(cell),
+            pattern => pattern,
         }
     }
 }
@@ -262,13 +296,10 @@ impl NativeSlots {
         let mut fill = Vec::new();
         for (&at, run) in captured.into_iter().rev() {
             run.pattern.append_fill_slots(&mut fill, run.end - at, None);
-            runs.insert(
-                at - start,
-                Run {
-                    end: run.end - start,
-                    ..run.clone()
-                },
-            );
+            let mut tail = run.clone();
+            tail.end -= start;
+            tail.pattern = tail.pattern.into_independent_tail();
+            runs.insert(at - start, tail);
         }
         Some(DeviceTail {
             fill_cells: fill.len(),
@@ -317,10 +348,24 @@ impl NativeSlots {
             };
             match cell {
                 FieldCell::DrawnSpaces(count) => {
-                    slots.advance(*count, FieldCell::BreakableBlank, None);
+                    slots.advance_pattern(
+                        *count,
+                        Pattern::ImportedAdvance {
+                            cell: FieldCell::BreakableBlank,
+                            source: index,
+                        },
+                        None,
+                    );
                 }
                 FieldCell::FixedDrawingAdvance(count) => {
-                    slots.advance_pattern(*count, Pattern::DrawingAdvance, None);
+                    slots.advance_pattern(
+                        *count,
+                        Pattern::ImportedAdvance {
+                            cell: FieldCell::NonBreakingBlank,
+                            source: index,
+                        },
+                        None,
+                    );
                 }
                 _ => slots.write_run(cell.clone(), 1, Some(owner)),
             }
@@ -369,9 +414,7 @@ impl NativeSlots {
                 .runs
                 .range(..marker)
                 .next_back()
-                .is_some_and(|(_, run)| {
-                    run.end == marker && matches!(run.pattern, Pattern::DrawingAdvance)
-                }))
+                .is_some_and(|(_, run)| run.end == marker && run.pattern.is_fixed_advance()))
         .then_some(marker)
     }
 
@@ -384,7 +427,7 @@ impl NativeSlots {
         }
         let boundary = self.extent.checked_sub(automatic)?;
         let (_, run) = self.runs.range(..boundary).next_back()?;
-        (run.end == boundary && matches!(run.pattern, Pattern::DrawingAdvance)).then_some(boundary)
+        (run.end == boundary && run.pattern.is_fixed_advance()).then_some(boundary)
     }
 
     pub(in crate::mandoc::inline) fn has_unpainted_marker_tail(&self) -> bool {

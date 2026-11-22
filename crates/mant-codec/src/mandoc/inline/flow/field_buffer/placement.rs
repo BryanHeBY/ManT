@@ -519,6 +519,7 @@ impl FieldBuffer {
     pub(in crate::mandoc::inline::flow) fn retained_motion_gap(
         &self,
         end: usize,
+        plain_output: bool,
     ) -> Option<RetainedMotionGap> {
         let end = (end..self.cells.len())
             .take(MAX_REPLAY_PREFIX_CELLS)
@@ -557,7 +558,12 @@ impl FieldBuffer {
             // occupies the covering glyph's column, not the earlier gap.
             before_ink -= 2;
         }
+        let mut covered_before_gap = None;
+        let mut can_cover_preceding_glyph = plain_output;
         for cell in (floor..before_ink).rev() {
+            if covered_before_gap == Some(cell) {
+                continue;
+            }
             match self.cells[cell] {
                 FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => {
                     saw_motion = true;
@@ -577,10 +583,20 @@ impl FieldBuffer {
                     width += 1;
                     projection_is_complete &= self.projection_length(cell, cell + 1) == 1;
                 }
-                FieldCell::BreakMarker
-                | FieldCell::ZeroWidthGraph
-                | FieldCell::TabReference
-                | FieldCell::Breakpoint => {}
+                // A word-end request can put the advance on a different
+                // accepted row from the backspace or the earlier ink.
+                FieldCell::BreakMarker if covered_before_gap.is_some() => return None,
+                FieldCell::BreakMarker => can_cover_preceding_glyph = false,
+                FieldCell::ZeroWidthGraph | FieldCell::TabReference | FieldCell::Breakpoint => {}
+                FieldCell::Backline
+                    if can_cover_preceding_glyph
+                        && saw_motion
+                        && cell > floor
+                        && covered_before_gap.is_none()
+                        && self.gap_covers_preceding_glyph(cell - 1, gap) =>
+                {
+                    covered_before_gap = Some(cell - 1);
+                }
                 FieldCell::Graph { text, .. } if !text.is_whitespace() => {
                     return (saw_motion && (1..=MAX_REPLAY_PREFIX_CELLS).contains(&width))
                         .then_some(RetainedMotionGap {
@@ -594,6 +610,22 @@ impl FieldBuffer {
             }
         }
         None
+    }
+
+    fn gap_covers_preceding_glyph(&self, glyph: usize, gap: usize) -> bool {
+        // term_field() releases spaces queued after its backspace before
+        // the next printing cell. The retreat receipt identifies the
+        // covered glyph, leaving the earlier ink as the gap's origin.
+        let index = self
+            .pass_retreats
+            .partition_point(|&(_, mark)| mark <= glyph + 1);
+        glyph >= self.raw_slot_fence
+            && self.projection_length(glyph, glyph + 1) == 1
+            && matches!(self.cells[glyph], FieldCell::Graph { text, width: 1 } if !text.is_whitespace())
+            && self.pass_retreats[index..]
+                .iter()
+                .take_while(|&&(_, mark)| mark <= gap)
+                .any(|&(target, _)| target == glyph)
     }
 
     pub(super) fn replace_placed_tail(&mut self, count: usize) {

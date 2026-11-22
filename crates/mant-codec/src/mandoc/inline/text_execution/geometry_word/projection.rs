@@ -291,6 +291,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
         if slot.drawing_advance && slot.owner.is_none() && slot.count > 1 {
             let count = slot.count;
             let cell = slot.cell.clone();
+            let advance_source = slot.advance_source;
             slots.splice(
                 index..=index,
                 (0..count).map(|_| FillSlot {
@@ -298,6 +299,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
                     count: 1,
                     owner: None,
                     drawing_advance: true,
+                    advance_source,
                 }),
             );
         }
@@ -417,6 +419,7 @@ fn replay_prefix(
     FieldWrite::ReplaceLivePrefix {
         start,
         positions,
+        retained_advances: retain_earlier_advances(slots, start, first_incoming),
         first_incoming: start + first_incoming,
         // Interleaved old glyphs own their individual advances. They
         // cannot share an entry-width correction on the incoming word.
@@ -425,6 +428,23 @@ fn replay_prefix(
         entry_gap: entry_gap.filter(|_| entry_blanks == 1),
         unpublished: unpublished.map(|index| start + index),
     }
+}
+
+fn retain_earlier_advances(
+    slots: &[FillSlot],
+    start: usize,
+    first_incoming: usize,
+) -> std::collections::BTreeMap<usize, (usize, usize)> {
+    let mut advances = std::collections::BTreeMap::<usize, (usize, usize)>::new();
+    for (position, slot) in slots.iter().take(first_incoming).enumerate() {
+        if let Some(source) = slot.advance_source {
+            let (_, width) = advances
+                .entry(start + source)
+                .or_insert((start + position, 0));
+            *width = width.saturating_add(slot.count);
+        }
+    }
+    advances
 }
 
 fn retire_trailing_entry_blanks(

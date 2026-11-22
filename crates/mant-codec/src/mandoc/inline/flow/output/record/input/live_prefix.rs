@@ -42,6 +42,7 @@ impl PrefixEdits {
         let Some(FieldWrite::ReplaceLivePrefix {
             start,
             positions,
+            retained_advances,
             first_incoming,
             first_incoming_ink,
             entry_blanks,
@@ -122,7 +123,7 @@ impl PrefixEdits {
         moved.sort_unstable_by_key(|&(position, _)| position);
         let gaps = rebase_earlier_words(
             (buffer, earlier),
-            (positions, &locations),
+            GapOverlay(positions, &locations, retained_advances),
             (*start, *first_incoming),
             &earlier_ink,
         );
@@ -389,13 +390,20 @@ struct GapRemoval {
 
 type SourceProjection = Option<(usize, usize, usize)>;
 
+#[derive(Clone, Copy)]
+struct GapOverlay<'a>(
+    &'a [Option<usize>],
+    &'a [SourceProjection],
+    &'a BTreeMap<usize, (usize, usize)>,
+);
+
 fn rebase_earlier_words(
     (buffer, earlier): (&FieldBuffer, &mut [NativeWordAnchor]),
-    overlay: (&[Option<usize>], &[SourceProjection]),
+    overlay: GapOverlay<'_>,
     (start, first_incoming): (usize, usize),
     earlier_ink: &HashMap<usize, usize>,
 ) -> GapEdits {
-    let (positions, _) = overlay;
+    let GapOverlay(positions, _, _) = overlay;
     let first_touched = earlier.partition_point(|owner| owner.content < start);
     let mut gaps = GapEdits::default();
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
@@ -437,12 +445,13 @@ impl GapEdits {
     fn rebase(
         &mut self,
         buffer: &FieldBuffer,
-        (positions, locations): (&[Option<usize>], &[SourceProjection]),
+        overlay: GapOverlay<'_>,
         (owner, owner_index): (&mut NativeWordAnchor, usize),
         start: usize,
         offset: usize,
         first_incoming: usize,
     ) {
+        let GapOverlay(positions, locations, retained_advances) = overlay;
         let mut lost_columns = 0usize;
         let mut surviving = None;
         // A prefix can represent several consecutive cells. Overwriting
@@ -459,6 +468,13 @@ impl GapEdits {
                 // term_field() emits one run of spaces, but a source blank
                 // in that run keeps its own scalar and moves independently.
                 continue;
+            }
+            if let Some(&(cell, kept)) = retained_advances.get(&(start + source)) {
+                // Imported device-only advances have no glyph owner.
+                // Count any original columns still before incoming ink.
+                lost_columns = lost_columns.saturating_add(width.saturating_sub(kept));
+                surviving = Some((source, cell));
+                break;
             }
             if let Some(cell) = position {
                 surviving = Some((source, cell));

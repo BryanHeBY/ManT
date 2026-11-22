@@ -63,6 +63,7 @@ fn split_buffered_advance(
             count: 1,
             owner: None,
             drawing_advance: true,
+            advance_source: None,
         }),
     );
     Some(start..start + count)
@@ -294,15 +295,15 @@ fn publish_inner_advances(
                     count: 1,
                     owner: Some(id),
                     drawing_advance: false,
+                    advance_source: None,
                 }
             })
             .collect::<Vec<_>>();
         if projected < slot.count {
             blanks.push(FillSlot {
-                cell: slot.cell.clone(),
                 count: slot.count - projected,
                 owner: None,
-                drawing_advance: slot.drawing_advance,
+                ..slot.clone()
             });
         }
         slots.splice(index..=index, blanks);
