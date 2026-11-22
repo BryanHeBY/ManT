@@ -147,3 +147,27 @@ fn native_heading_handoff_preserves_exact_marker_rows_and_body_owner() {
         }
     }
 }
+
+#[test]
+fn filled_subsection_heading_retires_each_invisible_marker_pass() {
+    // At PD=0 pre_SS leaves the pending field open. HEAD's term_newln
+    // (man_term.c:668-691,752-762) consumes each accepted `\p\&` pass.
+    let header = MAN.replace(".SH DESCRIPTION", ".SH FIRST");
+    for count in [1, 3, 4] {
+        for separator in [" ", "\n"] {
+            let input = vec![r"\p\&"; count].join(separator);
+            let source = format!("{header}.PD 0\n{input}\n.SS NEXT\nAFTERMARK\n");
+            let content = mant_loader::load_roff_bytes(source.as_bytes()).expect("parse roff");
+            let rendered = mant_render::render_query_man(&content);
+            let (_, body) = rendered.split_once("\nFIRST\n").expect("FIRST section");
+            let mut expected = vec![""; count];
+            expected.extend(["NEXT", "AFTERMARK"]);
+            assert!(
+                body.lines()
+                    .map(|line| line.trim_start_matches(' '))
+                    .eq(expected),
+                "{source}\n{rendered}"
+            );
+        }
+    }
+}

@@ -41,6 +41,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     let mut positions = BTreeMap::new();
     let first_owners = std::cell::OnceCell::new();
     let has_drawing_advance = buffer.has_deferred_drawing_advances();
+    let unowned_prefix = handoff.is_none() && has_unowned_prefix_rows(buffer, anchors, passes);
     let mut preceding = 0;
     for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
@@ -62,7 +63,7 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
             buffer.defer_projected_gap(pass.end, next.start);
         }
         let cell = next.start;
-        let owner = projected_restart_owner(buffer, anchors, pass, next);
+        let owner = projected_restart_owner(buffer, anchors, pass, next, unowned_prefix);
         if let Some(mut index) = owner.checked_sub(1) {
             if project_definition_handoff(handoff, buffer, anchors, pass, next, &mut boundaries) {
                 continue;
@@ -287,11 +288,27 @@ fn project_definition_handoff(
     false
 }
 
+fn has_unowned_prefix_rows(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+) -> bool {
+    anchors.first().is_some_and(|anchor| {
+        passes
+            .first()
+            .is_some_and(|pass| pass.end <= anchor.content)
+            && passes.last().is_some_and(|pass| {
+                buffer.printed_content_end(anchor.content, pass.end) > anchor.content
+            })
+    })
+}
+
 fn projected_restart_owner(
     buffer: &super::super::field_buffer::FieldBuffer,
     anchors: &[super::super::NativeWordAnchor],
     pass: &super::super::field_buffer::FillPass,
     next: &super::super::field_buffer::FillPass,
+    unowned_prefix: bool,
 ) -> usize {
     use super::super::field_buffer::FillBoundary;
     if pass.boundary == FillBoundary::WordEndBreak
@@ -309,6 +326,16 @@ fn projected_restart_owner(
     // even when replay has removed its original entry-gap receipt.
     let cell = next.start;
     let owner = anchors.partition_point(|anchor| anchor.content <= cell);
+    if owner == 0
+        && unowned_prefix
+        && pass.boundary == FillBoundary::WordEndBreak
+        && buffer.printed_content_end(pass.start, pass.end) == pass.start
+    {
+        // An IR-only drain can leave several earlier NBRZW marker passes
+        // without scalar owners. term_flushln() still ends each row
+        // before the first later owner with accepted ink (term.c:205-220).
+        return 1;
+    }
     let Some(anchor) = anchors.get(owner).filter(|anchor| anchor.start <= cell) else {
         return owner;
     };
