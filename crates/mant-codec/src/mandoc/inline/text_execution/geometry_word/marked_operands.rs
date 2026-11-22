@@ -135,6 +135,43 @@ pub(super) fn bounded_literal_control_append(
         })
 }
 
+/// A graphless operand can retreat beyond the complete live input and
+/// change the native margin before that node restores its offset.
+pub(super) fn tracks_literal_control_retreat(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use super::EntryCursor;
+    let entry = &context.slot_entry;
+    entry.domain == ReplayDomain::LiteralDefinitionLine
+        && entry.cursor == EntryCursor::AtEnd
+        && !entry.kept_blanks
+        && !context.zero_advance.has_annotation_output_owner()
+        && !context.defer_leading_blanks
+        && entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.pass == ReplayPass::Incremental
+                && !prefix.backbefore
+                && !prefix.backafter
+                && prefix.pending_cell.is_none()
+                && prefix.tail_fonts.is_empty()
+        })
+        && events.split_first().is_some_and(|(first, tail)| {
+            matches!(first, RoffInlineEvent::HorizontalMotion { .. })
+                && tail
+                    .iter()
+                    .any(|event| matches!(event, RoffInlineEvent::LineBreak))
+                && tail.iter().all(|event| {
+                    matches!(
+                        event,
+                        RoffInlineEvent::LineBreak
+                            | RoffInlineEvent::ZeroWidthGlyph
+                            | RoffInlineEvent::Breakpoint
+                    )
+                })
+        })
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ControlReplay {
     None,

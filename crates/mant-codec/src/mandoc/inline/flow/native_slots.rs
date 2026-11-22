@@ -202,6 +202,12 @@ pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) prefix: Option<FieldPrefix>,
 }
 
+#[derive(Default)]
+pub(in crate::mandoc::inline) struct MotionEffect {
+    pub(in crate::mandoc::inline) reposition: Option<CursorReposition>,
+    pub(in crate::mandoc::inline) before_origin_units: usize,
+}
+
 #[derive(Clone, Copy)]
 pub(in crate::mandoc::inline) enum PrefixExtension {
     None,
@@ -635,25 +641,30 @@ impl NativeSlots {
         self.cursor = end;
     }
 
-    /// Report whether an absolute target or bounded retreat executed.
+    /// Report the buffered cursor effect independently of the excess
+    /// displacement before the complete field's origin.
     pub(in crate::mandoc::inline) fn motion(
         &mut self,
         argument: Option<&str>,
         owner: Option<usize>,
-    ) -> Option<CursorReposition> {
+    ) -> MotionEffect {
         if std::mem::take(&mut self.backafter) {
-            return None;
+            return MotionEffect::default();
         }
-        let argument = argument?;
+        let Some(argument) = argument else {
+            return MotionEffect::default();
+        };
         let (absolute, argument) = argument
             .strip_prefix('|')
             .map_or((false, argument), |a| (true, a));
-        let (length, _) = TableColumnMetrics::motion_argument(argument)?;
+        let Some((length, _)) = TableColumnMetrics::motion_argument(argument) else {
+            return MotionEffect::default();
+        };
         if absolute && self.prior_input && self.origin.is_none() {
             // term_word() resolves absolute HORIZ against col in the whole
             // field, including writes by earlier operands (term.c:678–714).
             self.prior_edit = Some(PriorSlotEdit::Unresolved);
-            return None;
+            return MotionEffect::default();
         }
         let column = self.origin.unwrap_or(0).saturating_add(self.cursor);
         let relative = if absolute {
@@ -662,26 +673,36 @@ impl NativeSlots {
         } else {
             i64::from(length)
         };
+        let mut effect = MotionEffect {
+            reposition: absolute.then_some(CursorReposition::Absolute),
+            ..MotionEffect::default()
+        };
         if relative > 0 {
             let cells = usize::try_from(relative).unwrap_or(usize::MAX).div_ceil(EN);
             let cells = cells.saturating_sub(usize::from(std::mem::take(&mut self.backbefore)));
             self.advance_pattern(cells, Pattern::DrawingAdvance, owner);
         } else if relative < 0 {
-            let cells = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX) / EN;
-            let retreat = cells.saturating_add(usize::from(std::mem::take(&mut self.backbefore)));
+            let units = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX);
+            let backbefore = usize::from(std::mem::take(&mut self.backbefore));
+            let retreat = (units / EN).saturating_add(backbefore);
             let within_slots = retreat <= self.cursor;
             if self.prior_input && !within_slots {
                 self.prior_edit = Some(PriorSlotEdit::Rewind);
-                return None;
+                return MotionEffect::default();
             }
-            // The pre-column remainder changes tcol.offset upstream, not
-            // lastcol or the available width after the occupied prefix.
+            if !absolute && self.origin == Some(0) {
+                // term_word() stores the excess in offset and ti. A
+                // fractional displacement can still have a valid raw
+                // cursor receipt after whole-cell truncation.
+                let available = self.cursor.saturating_sub(backbefore).saturating_mul(EN);
+                effect.before_origin_units = units.saturating_sub(available);
+            }
             self.cursor = self.cursor.saturating_sub(retreat);
             if !absolute && within_slots && retreat > 0 {
-                return Some(CursorReposition::RelativeRetreat);
+                effect.reposition = Some(CursorReposition::RelativeRetreat);
             }
         }
-        absolute.then_some(CursorReposition::Absolute)
+        effect
     }
 
     pub(in crate::mandoc::inline) fn line(
@@ -1009,17 +1030,31 @@ mod tests {
             slots.native_write(write, RoffFont::Regular, None);
         }
         assert_eq!(
-            slots.motion(Some("-1n"), None),
+            slots.motion(Some("-1n"), None).reposition,
             Some(CursorReposition::RelativeRetreat)
         );
         slots.arm_backafter();
-        assert_eq!(slots.motion(Some("|1n"), None), None);
+        assert_eq!(slots.motion(Some("|1n"), None).reposition, None);
         assert_eq!(slots.extent_and_retreat(), (3, 1));
         assert_eq!(
-            slots.motion(Some("|1n"), None),
+            slots.motion(Some("|1n"), None).reposition,
             Some(CursorReposition::Absolute)
         );
         assert_eq!(slots.extent_and_retreat(), (3, 2));
+    }
+
+    #[test]
+    fn fractional_retreat_preserves_cursor_and_reports_margin_excess() {
+        // Pinned `No X Ns No "\h'-1.5n'\p"` writes one native slot and
+        // sets ti by the remaining 12 basic units (term.c:706-713).
+        let mut slots = NativeSlots::after_entry(false);
+        for write in FieldWrite::literal("X") {
+            slots.native_write(write, RoffFont::Regular, None);
+        }
+        let effect = slots.motion(Some("-1.5n"), None);
+        assert_eq!(effect.reposition, Some(CursorReposition::RelativeRetreat));
+        assert_eq!(effect.before_origin_units, 12);
+        assert_eq!(slots.extent_and_retreat(), (1, 1));
     }
 
     #[test]

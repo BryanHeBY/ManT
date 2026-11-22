@@ -117,11 +117,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
             },
         },
     );
-    builder.ensure_definition_field_session();
-    builder.escape_coverage.record(execution.escape_scan);
-    if let Some(cell) = &mut builder.table_cell {
-        cell.buffered |= execution.table_device_buffer_written;
-    }
+    receive_word_effects(builder, &execution);
     builder.native_word_writes = Some(execution.native_writes);
     // A visited empty source TEXT takes the vertical path before reaching
     // here. roff_term_pre_ce() executes its empty TEXT as a direct term_word:
@@ -165,6 +161,20 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     }
     builder.continue_source_line(continues_line);
     !execution.definitive_reject && !builder.execution.wipe_remainder
+}
+
+fn receive_word_effects(
+    builder: &mut InlineBuilder,
+    execution: &super::text_execution::TextExecution,
+) {
+    builder.ensure_definition_field_session();
+    builder
+        .execution
+        .apply_native_origin_retreat(execution.native_origin_retreat_units);
+    builder.escape_coverage.record(execution.escape_scan);
+    if let Some(cell) = &mut builder.table_cell {
+        cell.buffered |= execution.table_device_buffer_written;
+    }
 }
 
 impl super::InlineExecutionState {

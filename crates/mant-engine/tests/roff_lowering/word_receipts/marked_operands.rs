@@ -226,21 +226,89 @@ fn continued_literal_definition_retires_graphless_motion_padding() {
             let content =
                 json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
             let rendered = mant_render::render_query_man(&content);
-            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
-            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
-            let label = body
-                .lines()
-                .find(|line| line.trim_start() == "TERM")
-                .unwrap();
-            let prefix = label.strip_suffix("TERM").unwrap();
-            let rows: Vec<_> = body
-                .strip_suffix(prefix)
-                .unwrap_or(body)
-                .trim_end_matches('\n')
-                .lines()
-                .map(|line| line.strip_prefix(prefix).unwrap_or(line))
-                .collect();
-            assert_eq!(rows, expected, "{source}\n{rendered}");
+            assert_eq!(
+                literal_rows_relative_to_label(&rendered),
+                expected,
+                "{source}\n{rendered}"
+            );
+        }
+    }
+}
+
+fn literal_rows_relative_to_label(rendered: &str) -> Vec<&str> {
+    let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+    let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+    let label = body
+        .lines()
+        .find(|line| line.trim_start() == "TERM")
+        .unwrap();
+    let prefix = label.strip_suffix("TERM").unwrap();
+    body.strip_suffix(prefix)
+        .unwrap_or(body)
+        .trim_end_matches('\n')
+        .lines()
+        .map(|line| line.strip_prefix(prefix).unwrap_or(line))
+        .collect()
+}
+
+#[test]
+fn graphless_literal_retreat_restores_temporary_origin_on_real_endline() {
+    // term.c::ESCAPE_HORIZ changes both offset and ti for the excess
+    // beyond the complete native col. print_mdoc_node() restores only
+    // offset, then ascii_endline() consumes the retained ti. Relative
+    // geometry must survive a later word and another no-fill source row.
+    for (kind, width, indent, clipped_indent) in [
+        ("hang", 0, 2, 9),
+        ("hang", 4, 6, 17),
+        ("tag", 0, 2, 9),
+        ("tag", 4, 6, 17),
+    ] {
+        for (retreat, prefix, mode, next, prior, empty, target_column) in [
+            ("-3n", "", "", "", "START", true, indent),
+            ("-3.5n", "", "", "", "START", true, indent),
+            ("-3.75n", "", "", "", "START", true, indent + 1),
+            ("-4n", "", "", "", "START", true, indent + 1),
+            ("-5.5n", "", ".ti 2n\n", "", "START", true, indent + 2),
+            ("-5n", "", "", ".No Y\n", "START", true, indent + 2),
+            ("-100n", r"\c", "", "", "TART", false, clipped_indent),
+        ] {
+            let controls = if retreat.contains('.') || !empty {
+                r"\&\p"
+            } else {
+                r"\p\&"
+            };
+            let source = format!(
+                r#"{HEADER}.nf
+.Bl -{kind} -width {width}n
+.It TERM
+.No START{prefix}
+{mode}.No "\h'0n'{controls}" No "\h'{retreat}'\p"
+.No X
+{next}.El
+.fi
+{END}"#,
+            );
+            let content =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let rendered = mant_render::render_query_man(&content);
+            let mut expected = vec![
+                String::new(),
+                "TERM".into(),
+                format!("{}{prior}", " ".repeat(indent)),
+            ];
+            if empty {
+                expected.push(String::new());
+            }
+            let next_indent = " ".repeat(target_column);
+            expected.push(format!("{next_indent}X"));
+            if !next.is_empty() {
+                expected.push(format!("{next_indent}Y"));
+            }
+            assert_eq!(
+                literal_rows_relative_to_label(&rendered),
+                expected,
+                "{source}\n{rendered}"
+            );
         }
     }
 }

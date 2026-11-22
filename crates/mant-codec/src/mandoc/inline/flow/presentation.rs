@@ -118,6 +118,19 @@ impl RowPresentation {
     /// A definition's canonical offset is separate from its transient
     /// correction. The backend floors the actual offset before storing it;
     /// subtracting a positive ti from a restored mdoc scope can reach page 0.
+    /// A proved `ESCAPE_HORIZ` beyond column zero moves both offset and `ti`.
+    /// Mdoc restores offset at node exit. The next endline consumes `ti`.
+    fn retreat_before_column_zero(&mut self, units: usize, native_offset: usize) {
+        let offset = self
+            .parent
+            .saturating_add(i32::try_from(native_offset).unwrap_or(i32::MAX))
+            .saturating_add(self.offset_shift)
+            .max(0);
+        let displacement = i32::try_from(units).unwrap_or(i32::MAX).min(offset);
+        self.offset_shift = self.offset_shift.saturating_sub(displacement);
+        self.temporary = self.temporary.saturating_sub(displacement);
+    }
+
     pub(in crate::mandoc) fn endline_at(&mut self, native_offset: usize) {
         let base = self
             .parent
@@ -260,6 +273,16 @@ impl RowPresentation {
 }
 
 impl super::InlineExecutionState {
+    pub(in crate::mandoc) fn apply_native_origin_retreat(&mut self, units: usize) {
+        if units > 0
+            && self.macro_set == libmandoc_rs::MacroSet::Mdoc
+            && let Some(state) = &self.definition
+        {
+            self.row_presentation
+                .retreat_before_column_zero(units, state.field_offset_units);
+        }
+    }
+
     pub(in crate::mandoc) fn apply_temporary_indent(&mut self, argument: Option<&str>) {
         let offset = self
             .definition

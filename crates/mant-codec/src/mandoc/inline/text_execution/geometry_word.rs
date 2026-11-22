@@ -937,6 +937,7 @@ struct Placement<'a> {
     active_link: Option<usize>,
     marker_after_blank: bool,
     reposition: Option<CursorReposition>,
+    pre_column_retreat_units: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -956,6 +957,7 @@ impl<'a> Placement<'a> {
             active_link: None,
             marker_after_blank: false,
             reposition: None,
+            pre_column_retreat_units: 0,
         }
     }
 
@@ -1048,7 +1050,11 @@ impl<'a> Placement<'a> {
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
                 let owner =
                     include_advances.then(|| self.mark(ReadingGlyph::DeviceAdvance, display));
-                self.reposition = self.slots.motion(argument.as_deref(), owner);
+                let effect = self.slots.motion(argument.as_deref(), owner);
+                self.reposition = effect.reposition;
+                if effect.before_origin_units > 0 {
+                    self.pre_column_retreat_units = effect.before_origin_units;
+                }
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
@@ -1331,8 +1337,16 @@ pub(super) fn try_execute(
     word: &mut WordExecution,
 ) -> Result<(), PriorSlotEdit> {
     let existing_tail = can_defer_blank_tail_advances(events, context);
+    let tracks_origin_retreat = marked_operands::tracks_literal_control_retreat(events, context);
     let seed = GeometrySeed::begin(context, events);
-    execute_seed(seed, events, context, word, existing_tail)
+    execute_seed(
+        seed,
+        events,
+        context,
+        word,
+        existing_tail,
+        tracks_origin_retreat,
+    )
 }
 
 fn execute_seed<'a>(
@@ -1341,6 +1355,7 @@ fn execute_seed<'a>(
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
     existing_tail: bool,
+    tracks_origin_retreat: bool,
 ) -> Result<(), PriorSlotEdit> {
     // Font and reading owners only commit after all addressed bytes can be
     // placed. Falling back to the live word executor must not run them twice.
@@ -1441,6 +1456,7 @@ fn execute_seed<'a>(
         // when a leading \p makes term_flushln() accept none of its ink.
         return Err(PriorSlotEdit::Unresolved);
     }
+    let pre_column_retreat = seed.placement.pre_column_retreat_units;
     let placed = PlacedWord::prepare(
         seed,
         retain_suffix,
@@ -1452,6 +1468,9 @@ fn execute_seed<'a>(
     *context.font = font;
     context.zero_advance.take_armed();
     word.source_continuation = continuation;
+    if tracks_origin_retreat {
+        word.native_origin_retreat_units = pre_column_retreat;
+    }
     placed.project(context, word);
     Ok(())
 }

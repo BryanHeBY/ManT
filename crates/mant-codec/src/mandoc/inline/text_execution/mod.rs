@@ -119,6 +119,8 @@ pub(in crate::mandoc) struct TextExecution {
     pub(in crate::mandoc) table_device_buffer_written: bool,
     /// Hard rows already resolved from the accepted tbl device passes.
     pub(in crate::mandoc) table_reading_breaks: Option<usize>,
+    /// Basic units of a proved relative `HORIZ` still left at raw column zero.
+    pub(in crate::mandoc) native_origin_retreat_units: usize,
     pub(in crate::mandoc) joins_preceding_node: bool,
     pub(in crate::mandoc) source_continuation: Option<bool>,
     pub(in crate::mandoc) pending_word_end_break: bool,
@@ -194,6 +196,7 @@ struct WordExecution {
     drawing_probe: Option<Box<crate::mandoc::inline::flow::field_buffer::DrawingProbe>>,
     table_device_buffer_written: bool,
     table_reading_breaks: Option<usize>,
+    native_origin_retreat_units: usize,
 }
 
 // Record each decoded native write before its presentation action, in the
@@ -343,6 +346,7 @@ fn finish_text_execution(
         native_writes,
         table_device_buffer_written,
         table_reading_breaks,
+        native_origin_retreat_units,
         source_continuation,
         text_state,
         ..
@@ -366,6 +370,7 @@ fn finish_text_execution(
         native_writes,
         table_device_buffer_written,
         table_reading_breaks,
+        native_origin_retreat_units,
         joins_preceding_node: zero_advance.take_preceding_join(),
         source_continuation,
         pending_word_end_break: text_state.pending_word_end_break,

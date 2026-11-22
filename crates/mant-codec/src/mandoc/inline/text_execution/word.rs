@@ -17,6 +17,7 @@ impl WordExecution {
             drawing_probe: None,
             table_device_buffer_written: false,
             table_reading_breaks: None,
+            native_origin_retreat_units: 0,
         }
     }
 
