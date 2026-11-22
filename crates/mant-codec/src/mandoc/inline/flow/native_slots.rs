@@ -171,6 +171,12 @@ impl EntryCursor {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum CursorReposition {
+    Absolute,
+    RelativeRetreat,
+}
+
 #[derive(Default)]
 pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) domain: ReplayDomain,
@@ -414,6 +420,12 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
+    pub(in crate::mandoc::inline) fn cursor_before_unread_break(&self) -> bool {
+        self.runs
+            .range(self.cursor..)
+            .any(|(_, run)| matches!(run.pattern, Pattern::Plain(FieldCell::BreakMarker)))
+    }
+
     /// The raw position of a buffered break immediately after a fixed advance.
     pub(in crate::mandoc::inline) fn trailing_advance_marker(
         &self,
@@ -576,29 +588,25 @@ impl NativeSlots {
         self.cursor = end;
     }
 
-    /// Return whether the native execution applied an absolute target.
+    /// Report whether an absolute target or bounded retreat executed.
     pub(in crate::mandoc::inline) fn motion(
         &mut self,
         argument: Option<&str>,
         owner: Option<usize>,
-    ) -> bool {
+    ) -> Option<CursorReposition> {
         if std::mem::take(&mut self.backafter) {
-            return false;
+            return None;
         }
-        let Some(argument) = argument else {
-            return false;
-        };
+        let argument = argument?;
         let (absolute, argument) = argument
             .strip_prefix('|')
             .map_or((false, argument), |a| (true, a));
-        let Some((length, _)) = TableColumnMetrics::motion_argument(argument) else {
-            return false;
-        };
+        let (length, _) = TableColumnMetrics::motion_argument(argument)?;
         if absolute && self.prior_input && self.origin.is_none() {
             // term_word() resolves absolute HORIZ against col in the whole
             // field, including writes by earlier operands (term.c:678–714).
             self.prior_edit = Some(PriorSlotEdit::Unresolved);
-            return false;
+            return None;
         }
         let column = self.origin.unwrap_or(0).saturating_add(self.cursor);
         let relative = if absolute {
@@ -613,16 +621,20 @@ impl NativeSlots {
             self.advance_pattern(cells, Pattern::DrawingAdvance, owner);
         } else if relative < 0 {
             let cells = usize::try_from(relative.unsigned_abs()).unwrap_or(usize::MAX) / EN;
-            let retreat = usize::from(std::mem::take(&mut self.backbefore));
-            if self.prior_input && cells.saturating_add(retreat) > self.cursor {
+            let retreat = cells.saturating_add(usize::from(std::mem::take(&mut self.backbefore)));
+            let within_slots = retreat <= self.cursor;
+            if self.prior_input && !within_slots {
                 self.prior_edit = Some(PriorSlotEdit::Rewind);
-                return false;
+                return None;
             }
             // The pre-column remainder changes tcol.offset upstream, not
             // lastcol or the available width after the occupied prefix.
-            self.cursor = self.cursor.saturating_sub(cells.saturating_add(retreat));
+            self.cursor = self.cursor.saturating_sub(retreat);
+            if !absolute && within_slots && retreat > 0 {
+                return Some(CursorReposition::RelativeRetreat);
+            }
         }
-        absolute
+        absolute.then_some(CursorReposition::Absolute)
     }
 
     pub(in crate::mandoc::inline) fn line(
@@ -940,11 +952,17 @@ mod tests {
         for write in FieldWrite::literal("ABC") {
             slots.native_write(write, RoffFont::Regular, None);
         }
-        assert!(!slots.motion(Some("-1n"), None));
+        assert_eq!(
+            slots.motion(Some("-1n"), None),
+            Some(CursorReposition::RelativeRetreat)
+        );
         slots.arm_backafter();
-        assert!(!slots.motion(Some("|1n"), None));
+        assert_eq!(slots.motion(Some("|1n"), None), None);
         assert_eq!(slots.extent_and_retreat(), (3, 1));
-        assert!(slots.motion(Some("|1n"), None));
+        assert_eq!(
+            slots.motion(Some("|1n"), None),
+            Some(CursorReposition::Absolute)
+        );
         assert_eq!(slots.extent_and_retreat(), (3, 2));
     }
 

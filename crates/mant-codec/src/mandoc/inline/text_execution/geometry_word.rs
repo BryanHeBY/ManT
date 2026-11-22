@@ -3,7 +3,10 @@
 use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecution};
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite},
-    native_slots::{EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass},
+    native_slots::{
+        CursorReposition, EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass,
+        SlotEntry,
+    },
 };
 use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
 
@@ -695,7 +698,7 @@ struct Placement<'a> {
     links: Vec<&'a str>,
     active_link: Option<usize>,
     marker_after_blank: bool,
-    effective_absolute_cursor: bool,
+    reposition: Option<CursorReposition>,
 }
 
 #[derive(Clone, Copy)]
@@ -714,7 +717,7 @@ impl<'a> Placement<'a> {
             links: Vec::new(),
             active_link: None,
             marker_after_blank: false,
-            effective_absolute_cursor: false,
+            reposition: None,
         }
     }
 
@@ -765,7 +768,12 @@ impl<'a> Placement<'a> {
     ) {
         let font = state.current;
         let display = state.display_current();
-        self.retain_absolute_cursor_for_control(event);
+        if !matches!(
+            event,
+            RoffInlineEvent::NoSpace | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+        ) {
+            self.reposition = None;
+        }
         match event {
             RoffInlineEvent::Font(next) => state.select(*next),
             RoffInlineEvent::PreviousFont => state.restore(),
@@ -802,7 +810,7 @@ impl<'a> Placement<'a> {
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
                 let owner =
                     include_advances.then(|| self.mark(ReadingGlyph::DeviceAdvance, display));
-                self.effective_absolute_cursor = self.slots.motion(argument.as_deref(), owner);
+                self.reposition = self.slots.motion(argument.as_deref(), owner);
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
@@ -854,13 +862,6 @@ impl<'a> Placement<'a> {
                 self.slots.native_write(cell, font, None);
             }
         }
-    }
-
-    fn retain_absolute_cursor_for_control(&mut self, event: &RoffInlineEvent) {
-        self.effective_absolute_cursor &= matches!(
-            event,
-            RoffInlineEvent::NoSpace | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
-        );
     }
 
     fn write_invisible_cell(&mut self) {
@@ -1130,7 +1131,7 @@ fn execute_seed<'a>(
     let slots = &seed.placement.slots;
     // A marker after new ink leaves an open cursor at the end of that
     // native segment, even when the old tail still holds glyphs.
-    let live_cursor = retains_word_cursor(&seed, context.slot_entry.cursor, events);
+    let live_cursor = retains_word_cursor(&seed, &context.slot_entry, events);
     // A placed glyph can still be waiting under BACKBEFORE after a marker.
     // Keep its raw decoration and the invisible label slots around it, so
     // the next word can revisit the same native suffix (term.c::encode1).
@@ -1203,7 +1204,7 @@ fn execute_seed<'a>(
 
 fn retains_word_cursor(
     seed: &GeometrySeed<'_>,
-    entry: EntryCursor,
+    entry: &SlotEntry,
     events: &[RoffInlineEvent],
 ) -> bool {
     let slots = &seed.placement.slots;
@@ -1211,14 +1212,14 @@ fn retains_word_cursor(
         && (seed.prefix_start > 0
             // An initial control-only word can leave the cursor before
             // a marker. The next word must be able to overwrite it.
-            || !entry.has_input()
+            || !entry.cursor.has_input()
                 && slots.cursor_before_invisible_tail()
                 && !slots.contains_ink_from(0)
             // term_word() keeps the marked word's trailing raw advancement
             // when HORIZ returns into it. The next word still writes
             // inside those fixed cells before term_fill() sees the marker.
-            || !entry.has_input() && slots.cursor_in_unread_advance_after_marker()
-            || retains_absolute_word_cursor(seed, entry)
+            || !entry.cursor.has_input() && slots.cursor_in_unread_advance_after_marker()
+            || retains_repositioned_word_cursor(seed, entry, events)
             || seed.earlier != 0
                 && (slots.cursor_before_invisible_tail()
                     || slots.has_unpainted_marker_tail()
@@ -1238,19 +1239,41 @@ fn covers_field_start(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
                 && seed.placement.slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS)
 }
 
-fn retains_absolute_word_cursor(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
+fn retains_repositioned_word_cursor(
+    seed: &GeometrySeed<'_>,
+    entry: &SlotEntry,
+    events: &[RoffInlineEvent],
+) -> bool {
     use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
 
-    // An absolute motion in a complete field moves col without
-    // discarding the later slots. A marker before the motion is still
-    // unread by term_fill() until the actual flush (term.c:659–660,
-    // 678–714). Keep that state only after the absolute motion executed.
+    // An executed HORIZ in a complete field moves col without discarding
+    // later slots. In filled text, a retreat into the raw operand also
+    // leaves its subsequent markers available to the next term_word()
+    // until term_fill() runs (term.c:659–660, 678–714).
     let slots = &seed.placement.slots;
-    covers_field_start(seed, entry)
+    covers_field_start(seed, entry.cursor)
         && slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS
         && slots.cursor_before_owner()
         && slots.contains_ink_from(seed.earlier)
-        && seed.placement.effective_absolute_cursor
+        && match seed.placement.reposition {
+            Some(CursorReposition::Absolute) => true,
+            Some(CursorReposition::RelativeRetreat) => {
+                entry.domain == ReplayDomain::Filled
+                    && slots.cursor_before_unread_break()
+                    // A previously relocated cursor can have rewritten the
+                    // span before these markers. Forward writes leave the
+                    // earlier slots in place (term.c::bufferc).
+                    && events
+                        .iter()
+                        .filter(|event| {
+                            matches!(event, RoffInlineEvent::HorizontalMotion { argument: Some(value), .. }
+                                if motion_columns(value).is_some_and(|(absolute, units)| absolute || units < 0))
+                        })
+                        .nth(1)
+                        .is_none()
+            }
+            None => false,
+        }
 }
 
 /// A complete replay can place `\p` or another control inside a field

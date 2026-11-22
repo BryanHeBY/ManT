@@ -145,6 +145,34 @@ fn zero_relative_motion_preserves_raw_word_slots_for_a_later_edit() {
 }
 
 #[test]
+fn a_bounded_relative_retreat_keeps_unread_markers_and_later_ink() {
+    // term.c::term_word() retreats through native bytes while retaining
+    // lastcol. The next operand can replace or overprint a graph before
+    // a marker that term_fill() has yet to consume.
+    let cases = [
+        (
+            r#".No A No "\z\h'-1n'\h'1n'" No "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            "A   XG",
+        ),
+        (
+            r#".Sy A No "\z\h'-1n'\h'1n'" Sy "F\pG\p\c\h'-5n'" Em "\h'3n'\h'-4n'X""#,
+            "A   FXG",
+        ),
+        (
+            r#".No A No "\h'1n'" No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            "A   FGX",
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!("{HEADER}{body}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}
+
+#[test]
 fn a_complete_absolute_cursor_leaves_later_slots_available_to_replay() {
     // term.c::term_word() moves col to the absolute target while
     // bufferc() keeps lastcol. The next word can write at the early
