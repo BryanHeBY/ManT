@@ -112,7 +112,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
         || marker && (edits || context.table_leading_blanks != 0)
         || field
             && (has_live_raw_cursor(context)
-                || has_zero_advance && contains_local_overwrite(events, context)
+                || has_zero_advance && local_overwrite(events, context).is_some()
                 || has_link && decorated_word(events, context.font.current)
                 || marker && marker_replay(events, context).is_some()
                 || relative_advance && can_publish_inner_advances(events, context)
@@ -201,13 +201,19 @@ fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
     !context.zero_advance.has_pending_glyph() || can_place_pending(context)
 }
 
+#[derive(PartialEq, Eq)]
+enum LocalOverwrite {
+    Covered,
+    HoldsGlyph,
+}
+
 /// A complete in-word backspace stays editable until the native field
 /// retires. An unfinished escape still uses the delayed glyph owner,
 /// whose recovery and annotation state can span multiple fragments.
-fn contains_local_overwrite(
+fn local_overwrite(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
-) -> bool {
+) -> Option<LocalOverwrite> {
     let inherited_glyph = has_prior_retreat(context);
     let mut armed = false;
     let mut backbefore = false;
@@ -237,7 +243,7 @@ fn contains_local_overwrite(
                     if !(ch.is_ascii_graphic()
                         || direct_scalar && super::native_writes::is_single_column_ink(ch))
                     {
-                        return false;
+                        return None;
                     }
                     wrote_pair |= backbefore;
                     backbefore = std::mem::take(&mut armed);
@@ -253,7 +259,7 @@ fn contains_local_overwrite(
             {
                 projected_padding = true;
             }
-            _ => return false,
+            _ => return None,
         }
     }
     // encode() writes an ordinary trailing SP without consuming
@@ -273,7 +279,13 @@ fn contains_local_overwrite(
         && (events.last().is_some_and(
             |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
         ) || fits_editable_font_slots(events));
-    (wrote_pair || held_decorated_glyph) && !armed && (!inherited_glyph || !backbefore)
+    if armed || inherited_glyph && backbefore {
+        None
+    } else if backbefore {
+        (wrote_pair || held_decorated_glyph).then_some(LocalOverwrite::HoldsGlyph)
+    } else {
+        wrote_pair.then_some(LocalOverwrite::Covered)
+    }
 }
 
 fn fits_editable_font_slots(events: &[RoffInlineEvent]) -> bool {
@@ -312,7 +324,9 @@ fn can_publish_inner_advances(
     let mut ink = false;
     let mut advance = false;
     let mut followed = false;
-    for event in events {
+    let mut prior_zero_advance = false;
+    let mut covered_pair = false;
+    for (index, event) in events.iter().enumerate() {
         match event {
             RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _) => {
                 let printable = text
@@ -325,7 +339,30 @@ fn can_publish_inner_advances(
                 argument: Some(value),
                 ..
             } if motion_columns(value).is_some_and(|(absolute, units)| absolute || units > 0) => {
+                if (prior_zero_advance || covered_pair) && absolute_motion(event) {
+                    return false;
+                }
+                if std::mem::take(&mut prior_zero_advance) {
+                    // encode1() has already consumed both BACK registers
+                    // in this source operand. The next relative advance
+                    // therefore writes its full width (term.c:678–699).
+                    if local_overwrite(&events[..index], context) != Some(LocalOverwrite::Covered) {
+                        return false;
+                    }
+                    covered_pair = true;
+                }
                 advance |= ink;
+            }
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } if covered_pair
+                && followed
+                && motion_columns(value)
+                    .is_some_and(|(absolute, units)| !absolute && units < 0) =>
+            {
+                // Native placement checks the earlier edit fence. Permit
+                // an overwrite of later ink within the proved field.
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
@@ -337,6 +374,7 @@ fn can_publish_inner_advances(
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::Link(_)
             | RoffInlineEvent::ZeroWidthGlyph => {}
+            RoffInlineEvent::ZeroAdvance if !advance => prior_zero_advance = true,
             RoffInlineEvent::LineBreak if context.slot_entry.domain == ReplayDomain::Filled => {}
             _ => return false,
         }
@@ -432,7 +470,7 @@ fn marker_replay(
     // SP the terminal preserves beside a marker (term.c:659-661,946-967).
     // Otherwise the existing glyph owner must carry the pending BACK
     // register through the next term_word().
-    if has_backstep && (has_other_padding_controls || !contains_local_overwrite(events, context)) {
+    if has_backstep && (has_other_padding_controls || local_overwrite(events, context).is_none()) {
         return None;
     }
     if !has_marker || !has_ink || !ink_after_marker && !has_backstep {

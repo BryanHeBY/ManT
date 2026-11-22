@@ -1,0 +1,25 @@
+.Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Ss Covered before word-end marker
+.No "\zFG\h'2n'\pZ"
+.Ss Covered without marker
+.No "\zFG\h'2n'Z"
+.Ss Ordinary advance
+.No "FG\h'2n'\pZ"
+.Ss Pending glyph
+.No "\zF\h'2n'Z"
+.Ss Underlined ink
+.Em "\zFG\h'2n'\pZ"
+.Ss Bold ink
+.Sy "\zFG\h'2n'\pZ"
+.Ss Following glyph rewritten
+.No "\zFG\h'2n'Z\h'-1n'W"
+.Ss Later absolute cursor
+.No "\zFG\h'1n'X\h'|0n'"
+.Sh ENDTEST
+Done.

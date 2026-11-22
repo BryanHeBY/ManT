@@ -242,3 +242,44 @@ fn replay_preserves_a_single_advance_before_retained_ink() {
         assert_eq!(description_rows(&text, &source), [expected], "{source}");
     }
 }
+
+#[test]
+fn covered_local_glyphs_release_the_full_following_advance() {
+    // term.c::encode1() covers the first glyph with the second and clears
+    // BACKBEFORE. Only a still-pending glyph consumes the first advance cell.
+    let source = include_str!("live_replay/replay-keeps-advance-after-covered-glyph.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    let lines: Vec<_> = description_rows(&text, source)
+        .into_iter()
+        .map(str::trim_start)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Covered before word-end marker",
+            "G  Z",
+            "",
+            "Covered without marker",
+            "G  Z",
+            "",
+            "Ordinary advance",
+            "FG  Z",
+            "",
+            "Pending glyph",
+            "F Z",
+            "",
+            "Underlined ink",
+            "G  Z",
+            "",
+            "Bold ink",
+            "G  Z",
+            "",
+            "Following glyph rewritten",
+            "G  W",
+            "",
+            "Later absolute cursor",
+            "G X",
+        ]
+    );
+}
