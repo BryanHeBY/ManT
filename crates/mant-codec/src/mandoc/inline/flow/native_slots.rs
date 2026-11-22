@@ -458,6 +458,23 @@ impl NativeSlots {
             == Some(&FieldCell::BreakMarker)
     }
 
+    pub(in crate::mandoc::inline) fn cursor_in_unread_advance_after_marker(&self) -> bool {
+        self.origin == Some(0)
+            && self.extent <= super::field_buffer::MAX_EDITABLE_APPEND_CELLS
+            && !self.backafter
+            && !self.backbefore
+            && self
+                .runs
+                .range(..=self.cursor)
+                .next_back()
+                .is_some_and(|(&start, run)| {
+                    run.end == self.extent
+                        && self.cursor < run.end
+                        && run.pattern.is_fixed_advance()
+                        && self.previous_cell(start) == Some(&FieldCell::BreakMarker)
+                })
+    }
+
     pub(in crate::mandoc::inline) fn follows_blank(&self) -> bool {
         matches!(
             self.previous_cell(self.cursor),

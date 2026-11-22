@@ -324,3 +324,54 @@ fn a_final_absolute_cursor_does_not_erase_an_established_advance() {
         assert_eq!(description_rows(&text, &source), [expected], "{source}");
     }
 }
+
+#[test]
+fn relative_rewind_preserves_the_cursor_inside_an_unread_advance() {
+    // term_word() keeps lastcol while HORIZ rewinds col. The next
+    // term_word() overwrites the retained fixed cells before term_fill()
+    // decides whether the earlier marker causes an endline.
+    for (words, expected) in [
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'-2n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "FX",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'-2n'" Ns Sy "\~" No "\h'-2n'X""#,
+            "FX",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'-1n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "F X",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'0n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "F  X",
+        ),
+        (
+            r#".Em "\h'-1n'F\h'2n'\h'-2n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "FX",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'-2n'" Ns Sy "B" Sy "\h'-2n'X""#,
+            "FX",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'\h'-2n'" Ns Sy "\&" Sy "\h'-2n'X""#,
+            "FX",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'3n'\h'-2n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "F X",
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'3n'\h'-3n'" Ns Sy "\~" Sy "\h'-2n'X""#,
+            "FX",
+        ),
+    ] {
+        let source = format!("{HEADER}{words}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&rendered, &source), [expected], "{source}");
+    }
+}

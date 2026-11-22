@@ -1139,6 +1139,10 @@ fn retains_word_cursor(
             || !entry.has_input()
                 && slots.cursor_before_invisible_tail()
                 && !slots.contains_ink_from(0)
+            // term_word() keeps the marked word's trailing raw advancement
+            // when HORIZ returns into it. The next word still writes
+            // inside those fixed cells before term_fill() sees the marker.
+            || !entry.has_input() && slots.cursor_in_unread_advance_after_marker()
             || retains_absolute_word_cursor(seed, entry)
             || seed.earlier != 0
                 && (slots.cursor_before_invisible_tail()
