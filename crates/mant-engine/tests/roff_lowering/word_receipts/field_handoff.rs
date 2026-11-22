@@ -63,6 +63,28 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "AXFG",
     ),
     (
+        // Ordinary SP leaves the pending retreat armed in term.c::encode.
+        // The following HORIZ revisits D's decoration before the \\p.
+        include_str!("live_replay/replay-rewinds-through-held-glyph-and-blank.1"),
+        &["C X", "J"],
+        None,
+        "D",
+    ),
+    (
+        include_str!("live_replay/replay-retains-held-glyph-and-blank-without-rewind.1"),
+        &["C D  J X"],
+        None,
+        "JX",
+    ),
+    (
+        // Native SP and the local BACKBEFORE pair stay editable across
+        // the first marker. The later cursor lands in D's decorated run.
+        include_str!("live_replay/replay-keeps-first-glyph-after-a-local-backstep.1"),
+        &["C", "D", "F", "X"],
+        None,
+        "J",
+    ),
+    (
         include_str!("live_replay/replay-keeps-two-accepted-gap-columns.1"),
         &["A  X"],
         None,

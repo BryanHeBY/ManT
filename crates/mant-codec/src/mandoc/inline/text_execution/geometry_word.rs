@@ -241,7 +241,15 @@ fn contains_local_overwrite(
             _ => return false,
         }
     }
-    wrote_pair && !armed && (!inherited_glyph || !backbefore)
+    // encode() writes an ordinary trailing SP without consuming
+    // BACKBEFORE (term.c:946-967). Preserve the complete local word so
+    // the next HORIZ can still revisit its decorated slots.
+    let held_before_trailing_blank = backbefore
+        && !inherited_glyph
+        && events.last().is_some_and(
+            |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
+        );
+    (wrote_pair || held_before_trailing_blank) && !armed && (!inherited_glyph || !backbefore)
 }
 
 fn can_publish_inner_advances(
@@ -323,7 +331,6 @@ fn marker_replay(
     let mut has_ink = false;
     let mut has_marker = false;
     let mut ink_after_marker = false;
-    let mut needs_complete_word = false;
     let mut has_backstep = false;
     let mut has_motion = false;
     for event in events {
@@ -337,13 +344,14 @@ fn marker_replay(
             RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
                 if filled
                     && text.chars().all(|ch| {
-                        ch == '\u{a0}' || ch == ' ' && owns_link || ch.is_ascii_graphic()
+                        ch == '\u{a0}'
+                            || ch == ' ' && (owns_link || has_marker && has_backstep)
+                            || ch.is_ascii_graphic()
                     }) =>
             {
                 let ink = text.bytes().any(|byte| byte.is_ascii_graphic());
                 has_ink |= ink;
                 ink_after_marker |= has_marker && ink;
-                needs_complete_word = true;
             }
             RoffInlineEvent::LineBreak => {
                 has_marker = true;
@@ -356,16 +364,12 @@ fn marker_replay(
                 argument: Some(value),
                 ..
             } if filled && motion_columns(value).is_some() => {
-                needs_complete_word = true;
                 has_motion = true;
             }
             RoffInlineEvent::Breakpoint
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::NonBreakingWordBlank
-                if filled =>
-            {
-                needs_complete_word = true;
-            }
+                if filled => {}
             RoffInlineEvent::ZeroAdvance => has_backstep = true,
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
@@ -374,9 +378,11 @@ fn marker_replay(
             _ => return None,
         }
     }
-    // Without a completed local pair, the existing glyph owner must
-    // carry a pending BACK register through the next term_word().
-    if has_backstep && (needs_complete_word || !contains_local_overwrite(events, context)) {
+    // A placed local backstep proves the raw word, including any source
+    // SP the terminal preserves beside a marker (term.c:659-661,946-967).
+    // Otherwise the existing glyph owner must carry the pending BACK
+    // register through the next term_word().
+    if has_backstep && !contains_local_overwrite(events, context) {
         return None;
     }
     if !has_marker || !has_ink || !ink_after_marker && !has_backstep {
