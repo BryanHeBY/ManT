@@ -304,3 +304,23 @@ fn covered_local_glyphs_release_the_full_following_advance() {
         ]
     );
 }
+
+#[test]
+fn a_final_absolute_cursor_does_not_erase_an_established_advance() {
+    // term.c::term_word() changes col without truncating lastcol. The
+    // earlier advance remains between the same accepted ink even when
+    // the last absolute target moves before, into, or beyond that word.
+    for (words, expected) in [
+        (r#".No "\zFG\h'2n'X\h'|0n'""#, "G  X"),
+        (r#".No "\zFG\h'2n'X\h'|4n'""#, "G  X"),
+        (r#".No "\zFG\h'2n'X\h'|8n'""#, "G  X"),
+        (r#".No "\zF\h'2n'X\h'|0n'""#, "F X"),
+        (r#".No "\zFG\p\h'2n'X\h'|0n'""#, "G  X"),
+    ] {
+        let source = format!("{HEADER}{words}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}

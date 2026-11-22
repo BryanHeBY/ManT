@@ -352,8 +352,17 @@ fn can_publish_inner_advances(
                 argument: Some(value),
                 ..
             } if motion_columns(value).is_some_and(|(absolute, units)| absolute || units > 0) => {
-                if (prior_zero_advance || covered_pair) && absolute_motion(event) {
-                    return false;
+                if absolute_motion(event) {
+                    // A final absolute can reposition col without erasing the
+                    // earlier accepted inter-glyph advance. Only the complete
+                    // fresh field proves the origin for that combined replay.
+                    let complete = !context.slot_entry.cursor.has_input()
+                        && context.slot_entry.automatic_blanks == 0;
+                    if prior_zero_advance
+                        || covered_pair && !(complete && followed && index + 1 == events.len())
+                    {
+                        return false;
+                    }
                 }
                 if std::mem::take(&mut prior_zero_advance) {
                     // encode1() has already consumed both BACK registers
