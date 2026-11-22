@@ -542,13 +542,25 @@ impl FieldBuffer {
         let mut previous_font_copy = false;
         for cell in cursor..end {
             let replaces_backline = self.cells[cell] == FieldCell::Backline;
-            let replaces_font_pair = cell + 1 < end
-                && self.cells[cell + 1] == FieldCell::Backline
+            let followed_by_backline = self.cells.get(cell + 1) == Some(&FieldCell::Backline);
+            let bold_copy = followed_by_backline
                 && self
                     .raw_copy_aliases
                     .binary_search_by_key(&cell, |&(copy, _)| copy)
                     .is_ok();
-            let replaces_decoration = replaces_backline || replaces_font_pair;
+            let replaces_font_pair = cell + 1 < end && bold_copy;
+            // A projected U+00A0 also overwrites the anonymous underline
+            // slot in encode1(). Leave a bold copy of a literal '_' on
+            // its existing ownership path (term.c:909-925).
+            let replaces_underline = followed_by_backline
+                && !bold_copy
+                && self.cells[cell]
+                    == (FieldCell::Graph {
+                        text: '_',
+                        width: 1,
+                    })
+                && self.projection_length(cell, cell + 1) == 0;
+            let replaces_decoration = replaces_backline || replaces_font_pair || replaces_underline;
             let inside_font_pair = previous_font_copy || replaces_font_pair;
             previous_font_copy = replaces_font_pair;
             if pending_break && self.cells[cell] == FieldCell::BreakableBlank {
@@ -565,8 +577,15 @@ impl FieldBuffer {
                 // The UTF-8 generated blank goes through encode1() as
                 // U+00A0 and overwrites earlier font bytes. Track the
                 // surviving authored slots through the next word overlay.
-                self.cells[cell] = FieldCell::FixedDrawingAdvance(1);
-                self.nonbreaking_positions.insert(cell);
+                if replaces_underline {
+                    self.cells[cell] = FieldCell::Graph {
+                        text: '\u{a0}',
+                        width: 1,
+                    };
+                } else {
+                    self.cells[cell] = FieldCell::FixedDrawingAdvance(1);
+                    self.nonbreaking_positions.insert(cell);
+                }
                 self.raw_copy_aliases.retain(|&(copy, _)| copy != cell);
                 if replaces_backline {
                     self.pass_retreats.retain(|&(_, mark)| mark != cell + 1);

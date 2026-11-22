@@ -100,6 +100,15 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "CD",
     ),
     (
+        // termp_it_pre() writes a generated NBSP through encode1().
+        // It replaces the underline slot and separates the two words.
+        // The UTF-8 device has a blank; ASCII transliterates it to '_'.
+        include_str!("live_replay/replay-keeps-gap-over-anonymous-underline.1"),
+        &["C Y"],
+        Some("C"),
+        "CY",
+    ),
+    (
         // term_flushln() ends the accepted first row independently of
         // the replacement owner losing its source glyph in that pass.
         include_str!("live_replay/replay-keeps-break-after-source-owner-is-covered.1"),
