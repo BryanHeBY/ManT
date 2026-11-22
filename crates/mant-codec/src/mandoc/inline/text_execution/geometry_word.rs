@@ -1382,6 +1382,7 @@ fn execute_seed<'a>(
         retain_suffix,
         advances,
         editable_marker,
+        context.slot_entry.domain,
         context.zero_advance.native_word_owner(),
     )?;
     *context.font = font;

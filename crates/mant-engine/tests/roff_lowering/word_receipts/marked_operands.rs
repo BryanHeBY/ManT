@@ -457,3 +457,23 @@ fn adopted_motion_columns_retire_the_earlier_positioning() {
         ),
     ]);
 }
+
+#[test]
+fn marked_native_decoration_remains_editable_before_flush() {
+    // term.c::term_word leaves the earlier marker, SP and local BACKBEFORE
+    // in the same short filled buffer. A later HORIZ can overwrite part of
+    // a font's raw decoration; term_field decides which cells are printed.
+    for (font, ink, columns, expected) in [
+        ("Sy", "D", 4, &["DJ"][..]),
+        ("Sy", "D", 5, &["D", "J"]),
+        ("Sy", "D", 6, &["DD", "J"]),
+        ("Sy", "CD", 9, &["CCD", "J"]),
+        ("Em", "D", 5, &["_", "J"]),
+        ("Em", "CD", 5, &["C_", "J"]),
+        ("Em", "CD", 6, &["C_D", "J"]),
+        ("No", "CD", 4, &["D", "J"]),
+    ] {
+        let source = format!(r#".{font} "\p{ink} \zJ" No "\h'-{columns}n'\p""#);
+        verify_rows(&[(&source, expected)]);
+    }
+}

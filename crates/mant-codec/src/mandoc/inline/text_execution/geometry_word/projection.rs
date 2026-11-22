@@ -3,7 +3,7 @@
 use super::super::{WordOutput, references};
 use super::{
     AdvanceReading, FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorPendingSlot,
-    PriorSlotEdit, ReadingCell, ReadingGlyph, TextExecutionContext, WordExecution,
+    PriorSlotEdit, ReadingCell, ReadingGlyph, ReplayDomain, TextExecutionContext, WordExecution,
 };
 use crate::mandoc::inline::{
     flow::{
@@ -39,6 +39,7 @@ impl<'a> PlacedWord<'a> {
         retain_suffix: bool,
         advances: AdvanceReading,
         editable_marker: bool,
+        domain: ReplayDomain,
         word_owner: Option<u64>,
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
@@ -65,7 +66,7 @@ impl<'a> PlacedWord<'a> {
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
         if retain_suffix && editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS {
-            release_unpaired_underlines(&mut slots, &mut reading);
+            release_unpaired_underlines(&mut slots, &mut reading, domain);
         }
         let replaced_advance_marker = advance_marker.filter(|_| {
             retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS && word_owner.is_some()
@@ -276,17 +277,28 @@ fn settle_prior_slot(
     ))
 }
 
-fn release_unpaired_underlines(slots: &mut [FillSlot], reading: &mut Vec<ReadingCell<'_>>) {
-    // encode1() writes '_' then BS. If a proved edit overwrote that BS,
-    // term_field() can print the surviving underscore at its own column.
-    // Its new reading owner participates in the same accepted-pass rules
-    // as other graph cells.
+fn release_unpaired_underlines(
+    slots: &mut [FillSlot],
+    reading: &mut Vec<ReadingCell<'_>>,
+    domain: ReplayDomain,
+) {
+    // encode1() writes '_' then BS followed by the glyph. A proved
+    // edit can overwrite the BS, leaving the stroke at its own column.
+    // Plain filled fields can also retain the BS but overwrite the
+    // paired glyph with a marker. Definition fields need their eventual
+    // row placement to establish where such a trailing BS lands.
     for index in 0..slots.len() {
-        if slots[index].underline_decoration
-            && !slots
-                .get(index + 1)
-                .is_some_and(|next| next.cell == FieldCell::Backline)
-        {
+        if !slots[index].underline_decoration {
+            continue;
+        }
+        let retains_backline = slots
+            .get(index + 1)
+            .is_some_and(|next| next.cell == FieldCell::Backline);
+        let overwritten_by_marker = domain == ReplayDomain::Filled
+            && slots
+                .get(index + 2)
+                .is_some_and(|next| next.cell == FieldCell::BreakMarker);
+        if !retains_backline || overwritten_by_marker {
             slots[index].owner = Some(Placement::push_reading(
                 reading,
                 ReadingGlyph::Scalar('_'),

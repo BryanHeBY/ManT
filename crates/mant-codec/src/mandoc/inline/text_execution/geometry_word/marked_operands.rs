@@ -56,6 +56,10 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
                 marker = true;
                 1
             }
+            // A local arm after a marker remains in the same fresh
+            // filled buffer. Reserve the extra backline that encode1()
+            // can write when a following glyph covers the pending slot.
+            RoffInlineEvent::ZeroAdvance if initial == 0 && marker => 1,
             RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::NoSpace => {
                 0
             }
