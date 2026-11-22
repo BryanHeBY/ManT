@@ -766,12 +766,18 @@ impl super::InlineExecutionState {
             || device_tail
                 .as_ref()
                 .is_some_and(super::native_slots::DeviceTail::has_retreated);
-        let domain =
-            if self.no_fill_word_active || self.definition.is_some() || self.table_cell.is_some() {
-                ReplayDomain::Scoped
-            } else {
-                ReplayDomain::Filled
-            };
+        let domain = if self.no_fill_word_active || self.table_cell.is_some() {
+            ReplayDomain::Scoped
+        } else if self.definition.is_none() {
+            ReplayDomain::Filled
+        } else if self
+            .author_execution
+            .is_some_and(|author| author.break_effect == AuthorBreakEffect::Line)
+        {
+            ReplayDomain::DefinitionLine
+        } else {
+            ReplayDomain::Scoped
+        };
         let extend = match extend {
             PrefixExtension::None => false,
             PrefixExtension::Word => {

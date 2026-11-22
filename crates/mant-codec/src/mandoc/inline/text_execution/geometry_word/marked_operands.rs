@@ -11,10 +11,34 @@ use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
 /// `ESCAPE_NOSPACE` changes registers without buffering a byte. A decoded
 /// nonbreaking space still reaches `encode1()` as a single glyph.
 pub(super) fn bounded_append(events: &[RoffInlineEvent]) -> bool {
-    let mut remaining = MAX_EDITABLE_APPEND_CELLS;
+    bounded_append_with_leading_columns(events, 0)
+}
+
+/// A positive relative HORIZ in a fresh definition line writes native
+/// NBRSP before any ink. Preserve those cells and later markers until the
+/// line closes so another operand can still edit them.
+pub(super) fn bounded_field_append(events: &[RoffInlineEvent]) -> bool {
+    let Some((
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(argument),
+            ..
+        },
+        remaining,
+    )) = events.split_first()
+    else {
+        return false;
+    };
+    let columns = libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument);
+    columns != 0 && bounded_append_with_leading_columns(remaining, columns)
+}
+
+fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usize) -> bool {
+    let Some(mut remaining) = MAX_EDITABLE_APPEND_CELLS.checked_sub(initial) else {
+        return false;
+    };
     let mut marker = false;
     let mut ink_after_marker = false;
-    let mut has_space = false;
+    let mut has_space = initial != 0;
     for event in events {
         let count = match event {
             RoffInlineEvent::Text(text)

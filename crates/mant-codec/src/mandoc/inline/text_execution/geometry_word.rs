@@ -540,11 +540,18 @@ fn marker_replay(
     // Wider word shapes are replayable as a whole at a fresh filled
     // field. A pending run-in or source-blank receipt still owns its
     // earlier spans and must finish through the shared word path.
-    let filled = context.slot_entry.domain == ReplayDomain::Filled
-        && !context.slot_entry.cursor.has_input()
+    let fresh = !context.slot_entry.cursor.has_input()
         && !context.defer_leading_blanks
         && !context.zero_advance.has_annotation_output_owner();
-    if filled && !context.zero_advance.is_armed() && marked_operands::bounded_append(events) {
+    let filled = fresh && context.slot_entry.domain == ReplayDomain::Filled;
+    if fresh
+        && !context.zero_advance.is_armed()
+        && match context.slot_entry.domain {
+            ReplayDomain::Filled => marked_operands::bounded_append(events),
+            ReplayDomain::DefinitionLine => marked_operands::bounded_field_append(events),
+            ReplayDomain::Scoped => false,
+        }
+    {
         return Some(MarkerReplay::AwaitFieldFlush);
     }
     // Plain source blanks already have an incremental pass receipt.

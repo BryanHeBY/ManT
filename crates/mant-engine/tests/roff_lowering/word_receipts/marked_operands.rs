@@ -6,6 +6,54 @@ const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm pro
 const END: &str = ".Ss CASE999CASE\nDone.\n";
 
 #[test]
+fn leading_advances_in_definition_lines_stay_editable_until_flush() {
+    // term.c::ESCAPE_HORIZ writes a native NBRSP before C. The following
+    // word can overwrite C or J before termp_it_post() closes the field.
+    // Pp and the literal display independently close the active row.
+    type Case = (
+        &'static str,
+        &'static str,
+        i8,
+        &'static str,
+        &'static [&'static str],
+    );
+    let cases: &[Case] = &[
+        ("-inset", "1n", -2, ".Pp\n.No X", &["C", "", "X"]),
+        (
+            "-inset",
+            "1n",
+            -2,
+            ".Bd -literal\n.No X\n.Ed",
+            &["C", "", "X"],
+        ),
+        ("-inset", "1n", -4, ".No X", &["X"]),
+        ("-inset", "1n", -4, ".Pp\n.No X", &["J", "", "X"]),
+        ("-ohang", "2n", -2, ".No X", &["C", "X"]),
+        (
+            "-ohang",
+            "2n",
+            -4,
+            ".Bd -literal\n.No X\n.Ed",
+            &["J", "", "X"],
+        ),
+        ("-ohang", "0n", -2, ".No X", &["C", "X"]),
+        ("-ohang", "1n", -1, ".No X", &["CJ", "X"]),
+    ];
+    for &(kind, advance, retreat, body, expected) in cases {
+        let source = format!(
+            "{HEADER}.Bl {kind}\n.It No \"\\h'{advance}'C\\pJ\" No \"\\h'{retreat}n'\\p\"\n{body}\n.El\n{END}"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+        let rows: Vec<_> = body.trim().lines().map(str::trim).collect();
+        assert_eq!(rows, expected, "{source}\n{rendered}");
+    }
+}
+
+#[test]
 fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
     // term.c::encode1() installs decoration bytes before a graph;
     // term_word() buffers SP and \p without collapsing them. The next
