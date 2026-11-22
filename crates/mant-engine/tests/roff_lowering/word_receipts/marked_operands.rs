@@ -49,6 +49,30 @@ fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
             r#".No "A\pB\p" Em "\h'1n'\h'-1n'\z\pC" Ns No "\zFG\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX""#,
             &["AB", "G   X"],
         ),
+        (
+            r#".Sy "C\p\~ DJ" No "\h'-5n'\p\:F\p" No "\c\p\h'-1n'\~" No "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "C\c\p DJ" No "\h'-5n'\p\:F\p" No " \c\p\h'-1n'\~" No "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "C\~\p DJ" No "\h'-5n'\p\:F\p" No "\c\p\~" No "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "C\p\c DJ" No "\h'-5n'\p\:F\p\~" No "\c\p\~" No "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "\cC\p DJ" No "\h'-5n'\p\:F\p" No "\c\p\h'-1n'\~" No "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "C\p DJ\c" No "\h'-5n'\p\:F\p" No " \c\p\h'-1n'\~" No "\h'-2n'X""#,
+            &["C", "D", "FJ", "X"],
+        ),
     ];
     for &(words, expected) in cases {
         let source = format!("{HEADER}{words}\n{END}");

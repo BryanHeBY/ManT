@@ -8,6 +8,8 @@ use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
 /// may put four decoration bytes before each graph; `term_word()` buffers
 /// SP and the marker separately. Place these writes in their original
 /// order so a later HORIZ addresses the native slots before `term_fill()`.
+/// `ESCAPE_NOSPACE` changes registers without buffering a byte. A decoded
+/// nonbreaking space still reaches `encode1()` as a single glyph.
 pub(super) fn bounded_append(events: &[RoffInlineEvent]) -> bool {
     let mut remaining = MAX_EDITABLE_APPEND_CELLS;
     let mut marker = false;
@@ -30,7 +32,10 @@ pub(super) fn bounded_append(events: &[RoffInlineEvent]) -> bool {
                 marker = true;
                 1
             }
-            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont => 0,
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::NoSpace => {
+                0
+            }
+            RoffInlineEvent::Glyph(text, _) if text == "\u{a0}" => 5,
             _ => return false,
         };
         let Some(left) = remaining.checked_sub(count) else {
