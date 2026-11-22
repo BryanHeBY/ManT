@@ -17,6 +17,10 @@ pub(super) fn absolute_motion(event: &RoffInlineEvent) -> bool {
         if value.strip_prefix('|').and_then(libmandoc_rs::TableColumnMetrics::motion_argument).is_some())
 }
 
+pub(super) fn relative_zero_motion(argument: Option<&str>) -> bool {
+    argument.and_then(motion_columns) == Some((false, 0))
+}
+
 pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
     if !can_place_word(context) {
         return false;

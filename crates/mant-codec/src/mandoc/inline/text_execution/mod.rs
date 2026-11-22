@@ -234,13 +234,7 @@ fn execute_formatter_word_events(
             && retained_previous_glyph
             && !context.zero_advance.is_armed()
             && geometry_word::absolute_motion(event);
-        opaque_slots |= matches!(
-            event,
-            RoffInlineEvent::Font(_)
-                | RoffInlineEvent::PreviousFont
-                | RoffInlineEvent::Overstrike { .. }
-                | RoffInlineEvent::HorizontalMotion { .. }
-        );
+        opaque_slots = opaque_slots || needs_native_slot_proof(event);
         let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt
         // separate from FieldBuffer's graph/width model. Once any column has
@@ -301,6 +295,21 @@ fn execute_formatter_word_events(
     word.finish_content_prefix();
     word.flush_segment();
     finish_text_execution(events, context.zero_advance, word)
+}
+
+fn needs_native_slot_proof(event: &RoffInlineEvent) -> bool {
+    match event {
+        RoffInlineEvent::Font(_)
+        | RoffInlineEvent::PreviousFont
+        | RoffInlineEvent::Overstrike { .. } => true,
+        // ESCAPE_HORIZ can clear BACKAFTER, but a parsed zero relative
+        // motion writes no raw slots (term.c:678-699). Keep the ordinary
+        // word execution and its separate register effect.
+        RoffInlineEvent::HorizontalMotion { argument, .. } => {
+            !geometry_word::relative_zero_motion(argument.as_deref())
+        }
+        _ => false,
+    }
 }
 
 fn record_word_slot_proof(

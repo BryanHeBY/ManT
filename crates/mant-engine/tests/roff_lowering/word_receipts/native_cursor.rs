@@ -119,3 +119,27 @@ fn a_control_only_prefix_remains_editable_until_its_accepted_rows() {
         }
     }
 }
+
+#[test]
+fn zero_relative_motion_preserves_raw_word_slots_for_a_later_edit() {
+    // term_word() handles the BACKAFTER flag before measuring HORIZ.
+    // A parsed zero relative length then writes no native slots, even
+    // when it appears inside or at the end of the preceding word.
+    for word in [
+        "BC",
+        r"\h'0n'BC",
+        r"B\h'0n'C",
+        r"BC\h'0n'",
+        r"\h'-0n'BC",
+        r"\h'0m'BC",
+        r"\z\h'0n'BC",
+        r"B\zC\h'0n'",
+        r"\h'|0n'BC",
+    ] {
+        let source = format!("{HEADER}.No \"{word}\" Ns No \"\\h'-3n'Y\"{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&rendered, &source), ["YC"], "{source}");
+    }
+}
