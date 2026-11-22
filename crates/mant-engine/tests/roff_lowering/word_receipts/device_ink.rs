@@ -183,3 +183,24 @@ fn replayed_motion_after_a_word_end_keeps_the_preceding_glyph_and_row() {
     let text = mant_render::render_query_man(&content);
     assert_eq!(description_rows(&text, &source), ["AC", "D  X"], "{source}");
 }
+
+#[test]
+fn replay_preserves_a_single_advance_before_retained_ink() {
+    // term.c::term_field() releases the spaces before the first ink.
+    // Replaying that advance can retain earlier K, replace K with X,
+    // or place X on the other side of the advance.
+    for (advance, tail, expected) in [
+        ("", r#"Ns No "F\pG\0\c" No "\h'-4n'X""#, "A   KXG\u{a0}"),
+        ("", r#"Ns No "F\pG\~\p\c" No "\h'-4n'X""#, "A   KFXG\u{a0}"),
+        ("", r#"Ns No "F\c" Em "\h'-4n'X""#, "A   XF"),
+        ("", r#"Ns No "F\pG\&\c" No "\h'-9n'X""#, "A X KFG"),
+        ("", r#"No "F\pG\p\c" No "\h'-4n'X""#, "A   K XG"),
+        (r"\h'1n'", r#"Ns No "F\pG\p\c" No "\h'-4n'X""#, "A    KXG"),
+    ] {
+        let source = format!("{HEADER}.Sy \"A\" Em \"\\z\\h'-1n'\\h'1n'{advance} K\" {tail}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}

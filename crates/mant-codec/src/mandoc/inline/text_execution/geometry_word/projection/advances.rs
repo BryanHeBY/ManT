@@ -148,6 +148,15 @@ fn defer_retained_separator_advances(
             if let Some(owner) = incoming_ink(&slots[next_ink], reading, earlier) {
                 break Some(owner);
             }
+            if motion.advance_source.is_some()
+                && !motion.drawing_advance
+                && reading_ink(&slots[next_ink], reading).is_some_and(|owner| owner < earlier)
+                && continues_owned_advance(slots, reading, earlier, index, next_ink..ink_end)
+            {
+                // term_field() releases the advance at the first printable
+                // slot, which can still belong to an earlier operand.
+                break None;
+            }
             next_ink += 1;
         };
         let Some(owner) =
@@ -169,6 +178,42 @@ fn defer_retained_separator_advances(
     }
 }
 
+fn continues_owned_advance(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    earlier: usize,
+    advance: usize,
+    following: Range<usize>,
+) -> bool {
+    // term_field() flushes all adjacent advances together. Retain this
+    // already-projected single advance only if it still precedes the same
+    // contiguous ink. Compound advances, another separator, or a
+    // backspace still need their own accepted output coordinates.
+    let another_advance = |slot: &FillSlot| {
+        slot.advance_source.is_some()
+            || matches!(slot.cell, FieldCell::NonBreakingBlank | FieldCell::Tab)
+    };
+    !slots[..advance]
+        .iter()
+        .rev()
+        .take_while(|slot| reading_ink(slot, reading).is_none())
+        .chain(slots[advance + 1..following.start].iter())
+        .any(another_advance)
+        && slots[following]
+            .iter()
+            .take_while(|slot| {
+                !matches!(
+                    slot.cell,
+                    FieldCell::BreakableBlank
+                        | FieldCell::NonBreakingBlank
+                        | FieldCell::Tab
+                        | FieldCell::BreakMarker
+                        | FieldCell::Backline
+                )
+            })
+            .any(|slot| incoming_ink(slot, reading, earlier).is_some())
+}
+
 fn advance_between_replayed_glyphs(
     slots: &[FillSlot],
     reading: &[ReadingCell<'_>],
@@ -181,18 +226,20 @@ fn advance_between_replayed_glyphs(
     // A current glyph can land before an earlier glyph. The marker
     // between them decides a break only if term_fill stops at a later
     // separator. Keep the blank under term_field's accepted receipt.
-    let ink = |slot: &FillSlot| {
-        slot.owner.filter(|&owner| {
-            matches!(slot.cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
-                && matches!(
-                    reading[owner].glyph,
-                    ReadingGlyph::Scalar(_) | ReadingGlyph::Earlier(1..)
-                )
-        })
-    };
+    let ink = |slot: &FillSlot| reading_ink(slot, reading);
     let left = slots[..gap].iter().rev().find_map(ink)?;
     let right = slots[gap + 1..].iter().find_map(ink)?;
     (left >= earlier && right < earlier).then_some(left)
+}
+
+fn reading_ink(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> Option<usize> {
+    slot.owner.filter(|&owner| {
+        matches!(slot.cell, FieldCell::Graph { text, .. } if !text.is_whitespace())
+            && matches!(
+                reading[owner].glyph,
+                ReadingGlyph::Scalar(_) | ReadingGlyph::Earlier(1..)
+            )
+    })
 }
 
 /// A short advance inside one operand is already part of its reading

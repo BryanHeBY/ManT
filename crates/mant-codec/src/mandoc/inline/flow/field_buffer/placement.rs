@@ -296,6 +296,7 @@ impl FieldBuffer {
         Some(super::super::native_slots::FieldPrefix {
             start,
             cells,
+            projected_advances: Vec::new(),
             automatic,
             cursor_retreat: self.write_cursor.retreat(),
             kept,

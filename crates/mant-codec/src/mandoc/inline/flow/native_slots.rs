@@ -25,6 +25,7 @@ enum Pattern {
     ImportedAdvance {
         cell: FieldCell,
         source: usize,
+        drawing: bool,
     },
     Overstrike {
         cells: Arc<[FieldCell]>,
@@ -107,20 +108,13 @@ impl Pattern {
     fn is_fixed_advance(&self) -> bool {
         matches!(
             self,
-            Self::DrawingAdvance
-                | Self::ImportedAdvance {
-                    cell: FieldCell::NonBreakingBlank,
-                    ..
-                }
+            Self::DrawingAdvance | Self::ImportedAdvance { drawing: true, .. }
         )
     }
 
     fn into_independent_tail(self) -> Self {
         match self {
-            Self::ImportedAdvance {
-                cell: FieldCell::NonBreakingBlank,
-                ..
-            } => Self::DrawingAdvance,
+            Self::ImportedAdvance { drawing: true, .. } => Self::DrawingAdvance,
             Self::ImportedAdvance { cell, .. } => Self::Plain(cell),
             pattern => pattern,
         }
@@ -208,6 +202,8 @@ pub(in crate::mandoc::inline) enum ReplayPass {
 pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) start: usize,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
+    /// Existing reading seams whose originating advance normalized to one NBRSP.
+    pub(in crate::mandoc::inline::flow) projected_advances: Vec<usize>,
     pub(in crate::mandoc::inline) automatic: usize,
     pub(in crate::mandoc::inline) cursor_retreat: usize,
     pub(in crate::mandoc::inline) kept: bool,
@@ -353,6 +349,7 @@ impl NativeSlots {
                         Pattern::ImportedAdvance {
                             cell: FieldCell::BreakableBlank,
                             source: index,
+                            drawing: false,
                         },
                         None,
                     );
@@ -363,8 +360,22 @@ impl NativeSlots {
                         Pattern::ImportedAdvance {
                             cell: FieldCell::NonBreakingBlank,
                             source: index,
+                            drawing: true,
                         },
                         None,
+                    );
+                }
+                FieldCell::NonBreakingBlank
+                    if prefix.projected_advances.binary_search(&index).is_ok() =>
+                {
+                    slots.advance_pattern(
+                        1,
+                        Pattern::ImportedAdvance {
+                            cell: FieldCell::NonBreakingBlank,
+                            source: index,
+                            drawing: false,
+                        },
+                        Some(owner),
                     );
                 }
                 _ => slots.write_run(cell.clone(), 1, Some(owner)),

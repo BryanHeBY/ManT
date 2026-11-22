@@ -1,5 +1,6 @@
 use super::definition::PendingFieldGapOrigin;
-use super::native_slots::{EntryCursor, PrefixExtension, ReplayDomain};
+use super::field_buffer::{FieldBuffer, FieldCell};
+use super::native_slots::{EntryCursor, FieldPrefix, PrefixExtension, ReplayDomain};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
     InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
@@ -11,6 +12,31 @@ use libmandoc_rs::{
     MacroToken::{Man, Roff},
     ManMacro, RoffMacro,
 };
+
+fn retain_projected_advances(
+    prefix: &mut FieldPrefix,
+    input: &FieldBuffer,
+    anchors: &[super::NativeWordAnchor],
+) {
+    // A real reading seam can already own the advance even when its raw
+    // slot is indistinguishable from NBRSP. Keep only existing gap receipts.
+    prefix.projected_advances.extend(
+        anchors
+            .iter()
+            .rev()
+            .take(prefix.cells.len())
+            .take_while(|anchor| anchor.content >= prefix.start)
+            .filter_map(|anchor| anchor.projected_gap_cell)
+            .filter_map(|gap| {
+                let relative = gap.checked_sub(prefix.start)?;
+                (prefix.cells.get(relative) == Some(&(FieldCell::NonBreakingBlank, 0))
+                    && input.cells()[gap] == FieldCell::FixedDrawingAdvance(1))
+                .then_some(relative)
+            }),
+    );
+    prefix.projected_advances.sort_unstable();
+    prefix.projected_advances.dedup();
+}
 
 impl InlineBuilder {
     /// A pre-handler's direct `term_word` operands do not run the native node
@@ -631,7 +657,7 @@ impl super::InlineExecutionState {
         extend: PrefixExtension,
         leading_retreat: bool,
     ) -> super::native_slots::SlotEntry {
-        let (input, _) = self.word_input();
+        let (input, anchors) = self.word_input();
         let boundary = self
             .native_word_boundary
             .unwrap_or(super::PendingBoundary::Tight);
@@ -684,11 +710,13 @@ impl super::InlineExecutionState {
                 || leading_retreat && !input.has_entry_retreat()
                 || extend)
                 .then(|| {
-                    input.field_prefix(
+                    let mut prefix = input.field_prefix(
                         automatic_blanks,
                         kept_blanks,
                         leading_retreat || input.has_retained_word_cursor(),
-                    )
+                    )?;
+                    retain_projected_advances(&mut prefix, input, anchors);
+                    Some(prefix)
                 })
                 .flatten(),
         }
