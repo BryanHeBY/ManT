@@ -360,6 +360,47 @@ fn inherited_glyphs_release_only_the_advance_cells_cvs_writes() {
 }
 
 #[test]
+fn inherited_overprints_keep_advances_after_publishing_the_prior_glyph() {
+    // term.c::term_word() writes the automatic space before encode1()
+    // backs over it. The already published C still owns its raw glyph.
+    // Without a space, the raw predecessor may be covered as usual.
+    let source = include_str!("live_replay/replay-keeps-advances-after-published-glyph.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    let lines: Vec<_> = description_rows(&text, source)
+        .into_iter()
+        .map(str::trim_start)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Automatic separator after published glyph",
+            "ABCF G     X",
+            "",
+            "Automatic separator with italic ink",
+            "ABCF G     X",
+            "",
+            "Wider relative advance",
+            "ABCF  G     X",
+            "",
+            "Suppressed separator over the inherited glyph",
+            "ABF G     X",
+            "",
+            "Hyphen replaced by later motion",
+            "G  X",
+            "",
+            "Named backslash replaced by later motion",
+            "G  X",
+            "",
+            // ESCAPE_SPECIAL uses the native Unicode scalar in UTF-8.
+            // The ASCII branch prints '-' for this surviving hyphen.
+            "Named hyphen with no later motion",
+            "G  ‐",
+        ]
+    );
+}
+
+#[test]
 fn a_final_absolute_cursor_does_not_erase_an_established_advance() {
     // term.c::term_word() changes col without truncating lastcol. The
     // earlier advance remains between the same accepted ink even when

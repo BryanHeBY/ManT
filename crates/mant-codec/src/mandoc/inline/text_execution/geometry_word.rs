@@ -416,6 +416,22 @@ enum RetainedAdvancePhase {
     InkAfterAdvance,
 }
 
+fn has_retained_advance_entry(context: &TextExecutionContext<'_>, seed: &GeometrySeed<'_>) -> bool {
+    let slots = &seed.placement.slots;
+    match context.slot_entry.automatic_blanks {
+        0 => {
+            matches!(seed.prior_pending, Some(PriorPendingSlot::Buffered(_)))
+                && slots.cursor_follows_retained_glyph()
+        }
+        1 => {
+            !context.slot_entry.kept_blanks
+                && !context.zero_advance.has_pending_glyph()
+                && slots.cursor_follows_retained_glyph_and_blank()
+        }
+        _ => false,
+    }
+}
+
 fn can_publish_retained_advances(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -425,14 +441,12 @@ fn can_publish_retained_advances(
 
     if !context.policy.field_authoritative
         || context.slot_entry.domain != ReplayDomain::Filled
-        || !matches!(seed.prior_pending, Some(PriorPendingSlot::Buffered(_)))
         || context.zero_advance.is_armed()
         || context.zero_advance.has_annotation_output_owner()
-        || context.slot_entry.automatic_blanks != 0
         || seed.prefix_start != 0
         || !seed.editable_pass
         || seed.placement.slots.backafter()
-        || !seed.placement.slots.cursor_follows_retained_glyph()
+        || !has_retained_advance_entry(context, seed)
     {
         return false;
     }
@@ -469,6 +483,16 @@ fn can_publish_retained_advances(
                 } else {
                     Advance
                 }
+            }
+            (
+                Advance | InkAfterAdvance,
+                RoffInlineEvent::Glyph(text, GlyphInput::NativeSpecial),
+            ) if text
+                .chars()
+                .next()
+                .is_some_and(super::native_writes::is_single_column_ink) =>
+            {
+                InkAfterAdvance
             }
             (state, RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont)
             | (

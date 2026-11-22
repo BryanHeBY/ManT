@@ -531,7 +531,7 @@ impl Decoder {
             Some(SpecialCharacter::Visible(character)) => {
                 let mut glyph = String::new();
                 self.push_decoded_character(&mut glyph, character);
-                self.emit(RoffInlineEvent::Glyph(glyph, GlyphInput::Mapped));
+                self.emit(RoffInlineEvent::Glyph(glyph, GlyphInput::NativeSpecial));
             }
             Some(SpecialCharacter::ZeroWidth) => self.emit(RoffInlineEvent::ZeroWidthGlyph),
             None => self.push_unknown_special_character(name, syntax),

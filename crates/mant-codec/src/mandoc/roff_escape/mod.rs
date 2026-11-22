@@ -43,7 +43,9 @@ pub(super) enum RoffFont {
 pub(super) enum GlyphInput {
     /// A native Unicode or numbered escape reaches `encode1()` directly.
     Codepoint,
-    /// A named glyph or a formatter mapping can have a different slot shape.
+    /// A glyph from the pinned character table reaches UTF-8 `encode1()`.
+    NativeSpecial,
+    /// A formatter mapping can have a different slot shape.
     Mapped,
 }
 

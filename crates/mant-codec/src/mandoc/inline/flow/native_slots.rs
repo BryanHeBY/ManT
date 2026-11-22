@@ -559,6 +559,22 @@ impl NativeSlots {
             )
     }
 
+    pub(in crate::mandoc::inline) fn cursor_follows_retained_glyph_and_blank(&self) -> bool {
+        // term_word() writes the automatic separator before encode1()
+        // consumes BACKBEFORE. The retreat must reach that ordinary
+        // space, leaving the previously published glyph intact.
+        self.cursor_before_end()
+            && self.backbefore
+            && self.backbefore_slot.is_some_and(|glyph| {
+                self.cursor.checked_sub(2) == Some(glyph)
+                    && matches!(
+                        self.previous_cell(glyph + 1),
+                        Some(FieldCell::Graph { width: 1, .. })
+                    )
+            })
+            && self.previous_cell(self.cursor) == Some(&FieldCell::BreakableBlank)
+    }
+
     pub(in crate::mandoc::inline) fn pending_owner(&self) -> Option<usize> {
         let slot = self
             .backbefore_slot

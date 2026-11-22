@@ -1,0 +1,23 @@
+.Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Ss Automatic separator after published glyph
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Sy "\zF\h'2n'G\h'2n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX "
+.Ss Automatic separator with italic ink
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Em "\zF\h'2n'G\h'2n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX "
+.Ss Wider relative advance
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Sy "\zF\h'3n'G\h'2n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX "
+.Ss Suppressed separator over the inherited glyph
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns Sy "\zF\h'2n'G\h'2n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX "
+.Ss Hyphen replaced by later motion
+.No "AB" No "\h'1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\p\(hy" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Named backslash replaced by later motion
+.No "AB" No "\h'1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\p\(rs" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Named hyphen with no later motion
+.No "AB" No "\h'1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\p\(hy"
+.Sh ENDTEST
+Done.
