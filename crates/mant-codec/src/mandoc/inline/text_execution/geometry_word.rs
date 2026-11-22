@@ -4,8 +4,8 @@ use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecutio
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite},
     native_slots::{
-        CursorReposition, EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass,
-        SlotEntry,
+        CursorReposition, DeferredTail, EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain,
+        ReplayPass, SlotEntry,
     },
 };
 use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
@@ -118,7 +118,9 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || marker && marker_replay(events, context).is_some()
                 || control_replay.is_proved()
                 || relative_advance && can_publish_inner_advances(events, context)
-                || relative_advance && can_defer_trailing_advance(events, context)
+                || relative_advance
+                    && (can_defer_trailing_advance(events, context)
+                        || can_defer_blank_tail_advances(events, context))
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
@@ -464,7 +466,6 @@ fn can_defer_trailing_advance(
         || context.defer_leading_blanks
         || context.zero_advance.has_annotation_output_owner()
         || context.zero_advance.native_word_owner().is_none()
-        || !single_paint(context.font.current)
     {
         return false;
     }
@@ -519,9 +520,67 @@ fn can_defer_trailing_advance(
         RoffInlineEvent::Font(font) if single_paint(*font) => Some(count),
         _ => None,
     });
+    // The two bold paint copies of a lone direct glyph still belong to
+    // one reading owner. Their complete raw pair can be replayed with
+    // its deferred native advance.
+    let single_owner =
+        !leading_retreat && matches!(prefix, [RoffInlineEvent::Text(text)] if text.len() == 1);
     (leading_retreat || width > 1)
         && width > 0
         && size.is_some_and(|count| count > 0 && count <= budget)
+        && (single_paint(context.font.current) || single_owner)
+}
+
+fn can_defer_blank_tail_advances(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    let Some(prefix) = context.slot_entry.prefix.as_ref().filter(|prefix| {
+        prefix.deferred_tail == DeferredTail::Replayable && prefix.tail_fonts.is_empty()
+    }) else {
+        return false;
+    };
+    if context.slot_entry.domain != ReplayDomain::Filled
+        || context.zero_advance.has_pending_glyph()
+        || context.zero_advance.has_annotation_output_owner()
+        || context.zero_advance.native_word_owner().is_none()
+    {
+        return false;
+    }
+    // No ink releases the pending advances in this word. Keep its
+    // positive motion and ordinary SP in raw order until term_field()
+    // encounters the next printable graph, after any live cursor edits.
+    let earlier = prefix
+        .cells
+        .iter()
+        .fold(prefix.automatic, |total, (cell, _)| {
+            total.saturating_add(match cell {
+                FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => *count,
+                _ => 1,
+            })
+        });
+    let cells = events.iter().try_fold(earlier, |cells, event| {
+        let added = match event {
+            RoffInlineEvent::ZeroAdvance => 0,
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } => {
+                let (false, _units) = motion_columns(value)? else {
+                    return None;
+                };
+                libmandoc_rs::TableColumnMetrics::relative_motion_columns(value)
+            }
+            RoffInlineEvent::Text(value) if value.bytes().all(|byte| byte == b' ') => value.len(),
+            _ => return None,
+        };
+        cells
+            .checked_add(added)
+            .filter(|&total| total <= MAX_EDITABLE_APPEND_CELLS)
+    });
+    cells.is_some()
 }
 
 enum RetainedAdvancePhase {
@@ -538,6 +597,7 @@ enum AdvanceReading {
     Unprojected,
     Inner,
     DeferredTail,
+    DeferredBlankTail,
 }
 
 fn has_retained_advance_entry(context: &TextExecutionContext<'_>, seed: &GeometrySeed<'_>) -> bool {
@@ -1270,8 +1330,9 @@ pub(super) fn try_execute(
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
 ) -> Result<(), PriorSlotEdit> {
+    let existing_tail = can_defer_blank_tail_advances(events, context);
     let seed = GeometrySeed::begin(context, events);
-    execute_seed(seed, events, context, word)
+    execute_seed(seed, events, context, word, existing_tail)
 }
 
 fn execute_seed<'a>(
@@ -1279,6 +1340,7 @@ fn execute_seed<'a>(
     events: &'a [RoffInlineEvent],
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
+    existing_tail: bool,
 ) -> Result<(), PriorSlotEdit> {
     // Font and reading owners only commit after all addressed bytes can be
     // placed. Falling back to the live word executor must not run them twice.
@@ -1288,6 +1350,8 @@ fn execute_seed<'a>(
         || can_publish_retained_advances(events, context, &seed)
     {
         AdvanceReading::Inner
+    } else if existing_tail {
+        AdvanceReading::DeferredBlankTail
     } else if can_defer_trailing_advance(events, context) {
         AdvanceReading::DeferredTail
     } else {

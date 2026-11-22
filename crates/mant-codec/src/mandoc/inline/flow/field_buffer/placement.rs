@@ -295,6 +295,11 @@ impl FieldBuffer {
         }
         Some(super::super::native_slots::FieldPrefix {
             start,
+            deferred_tail: if complete_tail && start == 0 {
+                super::super::native_slots::DeferredTail::Replayable
+            } else {
+                super::super::native_slots::DeferredTail::Absent
+            },
             cells,
             projected_advances: Vec::new(),
             automatic,
@@ -325,10 +330,14 @@ impl FieldBuffer {
         })
     }
 
-    fn has_replayable_trailing_advance(&self) -> bool {
+    pub(in crate::mandoc::inline::flow) fn has_replayable_trailing_advance(&self) -> bool {
         self.resume == 0
             && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
-            && matches!(self.write_cursor, WriteCursor::Placed(_))
+            && (matches!(self.write_cursor, WriteCursor::Placed(_))
+                // An ordinary append ending at a marker can retain the
+                // same complete tape. It has not retired the field (term.c::term_word).
+                || self.raw_slot_fence == 0 && matches!(self.write_cursor, WriteCursor::End)
+                    && self.cells.last() == Some(&FieldCell::BreakMarker))
             && !self.deferred_blanks.is_empty()
             && self
                 .deferred_blanks

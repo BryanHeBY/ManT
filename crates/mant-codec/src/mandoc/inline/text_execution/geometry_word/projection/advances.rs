@@ -17,8 +17,14 @@ pub(super) fn prepare_reading_blanks(
         AdvanceReading::Inner => publish_inner_advances(slots, reading, earlier),
         AdvanceReading::DeferredTail => {
             if let Some(owner) = word_owner {
-                defer_trailing_advance(slots, reading, owner);
+                let start = slots.len().saturating_sub(1);
+                defer_trailing_advances(slots, reading, owner, start);
                 publish_inner_advances(slots, reading, earlier);
+            }
+        }
+        AdvanceReading::DeferredBlankTail => {
+            if let Some(owner) = word_owner {
+                defer_trailing_advances(slots, reading, owner, 0);
             }
         }
         AdvanceReading::Unprojected => {}
@@ -28,46 +34,52 @@ pub(super) fn prepare_reading_blanks(
     defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
 }
 
-fn defer_trailing_advance(
+fn defer_trailing_advances(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
     owner: u64,
+    start: usize,
 ) {
     // term.c::term_field() delays trailing NBRSP until it finds the
     // next printable cell. Keep the native slots, with no reading
     // scalars until the accepted range proves that output.
-    let Some(tail) = slots.last().filter(|slot| slot.drawing_advance) else {
-        return;
-    };
-    let Some(style) = tail.owner.map(|id| reading[id]) else {
-        return;
-    };
-    let start = slots.len() - 1;
-    let count = tail.count;
-    slots.pop();
-    for offset in 0..count {
-        let id = reading.len();
-        reading.push(ReadingCell {
-            glyph: ReadingGlyph::DeferredBlank {
-                source: DeferredSourceBlank {
-                    owner,
-                    write: start + offset,
-                    font: style.font,
-                    replayable_tail: true,
-                },
-                imported_cell: None,
-            },
-            link: None,
-            ..style
-        });
-        slots.push(FillSlot {
-            cell: FieldCell::NonBreakingBlank,
-            count: 1,
-            owner: Some(id),
-            drawing_advance: true,
-            advance_source: None,
-            underline_decoration: false,
-        });
+    let mut end = slots.iter().map(|slot| slot.count).sum::<usize>();
+    for index in (start..slots.len()).rev() {
+        let tail = &slots[index];
+        let count = tail.count;
+        end -= count;
+        let Some(style) = tail.owner.map(|id| reading[id]).filter(|read| {
+            tail.drawing_advance && matches!(read.glyph, ReadingGlyph::DeviceAdvance)
+        }) else {
+            continue;
+        };
+        slots.splice(
+            index..=index,
+            (0..count).map(|offset| {
+                let id = reading.len();
+                reading.push(ReadingCell {
+                    glyph: ReadingGlyph::DeferredBlank {
+                        source: DeferredSourceBlank {
+                            owner,
+                            write: end + offset,
+                            font: style.font,
+                            replayable_tail: true,
+                        },
+                        imported_cell: None,
+                    },
+                    link: None,
+                    ..style
+                });
+                FillSlot {
+                    cell: FieldCell::NonBreakingBlank,
+                    count: 1,
+                    owner: Some(id),
+                    drawing_advance: true,
+                    advance_source: None,
+                    underline_decoration: false,
+                }
+            }),
+        );
     }
 }
 

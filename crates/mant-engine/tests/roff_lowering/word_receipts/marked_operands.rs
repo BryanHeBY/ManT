@@ -477,3 +477,45 @@ fn marked_native_decoration_remains_editable_before_flush() {
         verify_rows(&[(&source, expected)]);
     }
 }
+
+#[test]
+fn trailing_native_advance_survives_overlaid_marked_words() {
+    // term.c::encode1() gives one bold glyph two native paint copies.
+    // term_word() keeps the trailing HORIZ and following graphless
+    // operand in the live field. Only term_field() can publish their
+    // surviving spaces before ink after the later relative rewind.
+    verify_rows(&[
+        (
+            r#".Sy "A\h'2n'" Em "\z\h'-1n'\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A     FGX"],
+        ),
+        (
+            r#".Sy "A\h'3n'" Em "\z\h'-1n'\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A      FGX"],
+        ),
+        (
+            r#".Sy "A\h'2n'" Em "\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A     FGX"],
+        ),
+        (
+            r#".Sy "A\h'2n'" Em "\z\h'-1n'\h'2n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A      FGX"],
+        ),
+        (
+            r#".Sy "A\h'2n'" Em "\z\h'-1n'\h'1n' \h'2n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A        FGX"],
+        ),
+        (
+            r#".No "A\h'2n'" Em "\z\h'-1n'\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A     FGX"],
+        ),
+        (
+            r#".Em "A\h'2n'" Em "\z\h'-1n'\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A     FGX"],
+        ),
+        (
+            r#".Sy "A\h'2n'" Em "\z\h'-1n'\h'1n' " Ns No "J\pK\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A     JKX"],
+        ),
+    ]);
+}

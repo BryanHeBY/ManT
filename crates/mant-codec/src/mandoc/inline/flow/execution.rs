@@ -817,6 +817,7 @@ impl super::InlineExecutionState {
             prefix: (capture_prefix
                 || live_edit
                 || leading_retreat && !input.has_entry_retreat()
+                || domain == ReplayDomain::Filled && input.has_replayable_trailing_advance()
                 || extend)
                 .then(|| {
                     let mut prefix = input.field_prefix(

@@ -219,6 +219,7 @@ pub(in crate::mandoc::inline) enum ReplayPass {
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.
 pub(in crate::mandoc::inline) struct FieldPrefix {
+    pub(in crate::mandoc::inline) deferred_tail: DeferredTail,
     pub(in crate::mandoc::inline) start: usize,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
     /// Existing reading seams whose originating advance normalized to one NBRSP.
@@ -232,6 +233,12 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) backafter: bool,
     pub(in crate::mandoc::inline) pending_cell: Option<usize>,
     pub(in crate::mandoc::inline) pass: ReplayPass,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum DeferredTail {
+    Absent,
+    Replayable,
 }
 
 impl DeviceTail {
