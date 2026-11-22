@@ -70,6 +70,67 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
     has_space && ink_after_marker
 }
 
+/// A continued no-fill definition line has not run `term_newln()` yet.
+/// Retain a bounded graphless HORIZ+marker append on its complete live
+/// buffer. The later `term_field()` call determines whether it prints.
+pub(super) fn bounded_literal_control_append(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use super::EntryCursor;
+    use crate::mandoc::inline::flow::field_buffer::FieldCell;
+    let entry = &context.slot_entry;
+    if entry.domain != ReplayDomain::LiteralDefinitionLine
+        || entry.cursor != EntryCursor::AtEnd
+        || entry.automatic_blanks != 0
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_annotation_output_owner()
+        || context.defer_leading_blanks
+    {
+        return false;
+    }
+    let Some(prefix) = entry.prefix.as_ref().filter(|prefix| {
+        prefix.start == 0
+            && prefix.pass == ReplayPass::Incremental
+            && !prefix.backbefore
+            && !prefix.backafter
+            && prefix.pending_cell.is_none()
+            && prefix.tail_fonts.is_empty()
+    }) else {
+        return false;
+    };
+    let Some((
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(value),
+            ..
+        },
+        tail,
+    )) = events.split_first()
+    else {
+        return false;
+    };
+    let columns = libmandoc_rs::TableColumnMetrics::relative_motion_columns(value);
+    let prefix_slots = prefix.cells.iter().fold(0usize, |total, (cell, _)| {
+        total.saturating_add(match cell {
+            FieldCell::FixedDrawingAdvance(count) | FieldCell::DrawnSpaces(count) => *count,
+            _ => 1,
+        })
+    });
+    columns != 0
+        && prefix_slots
+            .saturating_add(columns)
+            .saturating_add(tail.len())
+            <= MAX_EDITABLE_APPEND_CELLS
+        && tail.iter().all(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::LineBreak
+                    | RoffInlineEvent::ZeroWidthGlyph
+                    | RoffInlineEvent::Breakpoint
+            )
+        })
+}
+
 #[derive(Clone, Copy)]
 pub(super) enum ControlReplay {
     None,

@@ -172,6 +172,80 @@ fn rows_relative_to_term_origin(rendered: &str) -> Vec<&str> {
 }
 
 #[test]
+fn continued_literal_definition_retires_graphless_motion_padding() {
+    // The continued source line has not called term_newln() yet
+    // (mdoc_term.c::print_mdoc_node). The HORIZ and marker suffix remains
+    // editable, then term_field() drops its trailing positioning after
+    // printing START. An independent intentional empty row still lives.
+    for (kind, width, origin) in [("hang", 0, 2), ("hang", 4, 6), ("tag", 0, 2), ("tag", 4, 6)] {
+        let indent = " ".repeat(origin);
+        let start = format!("{indent}START");
+        let end = format!("{indent}X");
+        let following = format!("{indent}Y");
+        for (continued, motion, controls, tail, expected) in [
+            (
+                r"\c",
+                1,
+                r"\p\&",
+                r#"No "\h'-2n'\p""#,
+                &["", "TERM", &start, &end][..],
+            ),
+            (
+                r"\c",
+                2,
+                r"\&\p",
+                r#"No "\h'-4n'\p""#,
+                &["", "TERM", &start, &end][..],
+            ),
+            (
+                r"\c",
+                1,
+                r"\p\&",
+                "No Y",
+                &["", "TERM", &start, &following, &end][..],
+            ),
+            (
+                "",
+                1,
+                r"\p\&",
+                r#"No "\h'-2n'\p""#,
+                &["", "TERM", &start, "", &end][..],
+            ),
+        ] {
+            let source = format!(
+                r#"{HEADER}.nf
+.Bl -{kind} -width {width}n
+.It TERM
+.No START{continued}
+.No "\h'{motion}n'{controls}" {tail}
+.No X
+.El
+.fi
+{END}"#,
+            );
+            let content =
+                json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+            let rendered = mant_render::render_query_man(&content);
+            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            let label = body
+                .lines()
+                .find(|line| line.trim_start() == "TERM")
+                .unwrap();
+            let prefix = label.strip_suffix("TERM").unwrap();
+            let rows: Vec<_> = body
+                .strip_suffix(prefix)
+                .unwrap_or(body)
+                .trim_end_matches('\n')
+                .lines()
+                .map(|line| line.strip_prefix(prefix).unwrap_or(line))
+                .collect();
+            assert_eq!(rows, expected, "{source}\n{rendered}");
+        }
+    }
+}
+
+#[test]
 fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
     // term.c::encode1() installs decoration bytes before a graph;
     // term_word() buffers SP and \p without collapsing them. The next

@@ -768,8 +768,14 @@ impl super::InlineExecutionState {
             || device_tail
                 .as_ref()
                 .is_some_and(super::native_slots::DeviceTail::has_retreated);
-        let domain = if self.no_fill_word_active || self.table_cell.is_some() {
+        let domain = if self.table_cell.is_some() {
             ReplayDomain::Scoped
+        } else if self.no_fill_word_active {
+            if self.uses_definition_word_buffer() {
+                ReplayDomain::LiteralDefinitionLine
+            } else {
+                ReplayDomain::Scoped
+            }
         } else if self.definition.is_none() {
             ReplayDomain::Filled
         } else if self

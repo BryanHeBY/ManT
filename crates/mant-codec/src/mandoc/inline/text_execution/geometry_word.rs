@@ -666,9 +666,12 @@ fn marker_replay(
         && match context.slot_entry.domain {
             ReplayDomain::Filled => marked_operands::bounded_append(events),
             ReplayDomain::DefinitionLine => marked_operands::bounded_field_append(events),
-            ReplayDomain::Scoped => false,
+            ReplayDomain::LiteralDefinitionLine | ReplayDomain::Scoped => false,
         }
     {
+        return Some(MarkerReplay::AwaitFieldFlush);
+    }
+    if marked_operands::bounded_literal_control_append(events, context) {
         return Some(MarkerReplay::AwaitFieldFlush);
     }
     // Plain source blanks already have an incremental pass receipt.

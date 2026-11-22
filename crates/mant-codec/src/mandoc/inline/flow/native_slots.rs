@@ -167,6 +167,7 @@ pub(in crate::mandoc::inline) enum ReplayDomain {
     Scoped,
     Filled,
     DefinitionLine,
+    LiteralDefinitionLine,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
