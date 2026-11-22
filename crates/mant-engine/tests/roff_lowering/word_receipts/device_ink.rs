@@ -431,6 +431,38 @@ fn inherited_overprints_keep_advances_after_publishing_the_prior_glyph() {
 }
 
 #[test]
+fn replay_reuses_an_already_projected_native_gap() {
+    // term.c::term_field() prints the pending advance once. Later words
+    // may overwrite the next graph without replacing the gap's slot.
+    let source = include_str!("live_replay/replay-keeps-an-already-projected-gap.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    let lines: Vec<_> = description_rows(&text, source)
+        .into_iter()
+        .map(str::trim_start)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Surviving gap before rewritten ink",
+            "FB XF",
+            "",
+            "Surviving gap with shorter rewind",
+            "FB XF",
+            "",
+            "Surviving gap before retained ink",
+            "FB F",
+            "",
+            "Tight join without a projected gap",
+            "FBXF",
+            "",
+            "Rewound glyph with distinct following space",
+            "FX F",
+        ]
+    );
+}
+
+#[test]
 fn a_final_absolute_cursor_does_not_erase_an_established_advance() {
     // term.c::term_word() changes col without truncating lastcol. The
     // earlier advance remains between the same accepted ink even when

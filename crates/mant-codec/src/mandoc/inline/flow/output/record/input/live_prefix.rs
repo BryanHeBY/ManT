@@ -182,9 +182,11 @@ impl PrefixEdits {
     }
 
     pub(super) fn retains_blank(&self, cell: usize) -> bool {
-        self.retained_blanks
-            .iter()
-            .any(|&(position, _, _)| position == cell)
+        self.gaps.retained_before_incoming == Some(cell)
+            || self
+                .retained_blanks
+                .iter()
+                .any(|&(position, _, _)| position == cell)
     }
 
     pub(super) fn project(
@@ -383,6 +385,7 @@ fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: us
 struct GapEdits {
     remove: BTreeMap<String, GapRemoval>,
     relocate: BTreeMap<usize, String>,
+    retained_before_incoming: Option<usize>,
 }
 
 struct GapRemoval {
@@ -497,7 +500,13 @@ impl GapEdits {
                 start,
             ));
         }
-        if lost_columns == 0 && !relocate && surviving.is_some() {
+        if lost_columns == 0
+            && !relocate
+            && let Some((_, cell)) = surviving
+        {
+            // This native slot still has its earlier geometry marker.
+            // term_field() releases the blank only once before new ink.
+            self.retained_before_incoming = self.retained_before_incoming.max(Some(cell));
             return;
         }
         let serial = owner
