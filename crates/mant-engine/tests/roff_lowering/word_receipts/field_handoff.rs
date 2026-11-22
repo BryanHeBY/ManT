@@ -85,6 +85,14 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "J",
     ),
     (
+        // term_word() handles named specials before placing their native
+        // glyphs. A printable width alone cannot certify the edited slots.
+        include_str!("live_replay/replay-rejects-named-glyph-with-unproved-slot-shape.1"),
+        &[""],
+        None,
+        "F",
+    ),
+    (
         include_str!("live_replay/replay-keeps-two-accepted-gap-columns.1"),
         &["A  X"],
         None,
@@ -592,9 +600,9 @@ Done.
     let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
     let markup = mant_codec::encode::render_markdown(&content);
     let readback = mant_loader::load_markdown_text(&markup, None).unwrap();
-    for content in [&content, &readback] {
+    for (content, row) in [(&content, "X BX"), (&readback, "• X BX")] {
         let rendered = mant_render::render_query_man(content);
-        assert_eq!(description_rows(&rendered, &source), ["X BX"]);
+        assert_eq!(description_rows(&rendered, &source), [row]);
     }
 
     // The second rewind accepts the clipped first word and its separator.

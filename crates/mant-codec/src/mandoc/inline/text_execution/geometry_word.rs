@@ -223,11 +223,16 @@ fn contains_local_overwrite(
                 // term.c::encode does not consume BACKAFTER on a blank.
                 // encode1 consumes BACKBEFORE before writing the next
                 // glyph. A second arm may leave another pending glyph.
+                // A named escape can write a different native sequence
+                // from its one-column reading glyph (term.c:611-636).
+                let literal = matches!(event, RoffInlineEvent::Text(_));
                 for ch in value.chars() {
                     if !inherited_glyph && matches!(ch, ' ' | '\u{a0}') {
                         continue;
                     }
-                    if !super::native_writes::is_single_column_ink(ch) {
+                    if !(ch.is_ascii_graphic()
+                        || literal && super::native_writes::is_single_column_ink(ch))
+                    {
                         return false;
                     }
                     wrote_pair |= backbefore;
@@ -246,10 +251,16 @@ fn contains_local_overwrite(
         }
     }
     // encode() writes an ordinary trailing SP without consuming
-    // BACKBEFORE (term.c:946-967). Preserve the complete local word so
-    // the next HORIZ can still revisit its decorated slots.
+    // BACKBEFORE (term.c:946-967). Preserve the complete decorated word
+    // so the next HORIZ can revisit its font slots. Ordinary words
+    // already retain the editable blank through the shared word path.
     let held_before_trailing_blank = backbefore
         && !inherited_glyph
+        && context.slot_entry.domain == ReplayDomain::Filled
+        && !context.slot_entry.cursor.has_input()
+        && !context.defer_leading_blanks
+        && !context.zero_advance.has_annotation_output_owner()
+        && decorated_word(events, context.font.current)
         && events.last().is_some_and(
             |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
         );
@@ -335,6 +346,7 @@ fn marker_replay(
     let mut has_ink = false;
     let mut has_marker = false;
     let mut ink_after_marker = false;
+    let mut has_other_padding_controls = false;
     let mut has_backstep = false;
     let mut has_motion = false;
     for event in events {
@@ -356,6 +368,7 @@ fn marker_replay(
                 let ink = text.bytes().any(|byte| byte.is_ascii_graphic());
                 has_ink |= ink;
                 ink_after_marker |= has_marker && ink;
+                has_other_padding_controls |= owns_link || text.contains('\u{a0}');
             }
             RoffInlineEvent::LineBreak => {
                 has_marker = true;
@@ -368,12 +381,16 @@ fn marker_replay(
                 argument: Some(value),
                 ..
             } if filled && motion_columns(value).is_some() => {
+                has_other_padding_controls = true;
                 has_motion = true;
             }
             RoffInlineEvent::Breakpoint
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::NonBreakingWordBlank
-                if filled => {}
+                if filled =>
+            {
+                has_other_padding_controls = true;
+            }
             RoffInlineEvent::ZeroAdvance => has_backstep = true,
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
@@ -386,7 +403,7 @@ fn marker_replay(
     // SP the terminal preserves beside a marker (term.c:659-661,946-967).
     // Otherwise the existing glyph owner must carry the pending BACK
     // register through the next term_word().
-    if has_backstep && !contains_local_overwrite(events, context) {
+    if has_backstep && (has_other_padding_controls || !contains_local_overwrite(events, context)) {
         return None;
     }
     if !has_marker || !has_ink || !ink_after_marker && !has_backstep {
