@@ -153,6 +153,10 @@ impl ExecutedWordEntry {
         matches!(self.rewind, EntryRewind::Executed { .. })
     }
 
+    pub(super) fn relocated_cells(&self) -> &[(usize, usize)] {
+        &self.prefix.moved
+    }
+
     pub(super) fn append_owner_intervals(&self, anchors: &mut Vec<NativeWordAnchor>) {
         self.prefix.append_owner_intervals(anchors);
     }

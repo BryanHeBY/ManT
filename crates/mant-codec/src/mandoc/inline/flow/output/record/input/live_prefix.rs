@@ -12,7 +12,7 @@ pub(super) struct PrefixEdits {
     pub(super) word_start: Option<usize>,
     pub(super) entry_blanks: usize,
     pub(super) entry_gap: Option<usize>,
-    moved: Vec<(usize, usize)>,
+    pub(super) moved: Vec<(usize, usize)>,
     detached_moves: BTreeMap<usize, String>,
     edits: Vec<GlyphEdit>,
     gaps: GapEdits,

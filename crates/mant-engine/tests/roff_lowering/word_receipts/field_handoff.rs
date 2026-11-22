@@ -671,6 +671,52 @@ Done.
 }
 
 #[test]
+fn replayed_passes_keep_the_relocated_glyph_after_skipped_space() {
+    const PAGE: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Ss CASE0CASE\n";
+    // term_flushln() prints X, skips the earlier word's relocated SP and
+    // starts a new row with that same word's J (term.c:205-220). The SP
+    // still has a provisional owner interval before the field retires.
+    for (words, rows, linked) in [
+        (r#".No "CD \zJ" No " \h'-7n'\pX""#, &["X", "J"][..], false),
+        (r#".No "CD \zJ" No "  \h'-8n'\pX""#, &["X", "J"][..], false),
+        (r#".No "CD \zJ" No "\h'-6n'\pX""#, &["X", "J"][..], false),
+        (r#".No "CD \zJ" No " \h'-4n'XXX""#, &["CXXX"][..], false),
+        (r#".No "CD \zJ" No " \h'-6n'\pX""#, &["X", "J"][..], false),
+        (
+            r#".No "CD \z\fIJ\fR" No " \h'-9n'\pX""#,
+            &["X", "J"][..],
+            false,
+        ),
+        (
+            r#".No "CD \z\X'tty: link https://k.test'J\X'tty: link'" No " \h'-7n'\pX""#,
+            &["X", "J"][..],
+            true,
+        ),
+        (r#".No "CD \zJ" No " \h'-7n'\pJ""#, &["J", "J"][..], false),
+    ] {
+        let source = format!("{PAGE}{words}\n.Ss CASE999CASE\nDone.\n");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markup = mant_codec::encode::render_markdown(&content);
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markup, None).unwrap());
+        for document in [&content, &readback] {
+            let text = mant_render::render_query_man(document);
+            let (_, body) = text.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            let actual: Vec<_> = body.trim().lines().map(str::trim).collect();
+            assert_eq!(actual, rows, "{source}\n{text}");
+            let mut labels = Labels::default();
+            labels.visit_document(document.document.as_ref().unwrap());
+            assert_eq!(labels.0.len(), usize::from(linked), "{source}");
+            if linked {
+                assert_eq!(labels.0[0], ("https://k.test".into(), "J".into()));
+            }
+        }
+    }
+}
+
+#[test]
 fn replayed_retreats_keep_their_native_replacement_order() {
     const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n";
     // encode1() buffers C, a backspace, and the italic X's paint. Another

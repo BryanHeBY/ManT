@@ -247,8 +247,11 @@ impl InlineBuilder {
             });
         entry.append_owner_intervals(&mut definition.field_word_anchors);
         observe_definition_word(definition, incoming, separator);
-        let mut projection =
-            self.record_authored_native_passes(incoming, receipt.first_content_cell);
+        let mut projection = self.record_authored_native_passes(
+            incoming,
+            receipt.first_content_cell,
+            entry.relocated_cells(),
+        );
         let input = self.execution.word_input();
         projection.record_separator(input.0, native_word_start, separator, native_separator);
         entry.record_projection(&mut projection);
@@ -370,6 +373,7 @@ impl InlineBuilder {
             targets,
             receipt.first_content_cell,
             cached_glyph,
+            entry.relocated_cells(),
         );
         result.record_separator(&unit.buffer, native_word_start, separator, native_separator);
         entry.record_projection(&mut result);

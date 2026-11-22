@@ -33,6 +33,7 @@ impl InlineBuilder {
         &mut self,
         incoming: &[Inline],
         word_first_cell: usize,
+        relocated: &[(usize, usize)],
     ) -> WordPassProjection {
         // Width-dependent passes stay provisional until term_flushln(): a
         // later .ta may reinterpret every buffered tab. Only authored break
@@ -56,6 +57,7 @@ impl InlineBuilder {
             targets,
             word_first_cell,
             cached_glyph,
+            relocated,
         );
         let Some(definition) = self.execution.definition.as_mut() else {
             return result;
@@ -75,6 +77,7 @@ impl InlineBuilder {
         targets: super::super::super::field_buffer::FillTargets,
         word_first_cell: usize,
         cached_glyph: bool,
+        relocated: &[(usize, usize)],
     ) -> WordPassProjection {
         let anchor_count = anchors.len();
         let mut inside_splits: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
@@ -139,7 +142,10 @@ impl InlineBuilder {
                         }
                     }
                     restart = Some(boundary);
-                } else if boundary < word_end && !represented_in_ir {
+                } else if boundary < word_end
+                    && !represented_in_ir
+                    && !has_relocated_scalar(relocated, word_first_cell..boundary)
+                {
                     record_row_split(
                         &mut inside_splits,
                         &anchors[anchor_count - 1].owner,
@@ -181,6 +187,18 @@ impl InlineBuilder {
             ..WordPassProjection::default()
         }
     }
+}
+
+fn has_relocated_scalar(relocated: &[(usize, usize)], cells: std::ops::Range<usize>) -> bool {
+    // A raw slot replay can splice an older owner's scalar between two
+    // parts of the current word. A word-relative offset cannot express
+    // the cut over that mixed interval. Leave it for term_flushln's
+    // complete owner receipts, including SP it skips at the restart
+    // (term.c:205-220).
+    let first = relocated.partition_point(|&(cell, _)| cell < cells.start);
+    relocated
+        .get(first)
+        .is_some_and(|&(cell, _)| cell < cells.end)
 }
 
 fn starts_with_borrowed_output(
