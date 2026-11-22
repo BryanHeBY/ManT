@@ -147,14 +147,18 @@ impl BlockRenderer<'_> {
                 .first_visual_origin;
             let mut output = self.definition_term_rows(terms, origin);
             output.extend(self.definition_term_rows(vec![last_rows], origin));
-            let gap = mant_ir::geometry::definition_body_gap(
-                item.head_body_relation,
-                &item.layout,
-                term_origin,
-                last_width,
-                preferred_body_origin,
-            );
-            shared_row.push_plain(&" ".repeat(gap));
+            // Position an actual BODY payload. A hard line can close the
+            // shared row before BODY writes a single scalar.
+            if !first_line.0.visible.is_empty() {
+                let gap = mant_ir::geometry::definition_body_gap(
+                    item.head_body_relation,
+                    &item.layout,
+                    term_origin,
+                    last_width,
+                    preferred_body_origin,
+                );
+                shared_row.push_plain(&" ".repeat(gap));
+            }
             shared_row.append(&first_line.0);
             // An open HEAD tail can receive BODY content. Its origin is
             // applied to the completed shared row, never to an empty prefix.

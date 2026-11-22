@@ -48,6 +48,76 @@ fn copied_compact_display_retains_the_label_body_row_boundary() {
     }
 }
 
+#[test]
+fn native_graphless_body_pass_closes_head_without_virtual_spaces() {
+    // The pinned term_field() queues HORIZ and vbl without advancing
+    // until real ink. A graphless first pass closes the TERM row before
+    // the following No X is laid out in its own row.
+    for (kind, width, continuation) in [("hang", 0, 2), ("hang", 4, 6), ("tag", 4, 6)] {
+        let source = format!(
+            r#".Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Ss CASE0CASE
+.Bl -{kind} -width {width}n
+.It TERM
+.No "\h'1n'\p\&" No "\h'-2n'\p"
+.No X
+.El
+.Ss CASE999CASE
+Done.
+"#
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let encoded = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&encoded).unwrap();
+        let query: ResolvedContent = decoded.into();
+        let view = DocumentView::new(&query);
+        let logical_text = |line: &LogicalLine| {
+            line.spans
+                .iter()
+                .map(|span| &*span.content)
+                .collect::<String>()
+        };
+        let head = view
+            .lines
+            .iter()
+            .position(|line| logical_text(line).starts_with("TERM"))
+            .unwrap();
+        assert_eq!(logical_text(&view.lines[head]), "TERM", "{source}");
+        assert_eq!(logical_text(&view.lines[head + 1]), "X", "{source}");
+        for width in [40, 80] {
+            let rendered = view.render(width);
+            let hit = &rendered.search("TERM")[0];
+            let continuation_hit = &rendered.search("X")[0];
+            assert_eq!(
+                continuation_hit.start_column,
+                hit.start_column + continuation,
+                "{source}"
+            );
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition {
+                    row: hit.row,
+                    column: hit.start_column,
+                },
+                focus: TextPosition {
+                    row: continuation_hit.row,
+                    column: continuation_hit.start_column,
+                },
+            });
+            assert_eq!(
+                copied,
+                format!("TERM\n{}X", " ".repeat(continuation_hit.start_column)),
+                "{source}"
+            );
+        }
+    }
+}
+
 fn query(
     relation: HeadBodyRelation,
     alignment: DefinitionBodyAlignment,

@@ -138,3 +138,42 @@ fn empty_head_prefix_rows_preserve_the_recorded_run_in_body_origin() {
         }
     }
 }
+
+#[test]
+fn shared_definition_positions_only_its_first_row_payload() {
+    // A shared hard row can close with no BODY payload. Geometry must
+    // neither put virtual trailing padding on the HEAD nor trim actual
+    // source whitespace from a BODY row that has content.
+    for (term, body, expected) in [
+        ("TERM", "\nX", "TERM\n      X"),
+        ("TERM", " \nX", "TERM   \n      X"),
+        ("TERM", "\u{a0}\nX", "TERM  \u{a0}\n      X"),
+        ("TERM\n", "\nX", "TERM\n\n      X"),
+        ("TERM\n", "X", "TERM\n      X"),
+        ("TERM\nPart", "\nX", "TERM\nPart\n      X"),
+    ] {
+        let block = Block::DefinitionList {
+            declaration_groups: vec![],
+            compact: true,
+            items: vec![DefinitionItem {
+                head_body_relation: mant_ir::HeadBodyRelation::separated(),
+                terms: vec![vec![Inline::Text { value: term.into() }].into()],
+                description: vec![paragraph(body, 0)],
+                source: None,
+                entry: None,
+                layout: mant_ir::DefinitionLayout {
+                    body_alignment: mant_ir::DefinitionBodyAlignment::Indented,
+                    body_indent_columns: 6,
+                    min_term_gap_columns: 1,
+                    ..Default::default()
+                },
+            }],
+            layout: LayoutHint::default(),
+            source: None,
+        };
+        assert_eq!(
+            super::super::super::plain_renderer().render_blocks(&[block], 0),
+            expected
+        );
+    }
+}

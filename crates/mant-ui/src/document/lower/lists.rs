@@ -332,16 +332,25 @@ impl DocumentBuilder<'_> {
         let block_origin = compose_origin(indent, item.layout.body_indent_columns);
         let first_indent = compose_origin(block_origin, layout.indent_columns);
         let continuation_indent = compose_origin(first_indent, layout.continuation_indent_columns);
-        let gap = mant_ir::geometry::definition_body_gap(
-            item.head_body_relation,
-            &item.layout,
-            term_origin,
-            term_width,
-            body_hint
-                .resolve(first_indent, continuation_indent)
-                .first_visual_origin,
-        );
-        term_spans.push(Span::raw(" ".repeat(gap)));
+        let origins = body_hint.resolve(first_indent, continuation_indent);
+        let has_first_payload = body.spans.iter().any(|span| !span.content.is_empty());
+        let gap_at = |preferred_body_origin| {
+            if !has_first_payload {
+                return 0;
+            }
+            mant_ir::geometry::definition_body_gap(
+                item.head_body_relation,
+                &item.layout,
+                term_origin,
+                term_width,
+                preferred_body_origin,
+            )
+        };
+        let gap = gap_at(origins.first_visual_origin);
+        let base_gap = gap_at(first_indent);
+        if gap > 0 {
+            term_spans.push(Span::raw(" ".repeat(gap)));
+        }
         let description_scalar_offset = spans_scalars(&term_spans);
         term_links.extend(shifted_links(body.links, description_scalar_offset));
         term_marks.extend(shifted_reference_marks(
@@ -349,14 +358,6 @@ impl DocumentBuilder<'_> {
             description_scalar_offset,
         ));
         term_spans.extend(body.spans);
-        let origins = body_hint.resolve(first_indent, continuation_indent);
-        let base_gap = mant_ir::geometry::definition_body_gap(
-            item.head_body_relation,
-            &item.layout,
-            term_origin,
-            term_width,
-            first_indent,
-        );
         let mut logical = LogicalLine::hanging(
             padding(term_origin),
             padding(origins.continuation_origin),
