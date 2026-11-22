@@ -213,6 +213,28 @@ fn a_trailing_native_advance_is_only_printed_before_later_ink() {
 }
 
 #[test]
+fn a_fresh_retreat_keeps_inner_and_trailing_native_advances_editable() {
+    // term_word() changes offset for a retreat before col zero. Both
+    // positive advances still write into the new field. A later tight
+    // HORIZ can consume either extent and overwrite C or precede it.
+    let cases = [
+        (r#".No "\h'-3n'B\h'1n'C\h'1n'" Ns No "\h'-3n'Y""#, "BYC"),
+        (r#".No "\h'-3n'B\h'1n'C\h'1n'" Ns No "\h'-6n'Y""#, "Y C"),
+        (r#".No "\h'-3n'B\h'2n'C\h'2n'" Ns Em "\h'-3n'Y""#, "B  Y"),
+        (r#".No "\h'-3n'B\h'2n'C\h'2n'" Ns No "\h'-3n'Y""#, "B  Y"),
+        (r#".No "B\h'2n'C\h'2n'" Ns No "\h'-3n'Y""#, "B  Y"),
+        (r#".No "\h'-1n'B\h'2n'C\h'1n'" No "\h'-3n'Y""#, "B  Y"),
+    ];
+    for (body, expected) in cases {
+        let source = format!("{HEADER}{body}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}
+
+#[test]
 fn a_complete_absolute_cursor_leaves_later_slots_available_to_replay() {
     // term.c::term_word() moves col to the absolute target while
     // bufferc() keeps lastcol. The next word can write at the early

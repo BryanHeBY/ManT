@@ -18,6 +18,7 @@ pub(super) fn prepare_reading_blanks(
         AdvanceReading::DeferredTail => {
             if let Some(owner) = word_owner {
                 defer_trailing_advance(slots, reading, owner);
+                publish_inner_advances(slots, reading, earlier);
             }
         }
         AdvanceReading::Unprojected => {}

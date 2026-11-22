@@ -482,16 +482,46 @@ fn can_defer_trailing_advance(
     let Some(budget @ 1..) = MAX_EDITABLE_APPEND_CELLS.checked_sub(width) else {
         return false;
     };
-    let ink = prefix.iter().try_fold(0usize, |count, event| match event {
+    // At a fresh field origin, a negative HORIZ changes the position of
+    // the field but cannot consume any raw slots (term.c::term_word).
+    // The later internal and trailing advances still occupy exact slots.
+    let (leading_retreat, prefix) = match prefix.split_first() {
+        Some((
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            },
+            rest,
+        )) if motion_columns(value).is_some_and(|(absolute, units)| !absolute && units < 0) => {
+            (true, rest)
+        }
+        _ => (false, prefix),
+    };
+    let size = prefix.iter().try_fold(0usize, |count, event| match event {
         RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte.is_ascii_graphic()) => {
-            Some(count.saturating_add(text.len()))
+            Some(count.saturating_add(text.len().saturating_mul(5)))
+        }
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(value),
+            ..
+        } if leading_retreat
+            && count > 0
+            && motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0) =>
+        {
+            Some(
+                count.saturating_add(libmandoc_rs::TableColumnMetrics::relative_motion_columns(
+                    value,
+                )),
+            )
         }
         // Keep the ordinary receipt when the ink itself can have multiple
         // raw paint copies with independent coverage ownership.
         RoffInlineEvent::Font(font) if single_paint(*font) => Some(count),
         _ => None,
     });
-    width > 1 && ink.is_some_and(|count| count > 0 && count <= budget / 5)
+    (leading_retreat || width > 1)
+        && width > 0
+        && size.is_some_and(|count| count > 0 && count <= budget)
 }
 
 enum RetainedAdvancePhase {
