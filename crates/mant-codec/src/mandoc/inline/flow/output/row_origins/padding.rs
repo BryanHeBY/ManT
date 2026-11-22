@@ -56,6 +56,11 @@ pub(super) fn project_annotation(
                 boundary |= content;
                 projected.push(child.materialize());
             }
+            // An automatic stroke belongs outside source annotations.
+            // If the marked native cut still falls inside this wrapper,
+            // its independent output ownership has not been established.
+            ProjectedNode::Position(Inline::Anchor { ref id, .. })
+                if id.as_str() == super::CLOSED_UNDERLINE => {}
             ProjectedNode::Position(_) | ProjectedNode::FieldPadding(_) => {
                 projected.push(child.materialize());
             }

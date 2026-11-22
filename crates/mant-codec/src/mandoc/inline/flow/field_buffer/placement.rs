@@ -78,6 +78,17 @@ impl FieldBuffer {
     ) {
         match write {
             FieldWrite::Placed { cell, scalars } => self.push_placed(cell, *scalars),
+            FieldWrite::PlacedUnderlineStroke => {
+                let cell = self.cells.len();
+                self.push_placed(
+                    &FieldCell::Graph {
+                        text: '_',
+                        width: 1,
+                    },
+                    0,
+                );
+                self.underline_strokes.push(cell);
+            }
             FieldWrite::KeepPlacedRetreat { from_end } => self.keep_placed_retreat(*from_end),
             FieldWrite::ReplacePlacedTail { cells, .. } => self.replace_placed_tail(*cells),
             FieldWrite::RetainDeviceTail(tail) => self.device_tail = Some(tail.clone()),
@@ -412,6 +423,8 @@ impl FieldBuffer {
     fn replace_live_prefix(&mut self, start: usize, positions: &[Option<usize>]) {
         use super::cells::DeferredBlankRun;
 
+        self.underline_strokes
+            .truncate(self.underline_strokes.partition_point(|&cell| cell < start));
         // Keep earlier BACKBEFORE evidence when both the target and
         // its marker survive the overlay, including a target to its left.
         let first_retreat = self
@@ -705,6 +718,8 @@ impl FieldBuffer {
     pub(super) fn truncate_raw_slot_proof(&mut self, end: usize) {
         self.break_markers
             .truncate(self.break_markers.partition_point(|&marker| marker < end));
+        self.underline_strokes
+            .truncate(self.underline_strokes.partition_point(|&cell| cell < end));
         self.raw_slot_fence = self.raw_slot_fence.min(end);
         self.raw_edit_fence = self.raw_edit_fence.min(end);
         self.raw_tail_fonts.truncate(

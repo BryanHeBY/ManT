@@ -624,3 +624,100 @@ fn covered_trailing_advance_keeps_the_live_native_buffer() {
         ),
     ]);
 }
+
+#[test]
+fn closed_definition_rows_preserve_accepted_underline_strokes() {
+    // term.c::term_field paints the unpaired stroke after C. The device
+    // closes the row either in the pass loop or at the TAG HEAD post
+    // (mdoc_term.c::termp_it_post). A HANG field that keeps the row open
+    // can still be covered by a later BODY field at the same column.
+    let cases = [
+        (
+            r#".Bl -hang -width 0n
+.It TERM
+.Em "\h'1n'C\pJ" No "\h'-2n'\p"
+.No X
+.El"#,
+            &["TERM  C_", "X"][..],
+        ),
+        (
+            r#".Bl -hang -width 4n
+.It TERM
+.Em "\h'1n'C\pJ" No "\h'-2n'\p"
+.No X
+.El"#,
+            &["TERM   C_", "X"][..],
+        ),
+        (
+            r#".Bl -tag -width 4n
+.It TERM
+.Em "\h'1n'C\pJ" No "\h'-2n'\p"
+.No X
+.El"#,
+            &["TERM   C_", "X"][..],
+        ),
+        (
+            r#".Bl -tag -width 4n
+.It Xo TERM
+.br
+.Em "\h'1n'C\pJ" No "\h'-2n'\p"
+.Xc
+.No X
+.El"#,
+            &["TERM   C_", "X"][..],
+        ),
+        (
+            r#".Bl -hang -width 3n
+.It Em "\zC\pJ" Sy "\h'-2n'\p"
+.No "\zB\zY"
+.br
+.No "X"
+.El"#,
+            &["Y", "X"][..],
+        ),
+        (
+            r#".Bl -hang -width 3n
+.It Em "\zC\pJ" Sy "\h'-2n'\p"
+.No "\h'-1n' \zB\zY"
+.br
+.No "X"
+.El"#,
+            &["Y", "X"][..],
+        ),
+    ];
+    for (words, expected) in cases {
+        let source = format!("{HEADER}{words}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        let rows_of = |rendered: &str| {
+            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            body.trim()
+                .lines()
+                .map(|line| line.trim().to_owned())
+                .collect::<Vec<_>>()
+        };
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(rows_of(&rendered), expected, "{words}\n{rendered}");
+
+        // Markdown uses list markers and relative placement. Preserve the
+        // confirmed ink and its physical-row boundary through readback.
+        let rendered = mant_render::render_query_man(&readback);
+        let words_on_row = |row: &str| row.split_whitespace().collect::<Vec<_>>().join(" ");
+        let rows: Vec<_> = rows_of(&rendered)
+            .iter()
+            .map(|row| words_on_row(row.strip_prefix("• ").unwrap_or(row)))
+            .collect();
+        assert_eq!(
+            rows,
+            expected
+                .iter()
+                .map(|row| words_on_row(row))
+                .collect::<Vec<_>>(),
+            "{words}\n{rendered}"
+        );
+    }
+}

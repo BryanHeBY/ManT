@@ -231,6 +231,12 @@ pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
 
 pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
     nodes.retain_mut(|node| match node {
+        Inline::Anchor { id, .. } if id.as_str() == super::row_origins::CLOSED_UNDERLINE => {
+            *node = Inline::Text {
+                value: "_".to_owned(),
+            };
+            true
+        }
         node if crate::mandoc::inline::ownership::is_delayed_origin(node) => true,
         Inline::Anchor { .. } => {
             super::row_origins::is_layout_carrier(node)

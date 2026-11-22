@@ -16,6 +16,26 @@ pub(super) const NEXT_ROW: &str = "\0mant:row-layout:next:";
 pub(super) const CURRENT_ROW: &str = "\0mant:row-layout:current:";
 pub(super) const PRESENTATION: &str = "\0mant:row-layout:presentation:";
 
+pub(super) const CLOSED_UNDERLINE: &str = "\0mant:output-scope:closed-underline";
+
+pub(in crate::mandoc::inline::flow) fn project_closed_underlines(
+    nodes: &mut Vec<Inline>,
+    receipts: Vec<(String, usize)>,
+    output_start: usize,
+) -> OutputNodeEdits {
+    if receipts.is_empty() {
+        return OutputNodeEdits::default();
+    }
+    let mut positions = BTreeMap::<String, Vec<(usize, NativePosition, bool)>>::new();
+    for (owner, scalar) in receipts {
+        positions
+            .entry(owner)
+            .or_default()
+            .push((scalar, NativePosition::ClosedUnderline, true));
+    }
+    project_owner_positions(nodes, positions, output_start)
+}
+
 pub(in crate::mandoc::inline::flow) fn project_row_presentations(
     nodes: &mut Vec<Inline>,
     receipts: &[(String, usize, mant_ir::RowLayoutHint)],
@@ -35,6 +55,14 @@ pub(in crate::mandoc::inline::flow) fn project_row_presentations(
             true,
         ));
     }
+    project_owner_positions(nodes, positions, output_start)
+}
+
+fn project_owner_positions(
+    nodes: &mut Vec<Inline>,
+    mut positions: BTreeMap<String, Vec<(usize, NativePosition, bool)>>,
+    output_start: usize,
+) -> OutputNodeEdits {
     for values in positions.values_mut() {
         values.sort_by_key(|(scalar, _, _)| *scalar);
     }
@@ -342,6 +370,7 @@ enum NativePosition {
     RowOrigin(i32),
     FieldPadding(usize),
     Presentation(mant_ir::RowLayoutHint),
+    ClosedUnderline,
 }
 
 struct OriginCursor<'a> {
@@ -454,10 +483,26 @@ impl OriginCursor<'_> {
                 project_annotation(node, projected, output);
                 return;
             }
-            Inline::LineBreak {} | Inline::Equation { .. } => self.projected_blanks = 0,
+            Inline::LineBreak {} => {
+                self.projected_blanks = 0;
+                if self.pending_underline() {
+                    self.emit_here(output);
+                }
+            }
+            Inline::Equation { .. } => self.projected_blanks = 0,
             _ => {}
         }
         output.push(ProjectedNode::content(node));
+    }
+
+    fn pending_underline(&self) -> bool {
+        self.owner
+            .as_ref()
+            .and_then(|owner| self.positions.get(owner))
+            .and_then(|positions| positions.get(self.next))
+            .is_some_and(|(scalar, position, _)| {
+                *scalar == self.scalar && matches!(position, NativePosition::ClosedUnderline)
+            })
     }
 
     fn has_unprojected_graph_here(&self) -> bool {
@@ -489,6 +534,9 @@ impl OriginCursor<'_> {
                     format!("{INTERNAL_ROW_ORIGIN}{origin}"),
                 )),
                 NativePosition::FieldPadding(cells) => ProjectedNode::FieldPadding(*cells),
+                NativePosition::ClosedUnderline => {
+                    ProjectedNode::Position(Inline::anchor(CLOSED_UNDERLINE))
+                }
                 NativePosition::Presentation(hint) => {
                     let alignment = match hint.alignment {
                         mant_ir::TextAlignment::Left => 0,

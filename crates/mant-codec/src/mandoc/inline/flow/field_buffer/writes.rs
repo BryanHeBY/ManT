@@ -257,6 +257,7 @@ impl FieldBuffer {
         self.plain_paint_origins.clear();
         self.projection_prefix.clear();
         self.deferred_blanks.clear();
+        self.underline_strokes.clear();
         self.pass_retreats.clear();
         self.staged_backline_projection = false;
         self.backline_projection_target = None;
@@ -384,12 +385,9 @@ impl FieldBuffer {
                 FieldWrite::MoveInDrawing { absolute, units } => {
                     self.move_in_drawing(drawing_start, *absolute, *units);
                 }
-                FieldWrite::UnprovedMotion => {
-                    self.word_scan = WordScanPolicy::UnmodeledRewind;
-                    self.scan = None;
-                    self.clear_backtracking();
-                }
+                FieldWrite::UnprovedMotion => self.invalidate_rewound_scan(),
                 FieldWrite::Placed { .. }
+                | FieldWrite::PlacedUnderlineStroke
                 | FieldWrite::KeepPlacedRetreat { .. }
                 | FieldWrite::ReplacePlacedTail { .. }
                 | FieldWrite::RetainDeviceTail(_)
@@ -506,10 +504,14 @@ impl FieldBuffer {
         // at entry or occurred inside a word. term.c:678–714
         // skips it with BACKAFTER, otherwise moves col.
         if !std::mem::take(&mut self.backafter_armed) && (columns > 0 || self.backbefore_armed) {
-            self.word_scan = WordScanPolicy::UnmodeledRewind;
-            self.scan = None;
-            self.clear_backtracking();
+            self.invalidate_rewound_scan();
         }
+    }
+
+    fn invalidate_rewound_scan(&mut self) {
+        self.word_scan = WordScanPolicy::UnmodeledRewind;
+        self.scan = None;
+        self.clear_backtracking();
     }
 
     fn defer_source_blanks(&mut self, source: super::cells::DeferredSourceBlank, count: usize) {
@@ -998,7 +1000,7 @@ impl FieldBuffer {
                         self.blank_positions.pop_last();
                     }
                     self.cells.pop();
-                    self.retire_deferred_blank_at(self.cells.len());
+                    self.retire_replaced_cell_receipts(self.cells.len());
                     self.normalized_until = self.normalized_until.min(self.cells.len());
                     self.projection_prefix.pop();
                 }
@@ -1014,7 +1016,10 @@ impl FieldBuffer {
         self.push_cell(FieldCell::Graph { text, width });
     }
 
-    pub(super) fn retire_deferred_blank_at(&mut self, cell: usize) {
+    pub(super) fn retire_replaced_cell_receipts(&mut self, cell: usize) {
+        if let Ok(index) = self.underline_strokes.binary_search(&cell) {
+            self.underline_strokes.remove(index);
+        }
         if let Some(run) = self.deferred_blanks.last_mut()
             && run.end == cell + 1
         {
@@ -1067,7 +1072,7 @@ impl FieldBuffer {
         }
         // term_field() advances to a pending blank and can rewind over it
         // before printing the new graph (term.c:420-434,901-908).
-        self.retire_deferred_blank_at(cell);
+        self.retire_replaced_cell_receipts(cell);
         let contribution = self.projection_length(cell, cell + 1);
         // An arm can cross invisible controls, but the next arm starts
         // with a newly appended glyph. Adjust only its still-live suffix.

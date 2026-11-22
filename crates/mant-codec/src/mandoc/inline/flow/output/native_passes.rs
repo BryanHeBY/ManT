@@ -149,6 +149,35 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     }
 }
 
+/// Address the author's glyph directly before a closed native paint stroke.
+/// Its source scalar interval stays valid until owner acceptance runs.
+pub(in crate::mandoc::inline::flow) fn closed_underline_positions(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    passes: &[super::super::field_buffer::FillPass],
+    closes: impl Fn(usize, &super::super::field_buffer::FillPass) -> bool,
+) -> Vec<(String, usize)> {
+    let mut offsets = OwnerOffsets {
+        anchors,
+        preceding: 0,
+        lengths: BTreeMap::new(),
+        first_owners: std::cell::OnceCell::new(),
+    };
+    buffer
+        .closed_underline_graphs(passes, closes)
+        .into_iter()
+        .filter_map(|graph| {
+            let index = anchors
+                .partition_point(|anchor| anchor.content <= graph)
+                .checked_sub(1)?;
+            Some((
+                anchors[index].owner.clone(),
+                offsets.at(buffer, index, graph + 1),
+            ))
+        })
+        .collect()
+}
+
 struct OwnerOffsets<'a> {
     anchors: &'a [super::super::NativeWordAnchor],
     preceding: usize,

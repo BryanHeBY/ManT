@@ -162,6 +162,7 @@ impl FieldWrite {
             | Self::OpaqueRawSlots { .. }
             | Self::ProveAppendedSlots(_)
             | Self::Placed { .. }
+            | Self::PlacedUnderlineStroke
             | Self::PlacedBlank { .. } => EntryWrite::Rewind,
         }
     }
@@ -235,7 +236,7 @@ impl FieldBuffer {
         for index in (start..self.cells.len()).rev() {
             self.blank_positions.remove(&index);
             self.nonbreaking_positions.remove(&index);
-            self.retire_deferred_blank_at(index);
+            self.retire_replaced_cell_receipts(index);
         }
         self.cells.truncate(start);
         self.truncate_raw_slot_proof(start);

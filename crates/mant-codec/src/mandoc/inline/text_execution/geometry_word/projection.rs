@@ -87,26 +87,18 @@ impl<'a> PlacedWord<'a> {
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
         retire_trailing_entry_blanks(&mut slots, &reading, earlier);
         preserve_author_separators(&slots, &mut reading);
-        let mut writes = Vec::new();
-        if earlier != 0 {
-            writes.push(replay_prefix(
-                &slots,
-                &reading,
-                prefix_start,
-                earlier,
-                prior_pending.and_then(PriorPendingSlot::unpublished),
-            ));
-        } else if replace_tail > 0 {
-            writes.push(replay_device_tail(
-                &slots,
-                &reading,
-                replace_tail,
-                replayed_entry,
-            ));
-        }
         let (inherited_pending, prior) =
             settle_prior_slot(prior_pending, pending_owner, &slots, &reading, earlier)?;
-        writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
+        let mut writes = placed_slot_writes(
+            &slots,
+            &reading,
+            (prefix_start, earlier, prior_pending),
+            (replace_tail, replayed_entry),
+            retain_suffix
+                && editable_pass
+                && domain == ReplayDomain::DefinitionLine
+                && extent <= MAX_EDITABLE_APPEND_CELLS,
+        );
         let end = slots.len();
         record_slot_proof(
             &mut writes,
@@ -352,6 +344,45 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
             );
         }
     }
+}
+
+fn placed_slot_writes(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    (start, earlier, prior): (usize, usize, Option<PriorPendingSlot>),
+    (replace_tail, replayed_entry): (usize, bool),
+    defer_strokes: bool,
+) -> Vec<FieldWrite> {
+    let mut writes = Vec::new();
+    if earlier != 0 {
+        writes.push(replay_prefix(
+            slots,
+            reading,
+            start,
+            earlier,
+            prior.and_then(PriorPendingSlot::unpublished),
+        ));
+    } else if replace_tail > 0 {
+        writes.push(replay_device_tail(
+            slots,
+            reading,
+            replace_tail,
+            replayed_entry,
+        ));
+    }
+    writes.extend(slots.iter().enumerate().map(|(index, slot)| {
+        if defer_strokes
+            && slot.underline_decoration
+            && slots.get(index + 1..index + 3).is_some_and(|tail| {
+                tail[0].cell == FieldCell::Backline && tail[1].cell == FieldCell::BreakMarker
+            })
+        {
+            FieldWrite::PlacedUnderlineStroke
+        } else {
+            slot_write(slot, reading)
+        }
+    }));
+    writes
 }
 
 fn record_slot_proof(

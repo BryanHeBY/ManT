@@ -158,6 +158,7 @@ impl InlineBuilder {
 
         if let FlushReceipt::Accepted { passes, .. } = receipt {
             if !owner_boundary {
+                self.project_closed_field_underlines(passes, native);
                 self.project_accepted_field_passes(passes);
                 self.project_accepted_field_omissions(passes);
                 let start = self
@@ -275,6 +276,43 @@ impl InlineBuilder {
                 passes,
             );
         }
+    }
+
+    fn project_closed_field_underlines(
+        &mut self,
+        passes: &[super::super::field_buffer::FillPass],
+        native: Option<&NativeFieldDevice>,
+    ) {
+        let Some(device) = native.filter(|_| !self.execution.has_column_output_scope()) else {
+            return;
+        };
+        let definition = self.execution.definition.as_ref().expect("native field");
+        let receipts = super::super::output::native_passes::closed_underline_positions(
+            &definition.field_buffer,
+            &definition.field_word_anchors,
+            passes,
+            |index, pass| {
+                device
+                    .loop_rows
+                    .get(index)
+                    .is_some_and(|row| row.printed && row.end_cell == pass.end)
+                    || (index + 1 == passes.len() && device.ends_row())
+            },
+        );
+        if receipts.is_empty() {
+            return;
+        }
+        let start = self
+            .execution
+            .author_execution
+            .as_ref()
+            .map_or(0, |author| author.field_output_start);
+        let edits = super::super::output::row_origins::project_closed_underlines(
+            &mut self.nodes,
+            receipts,
+            start,
+        );
+        self.remap_output_projection(&edits);
     }
 
     fn project_deferred_field_blanks(

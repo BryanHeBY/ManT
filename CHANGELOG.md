@@ -55,6 +55,8 @@ that crate was not published for that change.
   surviving link labels follow the terminal field. Transfer already printed
   advances without duplication, and print trailing advances only when later
   ink accepts them. Preserve leading motion on resumed hard rows.
+- Preserve literal row origins when a native retreat crosses the field origin.
+  Keep surviving underline strokes on definition rows that the device closes.
 - Preserve authored no-fill row boundaries before invisible mdoc nodes,
   including explicit targets that validation moves to a visible operand.
 - Keep nested mdoc enclosure operands from changing an outer option's

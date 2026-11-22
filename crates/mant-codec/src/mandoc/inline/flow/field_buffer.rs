@@ -257,6 +257,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// graphs remain native graph cells but contribute no projected glyph.
     projection_prefix: Vec<usize>,
     deferred_blanks: Vec<cells::DeferredBlankRun>,
+    underline_strokes: Vec<usize>,
     /// A backline can cover a provisional projection only when its
     /// replacement advance is accepted in the same pass. Native replacement
     /// slots are ordered even when a replay revisits an earlier target.

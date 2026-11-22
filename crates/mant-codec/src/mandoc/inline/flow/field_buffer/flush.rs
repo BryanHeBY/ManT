@@ -72,6 +72,54 @@ impl FieldBuffer {
             .any(|run| self.cells.get(run.start) == Some(&FieldCell::FixedDrawingAdvance(1)))
     }
 
+    pub(in crate::mandoc::inline::flow) fn closed_underline_graphs(
+        &self,
+        passes: &[FillPass],
+        closes: impl Fn(usize, &FillPass) -> bool,
+    ) -> Vec<usize> {
+        use super::{FieldProjectionOwner, FillBoundary};
+        if self.underline_strokes.is_empty()
+            || self.projection_owner != FieldProjectionOwner::Active
+        {
+            return Vec::new();
+        }
+        // term_flushln() closes a printed loop pass before starting the
+        // next one (term.c:217), and can also close a final field (250–253).
+        // An open field can still be covered by BODY, even if its last
+        // raw cells include the same underline, backspace and marker.
+        passes
+            .iter()
+            .enumerate()
+            .filter(|(index, pass)| {
+                pass.boundary == FillBoundary::WordEndBreak && closes(*index, pass)
+            })
+            .filter_map(|(_, pass)| {
+                let stroke = pass.end.checked_sub(3)?;
+                let graph = stroke.checked_sub(2)?;
+                if graph < pass.start
+                    || self.underline_strokes.binary_search(&stroke).is_err()
+                    || self.projection_length(graph, graph + 1) != 1
+                    || !matches!(
+                        self.cells.get(graph..pass.end),
+                        Some([
+                            FieldCell::Graph { width: 1, .. },
+                            FieldCell::BreakMarker,
+                            FieldCell::Graph {
+                                text: '_',
+                                width: 1
+                            },
+                            FieldCell::Backline,
+                            FieldCell::BreakMarker,
+                        ])
+                    )
+                {
+                    return None;
+                }
+                Some(graph)
+            })
+            .collect()
+    }
+
     pub(in crate::mandoc::inline::flow) fn printed_deferred_blanks(
         &self,
         passes: &[FillPass],
@@ -203,6 +251,7 @@ impl FieldBuffer {
             blank_positions: self.blank_positions.clone(),
             projection_prefix: Vec::new(),
             deferred_blanks: Vec::new(),
+            underline_strokes: Vec::new(),
             pass_retreats: Vec::new(),
             staged_backline_projection: false,
             backline_projection_target: None,

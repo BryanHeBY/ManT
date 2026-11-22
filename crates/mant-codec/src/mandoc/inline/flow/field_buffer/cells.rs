@@ -143,6 +143,9 @@ pub(in crate::mandoc) enum FieldWrite {
         keeps_prior_slots: bool,
     },
     ProveAppendedSlots(AppendedSlotProof),
+    /// A typed automatic underscore whose overwritten glyph can leave
+    /// paint at the end of an accepted physical row.
+    PlacedUnderlineStroke,
     /// Unknown SPECIAL/invalid NUMBERED buffers `ASCII_NBRZW` directly.
     /// Recovery spelling owns output scalars but is never native width or
     /// an encode1 glyph (term.c:610-638).
