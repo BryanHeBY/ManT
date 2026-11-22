@@ -535,6 +535,18 @@ impl NativeSlots {
         self.backbefore
     }
 
+    pub(in crate::mandoc::inline) fn cursor_follows_retained_glyph(&self) -> bool {
+        // encode1() backs over the actual col-1 byte. A compact prefix
+        // index cannot establish that relationship until expansion.
+        self.cursor_before_end()
+            && self.backbefore
+            && self.backbefore_slot == self.cursor.checked_sub(1)
+            && matches!(
+                self.previous_cell(self.cursor),
+                Some(FieldCell::Graph { width: 1, .. })
+            )
+    }
+
     pub(in crate::mandoc::inline) fn pending_owner(&self) -> Option<usize> {
         let slot = self
             .backbefore_slot

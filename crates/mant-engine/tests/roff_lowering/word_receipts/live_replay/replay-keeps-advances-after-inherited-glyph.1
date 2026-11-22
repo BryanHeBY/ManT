@@ -1,0 +1,33 @@
+.Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Ss Plain inherited glyph
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zF\h'3n'G\h'3n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Bold prefix
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns No "\zF\h'3n'G\h'3n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Italic advance with bold prefix
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns Em "\zF\h'3n'G\h'3n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Native breakpoint with bold glyph
+.Sy "AB" Sy "\:\h'1n'\h'-6n'\z\pC" Ns No "\zF\h'2n'G\h'2n'\h'2n'\&\p" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Covered local glyph before marker
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns No "\zFG\h'2n'\pK\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Covered local glyph before later ink
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns No "\zFG\h'2n'\pZ\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Shorter relative advance
+.Sy "AB" No "\h'1n'\h'-4n'\z\pC" Ns No "\zF\h'2n'G\h'2n'\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX\h'2n'"
+.Ss Advance consumed by the pending glyph
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zF\h'1n'G"
+.Ss Advance before new ink
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zF\h'3n'G"
+.Ss Full advance after covering both glyphs
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zFG\h'2n'\pZ"
+.Ss Inherited glyph without another arm
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "F\h'3n'G"
+.Ss Unused trailing advance
+.No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zF\h'3n'G\h'2n'"
+.Sh ENDTEST
+Done.

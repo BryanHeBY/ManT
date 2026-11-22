@@ -306,6 +306,60 @@ fn covered_local_glyphs_release_the_full_following_advance() {
 }
 
 #[test]
+fn inherited_glyphs_release_only_the_advance_cells_cvs_writes() {
+    // term.c::encode1() handles inherited BACKBEFORE before the local
+    // BACKAFTER can hold another glyph. ESCAPE_HORIZ spends its first
+    // unit on a still-held glyph and records only the remaining cells.
+    let source = include_str!("live_replay/replay-keeps-advances-after-inherited-glyph.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let text = mant_render::render_query_man(&content);
+    let lines: Vec<_> = description_rows(&text, source)
+        .into_iter()
+        .map(str::trim_start)
+        .collect();
+    assert_eq!(
+        lines,
+        [
+            "Plain inherited glyph",
+            "F  G      X",
+            "",
+            "Bold prefix",
+            "ABF  G      X",
+            "",
+            "Italic advance with bold prefix",
+            "ABF  G      X",
+            "",
+            "Native breakpoint with bold glyph",
+            "AF G    X",
+            "",
+            "Covered local glyph before marker",
+            "ABG  K X",
+            "",
+            "Covered local glyph before later ink",
+            "ABG  Z X",
+            "",
+            "Shorter relative advance",
+            "ABF G     X",
+            "",
+            "Advance consumed by the pending glyph",
+            "FG",
+            "",
+            "Advance before new ink",
+            "F  G",
+            "",
+            "Full advance after covering both glyphs",
+            "G  Z",
+            "",
+            "Inherited glyph without another arm",
+            "F   G",
+            "",
+            "Unused trailing advance",
+            "F  G",
+        ]
+    );
+}
+
+#[test]
 fn a_final_absolute_cursor_does_not_erase_an_established_advance() {
     // term.c::term_word() changes col without truncating lastcol. The
     // earlier advance remains between the same accepted ink even when

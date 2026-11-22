@@ -404,6 +404,80 @@ fn can_publish_inner_advances(
     followed
 }
 
+enum RetainedAdvancePhase {
+    Inherited,
+    Armed,
+    PendingLocal,
+    Settled,
+    Advance,
+    InkAfterAdvance,
+}
+
+fn can_publish_retained_advances(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+    seed: &GeometrySeed<'_>,
+) -> bool {
+    use RetainedAdvancePhase::{Advance, Armed, Inherited, InkAfterAdvance, PendingLocal, Settled};
+
+    if !context.policy.field_authoritative
+        || context.slot_entry.domain != ReplayDomain::Filled
+        || !matches!(seed.prior_pending, Some(PriorPendingSlot::Buffered(_)))
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_annotation_output_owner()
+        || context.slot_entry.automatic_blanks != 0
+        || seed.prefix_start != 0
+        || !seed.editable_pass
+        || seed.placement.slots.backafter()
+        || !seed.placement.slots.cursor_follows_retained_glyph()
+    {
+        return false;
+    }
+    let mut phase = Inherited;
+    for event in events {
+        phase = match (phase, event) {
+            (Inherited, RoffInlineEvent::ZeroAdvance) => Armed,
+            (
+                state,
+                RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, GlyphInput::Codepoint),
+            ) if !text.is_empty()
+                && text.chars().all(super::native_writes::is_single_column_ink) =>
+            {
+                match state {
+                    // encode1() first executes inherited BACKBEFORE, then
+                    // the newly armed BACKAFTER leaves the local glyph held.
+                    Armed if text.chars().nth(1).is_none() => PendingLocal,
+                    Inherited | Armed | PendingLocal | Settled => Settled,
+                    Advance | InkAfterAdvance => InkAfterAdvance,
+                }
+            }
+            (
+                state @ (PendingLocal | Settled | Advance | InkAfterAdvance),
+                RoffInlineEvent::HorizontalMotion {
+                    argument: Some(value),
+                    ..
+                },
+            ) if motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0) => {
+                // A positive HORIZ consumes the local BACKBEFORE with its
+                // first unit if necessary. NativeSlots records only the
+                // remaining advances before the next accepted graph.
+                if matches!(state, InkAfterAdvance) {
+                    InkAfterAdvance
+                } else {
+                    Advance
+                }
+            }
+            (state, RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont)
+            | (
+                state @ (Settled | Advance | InkAfterAdvance),
+                RoffInlineEvent::LineBreak | RoffInlineEvent::ZeroWidthGlyph,
+            ) => state,
+            _ => return false,
+        };
+    }
+    matches!(phase, InkAfterAdvance)
+}
+
 enum MarkerReplay {
     PreserveSlots,
     AwaitFieldFlush,
@@ -1031,7 +1105,8 @@ fn execute_seed<'a>(
     // placed. Falling back to the live word executor must not run them twice.
     let mut font = context.font.clone();
     let mut continuation = None;
-    let include_advances = can_publish_inner_advances(events, context);
+    let include_advances = can_publish_inner_advances(events, context)
+        || can_publish_retained_advances(events, context, &seed);
     if context.zero_advance.is_armed() {
         seed.placement.slots.arm_backafter();
     }
