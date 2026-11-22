@@ -256,7 +256,20 @@ impl InlineBuilder {
         for pass in &projection.closes_before {
             let row_indent = self.take_definition_row_indent();
             if !self.route_section_loop_end(pass.clone(), row_indent) {
-                super::super::push_row_break(&mut self.nodes, row_indent);
+                // A restarted ordinary word can carry earlier accepted
+                // ink beyond the source owner at this delimiter. The
+                // field and annotation paths own their delimiters already.
+                if self.execution.definition.is_none()
+                    && !self.execution.zero_advance.has_annotation_output_owner()
+                    && matches!(
+                        projection.leading_padding,
+                        super::super::record::RestartedPadding::WithEarlierOwners { .. }
+                    )
+                {
+                    super::super::split::push_accepted_native_endline(&mut self.nodes, row_indent);
+                } else {
+                    super::super::push_row_break(&mut self.nodes, row_indent);
+                }
             }
             self.execution.acknowledge_word_input_pass(pass.end);
         }

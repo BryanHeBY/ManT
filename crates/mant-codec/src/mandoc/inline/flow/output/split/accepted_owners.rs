@@ -54,7 +54,21 @@ struct AcceptedOwners<'a> {
 
 impl AcceptedOwners<'_> {
     fn retain(&mut self, nodes: &mut Vec<Inline>) {
-        nodes.retain_mut(|node| self.project(node));
+        let mut next_is_accepted_endline = false;
+        nodes.retain_mut(|node| {
+            if !self.covered_only {
+                let accepted = std::mem::take(&mut next_is_accepted_endline);
+                if matches!(node, Inline::Anchor { id, .. } if id.as_str() == super::ACCEPTED_NATIVE_ENDLINE)
+                {
+                    next_is_accepted_endline = true;
+                    return false;
+                }
+                if accepted && matches!(node, Inline::LineBreak { .. }) {
+                    return true;
+                }
+            }
+            self.project(node)
+        });
     }
 
     fn project(&mut self, node: &mut Inline) -> bool {

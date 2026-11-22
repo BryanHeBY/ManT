@@ -77,6 +77,22 @@ const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
         "JX",
     ),
     (
+        // A zero-width graph after the pending glyph keeps its decorated
+        // slots editable until HORIZ rewrites them (term.c::encode1).
+        include_str!("live_replay/replay-retains-held-glyph-before-invisible-graph.1"),
+        &["CXD", "J"],
+        None,
+        "CD",
+    ),
+    (
+        // term_flushln() ends the accepted first row independently of
+        // the replacement owner losing its source glyph in that pass.
+        include_str!("live_replay/replay-keeps-break-after-source-owner-is-covered.1"),
+        &["D", "J"],
+        None,
+        "DJ",
+    ),
+    (
         // Native SP and the local BACKBEFORE pair stay editable across
         // the first marker. The later cursor lands in D's decorated run.
         include_str!("live_replay/replay-keeps-first-glyph-after-a-local-backstep.1"),

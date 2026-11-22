@@ -6,6 +6,18 @@ pub(in crate::mandoc::inline::flow) use accepted_owners::{
     remove_covered_native_glyphs, retain_native_field_owners,
 };
 
+// A word-time pass has already ended this row. Its delimiter is a fact
+// about native acceptance even if the adjacent source owner lost all ink.
+const ACCEPTED_NATIVE_ENDLINE: &str = "\0mant:output-scope:accepted-native-endline";
+
+pub(super) fn push_accepted_native_endline(nodes: &mut Vec<Inline>, origin: u16) {
+    if origin != 0 {
+        super::row_origins::set_next_origin(nodes, origin);
+    }
+    nodes.push(Inline::anchor(ACCEPTED_NATIVE_ENDLINE));
+    nodes.push(Inline::line_break());
+}
+
 // A section transition already represents the device row end in public
 // output. Its private event still consumes the same separator as a break.
 const SECTION_END: &str = "\0mant:output-scope:section-row-end";

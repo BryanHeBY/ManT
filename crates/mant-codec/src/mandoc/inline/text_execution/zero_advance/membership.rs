@@ -165,7 +165,7 @@ impl ZeroAdvanceState {
     }
 
     /// Wrapped source labels have their own reading projection.
-    pub(in crate::mandoc::inline::text_execution) fn has_annotation_output_owner(&self) -> bool {
+    pub(in crate::mandoc::inline) fn has_annotation_output_owner(&self) -> bool {
         !self.membership.output_owners.is_empty()
     }
 

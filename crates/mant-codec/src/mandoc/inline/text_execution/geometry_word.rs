@@ -212,6 +212,7 @@ fn contains_local_overwrite(
     let mut armed = false;
     let mut backbefore = false;
     let mut wrote_pair = false;
+    let mut projected_padding = false;
     for event in events {
         match event {
             RoffInlineEvent::ZeroAdvance
@@ -246,10 +247,12 @@ fn contains_local_overwrite(
             | RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
             | RoffInlineEvent::ZeroWidthGlyph => {}
-            RoffInlineEvent::Breakpoint
-            | RoffInlineEvent::LineBreak
-            | RoffInlineEvent::NonBreakingWordBlank
-                if !inherited_glyph => {}
+            RoffInlineEvent::LineBreak if !inherited_glyph => {}
+            RoffInlineEvent::Breakpoint | RoffInlineEvent::NonBreakingWordBlank
+                if !inherited_glyph =>
+            {
+                projected_padding = true;
+            }
             _ => return false,
         }
     }
@@ -257,17 +260,40 @@ fn contains_local_overwrite(
     // BACKBEFORE (term.c:946-967). Preserve the complete decorated word
     // so the next HORIZ can revisit its font slots. Ordinary words
     // already retain the editable blank through the shared word path.
-    let held_before_trailing_blank = backbefore
+    let held_decorated_glyph = backbefore
         && !inherited_glyph
         && context.slot_entry.domain == ReplayDomain::Filled
         && !context.slot_entry.cursor.has_input()
         && !context.defer_leading_blanks
         && !context.zero_advance.has_annotation_output_owner()
+        // These controls can already have an independently projected
+        // separator around BACKBEFORE. Leave that owner on the shared path.
+        && !projected_padding
         && decorated_word(events, context.font.current)
-        && events.last().is_some_and(
+        && (events.last().is_some_and(
             |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
-        );
-    (wrote_pair || held_before_trailing_blank) && !armed && (!inherited_glyph || !backbefore)
+        ) || fits_editable_font_slots(events));
+    (wrote_pair || held_decorated_glyph) && !armed && (!inherited_glyph || !backbefore)
+}
+
+fn fits_editable_font_slots(events: &[RoffInlineEvent]) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    // encode1() writes up to five slots for one decorated glyph. Leave
+    // room for the pending backstep and replay only a bounded local word.
+    let mut slots = 1;
+    for event in events {
+        slots += match event {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
+                value.len().saturating_mul(5).min(MAX_EDITABLE_APPEND_CELLS)
+            }
+            _ => 1,
+        };
+        if slots > MAX_EDITABLE_APPEND_CELLS {
+            return false;
+        }
+    }
+    true
 }
 
 fn can_publish_inner_advances(
