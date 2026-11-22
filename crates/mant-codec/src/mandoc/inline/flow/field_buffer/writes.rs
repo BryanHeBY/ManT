@@ -562,7 +562,9 @@ impl FieldBuffer {
                 };
                 (self.cells.len() - 1, write)
             }
-            WriteCursor::Placed(0) | WriteCursor::End
+            // Only an exact slot replay proves the pending glyph at col-1.
+            // Ordinary End words keep the established zero-advance path.
+            WriteCursor::Placed(0)
                 if self.backbefore_armed && self.has_independent_run_in_glyph() =>
             {
                 (self.cells.len(), RunInWordWrite::AppendsBackline)

@@ -859,6 +859,10 @@ fn run_in_backspace_keeps_prior_covered_ink_retired() {
             include_str!("live_replay/run-in-does-not-republish-glyph-after-earlier-marker.1"),
             &["Sy J", "NBZ"][..],
         ),
+        (
+            include_str!("live_replay/run-in-ordinary-head-covers-pending-glyph.1"),
+            &["A BC"][..],
+        ),
     ] {
         let document =
             json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
