@@ -18,6 +18,7 @@ pub(super) struct PrefixEdits {
     gaps: GapEdits,
     retained_blanks: Vec<(usize, usize, RewoundGlyph)>,
     deferred_blanks: BTreeMap<usize, String>,
+    transferred_gaps: Vec<usize>,
 }
 
 #[derive(Clone, Copy)]
@@ -142,6 +143,7 @@ impl PrefixEdits {
             gaps,
             retained_blanks,
             deferred_blanks,
+            transferred_gaps: Vec::new(),
         }
     }
 
@@ -271,6 +273,7 @@ impl PrefixEdits {
         if self.first_incoming.is_some() {
             Self::relocate_payload(
                 (&self.gaps.relocate, &mut self.deferred_blanks),
+                &mut self.transferred_gaps,
                 nodes,
                 incoming,
                 incoming_owner,
@@ -280,8 +283,18 @@ impl PrefixEdits {
         }
     }
 
+    pub(super) fn transfer_positioning_slots(&self, buffer: &mut FieldBuffer) {
+        for &cell in &self.transferred_gaps {
+            buffer.transfer_positioning_slot(cell);
+        }
+    }
+
     fn relocate_payload(
-        (gap_markers, deferred_blanks): (&BTreeMap<usize, String>, &mut BTreeMap<usize, String>),
+        (gap_markers, deferred_blanks): (
+            &BTreeMap<usize, GapLanding>,
+            &mut BTreeMap<usize, String>,
+        ),
+        transferred_gaps: &mut Vec<usize>,
         nodes: &mut [Inline],
         incoming: &mut Vec<Inline>,
         incoming_owner: &str,
@@ -304,10 +317,17 @@ impl PrefixEdits {
             let Ok(slot) = slot.parse::<usize>() else {
                 continue;
             };
-            if let Some(marker) = gap_markers.get(&slot)
-                && let Some(value) = removed_gaps.remove(marker.as_str())
+            if let Some(gap) = gap_markers.get(&slot)
+                && let Some(value) = removed_gaps.remove(gap.marker.as_str())
             {
-                incoming.push(Inline::anchor(marker.as_str()));
+                // This positioning text supersedes a source blank
+                // extracted from the same native landing. Only that
+                // displaced owner scalar changes role.
+                let displaced = relocated.remove(&slot).is_some();
+                if gap.positioning_only || displaced {
+                    transferred_gaps.push(gap.cell);
+                }
+                incoming.push(Inline::anchor(gap.marker.as_str()));
                 incoming.push(Inline::Text { value });
                 incoming.push(Inline::anchor(incoming_owner));
             } else if let Some(marker) = deferred_blanks.remove(&slot)
@@ -384,8 +404,14 @@ fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: us
 #[derive(Default)]
 struct GapEdits {
     remove: BTreeMap<String, GapRemoval>,
-    relocate: BTreeMap<usize, String>,
+    relocate: BTreeMap<usize, GapLanding>,
     retained_before_incoming: Option<usize>,
+}
+
+struct GapLanding {
+    marker: String,
+    cell: usize,
+    positioning_only: bool,
 }
 
 struct GapRemoval {
@@ -514,8 +540,15 @@ impl GapEdits {
             .strip_prefix(super::super::super::INTERNAL_FIELD_WORD)
             .expect("native word owner");
         let marker = format!("{}{serial}", super::super::super::INTERNAL_FIELD_PREFIX);
-        if let Some((source, _)) = surviving.filter(|_| relocate) {
-            self.relocate.insert(source, marker.clone());
+        if let Some((source, cell)) = surviving.filter(|_| relocate) {
+            self.relocate.insert(
+                source,
+                GapLanding {
+                    marker: marker.clone(),
+                    cell,
+                    positioning_only: locations[source].is_none(),
+                },
+            );
         }
         owner.projected_field_prefix &= surviving.is_some();
         self.remove.insert(

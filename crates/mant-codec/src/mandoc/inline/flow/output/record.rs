@@ -14,6 +14,7 @@ pub(super) struct WordPassProjection {
     pub(super) native_separator: usize,
     pub(super) first_payload_cell: Option<usize>,
     pub(super) replayed_entry_gap: Option<usize>,
+    pub(super) automatic_separator_slot: Option<usize>,
     pub(super) separator: SeparatorDisposition,
     pub(super) prints_padding: bool,
     pub(super) authored_separator: Option<Inline>,
@@ -324,6 +325,7 @@ impl InlineBuilder {
             &self.execution.plain_input.anchors,
             None,
         );
+        entry.transfer_positioning_slots(&mut self.execution.plain_input.buffer);
         let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;
         let native_separator = entry.surviving_separator;

@@ -122,6 +122,10 @@ fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
             &["C", "D", "FJ", "X"],
         ),
     ];
+    verify_rows(cases);
+}
+
+fn verify_rows(cases: &[(&str, &[&str])]) {
     for &(words, expected) in cases {
         let source = format!("{HEADER}{words}\n{END}");
         let content =
@@ -137,4 +141,47 @@ fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
             assert_eq!(rows, expected, "{words}\n{rendered}");
         }
     }
+}
+
+#[test]
+fn positioning_prefixes_do_not_spend_body_row_or_cover_offsets() {
+    // term_word() buffers the automatic separator next to the HORIZ
+    // advance. When the reading prefix emits those cells together, the
+    // owner offset advances only at the next glyph. A replayed gap may
+    // keep that positioning owner or remain a genuine source scalar.
+    // Both offsets still follow term_field()'s accepted rows and paint.
+    verify_rows(&[
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" E\pm "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   Em", "FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" \pEm "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   Em", "FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" \zEm "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   m FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" E m "F\p G\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   E m F", "G"],
+        ),
+        (
+            r#".Em "A\zC\fPD\h'-2n'" Em "\z\h'-8n'\h'2n'" Sy "F\pG" Ns Em "\h'-5n'\cX""#,
+            &["AD  G"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Em "FW\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   FWG"],
+        ),
+        (
+            r#".Em "A" Em "\fP\z\h'-1n'\h'1n'" Em "F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A   FG"],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' " Sy "\h'3n'F\pG\p\c\h'-1n'" No "\h'-2n'X""#,
+            &["A       FX"],
+        ),
+    ]);
 }

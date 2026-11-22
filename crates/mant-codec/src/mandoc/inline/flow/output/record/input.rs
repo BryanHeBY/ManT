@@ -91,6 +91,10 @@ impl ExecutedWordEntry {
         }
     }
 
+    pub(super) fn transfer_positioning_slots(&self, buffer: &mut FieldBuffer) {
+        self.prefix.transfer_positioning_slots(buffer);
+    }
+
     pub(super) fn project_rewind(
         &mut self,
         nodes: &mut [Inline],
@@ -121,6 +125,7 @@ impl ExecutedWordEntry {
 
     pub(super) fn record_projection(&self, projection: &mut WordPassProjection) {
         projection.first_payload_cell = Some(self.receipt.first_content_cell);
+        projection.automatic_separator_slot = self.prefix.entry_gap;
         projection.replayed_entry_gap = self
             .prefix
             .entry_gap

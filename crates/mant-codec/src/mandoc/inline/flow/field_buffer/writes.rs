@@ -300,6 +300,26 @@ impl FieldBuffer {
         true
     }
 
+    /// The output word has emitted this slot as positioning. Keep the
+    /// stored cell for `term_fill()` and the editable cursor, but stop
+    /// charging it to the semantic source owner's scalar range.
+    pub(in crate::mandoc::inline::flow) fn transfer_positioning_slot(&mut self, cell: usize) {
+        if !matches!(self.word_scan, WordScanPolicy::AwaitFlush)
+            || cell < self.resume
+            || self.cells.len().saturating_sub(cell) > super::MAX_EDITABLE_APPEND_CELLS
+            || !matches!(
+                self.cells.get(cell),
+                Some(FieldCell::BreakableBlank | FieldCell::NonBreakingBlank)
+            )
+            || self.projection_length(cell, cell + 1) != 1
+        {
+            return;
+        }
+        for prefix in &mut self.projection_prefix[cell + 1..] {
+            *prefix -= 1;
+        }
+    }
+
     /// Execute decoded native writes without consulting projected IR.
     pub(in crate::mandoc::inline::flow) fn apply_writes(
         &mut self,
@@ -673,7 +693,7 @@ impl FieldBuffer {
             let inside_font_pair = previous_font_copy || replaces_font_pair;
             previous_font_copy = replaces_font_pair;
             if pending_break && self.cells[cell] == FieldCell::BreakableBlank {
-                // A generated NBSP is a graph for term_fill(), including
+                // A generated NBSP is a graph for `term_fill()`, including
                 // when it rewrites the ordinary SP after a saved marker.
                 self.cells[cell] = FieldCell::Graph {
                     text: '\u{a0}',

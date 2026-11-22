@@ -8,6 +8,7 @@ use super::super::record::{SeparatorDisposition, WordPassProjection};
 struct ReplayedMotionPadding {
     device: usize,
     separator: usize,
+    absorbed_separator: Option<usize>,
 }
 
 impl InlineBuilder {
@@ -104,18 +105,13 @@ impl InlineBuilder {
                 );
             let motion_padding = (!field_padding && projection.retained_motion_width > 0)
                 .then(|| self.replayed_motion_padding(projection, payload, replayed_gap));
-            let prefix_prints = motion_padding
-                .as_ref()
-                .map_or(virtual_padding || replayed_gap.is_some(), |padding| {
-                    padding.device > 0
-                });
-            let prefix_marker =
-                native_anchor_marker.filter(|_| word && (field_padding || prefix_prints));
-            self.begin_word_padding(
-                prefix_marker.as_deref(),
+            let prefix_marker = self.begin_word_padding(
+                native_anchor_marker.filter(|_| word),
                 replayed_gap,
                 projection,
                 field_padding,
+                virtual_padding,
+                motion_padding.as_ref(),
             );
             if field_padding {
                 self.append_device_field_padding();
@@ -143,17 +139,61 @@ impl InlineBuilder {
 
     fn begin_word_padding(
         &mut self,
-        owner: Option<&str>,
+        owner: Option<String>,
         replayed_gap: Option<usize>,
         projection: &WordPassProjection,
         field_padding: bool,
-    ) {
-        if let Some(owner) = owner {
+        virtual_padding: bool,
+        motion: Option<&ReplayedMotionPadding>,
+    ) -> Option<String> {
+        let prefix_prints = motion.map_or(virtual_padding || replayed_gap.is_some(), |padding| {
+            padding.device > 0
+        });
+        let owner = owner.filter(|_| field_padding || prefix_prints);
+        if let Some(owner) = &owner {
+            if !self.in_definition_field()
+                && let Some(slot) = motion.and_then(|padding| {
+                    padding
+                        .absorbed_separator
+                        .or_else(|| self.adjacent_motion_separator(projection, padding))
+                })
+            {
+                self.execution
+                    .plain_input
+                    .buffer
+                    .transfer_positioning_slot(slot);
+            }
             self.mark_native_field_prefix(
                 owner,
                 replayed_gap.or(projection.projected_gap(field_padding)),
             );
         }
+        owner
+    }
+
+    fn adjacent_motion_separator(
+        &self,
+        projection: &WordPassProjection,
+        padding: &ReplayedMotionPadding,
+    ) -> Option<usize> {
+        use super::super::super::field_buffer::FieldCell;
+
+        // The actual separator can precede the current owner after a
+        // replay. If the prefix emits exactly it and its adjacent fixed
+        // advance, the separator also lies outside that owner's scalars.
+        if padding.separator != 0 || projection.native_separator != 1 {
+            return None;
+        }
+        let gap = projection.projected_gap(false)?;
+        let separator = projection.automatic_separator_slot?;
+        if separator.abs_diff(gap) != 1 {
+            return None;
+        }
+        let width = match self.execution.plain_input.buffer.cells().get(gap) {
+            Some(FieldCell::FixedDrawingAdvance(width) | FieldCell::DrawnSpaces(width)) => *width,
+            _ => return None,
+        };
+        (padding.device == width.saturating_add(1)).then_some(separator)
     }
 
     fn end_word_padding(&mut self, owner: Option<String>, motion: Option<ReplayedMotionPadding>) {
@@ -194,11 +234,11 @@ impl InlineBuilder {
         // stream. A contiguous separator with a proved slot in the
         // incoming word still needs its own scalar when neither a prior
         // replay receipt nor the payload already accounts for it.
-        let separator = if leading == 0 && replayed_gap.is_none() {
-            projection.first_payload_cell.map_or(0, |first| {
+        let (separator, absorbed_separator) = if leading == 0 && replayed_gap.is_none() {
+            projection.first_payload_cell.map_or((0, None), |first| {
                 use super::super::super::field_buffer::FieldCell;
                 let (buffer, owners) = self.execution.word_input();
-                owners.last().map_or(0, |owner| {
+                owners.last().map_or((0, None), |owner| {
                     let prefix = owner.content.min(first)..first;
                     let writes = &buffer.cells()[prefix.clone()];
                     // A leading HORIZ can be part of the current word's
@@ -214,21 +254,29 @@ impl InlineBuilder {
                         });
                     let owns_break = trailing == 0 && buffer.has_break_marker_at_or_after(first);
                     if owns_motion || owns_break {
-                        0
+                        // The actual positioning prefix subsumes this
+                        // automatic SP. Retain its native slot but keep it
+                        // outside the source scalar stream.
+                        let claimed = projection.automatic_separator_slot.filter(|&slot| {
+                            remaining > 0 && owner.start.max(owner.content) <= slot && slot < first
+                        });
+                        (0, claimed)
                     } else {
-                        buffer
+                        let kept = buffer
                             .projection_length(prefix.start, prefix.end)
                             .min(projection.native_separator)
-                            .min(remaining)
+                            .min(remaining);
+                        (kept, None)
                     }
                 })
             })
         } else {
-            0
+            (0, None)
         };
         ReplayedMotionPadding {
             device: remaining - separator,
             separator,
+            absorbed_separator,
         }
     }
 
