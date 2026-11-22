@@ -727,3 +727,50 @@ Done.
         assert!(labels.0.is_empty(), "{rendered}");
     }
 }
+
+#[test]
+fn run_in_backspace_keeps_the_head_glyph_with_body_ink() {
+    // termp_it_pre() writes a two-NBSP word. encode1() inspects
+    // col-1 and replaces the retained SP with a backspace. The BODY
+    // then rewrites the live suffix before term_field() accepts it.
+    let source = include_str!("live_replay/run-in-rewrites-retained-blank-after-head-glyph.1");
+    let document = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let markdown = mant_codec::encode::render_markdown(&document);
+    let readback =
+        json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+    for (document, rendered) in [
+        (&document, mant_render::render_query_man(&document)),
+        (&readback, mant_render::render_query_text(&readback)),
+    ] {
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+        let mut lines = body.trim().lines();
+        assert_eq!(
+            lines
+                .next()
+                .map(|line| line.trim().trim_start_matches("• ")),
+            Some("No CV NFBY"),
+            "{rendered}"
+        );
+        assert_eq!(lines.next().map(str::trim), Some("X"), "{rendered}");
+        assert_eq!(lines.next(), None, "{rendered}");
+        let mut labels = Labels::default();
+        labels.visit_document(document.document.as_ref().unwrap());
+        assert_eq!(labels.0, [("https://k.test".into(), "C".into())]);
+        let found = mant_query::search_query(
+            document,
+            &SearchQuery {
+                pattern: "NFBY".into(),
+                syntax: SearchSyntax::Literal,
+                case: SearchCase::Sensitive,
+                scope: SearchScope::Visible,
+                word: true,
+                context_lines: 0,
+                limit: 10,
+                offset: 0,
+            },
+        )
+        .unwrap();
+        assert_eq!(found.total, 1, "{rendered}");
+    }
+}

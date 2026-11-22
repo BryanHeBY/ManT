@@ -1,5 +1,5 @@
 use super::definition::PendingFieldGapOrigin;
-use super::field_buffer::{FieldBuffer, FieldCell};
+use super::field_buffer::{DeferredSourceBlank, FieldBuffer, FieldCell, FieldWrite};
 use super::native_slots::{EntryCursor, FieldPrefix, PrefixExtension, ReplayDomain};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
@@ -36,6 +36,70 @@ fn retain_projected_advances(
     );
     prefix.projected_advances.sort_unstable();
     prefix.projected_advances.dedup();
+}
+
+fn generated_run_in_writes(traversed: usize, native_count: usize, count: usize) -> Vec<FieldWrite> {
+    let mut writes = Vec::new();
+    if traversed != 0 {
+        writes.push(FieldWrite::AdvanceOverBufferedBlanks(traversed));
+    }
+    writes.extend((0..native_count).map(|index| FieldWrite::OwnedBlank {
+        projected: index >= native_count.saturating_sub(count),
+    }));
+    writes
+}
+
+fn retained_run_in_writes(
+    start: usize,
+    native_count: usize,
+    count: usize,
+    source: DeferredSourceBlank,
+) -> Vec<FieldWrite> {
+    // At a proved live cursor, the generated term_word() writes its
+    // BACKBEFORE byte over the old trailing SP. Append the escaped spaces
+    // as native U+00A0 so a following operand can still revisit them.
+    let mut writes = vec![
+        FieldWrite::ReplaceLivePrefix {
+            start,
+            positions: vec![None],
+            retained_advances: std::collections::BTreeMap::new(),
+            first_incoming: start,
+            first_incoming_ink: None,
+            entry_blanks: 0,
+            entry_gap: None,
+            unpublished: None,
+        },
+        FieldWrite::Placed {
+            cell: FieldCell::Backline,
+            scalars: 0,
+        },
+        FieldWrite::CancelBackbefore,
+    ];
+    writes.extend((0..native_count).map(|index| {
+        let cell = FieldCell::Graph {
+            text: '\u{a0}',
+            width: 1,
+        };
+        if index >= native_count.saturating_sub(count) {
+            FieldWrite::PlacedBlank { source, cell }
+        } else {
+            FieldWrite::Placed { cell, scalars: 0 }
+        }
+    }));
+    writes.extend([
+        FieldWrite::ProveRawSlots {
+            count: native_count + 1,
+            cursor_retreat: 0,
+            backbefore: false,
+            duplicates: Vec::new(),
+            editable_marker: false,
+        },
+        FieldWrite::PlacedZeroWidthRetreat {
+            target_from_end: native_count + 2,
+            mark_from_end: native_count,
+        },
+    ]);
+    writes
 }
 
 impl InlineBuilder {
@@ -499,61 +563,51 @@ impl InlineBuilder {
         native_count: usize,
         generated_word: bool,
     ) {
-        use super::field_buffer::{DeferredSourceBlank, FieldWrite};
-
         if !generated_word {
             return;
         }
 
-        let (traversed, armed_overlap) = self
-            .execution
-            .word_input()
-            .0
-            .generated_blank_overlap(native_count);
+        let input = self.execution.word_input().0;
+        // This receipt represents an undecorated native U+00A0 slot.
+        let retained_backline = (self.execution.font.current == super::Font::Regular)
+            .then(|| input.retained_run_in_backline(native_count))
+            .flatten();
+        let (traversed, armed_overlap) = input.generated_blank_overlap(native_count);
         let native_count = native_count - traversed;
         let projected_overlap = count.saturating_sub(native_count);
         let count = count.min(native_count);
-        let mut writes = Vec::new();
-        if traversed != 0 {
-            writes.push(FieldWrite::AdvanceOverBufferedBlanks(traversed));
-        }
-        writes.extend((0..native_count).map(|index| FieldWrite::OwnedBlank {
-            projected: index >= native_count.saturating_sub(count),
-        }));
-        self.execution.native_word_writes = Some(writes);
         self.execution.native_word_boundary = Some(PendingBoundary::Tight);
         self.note_produced_formatter_cell(native_count > 0);
         self.tighten_next_boundary();
         self.begin_word_projection(true);
         self.begin_native_word_owner();
-        let font = self.execution.font.display_current();
+        let source = DeferredSourceBlank {
+            owner: self.execution.native_owner_serial,
+            write: 0,
+            font: self.execution.font.display_current(),
+        };
         let mut projected = Vec::new();
-        if traversed > 0 {
-            let source = DeferredSourceBlank {
-                owner: self.execution.native_owner_serial,
-                write: 0,
-                font,
-            };
-            let buffer = if self.execution.uses_definition_word_buffer() {
-                &mut self
-                    .execution
-                    .definition
-                    .as_mut()
-                    .expect("run-in field")
-                    .field_buffer
-            } else {
-                &mut self.execution.plain_input.buffer
-            };
-            if buffer.defer_run_in_overlap(traversed, projected_overlap, source) {
+        let writes = if let Some(start) = retained_backline {
+            self.execution
+                .zero_advance
+                .release_field_owned_ink(&mut projected);
+            if count > 0 {
                 projected.push(Inline::anchor(source.marker()));
             }
-        }
-        self.execution.zero_advance.append_generated_cells(
-            count,
-            armed_overlap,
-            &mut projected,
-            font,
-        );
+            retained_run_in_writes(start, native_count, count, source)
+        } else {
+            if traversed > 0 && self.defer_run_in_overlap(traversed, projected_overlap, source) {
+                projected.push(Inline::anchor(source.marker()));
+            }
+            self.execution.zero_advance.append_generated_cells(
+                count,
+                armed_overlap,
+                &mut projected,
+                source.font,
+            );
+            generated_run_in_writes(traversed, native_count, count)
+        };
+        self.execution.native_word_writes = Some(writes);
         self.append_word(projected);
         if count > 0 {
             self.execution.trailing_output = TrailingOutput::FixedBlank;
@@ -562,6 +616,25 @@ impl InlineBuilder {
         self.tighten_next_boundary();
         self.execution.final_word_join = Some(false);
         self.execution.final_source_continuation = Some(false);
+    }
+
+    fn defer_run_in_overlap(
+        &mut self,
+        traversed: usize,
+        projected: usize,
+        source: DeferredSourceBlank,
+    ) -> bool {
+        let buffer = if self.execution.uses_definition_word_buffer() {
+            &mut self
+                .execution
+                .definition
+                .as_mut()
+                .expect("run-in field")
+                .field_buffer
+        } else {
+            &mut self.execution.plain_input.buffer
+        };
+        buffer.defer_run_in_overlap(traversed, projected, source)
     }
 
     pub(in crate::mandoc) fn take_zero_advance_armed(&mut self) -> bool {

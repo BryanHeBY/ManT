@@ -167,6 +167,7 @@ pub(in crate::mandoc) enum FieldWrite {
     /// A replayed native advance that owns no provisional text scalar.
     PlacedBlank {
         source: DeferredSourceBlank,
+        cell: FieldCell,
     },
     ArmBackafter,
     CancelBackafter,

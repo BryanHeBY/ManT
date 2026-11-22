@@ -554,7 +554,14 @@ fn resolve_backlines(
 fn slot_write(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> FieldWrite {
     if let Some(ReadingGlyph::DeferredBlank(source)) = slot.owner.map(|owner| reading[owner].glyph)
     {
-        return FieldWrite::PlacedBlank { source };
+        let cell = match slot.cell {
+            FieldCell::Graph {
+                text: '\u{a0}',
+                width: 1,
+            } => slot.cell.clone(),
+            _ => FieldCell::FixedDrawingAdvance(1),
+        };
+        return FieldWrite::PlacedBlank { source, cell };
     }
     let count = slot.count;
     let scalars = slot.owner.map_or(0, |id| {
@@ -609,7 +616,12 @@ fn append_range(
                 && (scalars != 0
                     || matches!(
                         slot.cell,
-                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                        FieldCell::BreakableBlank
+                            | FieldCell::NonBreakingBlank
+                            | FieldCell::Graph {
+                                text: '\u{a0}',
+                                width: 1
+                            }
                     ))
             {
                 word.flush_segment();

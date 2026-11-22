@@ -363,8 +363,8 @@ impl FieldBuffer {
                 FieldWrite::DeferredBlanks { source, count } => {
                     self.defer_source_blanks(*source, *count);
                 }
-                FieldWrite::PlacedBlank { source } => {
-                    self.place_deferred_blank(*source);
+                FieldWrite::PlacedBlank { source, cell } => {
+                    self.place_deferred_blank(*source, cell);
                 }
                 FieldWrite::ArmBackafter => self.backafter_armed = true,
                 FieldWrite::CancelBackafter => self.backafter_armed = false,
@@ -416,9 +416,13 @@ impl FieldBuffer {
         }
     }
 
-    fn place_deferred_blank(&mut self, source: super::cells::DeferredSourceBlank) {
+    fn place_deferred_blank(
+        &mut self,
+        source: super::cells::DeferredSourceBlank,
+        cell: &FieldCell,
+    ) {
         let start = self.cells.len();
-        self.push_placed(&FieldCell::FixedDrawingAdvance(1), 0);
+        self.push_placed(cell, 0);
         self.deferred_blanks.push(super::cells::DeferredBlankRun {
             start,
             end: start + 1,
@@ -508,6 +512,31 @@ impl FieldBuffer {
             _ => {}
         }
         (0, false)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn retained_run_in_backline(
+        &self,
+        count: usize,
+    ) -> Option<usize> {
+        // encode1() inspects col-1, not lastcol-1 (term.c:903-908).
+        // A live one-slot retreat with graph then SP therefore replaces
+        // the still-unprinted SP with the backspace and leaves the graph.
+        let cursor = self.cells.len().checked_sub(1)?;
+        (matches!(count, 1 | 2)
+            && matches!(self.write_cursor, WriteCursor::Placed(1))
+            && self.backbefore_armed
+            && !self.backafter_armed
+            && self.resume < cursor
+            && self.raw_slot_fence < cursor
+            && matches!(
+                self.cells.as_slice(),
+                [
+                    ..,
+                    FieldCell::Graph { width: 1, .. },
+                    FieldCell::BreakableBlank
+                ]
+            ))
+        .then_some(cursor)
     }
 
     fn advance_run_in_blanks(&mut self, count: usize) {

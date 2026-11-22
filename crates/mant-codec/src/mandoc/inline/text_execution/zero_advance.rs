@@ -276,6 +276,12 @@ impl ZeroAdvanceState {
         }
     }
 
+    /// Buffer connection already proves the glyph before the new
+    /// backspace survives as native input. Publish it to its original owner.
+    pub(in crate::mandoc) fn release_field_owned_ink(&mut self, out: &mut Vec<Inline>) {
+        out.extend(self.take_deferred_with_held());
+    }
+
     /// Blanks buffered behind the pending glyph when a `\p` marker
     /// arrives: the next graph's retreat lands on the marker's own blank,
     /// so the held bytes survive and print after the settled glyph.
