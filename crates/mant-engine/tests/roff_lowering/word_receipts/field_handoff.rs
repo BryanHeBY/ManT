@@ -775,48 +775,100 @@ Done.
 }
 
 #[test]
-fn run_in_backspace_keeps_the_head_glyph_with_body_ink() {
-    // termp_it_pre() writes a two-NBSP word. encode1() inspects
-    // col-1 and replaces the retained SP with a backspace. The BODY
-    // then rewrites the live suffix before term_field() accepts it.
-    let source = include_str!("live_replay/run-in-rewrites-retained-blank-after-head-glyph.1");
-    let document = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
-    let markdown = mant_codec::encode::render_markdown(&document);
-    let readback =
-        json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
-    for (document, rendered) in [
-        (&document, mant_render::render_query_man(&document)),
-        (&readback, mant_render::render_query_text(&readback)),
+fn run_in_separator_replays_retained_spaces_and_backspaces() {
+    // termp_it_pre() writes a two-NBSP word. encode1() writes at col:
+    // overwrite a retained SP, replace it with an armed backspace, or
+    // append that backspace at the buffer end. The BODY can then rewrite
+    // the accepted suffix before term_field() consumes it.
+    for (source, expected, search) in [
+        (
+            include_str!("live_replay/run-in-rewrites-retained-blank-after-head-glyph.1"),
+            "No CV NFBY",
+            "NFBY",
+        ),
+        (
+            include_str!("live_replay/run-in-replaces-retained-space-with-escaped-blank.1"),
+            "No CV NBY",
+            "NBY",
+        ),
+        (
+            include_str!("live_replay/run-in-appends-armed-backspace-after-head.1"),
+            "No CV NoFBY",
+            "NoFBY",
+        ),
+        (
+            include_str!("live_replay/run-in-retires-the-original-pending-glyph.1"),
+            "No CV NoBY",
+            "NoBY",
+        ),
     ] {
+        let document =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&document);
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        for (document, rendered) in [
+            (&document, mant_render::render_query_man(&document)),
+            (&readback, mant_render::render_query_text(&readback)),
+        ] {
+            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            let mut lines = body.trim().lines();
+            assert_eq!(
+                lines
+                    .next()
+                    .map(|line| line.trim().trim_start_matches("• ")),
+                Some(expected),
+                "{rendered}"
+            );
+            assert_eq!(lines.next().map(str::trim), Some("X"), "{rendered}");
+            assert_eq!(lines.next(), None, "{rendered}");
+            let mut labels = Labels::default();
+            labels.visit_document(document.document.as_ref().unwrap());
+            assert_eq!(labels.0, [("https://k.test".into(), "C".into())]);
+            let found = mant_query::search_query(
+                document,
+                &SearchQuery {
+                    pattern: search.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(found.total, 1, "{rendered}");
+        }
+    }
+}
+
+#[test]
+fn run_in_backspace_keeps_prior_covered_ink_retired() {
+    // encode1() can append its generated backspace after a glyph that
+    // covers another owner or follows an earlier marker. The accepted
+    // pass removes that glyph when its old column is overwritten again.
+    for (source, expected) in [
+        (
+            include_str!("live_replay/run-in-does-not-republish-compound-covered-glyph.1"),
+            &["Em CV Ns NBV"][..],
+        ),
+        (
+            include_str!("live_replay/run-in-does-not-republish-glyph-after-earlier-marker.1"),
+            &["Sy J", "NBZ"][..],
+        ),
+    ] {
+        let document =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&document);
         let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
         let (body, _) = body.split_once("CASE999CASE\n").unwrap();
-        let mut lines = body.trim().lines();
         assert_eq!(
-            lines
-                .next()
-                .map(|line| line.trim().trim_start_matches("• ")),
-            Some("No CV NFBY"),
-            "{rendered}"
+            body.trim().lines().map(str::trim).collect::<Vec<_>>(),
+            expected,
+            "{source}\n{rendered}"
         );
-        assert_eq!(lines.next().map(str::trim), Some("X"), "{rendered}");
-        assert_eq!(lines.next(), None, "{rendered}");
-        let mut labels = Labels::default();
-        labels.visit_document(document.document.as_ref().unwrap());
-        assert_eq!(labels.0, [("https://k.test".into(), "C".into())]);
-        let found = mant_query::search_query(
-            document,
-            &SearchQuery {
-                pattern: "NFBY".into(),
-                syntax: SearchSyntax::Literal,
-                case: SearchCase::Sensitive,
-                scope: SearchScope::Visible,
-                word: true,
-                context_lines: 0,
-                limit: 10,
-                offset: 0,
-            },
-        )
-        .unwrap();
-        assert_eq!(found.total, 1, "{rendered}");
     }
 }

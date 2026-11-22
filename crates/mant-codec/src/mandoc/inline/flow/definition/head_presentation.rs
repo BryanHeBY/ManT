@@ -99,6 +99,32 @@ impl DeferredHeadProjection {
         self.apply(terms)
     }
 
+    pub(in crate::mandoc::inline::flow) fn restore_pending_ink(
+        &self,
+        owner: u64,
+        glyphs: &mut Vec<Inline>,
+    ) {
+        let mut pending = self.0.borrow_mut();
+        if !pending
+            .owners
+            .contains(&format!("{INTERNAL_FIELD_WORD}{owner}"))
+            || glyphs.is_empty()
+        {
+            return;
+        }
+        let Some(terms) = pending.terms.as_mut().map(Rc::make_mut) else {
+            return;
+        };
+        // The generated word writes a backspace after the final native
+        // HEAD glyph. Keep its projection with the other scalars of that
+        // owner until the BODY flush decides if the column still shows it.
+        if let Some(term) = terms.last_mut() {
+            term.append(glyphs);
+        } else {
+            terms.push(std::mem::take(glyphs));
+        }
+    }
+
     pub(in crate::mandoc::inline::flow) fn relocate_ink(
         &self,
         owner: &str,

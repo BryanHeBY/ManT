@@ -45,6 +45,7 @@ pub(in crate::mandoc::inline) use drawing::DrawingProbe;
 pub(in crate::mandoc::inline) use placement::isolated_passes;
 pub(in crate::mandoc::inline::flow) use rewind::{EntryRewind, RewoundGlyph};
 pub(super) use scan::{CompactPass, compact_first_pass};
+pub(in crate::mandoc::inline::flow) use writes::RunInWordSlots;
 
 pub(in crate::mandoc::inline) use cells::{AppendedSlotProof, DeferredSourceBlank};
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};

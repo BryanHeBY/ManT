@@ -184,8 +184,8 @@ impl super::InlineExecutionState {
         });
         // Layout-only controls preceding a later rewind can still be
         // represented by the bounded suffix. Revisit them when the live
-        // field has staged coverage that depends on their actual slots.
-        let rewind = if self.has_staged_backline_coverage() {
+        // field retains proved editable space or backspace slots.
+        let rewind = if self.has_raw_prefix_after_layout_controls() {
             events.iter().find(|event| {
                 !matches!(
                     event,

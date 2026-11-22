@@ -1,5 +1,7 @@
 use super::definition::PendingFieldGapOrigin;
-use super::field_buffer::{DeferredSourceBlank, FieldBuffer, FieldCell, FieldWrite};
+use super::field_buffer::{
+    DeferredSourceBlank, FieldBuffer, FieldCell, FieldWrite, RunInWordSlots,
+};
 use super::native_slots::{EntryCursor, FieldPrefix, PrefixExtension, ReplayDomain};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
@@ -50,31 +52,33 @@ fn generated_run_in_writes(traversed: usize, native_count: usize, count: usize) 
 }
 
 fn retained_run_in_writes(
-    start: usize,
+    slots: &RunInWordSlots,
     native_count: usize,
     count: usize,
     source: DeferredSourceBlank,
 ) -> Vec<FieldWrite> {
-    // At a proved live cursor, the generated term_word() writes its
-    // BACKBEFORE byte over the old trailing SP. Append the escaped spaces
-    // as native U+00A0 so a following operand can still revisit them.
-    let mut writes = vec![
-        FieldWrite::ReplaceLivePrefix {
-            start,
-            positions: vec![None],
-            retained_advances: std::collections::BTreeMap::new(),
-            first_incoming: start,
-            first_incoming_ink: None,
-            entry_blanks: 0,
-            entry_gap: None,
-            unpublished: None,
-        },
-        FieldWrite::Placed {
-            cell: FieldCell::Backline,
-            scalars: 0,
-        },
-        FieldWrite::CancelBackbefore,
-    ];
+    // Preserve the generated word as native U+00A0 slots. Unlike a
+    // separator SP, those slots are graph to term_fill() and can be
+    // revisited by a later operand at this same physical field.
+    let mut writes = vec![FieldWrite::ReplaceLivePrefix {
+        start: slots.start,
+        positions: vec![None; slots.overwritten()],
+        retained_advances: std::collections::BTreeMap::new(),
+        first_incoming: slots.start,
+        first_incoming_ink: None,
+        entry_blanks: 0,
+        entry_gap: None,
+        unpublished: None,
+    }];
+    if slots.has_backline() {
+        writes.extend([
+            FieldWrite::Placed {
+                cell: FieldCell::Backline,
+                scalars: 0,
+            },
+            FieldWrite::CancelBackbefore,
+        ]);
+    }
     writes.extend((0..native_count).map(|index| {
         let cell = FieldCell::Graph {
             text: '\u{a0}',
@@ -86,19 +90,19 @@ fn retained_run_in_writes(
             FieldWrite::Placed { cell, scalars: 0 }
         }
     }));
-    writes.extend([
-        FieldWrite::ProveRawSlots {
-            count: native_count + 1,
-            cursor_retreat: 0,
-            backbefore: false,
-            duplicates: Vec::new(),
-            editable_marker: false,
-        },
-        FieldWrite::PlacedZeroWidthRetreat {
+    writes.push(FieldWrite::ProveRawSlots {
+        count: native_count + usize::from(slots.has_backline()),
+        cursor_retreat: 0,
+        backbefore: false,
+        duplicates: Vec::new(),
+        editable_marker: false,
+    });
+    if slots.has_backline() {
+        writes.push(FieldWrite::PlacedZeroWidthRetreat {
             target_from_end: native_count + 2,
             mark_from_end: native_count,
-        },
-    ]);
+        });
+    }
     writes
 }
 
@@ -569,10 +573,17 @@ impl InlineBuilder {
 
         let input = self.execution.word_input().0;
         // This receipt represents an undecorated native U+00A0 slot.
-        let retained_backline = (self.execution.font.current == super::Font::Regular)
-            .then(|| input.retained_run_in_backline(native_count))
-            .flatten();
-        let (traversed, armed_overlap) = input.generated_blank_overlap(native_count);
+        let retained_slots = (self.execution.font.current == super::Font::Regular)
+            .then(|| input.retained_run_in_word(native_count))
+            .flatten()
+            .filter(|slots| {
+                !slots.appends_backline() || self.execution.zero_advance.can_project_prior_slot()
+            });
+        let (traversed, armed_overlap) = if retained_slots.is_some() {
+            (0, false)
+        } else {
+            input.generated_blank_overlap(native_count)
+        };
         let native_count = native_count - traversed;
         let projected_overlap = count.saturating_sub(native_count);
         let count = count.min(native_count);
@@ -587,14 +598,25 @@ impl InlineBuilder {
             font: self.execution.font.display_current(),
         };
         let mut projected = Vec::new();
-        let writes = if let Some(start) = retained_backline {
+        let writes = if let Some(slots) = retained_slots {
+            let pending_owner = self.execution.zero_advance.pending_word_owner();
             self.execution
                 .zero_advance
                 .release_field_owned_ink(&mut projected);
+            if slots.appends_backline()
+                && let Some(owner) = pending_owner
+                && let Some(receiver) = self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .and_then(|definition| definition.deferred_head_projection.as_ref())
+            {
+                receiver.restore_pending_ink(owner, &mut projected);
+            }
             if count > 0 {
                 projected.push(Inline::anchor(source.marker()));
             }
-            retained_run_in_writes(start, native_count, count, source)
+            retained_run_in_writes(&slots, native_count, count, source)
         } else {
             if traversed > 0 && self.defer_run_in_overlap(traversed, projected_overlap, source) {
                 projected.push(Inline::anchor(source.marker()));
@@ -795,8 +817,9 @@ impl super::InlineExecutionState {
         }
     }
 
-    pub(in crate::mandoc::inline) fn has_staged_backline_coverage(&self) -> bool {
-        self.word_input().0.has_pass_retreats()
+    pub(in crate::mandoc::inline) fn has_raw_prefix_after_layout_controls(&self) -> bool {
+        let input = self.word_input().0;
+        input.has_pass_retreats() || input.has_live_run_in_blanks()
     }
 
     pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {

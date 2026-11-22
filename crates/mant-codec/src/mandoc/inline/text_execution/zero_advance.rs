@@ -254,7 +254,7 @@ impl ZeroAdvanceState {
         let _ = self.project_glyph(glyph);
     }
 
-    pub(super) fn can_project_prior_slot(&self) -> bool {
+    pub(in crate::mandoc::inline) fn can_project_prior_slot(&self) -> bool {
         self.machine.pending_ref().is_some()
             && self.held.is_empty()
             && self.machine.deferred_projection().is_empty()

@@ -27,6 +27,34 @@ std::thread_local! {
     static SEPARATOR_CELLS_VISITED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
+pub(in crate::mandoc::inline::flow) struct RunInWordSlots {
+    pub(in crate::mandoc::inline::flow) start: usize,
+    write: RunInWordWrite,
+}
+
+enum RunInWordWrite {
+    ReplacesSpace,
+    ReplacesSpaceWithBackline,
+    AppendsBackline,
+}
+
+impl RunInWordSlots {
+    pub(in crate::mandoc::inline::flow) const fn overwritten(&self) -> usize {
+        match self.write {
+            RunInWordWrite::ReplacesSpace | RunInWordWrite::ReplacesSpaceWithBackline => 1,
+            RunInWordWrite::AppendsBackline => 0,
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_backline(&self) -> bool {
+        !matches!(self.write, RunInWordWrite::ReplacesSpace)
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn appends_backline(&self) -> bool {
+        matches!(self.write, RunInWordWrite::AppendsBackline)
+    }
+}
+
 impl FieldBuffer {
     pub(super) fn push_cell(&mut self, cell: FieldCell) {
         if self.word_first_content.is_none() {
@@ -514,29 +542,79 @@ impl FieldBuffer {
         (0, false)
     }
 
-    pub(in crate::mandoc::inline::flow) fn retained_run_in_backline(
+    pub(in crate::mandoc::inline::flow) fn retained_run_in_word(
         &self,
         count: usize,
-    ) -> Option<usize> {
+    ) -> Option<RunInWordSlots> {
+        if !matches!(count, 1 | 2) || self.backafter_armed {
+            return None;
+        }
         // encode1() inspects col-1, not lastcol-1 (term.c:903-908).
-        // A live one-slot retreat with graph then SP therefore replaces
-        // the still-unprinted SP with the backspace and leaves the graph.
-        let cursor = self.cells.len().checked_sub(1)?;
-        (matches!(count, 1 | 2)
-            && matches!(self.write_cursor, WriteCursor::Placed(1))
-            && self.backbefore_armed
-            && !self.backafter_armed
-            && self.resume < cursor
-            && self.raw_slot_fence < cursor
+        // A proved one-cell retreat onto SP replaces it with either
+        // U+00A0 or a backspace, depending on the BACKBEFORE register.
+        // With col at the end and BACKBEFORE set, the backspace appends.
+        let (start, write) = match self.write_cursor {
+            WriteCursor::Placed(1) if self.cells.last() == Some(&FieldCell::BreakableBlank) => {
+                let write = if self.backbefore_armed {
+                    RunInWordWrite::ReplacesSpaceWithBackline
+                } else {
+                    RunInWordWrite::ReplacesSpace
+                };
+                (self.cells.len() - 1, write)
+            }
+            WriteCursor::Placed(0) | WriteCursor::End
+                if self.backbefore_armed && self.has_independent_run_in_glyph() =>
+            {
+                (self.cells.len(), RunInWordWrite::AppendsBackline)
+            }
+            _ => return None,
+        };
+        let previous = start.checked_sub(1)?;
+        (self.resume <= previous
+            && self.raw_slot_fence <= previous
             && matches!(
-                self.cells.as_slice(),
-                [
-                    ..,
-                    FieldCell::Graph { width: 1, .. },
-                    FieldCell::BreakableBlank
-                ]
+                self.cells.get(previous),
+                Some(FieldCell::Graph { width: 1, .. })
             ))
-        .then_some(cursor)
+        .then_some(RunInWordSlots { start, write })
+    }
+
+    fn has_independent_run_in_glyph(&self) -> bool {
+        // Publishing the pending raw owner is safe only when its glyph
+        // starts on an independent column in the still-unbroken field.
+        // A preceding backspace can have put the glyph over a different
+        // source owner. That compound cover still uses the held glyph.
+        !self.has_break_markers()
+            && self.cells.len().checked_sub(1).is_some_and(|last| {
+                let start = self.raw_copy_aliases.last().map_or(last, |&(copy, owner)| {
+                    if owner == last { copy.min(owner) } else { last }
+                });
+                start
+                    .checked_sub(1)
+                    .is_none_or(|previous| self.cells[previous] != FieldCell::Backline)
+            })
+    }
+
+    pub(in crate::mandoc::inline::flow) fn has_live_run_in_blanks(&self) -> bool {
+        // These placed Unicode space slots retain the generated word's
+        // ownership after a distinct TABREF from the first BODY NODE_LINE.
+        // A following HORIZ can still revisit them after buffering \p.
+        // Source blanks use FixedDrawingAdvance or BreakableBlank instead.
+        self.projection_owner == super::FieldProjectionOwner::Detached
+            && self.deferred_blanks.last().is_some_and(|run| {
+                self.raw_slot_fence <= run.start
+                    && matches!(
+                        self.cells.get(run.start..run.end),
+                        Some([FieldCell::Graph {
+                            text: '\u{a0}',
+                            width: 1
+                        }])
+                    )
+                    && matches!(
+                        self.cells.get(run.end..),
+                        Some([] | [FieldCell::TabReference])
+                    )
+            })
     }
 
     fn advance_run_in_blanks(&mut self, count: usize) {
