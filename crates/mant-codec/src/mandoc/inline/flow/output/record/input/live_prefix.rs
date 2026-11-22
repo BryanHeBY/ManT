@@ -208,19 +208,21 @@ impl PrefixEdits {
             let owner = &earlier[*owner_index].owner;
             let detached = head.filter(|head| head.owns_word(owner));
             let mut projection_owner = owner.clone();
-            let mut projection = super::super::super::source_blanks::take_rewound_glyph(
+            let edit = super::super::super::source_blanks::edit_rewound_glyph(
                 nodes,
                 incoming,
                 owner,
                 glyph,
                 slot.is_some() || detached.is_some(),
             );
-            if projection.is_some() {
-                extracted.push((*owner_index, glyph.following_scalars));
+            let edited_live_owner = edit.is_some();
+            if edited_live_owner {
+                // Successful removals without retained style still shorten
+                // this owner's scalar suffix for the next blank check.
+                extracted.push((owner, glyph.following_scalars));
             }
-            if projection.is_none()
-                && let Some(head) = detached
-            {
+            let mut projection = edit.and_then(|edit| edit.projection);
+            if !edited_live_owner && let Some(head) = detached {
                 projection = take_detached_ink(head, owner, glyph, *unprinted_tail);
                 if let Some(slot) = slot {
                     if projection.is_some() {
@@ -254,7 +256,7 @@ impl PrefixEdits {
             glyph.following_scalars -= extracted
                 .iter()
                 .filter(|&&(removed, following)| {
-                    removed == *owner && following < glyph.following_scalars
+                    removed == &earlier[*owner].owner && following < glyph.following_scalars
                 })
                 .count()
                 .min(glyph.following_scalars);

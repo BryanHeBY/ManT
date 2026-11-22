@@ -136,13 +136,7 @@ impl DeferredHeadProjection {
         let mut pending = self.0.borrow_mut();
         let terms = Rc::make_mut(pending.terms.as_mut()?);
         terms.iter_mut().rev().find_map(|term| {
-            super::super::output::source_blanks::take_rewound_glyph(
-                term,
-                &mut [],
-                owner,
-                glyph,
-                true,
-            )
+            super::super::output::source_blanks::take_rewound_glyph(term, &mut [], owner, glyph)
         })
     }
 
@@ -187,7 +181,6 @@ impl DeferredHeadProjection {
                     &mut [],
                     &owner,
                     &glyph,
-                    true,
                 )
                 .is_some()
                 {

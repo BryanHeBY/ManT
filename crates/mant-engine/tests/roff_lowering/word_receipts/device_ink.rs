@@ -402,6 +402,15 @@ fn inherited_overprints_keep_advances_after_publishing_the_prior_glyph() {
             "",
             "Plain glyph after relocated earlier ink",
             "GB X",
+            "",
+            "Advance before replacing a named glyph",
+            "GB X",
+            "",
+            "Advance before replacing an ordinary glyph",
+            "GB X",
+            "",
+            "Advance before replacing an escaped backslash",
+            "GB X",
         ]
     );
 }

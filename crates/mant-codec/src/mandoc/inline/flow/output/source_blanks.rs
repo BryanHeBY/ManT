@@ -13,7 +13,7 @@ pub(super) fn remove_rewound_glyph(
     owner: &str,
     receipt: &super::super::field_buffer::RewoundGlyph,
 ) {
-    take_rewound_glyph(nodes, incoming, owner, receipt, false);
+    edit_rewound_glyph(nodes, incoming, owner, receipt, false);
 }
 
 struct ReverseOwnerCursor<'a, 'b> {
@@ -136,8 +136,21 @@ pub(in crate::mandoc::inline::flow) fn take_rewound_glyph(
     incoming: &mut [Inline],
     owner: &str,
     receipt: &super::super::field_buffer::RewoundGlyph,
-    retain_style: bool,
 ) -> Option<Inline> {
+    edit_rewound_glyph(nodes, incoming, owner, receipt, true)?.projection
+}
+
+pub(super) struct RewoundGlyphEdit {
+    pub(super) projection: Option<Inline>,
+}
+
+pub(super) fn edit_rewound_glyph(
+    nodes: &mut [Inline],
+    incoming: &mut [Inline],
+    owner: &str,
+    receipt: &super::super::field_buffer::RewoundGlyph,
+    retain_style: bool,
+) -> Option<RewoundGlyphEdit> {
     rewound_glyph(
         nodes,
         incoming,
@@ -174,7 +187,7 @@ fn rewound_glyph(
     owner: &str,
     receipt: &super::super::field_buffer::RewoundGlyph,
     mode: RewindProjection,
-) -> Option<Inline> {
+) -> Option<RewoundGlyphEdit> {
     // A delayed glyph may re-enter the prior word after its earlier output
     // marker. Count the owner's scalar suffix backwards through all wrappers.
     let mut cursor = ReverseOwnerCursor {
@@ -203,7 +216,9 @@ fn rewound_glyph(
         if matches!(mode, RewindProjection::Remove { .. }) {
             value.remove(byte);
         }
-        return cursor.projection;
+        return Some(RewoundGlyphEdit {
+            projection: cursor.projection,
+        });
     }
     None
 }
