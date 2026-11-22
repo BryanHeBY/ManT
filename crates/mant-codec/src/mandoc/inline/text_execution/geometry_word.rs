@@ -10,9 +10,11 @@ use crate::mandoc::inline::flow::{
 };
 use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
 
+mod marked_operands;
 mod overprint;
 mod projection;
 
+use marked_operands::ControlReplay;
 use projection::PlacedWord;
 
 pub(super) fn absolute_motion(event: &RoffInlineEvent) -> bool {
@@ -25,9 +27,9 @@ pub(super) fn relative_zero_motion(argument: Option<&str>) -> bool {
 }
 
 pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
-    if !can_place_word(context) {
+    let Some(control_replay) = can_place_word(events, context) else {
         return false;
-    }
+    };
     let field = context.policy.field_authoritative;
     let mut marker = false;
     let mut edits = false;
@@ -97,9 +99,8 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
             _ => {}
         }
     }
-    let replay_empty_overstrike =
-        armed_empty_overstrike && context.slot_entry.trailing_tab_reference;
-    let has_armed_overlap = armed_overstrike || replay_empty_overstrike;
+    let has_armed_overlap =
+        armed_overstrike || armed_empty_overstrike && context.slot_entry.trailing_tab_reference;
     if has_unproved_armed_entry(context)
         && !(has_armed_overlap && context.slot_entry.automatic_blanks > 0)
     {
@@ -118,6 +119,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || has_zero_advance && local_overwrite(events, context).is_some()
                 || has_link && decorated_word(events, context.font.current)
                 || marker && marker_replay(events, context).is_some()
+                || control_replay.is_proved()
                 || relative_advance && can_publish_inner_advances(events, context)
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
@@ -189,19 +191,24 @@ fn decorated_word(events: &[RoffInlineEvent], entry_font: RoffFont) -> bool {
         )
 }
 
-fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
+fn can_place_word(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> Option<ControlReplay> {
     if !context.policy.record_native_cells {
-        return false;
+        return None;
     }
+    let controls = marked_operands::control_replay(events, context);
     // The inherited BACK pair may own an earlier operand or its entry
     // blank. Leave that receipt with the live word executor.
     if context.slot_entry.cursor.has_input()
         && context.zero_advance.is_armed()
         && context.zero_advance.has_buffered_glyph()
+        && !controls.cancels_arm()
     {
-        return false;
+        return None;
     }
-    !context.zero_advance.has_pending_glyph() || can_place_pending(context)
+    (!context.zero_advance.has_pending_glyph() || can_place_pending(context)).then_some(controls)
 }
 
 #[derive(PartialEq, Eq)]
@@ -526,6 +533,9 @@ fn marker_replay(
         && !context.slot_entry.cursor.has_input()
         && !context.defer_leading_blanks
         && !context.zero_advance.has_annotation_output_owner();
+    if filled && !context.zero_advance.is_armed() && marked_operands::bounded_append(events) {
+        return Some(MarkerReplay::AwaitFieldFlush);
+    }
     // Plain source blanks already have an incremental pass receipt.
     // When they separate an annotation from surrounding text, keep the
     // blank and label in the editable slots until acceptance can decide

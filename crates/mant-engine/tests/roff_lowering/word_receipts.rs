@@ -14,6 +14,8 @@ mod accepted_coverage;
 mod device_ink;
 #[path = "word_receipts/field_handoff.rs"]
 mod field_handoff;
+#[path = "word_receipts/marked_operands.rs"]
+mod marked_operands;
 #[path = "word_receipts/native_cursor.rs"]
 mod native_cursor;
 
