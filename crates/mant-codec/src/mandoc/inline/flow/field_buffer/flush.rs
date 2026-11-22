@@ -186,6 +186,7 @@ impl FieldBuffer {
             device_tail: None,
             raw_slot_fence: 0,
             raw_edit_fence: 0,
+            deferred_tail_tape: super::super::native_slots::DeferredTail::Absent,
             write_cursor: WriteCursor::End,
             raw_tail_fonts: Vec::new(),
             raw_copy_aliases: Vec::new(),

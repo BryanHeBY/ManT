@@ -587,3 +587,40 @@ fn trailing_native_advance_survives_overlaid_marked_words() {
         ),
     ]);
 }
+
+#[test]
+fn covered_trailing_advance_keeps_the_live_native_buffer() {
+    // term_word() can overwrite the last deferred advance without
+    // ending the field. Its next word still paints against the original
+    // native buffer. term_field() exposes B, which covers both A glyphs.
+    verify_rows(&[
+        (
+            r#".Sy "A\h'1n'" Em "\z\h'-1n'\h'1n' " Ns No "F\pG\p\c" No "\h'3n'\h'-4n'X""#,
+            &["A    FGX"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zFG\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCG    X"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zFG\h'2n'\h'2n'" Ns Sy "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCG    X"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zFG\h'3n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCG     X"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zFG\h'2n'\p\h'3n'" Ns Sy "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCG     X"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zJK\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCK    X"],
+        ),
+        (
+            r#".Sy "A\h'1n'" No "\h'1n'\h'-4n'\zABC" Ns No "\zFG\h'2n'\p\h'2n'" Ns No "\h'1n'\h'-2n'\fP\h'1n'X""#,
+            &["BCG    X"],
+        ),
+    ]);
+}

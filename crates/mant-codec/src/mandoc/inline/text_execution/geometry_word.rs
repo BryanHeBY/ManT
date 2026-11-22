@@ -120,7 +120,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || relative_advance && can_publish_inner_advances(events, context)
                 || relative_advance
                     && (can_defer_trailing_advance(events, context)
-                        || can_defer_blank_tail_advances(events, context))
+                        || can_defer_live_advances(events, context))
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
@@ -525,10 +525,14 @@ fn can_defer_trailing_advance(
     // its deferred native advance.
     let single_owner =
         !leading_retreat && matches!(prefix, [RoffInlineEvent::Text(text)] if text.len() == 1);
-    (leading_retreat || width > 1)
+    (leading_retreat || width > 1 || !single_paint(context.font.current) && single_owner)
         && width > 0
         && size.is_some_and(|count| count > 0 && count <= budget)
         && (single_paint(context.font.current) || single_owner)
+}
+
+fn can_defer_live_advances(events: &[RoffInlineEvent], context: &TextExecutionContext<'_>) -> bool {
+    can_defer_blank_tail_advances(events, context) || can_append_to_covered_tail(events, context)
 }
 
 fn can_defer_blank_tail_advances(
@@ -552,15 +556,7 @@ fn can_defer_blank_tail_advances(
     // No ink releases the pending advances in this word. Keep its
     // positive motion and ordinary SP in raw order until term_field()
     // encounters the next printable graph, after any live cursor edits.
-    let earlier = prefix
-        .cells
-        .iter()
-        .fold(prefix.automatic, |total, (cell, _)| {
-            total.saturating_add(match cell {
-                FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => *count,
-                _ => 1,
-            })
-        });
+    let earlier = prefix.raw_slot_count();
     let cells = events.iter().try_fold(earlier, |cells, event| {
         let added = match event {
             RoffInlineEvent::ZeroAdvance => 0,
@@ -581,6 +577,61 @@ fn can_defer_blank_tail_advances(
             .filter(|&total| total <= MAX_EDITABLE_APPEND_CELLS)
     });
     cells.is_some()
+}
+
+fn can_append_to_covered_tail(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+    let Some(prefix) = context.slot_entry.prefix.as_ref().filter(|prefix| {
+        prefix.deferred_tail == DeferredTail::Covered
+            && prefix.tail_fonts.is_empty()
+            // An inherited native arm can write independently of the
+            // incoming word's BACK controls (term.c::encode1).
+            && !prefix.backbefore
+            && !prefix.backafter
+    }) else {
+        return false;
+    };
+    if context.slot_entry.domain != ReplayDomain::Filled
+        || context.zero_advance.has_annotation_output_owner()
+        || context.zero_advance.has_pending_glyph()
+        || context.zero_advance.is_armed()
+        || context.zero_advance.native_word_owner().is_none()
+        || !matches!(events.first(), Some(RoffInlineEvent::ZeroAdvance))
+    {
+        return false;
+    }
+    let mut advance = false;
+    let cells = events
+        .iter()
+        .try_fold(prefix.raw_slot_count(), |cells, event| {
+            let added = match event {
+                RoffInlineEvent::ZeroAdvance | RoffInlineEvent::LineBreak => 1,
+                RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte.is_ascii_graphic()) => {
+                    text.len().saturating_mul(5)
+                }
+                RoffInlineEvent::HorizontalMotion {
+                    argument: Some(value),
+                    ..
+                } => {
+                    let (false, units) = motion_columns(value)? else {
+                        return None;
+                    };
+                    if units <= 0 {
+                        return None;
+                    }
+                    advance = true;
+                    libmandoc_rs::TableColumnMetrics::relative_motion_columns(value)
+                }
+                _ => return None,
+            };
+            cells
+                .checked_add(added)
+                .filter(|&total| total <= MAX_EDITABLE_APPEND_CELLS)
+        });
+    advance && cells.is_some()
 }
 
 enum RetainedAdvancePhase {
@@ -1336,7 +1387,7 @@ pub(super) fn try_execute(
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
 ) -> Result<(), PriorSlotEdit> {
-    let existing_tail = can_defer_blank_tail_advances(events, context);
+    let existing_tail = can_defer_live_advances(events, context);
     let tracks_origin_retreat = marked_operands::tracks_literal_control_retreat(events, context);
     let seed = GeometrySeed::begin(context, events);
     execute_seed(
@@ -1435,10 +1486,11 @@ fn execute_seed<'a>(
             || live_cursor
             || pending_glyph
             || terminal_marker
-            || seed.editable_pass);
+            || seed.editable_pass
+            || existing_tail);
     let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
         || has_marker && seed.editable_pass && slots.cursor_before_end()
-        || has_marker && live_cursor
+        || has_marker && (live_cursor || existing_tail)
         // BACKBEFORE can hold a glyph inside material still following
         // col. Leave the marker editable until a real device flush.
         || has_marker && pending_glyph && seed.earlier != 0 && slots.cursor_before_end()

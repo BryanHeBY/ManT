@@ -82,7 +82,6 @@ pub(super) fn bounded_literal_control_append(
     context: &TextExecutionContext<'_>,
 ) -> bool {
     use super::EntryCursor;
-    use crate::mandoc::inline::flow::field_buffer::FieldCell;
     let entry = &context.slot_entry;
     if entry.domain != ReplayDomain::LiteralDefinitionLine
         || entry.cursor != EntryCursor::AtEnd
@@ -114,14 +113,9 @@ pub(super) fn bounded_literal_control_append(
         return false;
     };
     let columns = libmandoc_rs::TableColumnMetrics::relative_motion_columns(value);
-    let prefix_slots = prefix.cells.iter().fold(0usize, |total, (cell, _)| {
-        total.saturating_add(match cell {
-            FieldCell::FixedDrawingAdvance(count) | FieldCell::DrawnSpaces(count) => *count,
-            _ => 1,
-        })
-    });
     columns != 0
-        && prefix_slots
+        && prefix
+            .raw_slot_count()
             .saturating_add(columns)
             .saturating_add(tail.len())
             <= MAX_EDITABLE_APPEND_CELLS

@@ -249,6 +249,7 @@ impl FieldBuffer {
         self.device_tail = None;
         self.raw_slot_fence = 0;
         self.raw_edit_fence = 0;
+        self.deferred_tail_tape = super::super::native_slots::DeferredTail::Absent;
         self.write_cursor = WriteCursor::End;
         self.raw_tail_fonts.clear();
         self.raw_copy_aliases.clear();

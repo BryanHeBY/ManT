@@ -92,6 +92,15 @@ impl FieldBuffer {
                 self.raw_slot_fence =
                     prior_raw_fence.map_or(appended_start, |fence| fence.min(appended_start));
                 self.raw_edit_fence = appended_start;
+                if self.raw_slot_fence == 0
+                    && !self.deferred_blanks.is_empty()
+                    && self
+                        .deferred_blanks
+                        .iter()
+                        .all(|run| run.source.replayable_tail)
+                {
+                    self.deferred_tail_tape = super::super::native_slots::DeferredTail::Replayable;
+                }
                 if *editable_marker {
                     // An interior \p has only marked the raw word.
                     // term.c::term_fill runs when a real flush accepts
@@ -296,7 +305,11 @@ impl FieldBuffer {
         Some(super::super::native_slots::FieldPrefix {
             start,
             deferred_tail: if complete_tail && start == 0 {
-                super::super::native_slots::DeferredTail::Replayable
+                if self.deferred_blanks.is_empty() {
+                    super::super::native_slots::DeferredTail::Covered
+                } else {
+                    super::super::native_slots::DeferredTail::Replayable
+                }
             } else {
                 super::super::native_slots::DeferredTail::Absent
             },
@@ -338,11 +351,15 @@ impl FieldBuffer {
                 // same complete tape. It has not retired the field (term.c::term_word).
                 || self.raw_slot_fence == 0 && matches!(self.write_cursor, WriteCursor::End)
                     && self.cells.last() == Some(&FieldCell::BreakMarker))
-            && !self.deferred_blanks.is_empty()
-            && self
-                .deferred_blanks
-                .iter()
-                .all(|run| run.start >= self.raw_slot_fence && run.source.replayable_tail)
+            && if self.deferred_blanks.is_empty() {
+                self.raw_slot_fence == 0
+                    && self.deferred_tail_tape
+                        == super::super::native_slots::DeferredTail::Replayable
+            } else {
+                self.deferred_blanks
+                    .iter()
+                    .all(|run| run.start >= self.raw_slot_fence && run.source.replayable_tail)
+            }
     }
 
     fn retained_cursor_fence(&self, fence: usize) -> usize {
@@ -443,8 +460,10 @@ impl FieldBuffer {
         if start == 0 {
             let scan = self.word_scan;
             let projection_owner = self.projection_owner;
+            let deferred_tail_tape = self.deferred_tail_tape;
             self.clear();
             self.projection_owner = projection_owner;
+            self.deferred_tail_tape = deferred_tail_tape;
             if matches!(scan, super::WordScanPolicy::AwaitFlush) {
                 self.word_scan = scan;
             }

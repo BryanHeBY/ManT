@@ -241,10 +241,23 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) pass: ReplayPass,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+impl FieldPrefix {
+    pub(in crate::mandoc::inline) fn raw_slot_count(&self) -> usize {
+        self.cells.iter().fold(self.automatic, |count, (cell, _)| {
+            count.saturating_add(match cell {
+                FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => *width,
+                _ => 1,
+            })
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(in crate::mandoc::inline) enum DeferredTail {
+    #[default]
     Absent,
     Replayable,
+    Covered,
 }
 
 impl DeviceTail {

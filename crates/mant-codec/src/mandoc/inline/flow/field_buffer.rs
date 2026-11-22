@@ -238,6 +238,7 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     // authorizing a later word to rewind through that append.
     raw_slot_fence: usize,
     raw_edit_fence: usize,
+    deferred_tail_tape: super::native_slots::DeferredTail,
     write_cursor: WriteCursor,
     raw_tail_fonts: Vec<(std::ops::Range<usize>, crate::mandoc::roff_escape::RoffFont)>,
     raw_copy_aliases: Vec<(usize, usize)>,
