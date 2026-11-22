@@ -36,13 +36,15 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     use super::super::field_buffer::FillBoundary;
 
     let count = passes.len().saturating_sub(1);
-    let start = output_start.min(nodes.len());
     let mut boundaries: BTreeMap<String, Vec<RecordedRowSplit>> = BTreeMap::new();
-    let mut positions = BTreeMap::new();
-    let first_owners = std::cell::OnceCell::new();
+    let mut offsets = OwnerOffsets {
+        anchors,
+        preceding: 0,
+        lengths: BTreeMap::new(),
+        first_owners: std::cell::OnceCell::new(),
+    };
     let has_drawing_advance = buffer.has_deferred_drawing_advances();
     let unowned_prefix = handoff.is_none() && has_unowned_prefix_rows(buffer, anchors, passes);
-    let mut preceding = 0;
     for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
             // An encoded ASCII_HYPH candidate locates the final device row
@@ -65,7 +67,14 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         let cell = next.start;
         let owner = projected_restart_owner(buffer, anchors, pass, next, unowned_prefix);
         if let Some(mut index) = owner.checked_sub(1) {
-            if project_definition_handoff(handoff, buffer, anchors, pass, next, &mut boundaries) {
+            let definition = definition_handoff(handoff, buffer, anchors, pass, next);
+            if let Some(DefinitionBoundary::Body(index)) = definition {
+                // The detached HEAD cannot carry its closing boundary in
+                // the BODY output, so put it before the first BODY scalar.
+                boundaries
+                    .entry(anchors[index].owner.clone())
+                    .or_default()
+                    .push(RecordedRowSplit::hard(0, pass.end));
                 continue;
             }
             let section_seam = matches!(
@@ -81,77 +90,134 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                     anchors,
                     pass,
                     (cell, owner),
-                    &first_owners,
+                    &offsets.first_owners,
                     &mut boundaries,
                 )
             {
                 continue;
             }
             let mut cut = cell;
-            let (span_end, accepted_end) = pass_cut_bounds(buffer, pass, cell, has_drawing_advance);
-            if !section_seam
-                && (pending_gap
-                    || projected_restart_needs_earlier_cut(
-                        buffer,
-                        anchors,
-                        index,
-                        pass,
-                        cell,
-                        span_end,
-                        &first_owners,
-                    ))
-                && let Some(last) = buffer.last_projected_cell(pass.start..accepted_end)
+            let detached = if let Some(DefinitionBoundary::Head {
+                receiver,
+                last,
+                anchor,
+            }) = definition
+                && anchor >= offsets.preceding
             {
-                // A replay can give this word an earlier fragment with
-                // the same scalar position. Anchor the native endline
-                // after the last accepted ink instead (term.c:205-220).
-                let actual = anchors.partition_point(|anchor| anchor.content <= last);
-                if let Some(actual) = actual.checked_sub(1)
-                    && actual >= preceding
-                    && actual < index
-                    && (pending_gap || anchors[actual].owner != anchors[index].owner)
-                    // A detached label is outside the current output span.
-                    // Keep its closing boundary with the first BODY owner.
-                    && !matches!(
-                        handoff,
-                        Some(NativePassHandoff::Definition(head))
-                            if head.owns_word(&anchors[actual].owner)
-                    )
-                {
-                    index = actual;
-                    cut = last + 1;
-                }
+                index = anchor;
+                cut = last + 1;
+                Some(receiver)
+            } else {
+                None
+            };
+            if detached.is_none()
+                && !section_seam
+                && let Some((actual, earlier_cut)) = offsets.earlier_cut(
+                    buffer,
+                    pass,
+                    (index, cell),
+                    pass_cut_bounds(buffer, pass, cell, has_drawing_advance),
+                    pending_gap,
+                    handoff,
+                )
+            {
+                index = actual;
+                cut = earlier_cut;
             }
             let anchor = &anchors[index];
             cut = exclude_skipped_gap(buffer, anchor.content, cut, pass.end..next.start);
-            // Native replay can move part of one word after another
-            // owner's glyph. The projection cursor counts an owner's
-            // scalars across all of its fragments, not just this span.
-            for pair in anchors[preceding..=index].windows(2) {
-                let (previous, next) = (&pair[0], &pair[1]);
-                *positions.entry(previous.owner.as_str()).or_insert(0) += buffer.projection_length(
-                    previous.content,
-                    next.start.min(next.content).max(previous.content),
-                );
+            let offset = offsets.at(buffer, index, cut);
+            if let Some(receiver) = detached {
+                receiver.accept_hard_row(&anchor.owner, offset);
+                buffer.acknowledge_projected_pass(pass.end);
+            } else {
+                boundaries
+                    .entry(anchor.owner.clone())
+                    .or_default()
+                    .push(RecordedRowSplit {
+                        section_seam,
+                        ..RecordedRowSplit::hard(offset, pass.end)
+                    });
             }
-            preceding = index;
-            boundaries
-                .entry(anchor.owner.clone())
-                .or_default()
-                .push(RecordedRowSplit {
-                    offset: positions.get(anchor.owner.as_str()).copied().unwrap_or(0)
-                        + buffer.projection_length(anchor.content, cut),
-                    pass_end: pass.end,
-                    before_cached_glyph: false,
-                    section_seam,
-                });
         }
     }
     if !boundaries.is_empty() {
         // Earlier flushed fields are immutable output. Only the active
         // suffix is traversed, once per real flush (term.c:233-237).
-        let pending = nodes.split_off(start);
+        let pending = nodes.split_off(output_start.min(nodes.len()));
         nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
+    }
+}
+
+struct OwnerOffsets<'a> {
+    anchors: &'a [super::super::NativeWordAnchor],
+    preceding: usize,
+    lengths: BTreeMap<&'a str, usize>,
+    first_owners: std::cell::OnceCell<std::collections::HashMap<&'a str, usize>>,
+}
+
+impl OwnerOffsets<'_> {
+    fn earlier_cut(
+        &self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        pass: &super::super::field_buffer::FillPass,
+        (index, restart): (usize, usize),
+        (span_end, accepted_end): (usize, usize),
+        pending_gap: bool,
+        handoff: Option<NativePassHandoff<'_>>,
+    ) -> Option<(usize, usize)> {
+        if !pending_gap
+            && !projected_restart_needs_earlier_cut(
+                buffer,
+                self.anchors,
+                index,
+                pass,
+                restart,
+                span_end,
+                &self.first_owners,
+            )
+        {
+            return None;
+        }
+        // A replay can give this word an earlier fragment with the same
+        // scalar position. Close after the last accepted ink (term.c:205-220).
+        let last = buffer.last_projected_cell(pass.start..accepted_end)?;
+        let before = self
+            .anchors
+            .partition_point(|anchor| anchor.content <= last);
+        let actual = before.checked_sub(1)?;
+        let owner = &self.anchors[actual].owner;
+        (actual >= self.preceding
+            && actual < index
+            && (pending_gap || owner != &self.anchors[index].owner)
+            // A detached label carries its own cuts. Keep any closing
+            // boundary with the first BODY owner.
+            && !matches!(handoff, Some(NativePassHandoff::Definition(head)) if head.owns_word(owner)))
+        .then_some((actual, last + 1))
+    }
+
+    fn at(
+        &mut self,
+        buffer: &super::super::field_buffer::FieldBuffer,
+        index: usize,
+        cut: usize,
+    ) -> usize {
+        // Native replay can move part of one word after another owner's
+        // glyph. Sum an owner's earlier fragments at each new cursor.
+        for pair in self.anchors[self.preceding..=index].windows(2) {
+            let (previous, next) = (&pair[0], &pair[1]);
+            *self.lengths.entry(previous.owner.as_str()).or_default() += buffer.projection_length(
+                previous.content,
+                next.start.min(next.content).max(previous.content),
+            );
+        }
+        self.preceding = index;
+        let anchor = &self.anchors[index];
+        self.lengths
+            .get(anchor.owner.as_str())
+            .copied()
+            .unwrap_or(0)
+            + buffer.projection_length(anchor.content, cut)
     }
 }
 
@@ -253,39 +319,51 @@ fn first_owner_positions<'a, 'map>(
     })
 }
 
-fn project_definition_handoff(
-    handoff: Option<NativePassHandoff<'_>>,
+enum DefinitionBoundary<'a> {
+    Head {
+        receiver: &'a super::super::definition::head_presentation::DeferredHeadProjection,
+        last: usize,
+        anchor: usize,
+    },
+    Body(usize),
+}
+
+fn definition_handoff<'a>(
+    handoff: Option<NativePassHandoff<'a>>,
     buffer: &super::super::field_buffer::FieldBuffer,
     anchors: &[super::super::NativeWordAnchor],
     pass: &super::super::field_buffer::FillPass,
     next: &super::super::field_buffer::FillPass,
-    boundaries: &mut BTreeMap<String, Vec<RecordedRowSplit>>,
-) -> bool {
-    if let Some(NativePassHandoff::Definition(head)) = handoff
-        && let Some(last) = buffer.last_projected_cell(pass.start..pass.end)
-        && anchors[..anchors.partition_point(|anchor| anchor.content <= last)]
-            .last()
-            .is_some_and(|anchor| head.owns_word(&anchor.owner))
-        && let Some(first) =
-            (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)
-        && let Some(body) = anchors[..anchors.partition_point(|anchor| anchor.content <= first)]
-            .last()
-            .filter(|anchor| !head.owns_word(&anchor.owner))
-    {
-        // term_flushln closes the HEAD before skipping invisible entry
-        // cells. The detached HEAD has no marker in this output.
-        boundaries
-            .entry(body.owner.clone())
-            .or_default()
-            .push(RecordedRowSplit {
-                offset: 0,
-                pass_end: pass.end,
-                before_cached_glyph: false,
-                section_seam: false,
-            });
-        return true;
+) -> Option<DefinitionBoundary<'a>> {
+    let Some(NativePassHandoff::Definition(head)) = handoff else {
+        return None;
+    };
+    let last = buffer.last_projected_cell(pass.start..pass.end)?;
+    let anchor = anchors
+        .partition_point(|anchor| anchor.content <= last)
+        .checked_sub(1)?;
+    if !head.owns_word(&anchors[anchor].owner) {
+        return None;
     }
-    false
+    let first =
+        (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)?;
+    let following = anchors
+        .partition_point(|anchor| anchor.content <= first)
+        .checked_sub(1)?;
+    if head.owns_word(&anchors[following].owner) {
+        // Both accepted intervals still belong to the suspended term. Keep
+        // its authored hard row even when BODY flushes it (term.c:205-220).
+        // Device-width wrapping remains the reader's responsibility.
+        (pass.boundary == super::super::field_buffer::FillBoundary::WordEndBreak).then_some(
+            DefinitionBoundary::Head {
+                receiver: head,
+                last,
+                anchor,
+            },
+        )
+    } else {
+        Some(DefinitionBoundary::Body(following))
+    }
 }
 
 fn has_unowned_prefix_rows(
@@ -355,6 +433,17 @@ pub(super) struct RecordedRowSplit {
     /// cached zero-advance glyph cannot appear in the current fragment.
     pub(super) before_cached_glyph: bool,
     pub(super) section_seam: bool,
+}
+
+impl RecordedRowSplit {
+    fn hard(offset: usize, pass_end: usize) -> Self {
+        Self {
+            offset,
+            pass_end,
+            before_cached_glyph: false,
+            section_seam: false,
+        }
+    }
 }
 
 pub(super) fn split_recorded_native_passes(

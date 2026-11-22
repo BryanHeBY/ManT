@@ -19,6 +19,7 @@ type RowReceipt = (String, usize, RowLayoutHint);
 struct PendingRows {
     owners: BTreeSet<String>,
     receipts: Vec<RowReceipt>,
+    hard_rows: BTreeMap<String, Vec<usize>>,
     tabs: Vec<TabExpansion>,
     blanks: Vec<(DeferredSourceBlank, usize)>,
     coverage: BTreeMap<String, OwnerAcceptance>,
@@ -40,6 +41,7 @@ impl Clone for DeferredHeadProjection {
         Self(Rc::new(RefCell::new(PendingRows {
             owners: source.owners.clone(),
             receipts: source.receipts.clone(),
+            hard_rows: source.hard_rows.clone(),
             tabs: source.tabs.clone(),
             blanks: source.blanks.clone(),
             coverage: source.coverage.clone(),
@@ -65,6 +67,7 @@ impl DeferredHeadProjection {
         Self(Rc::new(RefCell::new(PendingRows {
             owners: anchors.iter().map(|anchor| anchor.owner.clone()).collect(),
             receipts: Vec::new(),
+            hard_rows: BTreeMap::new(),
             tabs: Vec::new(),
             blanks: Vec::new(),
             coverage: BTreeMap::new(),
@@ -126,12 +129,22 @@ impl DeferredHeadProjection {
         }
     }
 
+    pub(in crate::mandoc::inline::flow) fn accept_hard_row(&self, owner: &str, offset: usize) {
+        self.0
+            .borrow_mut()
+            .hard_rows
+            .entry(owner.to_owned())
+            .or_default()
+            .push(offset);
+    }
+
     pub(in crate::mandoc) fn apply(
         &self,
         terms: &mut [Vec<Inline>],
     ) -> Option<crate::definitions::CapturedHeadOperands> {
         let mut pending = self.0.borrow_mut();
         let receipts = std::mem::take(&mut pending.receipts);
+        let hard_rows = std::mem::take(&mut pending.hard_rows);
         let tabs = std::mem::take(&mut pending.tabs);
         let blanks = std::mem::take(&mut pending.blanks);
         let coverage = std::mem::take(&mut pending.coverage);
@@ -157,6 +170,13 @@ impl DeferredHeadProjection {
             }
         }
         for term in terms.iter_mut() {
+            if !hard_rows.is_empty() {
+                // Breaks use provisional owner positions, just as they
+                // do in the live BODY. Apply before removing covered ink.
+                *term = super::super::output::native_passes::split_retired_native_field_passes(
+                    term, &hard_rows,
+                );
+            }
             super::super::output::split::remove_covered_native_glyphs(term, &coverage);
             // Detached term vectors own no live builder/execution addresses.
             let _ =

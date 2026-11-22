@@ -684,9 +684,9 @@ Done.
         assert_eq!(description_rows(&rendered, &source), [row]);
     }
 
-    // The second rewind accepts the clipped first word and its separator.
-    // Both fixed devices agree on these words, including the literal
-    // annotation spelling after the initial escaped backslash.
+    // A BODY request flushes two accepted passes belonging to the HEAD.
+    // term_flushln() emits their endline before printing the second HEAD
+    // pass, then the BODY's later word starts on its own line (term.c:205-220).
     let source = format!(
         r#"{HEADER}.Bl -inset
 .It Em "\\0X'tty: link https://k.test'C\X'tty: link' D" Sy "\h'-6n'\h'-6n'\&\&"
@@ -699,12 +699,22 @@ Done.
 "#
     );
     let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
-    let rendered = mant_render::render_query_man(&content);
-    assert!(
-        description_rows(&rendered, &source)
+    let markup = mant_codec::encode::render_markdown(&content);
+    let readback = mant_loader::load_markdown_text(&markup, None).unwrap();
+    for content in [&content, &readback] {
+        let rendered = mant_render::render_query_man(content);
+        let rows = description_rows(&rendered, &source);
+        let rows: Vec<_> = rows
             .iter()
-            .flat_map(|row| row.split_whitespace())
-            .eq(["X'tty:", "link", "https://k.testC", "D", "Y"]),
-        "{rendered}"
-    );
+            .map(|row| row.trim().trim_start_matches("• ").trim_start())
+            .collect();
+        assert_eq!(
+            rows,
+            ["X'tty: link https://k.testC", "D", "Y"],
+            "{rendered}"
+        );
+        let mut labels = Labels::default();
+        labels.visit_document(content.document.as_ref().unwrap());
+        assert!(labels.0.is_empty(), "{rendered}");
+    }
 }
