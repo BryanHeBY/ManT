@@ -64,6 +64,7 @@ fn retained_run_in_writes(
         start: slots.start,
         positions: vec![None; slots.overwritten()],
         retained_advances: std::collections::BTreeMap::new(),
+        adopted_advances: Vec::new(),
         first_incoming: slots.start,
         first_incoming_ink: None,
         entry_blanks: 0,

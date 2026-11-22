@@ -441,10 +441,22 @@ fn replay_prefix(
             }
         }
     }
+    let adopted_advances = slots
+        .iter()
+        .filter(|slot| slot.count == 1)
+        .filter_map(|slot| match reading[slot.owner?].glyph {
+            ReadingGlyph::DeferredBlank {
+                imported_cell: Some(cell),
+                ..
+            } => Some(start + cell),
+            _ => None,
+        })
+        .collect();
     FieldWrite::ReplaceLivePrefix {
         start,
         positions,
         retained_advances: retain_earlier_advances(slots, start, first_incoming),
+        adopted_advances,
         first_incoming: start + first_incoming,
         // Interleaved old glyphs own their individual advances. They
         // cannot share an entry-width correction on the incoming word.
@@ -577,7 +589,8 @@ fn resolve_backlines(
 }
 
 fn slot_write(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> FieldWrite {
-    if let Some(ReadingGlyph::DeferredBlank(source)) = slot.owner.map(|owner| reading[owner].glyph)
+    if let Some(ReadingGlyph::DeferredBlank { source, .. }) =
+        slot.owner.map(|owner| reading[owner].glyph)
     {
         let cell = match slot.cell {
             FieldCell::Graph {
@@ -628,7 +641,7 @@ fn append_range(
             continue;
         }
         let current = reading[id];
-        if let ReadingGlyph::DeferredBlank(blank) = current.glyph {
+        if let ReadingGlyph::DeferredBlank { source: blank, .. } = current.glyph {
             word.flush_segment();
             word.output.push(mant_ir::Inline::anchor(blank.marker()));
             // The native owner interval starts here even though the blank

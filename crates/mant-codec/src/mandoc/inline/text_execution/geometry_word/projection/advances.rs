@@ -47,12 +47,15 @@ fn defer_trailing_advance(
     for offset in 0..count {
         let id = reading.len();
         reading.push(ReadingCell {
-            glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {
-                owner,
-                write: start + offset,
-                font: style.font,
-                replayable_tail: true,
-            }),
+            glyph: ReadingGlyph::DeferredBlank {
+                source: DeferredSourceBlank {
+                    owner,
+                    write: start + offset,
+                    font: style.font,
+                    replayable_tail: true,
+                },
+                imported_cell: None,
+            },
             link: None,
             ..style
         });
@@ -213,12 +216,15 @@ fn defer_retained_separator_advances(
         };
         let id = reading.len();
         reading.push(ReadingCell {
-            glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {
-                owner: word_owner,
-                write: index,
-                font: reading[owner].font,
-                replayable_tail: false,
-            }),
+            glyph: ReadingGlyph::DeferredBlank {
+                source: DeferredSourceBlank {
+                    owner: word_owner,
+                    write: index,
+                    font: reading[owner].font,
+                    replayable_tail: false,
+                },
+                imported_cell: motion.advance_source.or(motion.owner),
+            },
             link: None,
             ..reading[owner]
         });
@@ -466,7 +472,7 @@ pub(super) fn preserve_author_separators(slots: &[FillSlot], reading: &mut [Read
                         reading[id].glyph,
                         ReadingGlyph::Earlier(_)
                             | ReadingGlyph::EntryBlank
-                            | ReadingGlyph::DeferredBlank(_)
+                            | ReadingGlyph::DeferredBlank { .. }
                     ) {
                         reading[id].preserve_separator = wrote_source
                             && after_author

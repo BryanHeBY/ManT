@@ -45,6 +45,7 @@ impl PrefixEdits {
             start,
             positions,
             retained_advances,
+            adopted_advances,
             first_incoming,
             first_incoming_ink,
             entry_blanks,
@@ -72,20 +73,10 @@ impl PrefixEdits {
             if let (Some(position), Some((owner, following_scalars, _))) = (position, location)
                 && relocated.is_none()
             {
-                if matches!(
-                    buffer.cells()[cell],
-                    FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
-                ) && *unpublished != Some(cell)
+                if *unpublished != Some(cell)
+                    && let Some(glyph) = retained_blank(buffer, cell, following_scalars)
                 {
-                    retained_blanks.push((
-                        *position,
-                        owner,
-                        RewoundGlyph {
-                            cell,
-                            scalar: ' ',
-                            following_scalars,
-                        },
-                    ));
+                    retained_blanks.push((*position, owner, glyph));
                 }
                 // A surviving decoration copy can be written before the
                 // original owner interval. Retain its real landing.
@@ -125,7 +116,7 @@ impl PrefixEdits {
         moved.sort_unstable_by_key(|&(position, _)| position);
         let gaps = rebase_earlier_words(
             (buffer, earlier),
-            GapOverlay(positions, &locations, retained_advances),
+            GapOverlay(positions, &locations, retained_advances, adopted_advances),
             (*start, *first_incoming),
             &earlier_ink,
         );
@@ -346,6 +337,22 @@ impl PrefixEdits {
     }
 }
 
+fn retained_blank(
+    buffer: &FieldBuffer,
+    cell: usize,
+    following_scalars: usize,
+) -> Option<RewoundGlyph> {
+    matches!(
+        buffer.cells()[cell],
+        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+    )
+    .then_some(RewoundGlyph {
+        cell,
+        scalar: ' ',
+        following_scalars,
+    })
+}
+
 fn rewound_scalar(cell: &FieldCell) -> Option<char> {
     match cell {
         FieldCell::Graph { text, .. } => Some(*text),
@@ -417,6 +424,7 @@ struct GapLanding {
 
 struct GapRemoval {
     lost_columns: usize,
+    adopted_columns: Vec<usize>,
     relocate: bool,
 }
 
@@ -427,6 +435,7 @@ struct GapOverlay<'a>(
     &'a [Option<usize>],
     &'a [SourceProjection],
     &'a BTreeMap<usize, (usize, usize)>,
+    &'a [usize],
 );
 
 fn rebase_earlier_words(
@@ -435,7 +444,7 @@ fn rebase_earlier_words(
     (start, first_incoming): (usize, usize),
     earlier_ink: &HashMap<usize, usize>,
 ) -> GapEdits {
-    let GapOverlay(positions, _, _) = overlay;
+    let GapOverlay(positions, _, _, _) = overlay;
     let first_touched = earlier.partition_point(|owner| owner.content < start);
     let mut gaps = GapEdits::default();
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
@@ -483,7 +492,7 @@ impl GapEdits {
         offset: usize,
         first_incoming: usize,
     ) {
-        let GapOverlay(_, locations, _) = overlay;
+        let GapOverlay(_, locations, _, adopted_advances) = overlay;
         let precise = owner
             .projected_gap
             .motion_span
@@ -507,6 +516,20 @@ impl GapEdits {
         owner.projected_gap.motion_span = span;
         owner.projected_gap.cell = surviving.map(|(_, cell)| cell);
         let relocate = surviving.is_some_and(|(_, cell)| cell >= first_incoming);
+        // The exact span already retires cells transferred to the new
+        // owner. Its fallback can instead use the explicit adopted tail.
+        let adopted_columns = surviving
+            .filter(|_| relocate && !has_exact_span && !adopted_advances.is_empty())
+            .map_or_else(Vec::new, |(survivor, _)| {
+                adopted_gap_tail(
+                    buffer,
+                    locations,
+                    adopted_advances,
+                    owner_index,
+                    start + offset..start + survivor + 1,
+                    start,
+                )
+            });
         if (lost_columns == 0 || has_exact_span)
             && !relocate
             && let Some((_, cell)) = surviving
@@ -538,6 +561,7 @@ impl GapEdits {
             marker,
             GapRemoval {
                 lost_columns: surviving.map_or(usize::MAX, |_| lost_columns),
+                adopted_columns,
                 relocate,
             },
         );
@@ -552,7 +576,7 @@ struct RebasedMotionSpan {
 
 fn rebase_motion_span(
     buffer: &FieldBuffer,
-    GapOverlay(positions, _, retained): GapOverlay<'_>,
+    GapOverlay(positions, _, retained, _): GapOverlay<'_>,
     span: std::ops::Range<usize>,
     start: usize,
     first_incoming: usize,
@@ -617,7 +641,7 @@ fn rebase_motion_span(
 
 fn infer_gap_landing(
     buffer: &FieldBuffer,
-    GapOverlay(positions, locations, retained_advances): GapOverlay<'_>,
+    GapOverlay(positions, locations, retained_advances, _): GapOverlay<'_>,
     (owner, owner_index): (&NativeWordAnchor, usize),
     start: usize,
     offset: usize,
@@ -665,6 +689,49 @@ fn infer_gap_landing(
     }
 }
 
+fn adopted_gap_tail(
+    buffer: &FieldBuffer,
+    locations: &[SourceProjection],
+    adopted: &[usize],
+    owner: usize,
+    prefix: std::ops::Range<usize>,
+    start: usize,
+) -> Vec<usize> {
+    let mut column = 0usize;
+    let mut columns = Vec::new();
+    let end = start + locations.len();
+    for (cell, kind) in buffer
+        .cells()
+        .iter()
+        .enumerate()
+        .take(end)
+        .skip(prefix.start)
+    {
+        let width = match kind {
+            FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => *width,
+            FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
+            _ => break,
+        };
+        if cell > prefix.start
+            && locations
+                .get(cell - start)
+                .copied()
+                .flatten()
+                .is_some_and(|(index, _, _)| index != owner)
+        {
+            continue;
+        }
+        // A new deferred receipt may acquire an advance beyond the
+        // first surviving space of this already emitted prefix. Trim
+        // that column only if the actual old output covered it.
+        if cell >= prefix.end && width == 1 && adopted.contains(&cell) {
+            columns.push(column);
+        }
+        column = column.saturating_add(width);
+    }
+    columns
+}
+
 fn clipped_gap_prefix(
     buffer: &FieldBuffer,
     (positions, locations): (&[Option<usize>], &[SourceProjection]),
@@ -710,7 +777,15 @@ fn take_overwritten_gaps<'a>(
                     let columns = value.len() - value.trim_start_matches(' ').len();
                     let lost = columns.min(edit.lost_columns);
                     if edit.relocate && lost < columns {
-                        removed.insert(owner, value[lost..columns].to_owned());
+                        let adopted = edit
+                            .adopted_columns
+                            .iter()
+                            .filter(|&&column| column < columns)
+                            .count();
+                        let remaining = columns.saturating_sub(lost + adopted);
+                        if remaining != 0 {
+                            removed.insert(owner, value[lost..lost + remaining].to_owned());
+                        }
                     }
                     value.drain(..if edit.relocate { columns } else { lost });
                 }

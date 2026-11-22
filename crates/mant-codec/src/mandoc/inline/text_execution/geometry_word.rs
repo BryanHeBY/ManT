@@ -798,7 +798,10 @@ enum ReadingGlyph<'a> {
     Earlier(usize),
     EntryBlank,
     DeviceAdvance,
-    DeferredBlank(crate::mandoc::inline::flow::field_buffer::DeferredSourceBlank),
+    DeferredBlank {
+        source: crate::mandoc::inline::flow::field_buffer::DeferredSourceBlank,
+        imported_cell: Option<usize>,
+    },
 }
 
 impl ReadingGlyph<'_> {
@@ -806,7 +809,10 @@ impl ReadingGlyph<'_> {
         match self {
             Self::Scalar(value) => text.push(value),
             Self::Spelling(value) => text.push_str(value),
-            Self::Earlier(_) | Self::EntryBlank | Self::DeviceAdvance | Self::DeferredBlank(_) => {}
+            Self::Earlier(_)
+            | Self::EntryBlank
+            | Self::DeviceAdvance
+            | Self::DeferredBlank { .. } => {}
         }
     }
 
@@ -815,7 +821,7 @@ impl ReadingGlyph<'_> {
             Self::Scalar(_) | Self::EntryBlank => 1,
             Self::Spelling(text) => text.chars().count(),
             Self::Earlier(count) => count,
-            Self::DeviceAdvance | Self::DeferredBlank(_) => 0,
+            Self::DeviceAdvance | Self::DeferredBlank { .. } => 0,
         }
     }
 }

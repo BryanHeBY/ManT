@@ -341,3 +341,45 @@ fn positioning_prefixes_do_not_spend_body_row_or_cover_offsets() {
         ),
     ]);
 }
+
+#[test]
+fn adopted_motion_columns_retire_the_earlier_positioning() {
+    // term_word() can walk over two earlier HORIZ cells and their SP;
+    // term_field() emits all three once at the same accepted ink. The
+    // second motion receipt can replace a column after the first surviving
+    // position of the old prefix.
+    verify_rows(&[
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A    FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" No "\h'2n'\h'-3n'X""#,
+            &["A    FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" No "\h'4n'\h'-5n'X""#,
+            &["A    FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'2n'F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A     FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'K\pL\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A    KL"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-2n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" No "\h'3n'\h'-4n'X""#,
+            &["A    FG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" Ns No "\h'3n'\h'-4n'X""#,
+            &["A    FXG"],
+        ),
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "\h'1n'F\pG\p\c\h'-4n'" No "\h'-1n'X""#,
+            &["A    FG"],
+        ),
+    ]);
+}

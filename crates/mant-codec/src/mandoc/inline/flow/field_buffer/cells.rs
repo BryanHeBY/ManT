@@ -129,6 +129,8 @@ pub(in crate::mandoc) enum FieldWrite {
         positions: Vec<Option<usize>>,
         /// Old advance slot to first surviving slot and columns before new ink.
         retained_advances: std::collections::BTreeMap<usize, (usize, usize)>,
+        /// Earlier native advance slots that now have their own output receipt.
+        adopted_advances: Vec<usize>,
         first_incoming: usize,
         first_incoming_ink: Option<usize>,
         entry_blanks: usize,
