@@ -29,5 +29,15 @@
 .No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "F\h'3n'G"
 .Ss Unused trailing advance
 .No "AB" No "\h'1n'\h'-6n'\z\pC\c" Ns No "\zF\h'3n'G\h'2n'"
+.Ss Interior continuation after a settled glyph
+.No "AB" No "\h'-1n'\h'-6n'\z\pC" Ns No "\zFG\c\h'2n'\pZ\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Interior continuation after a held glyph
+.No "AB" No "\h'-1n'\h'-6n'\z\pC" Ns No "\zF\c\h'2n'\pZ\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Interior continuation after the advance
+.No "AB" No "\h'-1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\c\pZ\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Terminal continuation stays on the same line
+.No "AB" No "\h'-1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\pZ\h'2n'\c" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss Continuation cancels the local zero-width arm
+.No "AB" No "\h'-1n'\h'-6n'\z\pC" Ns No "\z\cFG\h'2n'\pZ\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
 .Sh ENDTEST
 Done.

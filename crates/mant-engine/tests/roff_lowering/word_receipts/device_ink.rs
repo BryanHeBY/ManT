@@ -355,6 +355,21 @@ fn inherited_glyphs_release_only_the_advance_cells_cvs_writes() {
             "",
             "Unused trailing advance",
             "F  G",
+            "",
+            "Interior continuation after a settled glyph",
+            "G  Z X",
+            "",
+            "Interior continuation after a held glyph",
+            "F Z X",
+            "",
+            "Interior continuation after the advance",
+            "G  Z X",
+            "",
+            "Terminal continuation stays on the same line",
+            "G  Z X",
+            "",
+            "Continuation cancels the local zero-width arm",
+            "FG  Z X",
         ]
     );
 }

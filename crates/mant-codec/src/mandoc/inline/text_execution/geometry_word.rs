@@ -464,6 +464,9 @@ fn can_publish_retained_advances(
     for event in events {
         phase = match (phase, event) {
             (Inherited, RoffInlineEvent::ZeroAdvance) => Armed,
+            // ESCAPE_NOSPACE cancels BACKAFTER before checking for the
+            // end of the operand. The inherited BACKBEFORE stays live.
+            (Armed, RoffInlineEvent::NoSpace) => Inherited,
             (
                 state,
                 RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, GlyphInput::Codepoint),
@@ -504,7 +507,12 @@ fn can_publish_retained_advances(
             {
                 InkAfterAdvance
             }
-            (state, RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont)
+            // In other states, only a terminal continuation is recorded
+            // by actual placement; this escape leaves advance proof intact.
+            (
+                state,
+                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::NoSpace,
+            )
             | (
                 state @ (Settled | Advance | InkAfterAdvance),
                 RoffInlineEvent::LineBreak | RoffInlineEvent::ZeroWidthGlyph,
