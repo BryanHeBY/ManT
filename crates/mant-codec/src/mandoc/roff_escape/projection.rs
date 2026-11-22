@@ -80,7 +80,7 @@ impl PlainTextProjection {
         match event {
             RoffInlineEvent::NonBreakingWordBlank => self.append_text(" "),
             RoffInlineEvent::Text(value) => self.append_text(&value),
-            RoffInlineEvent::Glyph(value)
+            RoffInlineEvent::Glyph(value, _)
             | RoffInlineEvent::Overstrike {
                 terminal: Some(value),
                 ..

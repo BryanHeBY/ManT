@@ -1,6 +1,6 @@
 use super::{
-    ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, PresentationKind, RoffFont, RoffInlineEvent, decode,
-    visible_text,
+    ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, GlyphInput, PresentationKind, RoffFont, RoffInlineEvent,
+    decode, visible_text,
 };
 
 #[test]
@@ -71,7 +71,7 @@ fn optional_breakpoints_remain_distinct_from_invisible_graphs_and_unicode() {
         decode(r"X\[u200B]Y"),
         [
             RoffInlineEvent::Text("X".into()),
-            RoffInlineEvent::Glyph("\u{200b}".into()),
+            RoffInlineEvent::Glyph("\u{200b}".into(), GlyphInput::Codepoint),
             RoffInlineEvent::Text("Y".into()),
         ]
     );

@@ -4,8 +4,8 @@ use super::glyphs::{
 use super::scanner::{ArgumentCompletion, QuotedOutcome, scan_argument, scan_quoted_argument};
 use super::{
     ASCII_BREAK, ASCII_HYPH, ASCII_NBRSP, ASCII_NBRZW, ASCII_TABREF, DecodedText,
-    EscapeDecodeStatus, PresentationKind, Projection, RoffInlineEvent, WordSpace, font, grammar,
-    overstrike_operands, scanner,
+    EscapeDecodeStatus, GlyphInput, PresentationKind, Projection, RoffInlineEvent, WordSpace, font,
+    grammar, overstrike_operands, scanner,
 };
 use crate::text_safety::push_terminal_safe;
 use libmandoc_rs::SpecialCharacter;
@@ -189,13 +189,13 @@ impl Decoder {
             // These are formatter glyphs, not breakable source whitespace.
             // Keeping them as one glyph lets a pending `\\p` pass across the
             // displayed blank and break only at the next real word boundary.
-            ' ' | '~' | '0' => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
+            ' ' | '~' | '0' => self.emit_mapped_glyph("\u{a0}"),
             'p' => self.emit(RoffInlineEvent::LineBreak),
             // term_strlen() measures source \: through the special
             // character catalog. Its zero-width glyph consumes a pending
             // \z skip. By contrast, an internal ASCII_BREAK byte is not
             // a source glyph and never reaches this branch.
-            ':' if self.measurement => self.emit(RoffInlineEvent::Glyph("\u{200b}".into())),
+            ':' if self.measurement => self.emit_mapped_glyph("\u{200b}"),
             // term.c::term_word(), ESCAPE_SPECIAL: exactly ':' writes a
             // breakpoint before the ASCII/UTF8 split. Unlike chars.c's HTML
             // U+200B, this is bufferc(), not an encode1() glyph or graph.
@@ -406,6 +406,7 @@ impl Decoder {
                 // breakable spaces.
                 self.emit(RoffInlineEvent::Glyph(
                     escaped_codepoint(character).to_string(),
+                    GlyphInput::Codepoint,
                 ));
             }
         } else {
@@ -476,6 +477,7 @@ impl Decoder {
                     .expect("native Unicode name");
                 self.emit(RoffInlineEvent::Glyph(
                     escaped_codepoint(character).to_string(),
+                    GlyphInput::Codepoint,
                 ));
             } else {
                 self.push_native_special_character(name, syntax);
@@ -499,23 +501,26 @@ impl Decoder {
         }
         if let Some(value) = dedicated_special_character(name) {
             self.note_recovery();
-            self.emit(RoffInlineEvent::Glyph(value.to_owned()));
+            self.emit(RoffInlineEvent::Glyph(value.to_owned(), GlyphInput::Mapped));
             return;
         }
         if let Some(value) = documented_groff_composite_character(name) {
             self.note_recovery();
-            self.emit(RoffInlineEvent::Glyph(value));
+            self.emit(RoffInlineEvent::Glyph(value, GlyphInput::Mapped));
             return;
         }
         if let Some(value) = unicode_special_characters(name) {
-            if !grammar::native_unicode_name(name.as_bytes()) {
+            let input = if grammar::native_unicode_name(name.as_bytes()) {
+                GlyphInput::Codepoint
+            } else {
                 self.note_recovery();
-            }
+                GlyphInput::Mapped
+            };
             let mut glyph = String::new();
             for character in value.chars() {
                 self.push_decoded_character(&mut glyph, character);
             }
-            self.emit(RoffInlineEvent::Glyph(glyph));
+            self.emit(RoffInlineEvent::Glyph(glyph, input));
             return;
         }
         self.push_native_special_character(name, syntax);
@@ -526,7 +531,7 @@ impl Decoder {
             Some(SpecialCharacter::Visible(character)) => {
                 let mut glyph = String::new();
                 self.push_decoded_character(&mut glyph, character);
-                self.emit(RoffInlineEvent::Glyph(glyph));
+                self.emit(RoffInlineEvent::Glyph(glyph, GlyphInput::Mapped));
             }
             Some(SpecialCharacter::ZeroWidth) => self.emit(RoffInlineEvent::ZeroWidthGlyph),
             None => self.push_unknown_special_character(name, syntax),
@@ -562,7 +567,7 @@ impl Decoder {
             }
             ASCII_TABREF | ASCII_BREAK | ASCII_NBRZW => {}
             ASCII_HYPH => self.emit(RoffInlineEvent::BreakableHyphen),
-            ASCII_NBRSP => self.emit(RoffInlineEvent::Glyph("\u{a0}".to_owned())),
+            ASCII_NBRSP => self.emit_mapped_glyph("\u{a0}"),
             other => push_terminal_safe(&mut self.text, other),
         }
     }
@@ -570,6 +575,10 @@ impl Decoder {
     fn emit(&mut self, event: RoffInlineEvent) {
         self.flush_text();
         self.events.push(event);
+    }
+
+    fn emit_mapped_glyph(&mut self, glyph: &str) {
+        self.emit(RoffInlineEvent::Glyph(glyph.to_owned(), GlyphInput::Mapped));
     }
 
     fn flush_text(&mut self) {

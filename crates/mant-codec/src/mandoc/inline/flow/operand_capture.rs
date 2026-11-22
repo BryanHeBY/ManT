@@ -453,7 +453,7 @@ fn declaration_separator(decoded: &DecodedText) -> bool {
                 kind: PresentationKind::Color | PresentationKind::PointSize,
                 ..
             } => "".chars(),
-            RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word) => word.chars(),
+            RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word, _) => word.chars(),
             _ => "\0".chars(),
         })
         .skip_while(|glyph| glyph.is_whitespace());
@@ -487,7 +487,7 @@ fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> 
         Some(NativeOperandRole::LiteralContinuation(None))
     } else {
         decoded.events.iter().any(|event| matches!(
-            event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) if value.contains([',', '|'])
+            event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) if value.contains([',', '|'])
         )).then_some(NativeOperandRole::LiteralPunctuation)
     }
 }
@@ -508,7 +508,7 @@ impl FlSpelling {
         // cannot prove the original spelling. Cursor-editing operands use
         // the execution's existing native clipping receipts instead.
         let bytes = events.iter().try_fold(0, |bytes, event| match event {
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _)
                 if !value.contains(char::is_whitespace) =>
             {
                 Some(bytes + value.len())
@@ -533,13 +533,13 @@ impl FlSpelling {
 }
 
 fn assignment_prefix(events: &[RoffInlineEvent]) -> Option<String> {
-    if !events.iter().any(|event| matches!(event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) if value.contains('='))) {
+    if !events.iter().any(|event| matches!(event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) if value.contains('='))) {
         return None;
     }
     let mut prefix = String::new();
     for event in events {
         match event {
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
                 if let Some(index) = value.find('=') {
                     prefix.push_str(&value[..=index]);
                     return (prefix.len() > 1).then_some(prefix);

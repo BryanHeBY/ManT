@@ -143,7 +143,7 @@ impl RoffWordEvidence {
                     self.plain_text(&text);
                     self.append(&text);
                 }
-                RoffInlineEvent::Glyph(text) => self.other_text(&text),
+                RoffInlineEvent::Glyph(text, _) => self.other_text(&text),
                 RoffInlineEvent::BreakableHyphen => self.other_text("-"),
                 RoffInlineEvent::NonBreakingWordBlank => self.other_text("\u{a0}"),
                 RoffInlineEvent::DeviceName => self.other_text("utf8"),

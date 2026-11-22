@@ -5,7 +5,7 @@ use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldWrite},
     native_slots::{EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass},
 };
-use crate::mandoc::roff_escape::{PresentationKind, RoffFont};
+use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
 
 mod overprint;
 mod projection;
@@ -74,7 +74,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 has_zero_advance = true;
             }
             RoffInlineEvent::Link(_) => has_link = true,
-            RoffInlineEvent::Glyph(value) if !field => {
+            RoffInlineEvent::Glyph(value, _) if !field => {
                 isolated_needs_accepted_retreat |=
                     !value.is_empty() && mant_ir::geometry::text_width(value) == 0;
             }
@@ -88,7 +88,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 edits = true;
                 draws = true;
             }
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
                 authored_blank |= value.contains([' ', '\t']);
             }
             _ => {}
@@ -144,7 +144,7 @@ fn trailing_relative_retreat(events: &[RoffInlineEvent]) -> bool {
                 RoffInlineEvent::Font(_)
                     | RoffInlineEvent::PreviousFont
                     | RoffInlineEvent::Text(_)
-                    | RoffInlineEvent::Glyph(_)
+                    | RoffInlineEvent::Glyph(..)
                     | RoffInlineEvent::ZeroWidthGlyph
             )
         })
@@ -219,19 +219,22 @@ fn contains_local_overwrite(
             {
                 armed = true;
             }
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
                 // term.c::encode does not consume BACKAFTER on a blank.
                 // encode1 consumes BACKBEFORE before writing the next
                 // glyph. A second arm may leave another pending glyph.
                 // A named escape can write a different native sequence
                 // from its one-column reading glyph (term.c:611-636).
-                let literal = matches!(event, RoffInlineEvent::Text(_));
+                let direct_scalar = matches!(
+                    event,
+                    RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_, GlyphInput::Codepoint)
+                );
                 for ch in value.chars() {
                     if !inherited_glyph && matches!(ch, ' ' | '\u{a0}') {
                         continue;
                     }
                     if !(ch.is_ascii_graphic()
-                        || literal && super::native_writes::is_single_column_ink(ch))
+                        || direct_scalar && super::native_writes::is_single_column_ink(ch))
                     {
                         return false;
                     }
@@ -285,7 +288,7 @@ fn can_publish_inner_advances(
     let mut followed = false;
     for event in events {
         match event {
-            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text) => {
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _) => {
                 let printable = text
                     .chars()
                     .any(|ch| !ch.is_whitespace() && !ch.is_control());
@@ -351,13 +354,13 @@ fn marker_replay(
     let mut has_motion = false;
     for event in events {
         match event {
-            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _)
                 if text.bytes().all(|byte| byte.is_ascii_graphic()) =>
             {
                 has_ink |= !text.is_empty();
                 ink_after_marker |= has_marker && !text.is_empty();
             }
-            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text)
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _)
                 if filled
                     && text.chars().all(|ch| {
                         ch == '\u{a0}'
@@ -611,7 +614,7 @@ impl<'a> Placement<'a> {
                     .expect("Sphinx marker end")
                     .sphinx_marker = eligible;
             }
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
                 self.text(value, display, font);
             }
             RoffInlineEvent::Overstrike { source, .. } => {

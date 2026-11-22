@@ -405,7 +405,7 @@ fn trailing_breakable_spaces(events: &[RoffInlineEvent]) -> usize {
             | RoffInlineEvent::Breakpoint
             | RoffInlineEvent::LineBreak => {}
 
-            RoffInlineEvent::Glyph(_)
+            RoffInlineEvent::Glyph(..)
             | RoffInlineEvent::NonBreakingWordBlank
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::FallbackGlyph(_)

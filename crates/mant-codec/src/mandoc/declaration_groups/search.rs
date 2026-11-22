@@ -307,7 +307,7 @@ fn search_sign(node: &Node) -> Option<SearchSign> {
     let mut sign = None;
     for event in decoded.events {
         match event {
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value)
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _)
                 if sign.is_none() && matches!(value.as_str(), "/" | "?") =>
             {
                 sign = value.chars().next();

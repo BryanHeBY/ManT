@@ -289,7 +289,7 @@ pub fn section_label_evidence(nodes: &[Node]) -> SectionLabelEvidence {
 fn is_native_section_glyph(event: &RoffInlineEvent) -> bool {
     match event {
         RoffInlineEvent::Text(value)
-        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::Glyph(value, _)
         | RoffInlineEvent::Overstrike {
             terminal: Some(value),
             ..

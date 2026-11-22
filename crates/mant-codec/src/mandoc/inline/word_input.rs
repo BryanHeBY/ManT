@@ -55,7 +55,7 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     // routed separately and therefore do not gain this behavior.
     let has_glyph = events.iter().any(|event| match event {
         RoffInlineEvent::Text(value)
-        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::Glyph(value, _)
         | RoffInlineEvent::FallbackGlyph(value) => value
             .chars()
             .any(|character| !is_formatter_word_blank(character) && character != '\n'),
@@ -250,7 +250,7 @@ fn has_zero_advance_retreat(events: &[RoffInlineEvent]) -> bool {
     events
         .iter()
         .skip_while(|event| !matches!(event, RoffInlineEvent::ZeroAdvance))
-        .skip_while(|event| !matches!(event, RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(_)))
+        .skip_while(|event| !matches!(event, RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(..)))
         .any(|event| {
             matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
                 if negative_entry_columns(argument.as_deref()).is_some())
@@ -296,7 +296,7 @@ fn leading_event_needs_native_retreat(events: &[RoffInlineEvent], backafter: boo
                     }
                 }
             }
-            RoffInlineEvent::Glyph(_)
+            RoffInlineEvent::Glyph(..)
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::DeviceName
             | RoffInlineEvent::Overstrike { .. } => return false,

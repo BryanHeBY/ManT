@@ -42,7 +42,7 @@ pub(in crate::mandoc) fn link_identity_with_evidence(source: &str) -> (String, b
                     }
                 }
             }
-            RoffInlineEvent::Glyph(value) => {
+            RoffInlineEvent::Glyph(value, _) => {
                 if skip_next_glyph {
                     skip_next_glyph = false;
                 } else {

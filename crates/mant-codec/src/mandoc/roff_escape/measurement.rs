@@ -21,7 +21,7 @@ pub(in crate::mandoc) fn width_sample(source: &str) -> usize {
                 };
                 width = width.saturating_add(mant_ir::geometry::text_width(tail));
             }
-            RoffInlineEvent::Glyph(text) => {
+            RoffInlineEvent::Glyph(text, _) => {
                 if skip {
                     skip = false;
                 } else {

@@ -37,7 +37,7 @@ pub(in crate::mandoc) fn horizontal_line_stroke(
 fn line_glyph(suffix: &str) -> char {
     let glyph = if suffix.starts_with('\\') {
         decode(suffix).first().and_then(|event| match event {
-            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value) => value.chars().next(),
+            RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => value.chars().next(),
             _ => None,
         })
     } else {

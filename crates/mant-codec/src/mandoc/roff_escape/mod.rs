@@ -39,6 +39,14 @@ pub(super) enum RoffFont {
     CodeEmphasis,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum GlyphInput {
+    /// A native Unicode or numbered escape reaches `encode1()` directly.
+    Codepoint,
+    /// A named glyph or a formatter mapping can have a different slot shape.
+    Mapped,
+}
+
 impl From<libmandoc_rs::NormalizedFont> for RoffFont {
     fn from(font: libmandoc_rs::NormalizedFont) -> Self {
         match font {
@@ -68,9 +76,8 @@ pub(super) enum RoffInlineEvent {
     /// The parser's `ASCII_HYPH` cell. It displays '-' but remains a native
     /// `term_fill` break candidate, unlike an authored nonbreaking \- escape.
     BreakableHyphen,
-    /// One source-level glyph whose printable fallback spans several
-    /// characters, for example an unknown `\\[name]` escape.
-    Glyph(String),
+    /// A decoded glyph with its original scalar or mapping evidence.
+    Glyph(String, GlyphInput),
     /// An unrecognized source glyph. It remains visible normally, but cannot
     /// be made into a terminal `\\z` glyph because no output glyph exists to
     /// overstrike.

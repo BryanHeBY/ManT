@@ -59,7 +59,7 @@ impl WordExecution {
                 (context.policy.field_authoritative && context.policy.record_native_cells)
                     .then_some(&mut self.native_writes),
             ),
-            RoffInlineEvent::Glyph(value)
+            RoffInlineEvent::Glyph(value, _)
             | RoffInlineEvent::Overstrike {
                 terminal: Some(value),
                 ..
@@ -134,7 +134,7 @@ impl WordExecution {
         match event {
             RoffInlineEvent::Text(value) if value.is_empty() => {}
             RoffInlineEvent::Text(_)
-            | RoffInlineEvent::Glyph(_)
+            | RoffInlineEvent::Glyph(..)
             | RoffInlineEvent::NonBreakingWordBlank
             | RoffInlineEvent::Overstrike {
                 terminal: Some(_), ..

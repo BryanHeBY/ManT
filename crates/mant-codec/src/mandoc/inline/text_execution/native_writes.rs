@@ -174,7 +174,7 @@ pub(in crate::mandoc::inline) fn record_native_event(
             writes.push(FieldWrite::Cell(FieldCell::NonBreakingBlank));
         }
         RoffInlineEvent::Text(value)
-        | RoffInlineEvent::Glyph(value)
+        | RoffInlineEvent::Glyph(value, _)
         | RoffInlineEvent::Overstrike {
             terminal: Some(value),
             ..
