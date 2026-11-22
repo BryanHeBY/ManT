@@ -54,6 +54,124 @@ fn leading_advances_in_definition_lines_stay_editable_until_flush() {
 }
 
 #[test]
+fn accepted_leading_motion_keeps_its_place_on_shared_and_fresh_rows() {
+    // term.c::term_field() holds HORIZ and the initial vbl together until
+    // a real glyph prints. The first accepted graph owns an unprojected
+    // advance within its interval. The independent Pp device rows retain
+    // their own origins, and a later X must not claim an earlier separator.
+    #[derive(Clone, Copy)]
+    enum Placement {
+        Shared,
+        WidthLimited,
+        ExpandedHead,
+        Fresh,
+    }
+    use Placement::{ExpandedHead, Fresh, Shared, WidthLimited};
+
+    const FIXED: &str = r"\h'1n'C\pJ";
+    const ZERO: &str = r"\h'0n'C\pJ";
+    let shared = &["TERM   C", "      X"][..];
+    let cases = [
+        ("hang", 4, Shared, FIXED, -2, shared),
+        ("hang", 4, WidthLimited, FIXED, -2, shared),
+        ("tag", 4, Shared, FIXED, -2, shared),
+        ("tag", 4, ExpandedHead, FIXED, -2, shared),
+        (
+            "tag",
+            4,
+            ExpandedHead,
+            FIXED,
+            -4,
+            &["TERM   J", "      X"][..],
+        ),
+        ("tag", 4, WidthLimited, FIXED, -2, shared),
+        ("hang", 0, Shared, FIXED, -4, &["TERM  X"][..]),
+        (
+            "hang",
+            0,
+            Fresh,
+            FIXED,
+            -2,
+            &["TERM", "", "   C", "", "  X"][..],
+        ),
+        (
+            "hang",
+            0,
+            Fresh,
+            ZERO,
+            -2,
+            &["TERM", "", "  C", "", "  X"][..],
+        ),
+        ("hang", 4, Shared, ZERO, -2, &["TERM  C", "      X"][..]),
+        (
+            "hang",
+            4,
+            Shared,
+            r"\h'1n'\p\&",
+            -2,
+            &["TERM", "      X"][..],
+        ),
+        (
+            "hang",
+            4,
+            Fresh,
+            FIXED,
+            -2,
+            &["TERM", "", "       C", "", "      X"][..],
+        ),
+        (
+            "hang",
+            4,
+            Fresh,
+            ZERO,
+            -2,
+            &["TERM", "", "      C", "", "      X"][..],
+        ),
+        (
+            "hang",
+            4,
+            Fresh,
+            FIXED,
+            -4,
+            &["TERM", "", "       J", "", "      X"][..],
+        ),
+    ];
+    for (kind, width, placement, operand, retreat, expected) in cases {
+        let (before, after) = match placement {
+            Shared => (".It TERM\n", ""),
+            WidthLimited => (".It TERM\n.ll 12n\n", ".ll\n"),
+            ExpandedHead => (".It Xo TERM\n.br\n", ".Xc\n"),
+            Fresh => (".It TERM\n.Pp\n", ".Pp\n"),
+        };
+        let source = format!(
+            r#"{HEADER}.Bl -{kind} -width {width}n
+{before}.No "{operand}" No "\h'{retreat}n'\p"
+{after}.No X
+.El
+{END}"#
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(
+            rows_relative_to_term_origin(&rendered),
+            expected,
+            "{source}\n{rendered}"
+        );
+    }
+}
+
+fn rows_relative_to_term_origin(rendered: &str) -> Vec<&str> {
+    let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+    let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+    let shared_origin = " ".repeat(body.find("TERM").unwrap());
+    body.trim_end()
+        .lines()
+        .map(|line| line.strip_prefix(&shared_origin).unwrap_or(line).trim_end())
+        .collect()
+}
+
+#[test]
 fn marked_operands_keep_raw_font_slots_and_accepted_rows() {
     // term.c::encode1() installs decoration bytes before a graph;
     // term_word() buffers SP and \p without collapsing them. The next

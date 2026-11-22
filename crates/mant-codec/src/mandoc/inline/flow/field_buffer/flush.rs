@@ -545,6 +545,41 @@ impl FieldBuffer {
         printed
     }
 
+    /// A pass starting with fixed device motion queues its advance until
+    /// the first printed graph, independently of the field's offset/minbl.
+    /// An already represented prefix keeps its original output ownership.
+    pub(in crate::mandoc::inline::flow) fn unprojected_leading_advance(
+        &self,
+        start: usize,
+        graph: usize,
+    ) -> usize {
+        if start == graph || self.projection_length(start, graph) != 0 {
+            return 0;
+        }
+        let deferred = self.deferred_blanks.partition_point(|run| run.end <= start);
+        if self
+            .deferred_blanks
+            .get(deferred)
+            .is_some_and(|run| run.start < graph)
+        {
+            return 0;
+        }
+        let mut cells = 0usize;
+        for cell in &self.cells[start..graph] {
+            match cell {
+                FieldCell::FixedDrawingAdvance(count) => cells = cells.saturating_add(*count),
+                FieldCell::BreakMarker
+                | FieldCell::ZeroWidthGraph
+                | FieldCell::Breakpoint
+                | FieldCell::TabReference => {}
+                // A mixed prefix has independent spacing or overprint
+                // ownership; this receipt proves only fixed motion.
+                _ => return 0,
+            }
+        }
+        cells
+    }
+
     /// Translate only projection positions, never native execution facts.
     /// Invisible native cells have no corresponding scalar in semantic IR.
     pub(in crate::mandoc::inline::flow) fn projection_length(

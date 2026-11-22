@@ -181,6 +181,8 @@ impl InlineBuilder {
             .saturating_add(11)
             / 24;
         let cells = cells.saturating_sub(anchor.projected_device_padding);
+        let cells =
+            cells.saturating_add(self.leading_field_advance(start, graph, owner, padding_units));
         (cells > 0).then(|| {
             (
                 anchor.owner.clone(),
@@ -191,6 +193,61 @@ impl InlineBuilder {
                 state.field_buffer.projection_length(graph, graph + 1) == 0,
             )
         })
+    }
+
+    pub(super) fn fresh_row_leading_advance(
+        &self,
+        start: usize,
+        end: usize,
+        padding_units: usize,
+    ) -> i32 {
+        use super::super::super::field_buffer::FieldCell;
+        let state = self.execution.definition.as_ref().expect("field session");
+        if self.execution.text_alignment != mant_ir::TextAlignment::Left
+            || state.column_origin_units.is_some()
+        {
+            return 0;
+        }
+        let Some(graph) = (start..end).find(|cell| {
+            matches!(
+                state.field_buffer.cells().get(*cell),
+                Some(FieldCell::Graph { .. } | FieldCell::Hyphen)
+            )
+        }) else {
+            return 0;
+        };
+        let owner = state
+            .field_word_anchors
+            .partition_point(|anchor| anchor.content <= graph);
+        i32::try_from(self.leading_field_advance(start, graph, owner, padding_units))
+            .expect("bounded advance")
+    }
+
+    fn leading_field_advance(
+        &self,
+        start: usize,
+        graph: usize,
+        owner: usize,
+        padding_units: usize,
+    ) -> usize {
+        let state = self.execution.definition.as_ref().expect("field session");
+        let Some(anchor) = owner
+            .checked_sub(1)
+            .and_then(|index| state.field_word_anchors.get(index))
+        else {
+            return 0;
+        };
+        // A replay can leave an earlier owner's positioned space at the
+        // projection seam. Only the first graph's own accepted prefix is
+        // unambiguous here; do not add another inter-owner separator.
+        if anchor.content > start || anchor.projected_field_prefix {
+            return 0;
+        }
+        let leading = state.field_buffer.unprojected_leading_advance(start, graph);
+        // term_field() releases fixed motion and placement together;
+        // ascii_advance() caps that actual advance at 256 cells.
+        let available = 256usize.saturating_sub(padding_units.saturating_add(11) / 24);
+        leading.min(available)
     }
 
     fn printed_separator_retention(

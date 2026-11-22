@@ -138,19 +138,6 @@ impl InlineBuilder {
     ) {
         let state = self.execution.definition.as_ref().expect("field session");
         let fresh = sweep.printed_row.is_none();
-        if fresh
-            && let Some(receipt) = super::super::super::presentation::pass_receipt(
-                &state.field_buffer,
-                &state.field_word_anchors,
-                pass.print.start,
-                pass.print.end,
-                sweep
-                    .presentation
-                    .hint_at_signed(self.execution.text_alignment, pass.print.origin_units),
-            )
-        {
-            sweep.row_presentations.push(receipt);
-        }
         let old_presentation = sweep.presentation;
         let placement = pass.placement.aligned(
             self.execution.text_alignment,
@@ -159,6 +146,27 @@ impl InlineBuilder {
             sweep.presentation.parent,
             !fresh,
         );
+        if fresh {
+            let mut hint = sweep
+                .presentation
+                .hint_at_signed(self.execution.text_alignment, pass.print.origin_units);
+            hint.first_line_indent_columns =
+                hint.first_line_indent_columns
+                    .saturating_add(self.fresh_row_leading_advance(
+                        pass.print.start,
+                        pass.print.end,
+                        placement.projection_padding,
+                    ));
+            if let Some(receipt) = super::super::super::presentation::pass_receipt(
+                &state.field_buffer,
+                &state.field_word_anchors,
+                pass.print.start,
+                pass.print.end,
+                hint,
+            ) {
+                sweep.row_presentations.push(receipt);
+            }
+        }
         sweep.presentation.record_field_placement(placement);
         let print = NativeFieldPrint {
             padding_units: placement.projection_padding,
