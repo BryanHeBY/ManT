@@ -1,0 +1,33 @@
+.Dd November 19, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd field probe
+.Sh DESCRIPTION
+.Ss Fresh zero cursor
+.No "AB\h'|0n'\c"
+.No "X"
+.Ss Fresh interior cursor
+.No "AB\h'|1n'"
+.No "X"
+.Ss Cursor at end
+.No "AB\h'|2n'"
+.No "X"
+.Ss Existing proven prefix
+.No "AB"
+.No "\h'|0n'\c"
+.No "X"
+.Ss Literal field
+.Bd -literal
+.No "AB\h'|0n'\c"
+.No "X"
+.Ed
+.Ss Absolute canceled by armed escape
+.No "AB\h'-1n'\z\h'|0n'\c"
+.No "X"
+.Ss Marker stays in the native field
+.No "AB\p\h'|0n'\c"
+.No "X"
+.Sh ENDTEST
+Done.

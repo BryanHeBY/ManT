@@ -200,3 +200,42 @@ fn backafter_cancels_an_absolute_target_after_a_relative_rewind() {
     let rendered = mant_render::render_query_man(&content);
     assert_eq!(description_rows(&rendered, &source), ["ABCX"], "{source}");
 }
+
+#[test]
+fn absolute_motion_can_revisit_ink_written_into_a_fresh_field() {
+    // term.c::term_word() resolves absolute HORIZ from the field's
+    // actual col. With no earlier cells the first operand owns the
+    // full field, even when a word-end marker still awaits term_fill().
+    let source = include_str!("live_replay/replay-keeps-absolute-cursor-in-fresh-field.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    let rows: Vec<_> = description_rows(&rendered, source)
+        .into_iter()
+        .map(str::trim_start)
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "Fresh zero cursor",
+            "XB",
+            "",
+            "Fresh interior cursor",
+            "ABX",
+            "",
+            "Cursor at end",
+            "AB X",
+            "",
+            "Existing proven prefix",
+            "XB",
+            "",
+            "Literal field",
+            "XB",
+            "",
+            "Absolute canceled by armed escape",
+            "AX",
+            "",
+            "Marker stays in the native field",
+            "XB",
+        ]
+    );
+}

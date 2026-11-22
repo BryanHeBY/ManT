@@ -1096,7 +1096,7 @@ fn execute_seed<'a>(
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
-        && (seed.prefix_start != 0 || seed.earlier == 0)
+        && !covers_field_start(&seed, context.slot_entry.cursor)
     {
         // A partial replay cannot carry a cursor inside an earlier owner.
         // When the whole field is available, keep col and lastcol even
@@ -1130,16 +1130,27 @@ fn retains_word_cursor(
             || !entry.has_input()
                 && slots.cursor_before_invisible_tail()
                 && !slots.contains_ink_from(0)
+            || retains_absolute_word_cursor(seed, entry)
             || seed.earlier != 0
                 && (slots.cursor_before_invisible_tail()
                     || slots.has_unpainted_marker_tail()
                         && !events.iter().any(absolute_motion)
                         && slots.contains_ink_from(seed.earlier)
-                    || retains_absolute_word_cursor(seed)
                     || slots_rewritten_by_controls(events)))
 }
 
-fn retains_absolute_word_cursor(seed: &GeometrySeed<'_>) -> bool {
+fn covers_field_start(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    // An exact prefix starting at col zero and a fresh field both own
+    // their origin. Missing prefix evidence with prior input stays opaque.
+    seed.prefix_start == 0
+        && (seed.earlier != 0
+            || !entry.has_input()
+                && seed.placement.slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS)
+}
+
+fn retains_absolute_word_cursor(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
     use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
 
     // An absolute motion in a complete field moves col without
@@ -1147,7 +1158,7 @@ fn retains_absolute_word_cursor(seed: &GeometrySeed<'_>) -> bool {
     // unread by term_fill() until the actual flush (term.c:659–660,
     // 678–714). Keep that state only after the absolute motion executed.
     let slots = &seed.placement.slots;
-    seed.prefix_start == 0
+    covers_field_start(seed, entry)
         && slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS
         && slots.cursor_before_owner()
         && slots.contains_ink_from(seed.earlier)
