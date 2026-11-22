@@ -15,6 +15,9 @@ that crate was not published for that change.
 
 ### mant-render
 
+- Omit generated definition-list padding when a hard break ends the shared
+  body row before any visible content. Preserve authored whitespace and
+  subsequent rows in text and TUI output.
 - Keep the outline-path emphasis in Markdown excerpts for sections with empty
   headings. Preserve trailing whitespace outside the emphasis.
 - Render multiline outline labels on one line in text and Markdown query
@@ -49,7 +52,9 @@ that crate was not published for that change.
 
 - Preserve the live cursor when a word retreats over unprinted source cells.
   Keep gap positioning separate from word scalars so accepted rows and
-  surviving link labels follow the terminal field.
+  surviving link labels follow the terminal field. Transfer already printed
+  advances without duplication, and print trailing advances only when later
+  ink accepts them. Preserve leading motion on resumed hard rows.
 - Preserve authored no-fill row boundaries before invisible mdoc nodes,
   including explicit targets that validation moves to a visible operand.
 - Keep nested mdoc enclosure operands from changing an outer option's
