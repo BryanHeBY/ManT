@@ -124,6 +124,44 @@ fn edited_font_copies_share_their_original_style_and_each_keep_their_own_column(
 }
 
 #[test]
+fn edited_font_copies_keep_unchanged_whitespace_and_styling() {
+    // term.c::encode1() emits a bold glyph on either side of BS.
+    // After a marker overwrites BS, term_field() skips that marker
+    // and the two copies print at distinct device columns.
+    for (source, expected) in [
+        (
+            include_str!("live_replay/replay-keeps-repeated-font-glyph-after-blank.1"),
+            "D JJ",
+        ),
+        (
+            include_str!("live_replay/replay-keeps-repeated-font-glyph-before-stable-suffix.1"),
+            "D KKJ",
+        ),
+        (
+            include_str!("live_replay/replay-keeps-repeated-font-glyph-before-trailing-blanks.1"),
+            "C JJ",
+        ),
+        (
+            include_str!("live_replay/replay-keeps-separate-repeated-font-glyphs.1"),
+            "D KK LRR",
+        ),
+    ] {
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&content);
+        assert!(markdown.contains(&format!("**{expected}**")), "{markdown}");
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        for document in [content, readback] {
+            let rendered = mant_render::render_query_man(&document);
+            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            assert_eq!(body.trim(), expected, "{source}");
+        }
+    }
+}
+
+#[test]
 fn suffix_replay_preserves_earlier_accepted_rows_with_covered_glyphs() {
     // term.c::term_field() releases padding ahead of a backspace. The
     // following bold G still covers F in that same column. A later edit

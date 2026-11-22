@@ -339,8 +339,8 @@ impl FieldBuffer {
                 for (target, by) in overprint.covered {
                     accept(target, by);
                 }
-                if !overprint.ordered.is_empty() {
-                    order(overprint.ordered);
+                for ordered in overprint.order_groups {
+                    order(ordered);
                 }
                 while retreats.peek().is_some_and(|&&(_, mark)| mark < pass.end) {
                     retreats.next();

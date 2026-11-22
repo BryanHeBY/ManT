@@ -5,7 +5,7 @@ use super::{FieldBuffer, FieldCell, FillPass};
 
 pub(super) struct DeviceOverprint {
     pub(super) covered: Vec<(usize, Option<usize>)>,
-    pub(super) ordered: Vec<usize>,
+    pub(super) order_groups: Vec<Vec<usize>>,
     pub(super) overhang: Option<String>,
 }
 
@@ -118,7 +118,7 @@ impl FieldBuffer {
             // without that one cell. Larger retreats remain unproved.
             let (clipped, _) =
                 self.paint_device_interval(start, cells, last_edit, 0, true, false)?;
-            if proof.ordered != clipped.ordered
+            if proof.order_groups != clipped.order_groups
                 || !proof
                     .covered
                     .iter()
@@ -216,21 +216,7 @@ impl FieldBuffer {
                 ordered.push(cell);
             }
         }
-        let mut source_order = ordered.clone();
-        source_order.sort_unstable();
-        source_order.dedup();
-        if source_order.len() == ordered.len() {
-            let first = ordered.iter().zip(&source_order).position(|(a, b)| a != b);
-            ordered = first.map_or_else(Vec::new, |first| {
-                let tail = ordered
-                    .iter()
-                    .zip(&source_order)
-                    .rev()
-                    .take_while(|(a, b)| a == b)
-                    .count();
-                ordered[first..ordered.len() - tail].to_vec()
-            });
-        }
+        let order_groups = changed_paint_groups(start, &ordered);
         let retreat_targets = self.paint_retreat_targets(start, cells.len());
         let proof = DeviceOverprint {
             covered: covered_by
@@ -242,7 +228,7 @@ impl FieldBuffer {
                         .map(|by| (target, Some(by)))
                 })
                 .collect(),
-            ordered,
+            order_groups,
             overhang,
         };
         Some((proof, stepped_left))
@@ -333,6 +319,58 @@ impl FieldBuffer {
             .get(index)
             .is_some_and(|run| run.start <= cell)
     }
+}
+
+fn changed_paint_groups(start: usize, ordered: &[usize]) -> Vec<Vec<usize>> {
+    let mut source_order = ordered.to_vec();
+    source_order.sort_unstable();
+    source_order.dedup();
+
+    if source_order.len() == ordered.len() {
+        // Preserve the existing single interval for a pure reorder.
+        let Some(first) = ordered.iter().zip(&source_order).position(|(a, b)| a != b) else {
+            return Vec::new();
+        };
+        let tail = ordered
+            .iter()
+            .zip(&source_order)
+            .rev()
+            .take_while(|(a, b)| a == b)
+            .count();
+        return vec![ordered[first..ordered.len() - tail].to_vec()];
+    }
+
+    // A duplicated owner need not include every survivor in its span.
+    // Close an interval when the output has visited every authored owner
+    // in that interval, including its last visible copy. Independent
+    // edits may be separated by real spaces, which have no paint rank.
+    let mut last = [0; MAX_REPLAY_PREFIX_CELLS];
+    for (position, &owner) in ordered.iter().enumerate() {
+        last[owner - start] = position + 1;
+    }
+    let mut groups = Vec::new();
+    let mut first_source = 0;
+    let mut first_output = 0;
+    let mut next_source = 0;
+    let mut end_output = 0;
+    for (position, owner) in ordered.iter().enumerate() {
+        let source = source_order
+            .binary_search(owner)
+            .expect("known paint owner");
+        while next_source <= source {
+            end_output = end_output.max(last[source_order[next_source] - start]);
+            next_source += 1;
+        }
+        if position + 1 == end_output {
+            let observed = &ordered[first_output..end_output];
+            if observed != &source_order[first_source..next_source] {
+                groups.push(observed.to_vec());
+            }
+            first_source = next_source;
+            first_output = end_output;
+        }
+    }
+    groups
 }
 
 fn emits_backspace_after_control_or_advance(cells: &[FieldCell]) -> bool {
