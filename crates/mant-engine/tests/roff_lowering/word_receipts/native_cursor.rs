@@ -143,3 +143,60 @@ fn zero_relative_motion_preserves_raw_word_slots_for_a_later_edit() {
         assert_eq!(description_rows(&rendered, &source), ["YC"], "{source}");
     }
 }
+
+#[test]
+fn a_complete_absolute_cursor_leaves_later_slots_available_to_replay() {
+    // term.c::term_word() moves col to the absolute target while
+    // bufferc() keeps lastcol. The next word can write at the early
+    // target, while term_fill() still accepts the original suffix.
+    let cases = [
+        (
+            include_str!("live_replay/replay-keeps-absolute-cursor-before-ink.1"),
+            "X   FG",
+            "X",
+        ),
+        (
+            include_str!("live_replay/replay-covers-ink-after-absolute-cursor.1"),
+            "A   FG",
+            "A",
+        ),
+    ];
+    for (source, expected, retained) in cases {
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&rendered, source), [expected], "{source}");
+        for pattern in ["A", "X", "FG"] {
+            let result = mant_query::search_query(
+                &content,
+                &SearchQuery {
+                    pattern: pattern.into(),
+                    syntax: SearchSyntax::Literal,
+                    case: SearchCase::Sensitive,
+                    scope: SearchScope::Visible,
+                    word: true,
+                    context_lines: 0,
+                    limit: 10,
+                    offset: 0,
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                result.total,
+                u32::from(pattern == retained || pattern == "FG")
+            );
+        }
+    }
+}
+
+#[test]
+fn backafter_cancels_an_absolute_target_after_a_relative_rewind() {
+    // term.c::term_word() clears BACKAFTER before HORIZ reads the
+    // target. X replaces the invisible slot reached by the relative
+    // rewind, and the original ABC remains in the accepted field.
+    let words = r#".No "ABC\&\h'-1n'\z\h'|1n'\c" No X"#;
+    let source = format!("{HEADER}{words}{END}");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    assert_eq!(description_rows(&rendered, &source), ["ABCX"], "{source}");
+}

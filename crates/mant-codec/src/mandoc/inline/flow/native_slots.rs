@@ -547,26 +547,29 @@ impl NativeSlots {
         self.cursor = end;
     }
 
+    /// Return whether the native execution applied an absolute target.
     pub(in crate::mandoc::inline) fn motion(
         &mut self,
         argument: Option<&str>,
         owner: Option<usize>,
-    ) {
+    ) -> bool {
         if std::mem::take(&mut self.backafter) {
-            return;
+            return false;
         }
-        let Some(argument) = argument else { return };
+        let Some(argument) = argument else {
+            return false;
+        };
         let (absolute, argument) = argument
             .strip_prefix('|')
             .map_or((false, argument), |a| (true, a));
         let Some((length, _)) = TableColumnMetrics::motion_argument(argument) else {
-            return;
+            return false;
         };
         if absolute && self.prior_input && self.origin.is_none() {
             // term_word() resolves absolute HORIZ against col in the whole
             // field, including writes by earlier operands (term.c:678–714).
             self.prior_edit = Some(PriorSlotEdit::Unresolved);
-            return;
+            return false;
         }
         let column = self.origin.unwrap_or(0).saturating_add(self.cursor);
         let relative = if absolute {
@@ -584,12 +587,13 @@ impl NativeSlots {
             let retreat = usize::from(std::mem::take(&mut self.backbefore));
             if self.prior_input && cells.saturating_add(retreat) > self.cursor {
                 self.prior_edit = Some(PriorSlotEdit::Rewind);
-                return;
+                return false;
             }
             // The pre-column remainder changes tcol.offset upstream, not
             // lastcol or the available width after the occupied prefix.
             self.cursor = self.cursor.saturating_sub(cells.saturating_add(retreat));
         }
+        absolute
     }
 
     pub(in crate::mandoc::inline) fn line(
@@ -898,6 +902,22 @@ fn glyph_width(glyph: char) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn absolute_motion_receipt_requires_the_target_to_execute() {
+        // term.c::term_word() consumes BACKAFTER before interpreting
+        // HORIZ. The canceled target leaves the relative retreat intact.
+        let mut slots = NativeSlots::default();
+        for write in FieldWrite::literal("ABC") {
+            slots.native_write(write, RoffFont::Regular, None);
+        }
+        assert!(!slots.motion(Some("-1n"), None));
+        slots.arm_backafter();
+        assert!(!slots.motion(Some("|1n"), None));
+        assert_eq!(slots.extent_and_retreat(), (3, 1));
+        assert!(slots.motion(Some("|1n"), None));
+        assert_eq!(slots.extent_and_retreat(), (3, 2));
+    }
 
     #[test]
     fn repeated_motion_keeps_a_fixed_blank_interval_compact() {

@@ -561,6 +561,7 @@ struct Placement<'a> {
     links: Vec<&'a str>,
     active_link: Option<usize>,
     marker_after_blank: bool,
+    effective_absolute_cursor: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -579,6 +580,7 @@ impl<'a> Placement<'a> {
             links: Vec::new(),
             active_link: None,
             marker_after_blank: false,
+            effective_absolute_cursor: false,
         }
     }
 
@@ -629,6 +631,7 @@ impl<'a> Placement<'a> {
     ) {
         let font = state.current;
         let display = state.display_current();
+        self.retain_absolute_cursor_for_control(event);
         match event {
             RoffInlineEvent::Font(next) => state.select(*next),
             RoffInlineEvent::PreviousFont => state.restore(),
@@ -665,7 +668,7 @@ impl<'a> Placement<'a> {
             RoffInlineEvent::HorizontalMotion { argument, .. } => {
                 let owner =
                     include_advances.then(|| self.mark(ReadingGlyph::DeviceAdvance, display));
-                self.slots.motion(argument.as_deref(), owner);
+                self.effective_absolute_cursor = self.slots.motion(argument.as_deref(), owner);
             }
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
@@ -717,6 +720,13 @@ impl<'a> Placement<'a> {
                 self.slots.native_write(cell, font, None);
             }
         }
+    }
+
+    fn retain_absolute_cursor_for_control(&mut self, event: &RoffInlineEvent) {
+        self.effective_absolute_cursor &= matches!(
+            event,
+            RoffInlineEvent::NoSpace | RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+        );
     }
 
     fn write_invisible_cell(&mut self) {
@@ -1074,7 +1084,23 @@ fn retains_word_cursor(
                     || slots.has_unpainted_marker_tail()
                         && !events.iter().any(absolute_motion)
                         && slots.contains_ink_from(seed.earlier)
+                    || retains_absolute_word_cursor(seed)
                     || slots_rewritten_by_controls(events)))
+}
+
+fn retains_absolute_word_cursor(seed: &GeometrySeed<'_>) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    // An absolute motion in a complete field moves col without
+    // discarding the later slots. A marker before the motion is still
+    // unread by term_fill() until the actual flush (term.c:659–660,
+    // 678–714). Keep that state only after the absolute motion executed.
+    let slots = &seed.placement.slots;
+    seed.prefix_start == 0
+        && slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS
+        && slots.cursor_before_owner()
+        && slots.contains_ink_from(seed.earlier)
+        && seed.placement.effective_absolute_cursor
 }
 
 /// A complete replay can place `\p` or another control inside a field
