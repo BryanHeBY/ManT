@@ -15,6 +15,8 @@
 
 //! Project accepted plain native input into its current output owner.
 
+use std::{cell::OnceCell, collections::BTreeSet};
+
 use super::super::output::retain_inline_identities as retain_unprinted_field_targets;
 use super::super::{Inline, InlineBuilder};
 use super::PlainFlushBoundary;
@@ -35,14 +37,25 @@ pub(super) fn retire_plain_presentation(
         .map_or(0, |state| state.field_offset_units);
     let mut presentation = execution.row_presentation;
     let mut row_presentations = Vec::new();
-    for pass in passes {
-        if let Some(receipt) = super::super::presentation::pass_receipt(
-            buffer,
-            anchors,
-            pass.start,
-            pass.end,
-            presentation.hint_at(execution.text_alignment, offset),
-        ) {
+    let projected_gaps = OnceCell::new();
+    for (index, pass) in passes.iter().enumerate() {
+        let mut hint = presentation.hint_at(execution.text_alignment, offset);
+        if index > 0
+            && execution.text_alignment == mant_ir::TextAlignment::Left
+            && passes[index - 1].boundary == super::super::field_buffer::FillBoundary::WordEndBreak
+        {
+            hint.first_line_indent_columns += leading_native_motion(buffer, pass, || {
+                projected_gaps.get_or_init(|| {
+                    anchors
+                        .iter()
+                        .filter_map(|owner| owner.projected_gap_cell)
+                        .collect()
+                })
+            });
+        }
+        if let Some(receipt) =
+            super::super::presentation::pass_receipt(buffer, anchors, pass.start, pass.end, hint)
+        {
             row_presentations.push(receipt);
         }
         presentation.endline_at(offset);
@@ -59,6 +72,36 @@ pub(super) fn retire_plain_presentation(
     );
     execution.remap_output_projection(&edits);
     edits
+}
+
+fn leading_native_motion<'a>(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    pass: &super::super::field_buffer::FillPass,
+    projected_gaps: impl FnOnce() -> &'a BTreeSet<usize>,
+) -> i32 {
+    use super::super::field_buffer::{FieldCell, MAX_EDITABLE_APPEND_CELLS};
+    // After term_flushln() ends a physical line, term_field() releases
+    // a surviving leading motion at the first emitted ink. These columns
+    // are row positioning and have no source scalars.
+    let prefix_cells = buffer.cells()[pass.start..pass.end]
+        .iter()
+        .take_while(|cell| {
+            matches!(
+                cell,
+                FieldCell::FixedDrawingAdvance(_) | FieldCell::ZeroWidthGraph
+            )
+        })
+        .count();
+    let end = pass.start + prefix_cells;
+    let width = buffer.unprojected_leading_advance(pass.start, end);
+    if width == 0
+        || width > MAX_EDITABLE_APPEND_CELLS
+        || projected_gaps().range(pass.start..end).next().is_some()
+        || buffer.printed_content_end(pass.start, pass.end) <= end
+    {
+        return 0;
+    }
+    i32::try_from(width).unwrap_or_default()
 }
 
 pub(super) fn project_rejected_plain_prefix(

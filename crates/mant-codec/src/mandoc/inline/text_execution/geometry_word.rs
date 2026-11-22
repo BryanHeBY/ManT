@@ -224,6 +224,7 @@ fn local_overwrite(
     context: &TextExecutionContext<'_>,
 ) -> Option<LocalOverwrite> {
     let inherited_glyph = has_prior_retreat(context);
+    let append_motion = !inherited_glyph && local_motion_appends_at_word_end(events, context);
     let mut armed = false;
     let mut backbefore = false;
     let mut wrote_pair = false;
@@ -266,6 +267,20 @@ fn local_overwrite(
                     backbefore = std::mem::take(&mut armed);
                 }
             }
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } if append_motion
+                && motion_columns(value)
+                    .is_some_and(|(absolute, units)| !absolute && units > 0) =>
+            {
+                // term_word() clears BACKAFTER without moving, or uses
+                // the first positive HORIZ unit to clear BACKBEFORE.
+                if !std::mem::take(&mut armed) {
+                    backbefore = false;
+                }
+                projected_padding = true;
+            }
             RoffInlineEvent::Link(_)
             | RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
@@ -307,6 +322,25 @@ fn local_overwrite(
     } else {
         wrote_pair.then_some(LocalOverwrite::Covered)
     }
+}
+
+fn local_motion_appends_at_word_end(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    // A leading advance writes at lastcol before local ink. A tight
+    // continuation or a marked operand can still own an old editable
+    // suffix whose motion and delayed reading receipt must stay intact.
+    context.slot_entry.domain == ReplayDomain::Filled
+        && context.slot_entry.cursor == EntryCursor::AtEnd
+        && context.slot_entry.automatic_blanks > 0
+        && !context.defer_leading_blanks
+        && !context.zero_advance.has_annotation_output_owner()
+        && matches!(events.first(), Some(RoffInlineEvent::HorizontalMotion { argument: Some(value), .. })
+            if motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0))
+        && !events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::LineBreak))
 }
 
 fn fits_editable_font_slots(events: &[RoffInlineEvent]) -> bool {

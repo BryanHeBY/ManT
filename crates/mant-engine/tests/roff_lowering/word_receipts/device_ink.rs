@@ -532,3 +532,65 @@ fn relative_rewind_preserves_the_cursor_inside_an_unread_advance() {
         assert_eq!(description_rows(&rendered, &source), [expected], "{source}");
     }
 }
+
+#[test]
+fn accepted_marked_row_preserves_both_motion_advances() {
+    // term_word() retains each HORIZ cell in the local BACK overwrite.
+    // After the prior \p closes, term_field() releases the resumed row's
+    // leading advance at F and the trailing advance at the following X.
+    let (meta, _) = HEADER.split_once(".Sh DESCRIPTION\n").unwrap();
+    for (leading, trailing, breakpoint, replacement) in [
+        (3, 2, r"\:", "AB"),
+        (2, 2, r"\:", "AB"),
+        (4, 2, r"\:", "AB"),
+        (3, 1, r"\:", "AB"),
+        (3, 3, r"\:", "AB"),
+        (3, 2, "", "AB"),
+        (3, 2, r"\:", "JL"),
+    ] {
+        let source = format!(
+            r#"{meta}.Sh DESCRIPTION
+.Ss CASE0CASE
+.Em "A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\pG\&" No "\h'{leading}n'F\z{replacement}G\&\h'{trailing}n'{breakpoint}" No "\p\h'-1n'\fPX"
+.Ss CASE999CASE
+Done.
+"#
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let output = mant_render::render_query_man(&content);
+        let (_, body) = output.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE").unwrap();
+        let mut rows = body.trim_end().lines();
+        let first = rows.next().unwrap();
+        assert_eq!(first.trim_start(), "AFG", "{source}\n{output}");
+        let origin = first.len() - first.trim_start().len();
+        assert_eq!(
+            rows.next().unwrap(),
+            format!(
+                "{}F{}G{}X",
+                " ".repeat(origin + leading),
+                replacement.chars().last().unwrap(),
+                " ".repeat(trailing + 1),
+            ),
+            "{source}\n{output}",
+        );
+        assert_eq!(rows.next(), None, "{source}\n{output}");
+    }
+
+    // A tight continuation with its own marker still edits the older
+    // suffix. It does not qualify as an append at lastcol.
+    let tight = format!(
+        r#"{meta}.Sh DESCRIPTION
+.Ss CASE0CASE
+.Sy "AB" No "\h'1n'\h'-4n'\c\pC" Ns No "\zFG\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX"
+.Ss CASE999CASE
+Done.
+"#
+    );
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(tight.as_bytes()).unwrap());
+    let output = mant_render::render_query_man(&content);
+    let (_, body) = output.split_once("CASE0CASE\n").unwrap();
+    let (body, _) = body.split_once("CASE999CASE").unwrap();
+    assert_eq!(body.trim(), "ABCG   X", "{tight}\n{output}");
+}
