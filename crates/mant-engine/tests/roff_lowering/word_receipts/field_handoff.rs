@@ -10,6 +10,21 @@ type FieldHandoffCase = (
     &'static str,
 );
 const FIELD_HANDOFF_CASES: &[FieldHandoffCase] = &[
+    // In UTF-8, term_field() replaces C with J and prints Y on the same
+    // accepted row. ASCII ends the row before Y; in both profiles the
+    // original link label is gone (term.c:205-220,397-429).
+    (
+        include_str!("live_replay/replay-retires-link-overwritten-before-body.1"),
+        &["JY"],
+        None,
+        "C",
+    ),
+    (
+        include_str!("live_replay/replay-retires-link-overwritten-after-body-motion.1"),
+        &["JY"],
+        None,
+        "C",
+    ),
     (
         // term_word() overwrites the first slot with a marker after
         // absolute HORIZ; term_flushln() stops on zero accepted cells.
@@ -529,6 +544,54 @@ fn armed_run_in_word_keeps_the_retained_cursor() {
                 "{source}: {actual:?}"
             );
         }
+    }
+}
+
+#[test]
+fn run_in_space_stays_editable_after_its_reading_owner_is_assigned() {
+    const PAGE: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n.Sh DESCRIPTION\n.Ss CASE0CASE\n";
+    const LINK: &str = r"\X'tty: link https://k.test'V\X'tty: link'";
+    // termp_it_pre(BODY) writes a fixed space over the retained SP and
+    // encode1 turns BACKAFTER into BACKBEFORE. The BODY motion consumes
+    // it before placing any new glyph (term.c:678-714,903-929).
+    for (head, body, ink, linked) in [
+        (r#""V" "\h'-2n'\&\z""#, LINK.to_string(), "V", true),
+        (r#""VV" "\h'-2n'\z\&""#, "V".to_string(), "VV", false),
+        (r#""V" "\c\h'-2n'\&\z""#, LINK.to_string(), "V", true),
+        (r#""V" "\h'-2n'\z\&""#, format!(r"\z{LINK}"), "V", true),
+    ] {
+        let source = format!(
+            "{PAGE}.Bl -inset\n.It Sy {head}\n.No \"\\h'-2n'{body}\"\n.El\n.Ss CASE999CASE\nDone.\n"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let mut labels = Labels::default();
+        labels.visit_document(content.document.as_ref().unwrap());
+        assert_eq!(labels.0.len(), usize::from(linked), "{source}");
+        if linked {
+            assert_eq!(
+                labels.0[0],
+                ("https://k.test".into(), "V".into()),
+                "{source}"
+            );
+        }
+        let rendered = mant_render::render_query_man(&content);
+        let (_, region) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (region, _) = region.split_once("CASE999CASE\n").unwrap();
+        let rows = region
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty());
+        let actual: Vec<String> = rows
+            .map(|row| {
+                row.chars()
+                    .filter(|character| !character.is_whitespace())
+                    .collect()
+            })
+            .collect();
+        // The ASCII and UTF-8 fixed profiles disagree on spacing in
+        // the two-V variant, but agree on ink and the accepted row.
+        assert_eq!(actual, [ink], "{source}\n{rendered}");
     }
 }
 

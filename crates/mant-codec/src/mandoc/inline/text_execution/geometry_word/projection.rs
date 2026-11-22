@@ -2,8 +2,8 @@
 
 use super::super::{WordOutput, references};
 use super::{
-    FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorSlotEdit, ReadingCell, ReadingGlyph,
-    TextExecutionContext, WordExecution,
+    FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorPendingSlot, PriorSlotEdit,
+    ReadingCell, ReadingGlyph, TextExecutionContext, WordExecution,
 };
 use crate::mandoc::inline::{
     flow::{
@@ -24,7 +24,13 @@ pub(super) struct PlacedWord<'a> {
     writes: Vec<FieldWrite>,
     pending: Option<usize>,
     armed: bool,
-    prior: Option<(usize, bool)>,
+    prior: Option<PriorSlotProjection>,
+}
+
+#[derive(Clone, Copy)]
+enum PriorSlotProjection {
+    Buffered { owner: usize, survives: bool },
+    ConsumedProjected,
 }
 
 impl<'a> PlacedWord<'a> {
@@ -39,7 +45,7 @@ impl<'a> PlacedWord<'a> {
             placement,
             prefix_start,
             earlier,
-            unpublished,
+            prior_pending,
             replace_tail,
             replayed_entry,
             advance_marker,
@@ -84,7 +90,7 @@ impl<'a> PlacedWord<'a> {
                 &reading,
                 prefix_start,
                 earlier,
-                unpublished,
+                prior_pending.and_then(PriorPendingSlot::unpublished),
             ));
         } else if replace_tail > 0 {
             writes.push(replay_device_tail(
@@ -94,11 +100,8 @@ impl<'a> PlacedWord<'a> {
                 replayed_entry,
             ));
         }
-        let inherited = unpublished.filter(|_| pending_owner == unpublished);
-        let inherited_pending = inherited_pending_slot(&slots, &reading, earlier, inherited)?;
-        let prior = unpublished
-            .filter(|_| inherited_pending.is_none())
-            .map(|id| (id, slots.iter().any(|slot| slot.owner == Some(id))));
+        let (inherited_pending, prior) =
+            settle_prior_slot(prior_pending, pending_owner, &slots, &reading, earlier)?;
         writes.extend(slots.iter().map(|slot| slot_write(slot, &reading)));
         let end = slots.len();
         record_slot_proof(
@@ -142,9 +145,18 @@ impl<'a> PlacedWord<'a> {
         context: &mut TextExecutionContext<'_>,
         word: &mut WordExecution,
     ) {
-        let prior = self.prior.and_then(|(id, survives)| {
-            let output = context.zero_advance.project_prior_slot(survives);
-            survives.then_some((id, output))
+        let prior = self.prior.and_then(|prior| match prior {
+            PriorSlotProjection::Buffered { owner, survives } => {
+                let output = context.zero_advance.project_prior_slot(survives);
+                survives.then_some((owner, output))
+            }
+            PriorSlotProjection::ConsumedProjected => {
+                // This advance already has its original output owner.
+                // Release BACKBEFORE without publishing another glyph.
+                let output = context.zero_advance.project_prior_slot(false);
+                debug_assert_eq!(output, [] as [mant_ir::Inline; 0]);
+                None
+            }
         });
         let links: Vec<_> = self
             .links
@@ -223,25 +235,42 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
-fn inherited_pending_slot(
+fn settle_prior_slot(
+    previous: Option<PriorPendingSlot>,
+    pending_owner: Option<usize>,
     slots: &[FillSlot],
     reading: &[ReadingCell<'_>],
     earlier: usize,
-    owner: Option<usize>,
-) -> Result<Option<usize>, PriorSlotEdit> {
-    let position = owner.and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)));
-    if let Some(position) = position
-        && slots[..position].iter().any(|slot| {
+) -> Result<(Option<usize>, Option<PriorSlotProjection>), PriorSlotEdit> {
+    let Some(previous) = previous else {
+        return Ok((None, None));
+    };
+    let owner = previous.owner();
+    let position = slots.iter().rposition(|slot| slot.owner == Some(owner));
+    if pending_owner == Some(owner)
+        && let Some(position) = position
+    {
+        if slots[..position].iter().any(|slot| {
             slot.owner.is_some_and(|owner| {
                 owner >= earlier && !matches!(reading[owner].glyph, ReadingGlyph::EntryBlank)
             })
-        })
-    {
-        // An inherited glyph still under BACKBEFORE cannot be
-        // published at a new position before its replacement is known.
-        return Err(PriorSlotEdit::Unresolved);
+        }) {
+            // An inherited glyph still under BACKBEFORE cannot be
+            // published at a new position before its replacement is known.
+            return Err(PriorSlotEdit::Unresolved);
+        }
+        return Ok((Some(position), None));
     }
-    Ok(position)
+    Ok((
+        None,
+        Some(match previous {
+            PriorPendingSlot::Buffered(owner) => PriorSlotProjection::Buffered {
+                owner,
+                survives: position.is_some(),
+            },
+            PriorPendingSlot::Projected(_) => PriorSlotProjection::ConsumedProjected,
+        }),
+    ))
 }
 
 fn settle_replay_slots(

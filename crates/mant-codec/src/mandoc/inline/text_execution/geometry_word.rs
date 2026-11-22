@@ -476,12 +476,22 @@ fn has_unproved_armed_entry(context: &TextExecutionContext<'_>) -> bool {
 }
 
 fn can_place_pending(context: &TextExecutionContext<'_>) -> bool {
+    let Some(prefix) = &context.slot_entry.prefix else {
+        return false;
+    };
+    let Some(cell) = prefix.pending_cell else {
+        return false;
+    };
     context.zero_advance.can_project_prior_slot()
-        && context
-            .slot_entry
-            .prefix
-            .as_ref()
-            .is_some_and(|prefix| prefix.pending_cell.is_some())
+        // termp_it_pre(BODY) can write its generated glyph into an
+        // existing native SP slot (term.c:903-929). The field retains that
+        // projected NBSP and the pending BACKBEFORE, but no cached glyph.
+        || prefix.backbefore
+            && context.zero_advance.can_replay_projected_prior_slot()
+            && matches!(
+                prefix.cells.get(cell),
+                Some((FieldCell::Graph { text: '\u{a0}', width: 1 }, _))
+            )
 }
 
 fn tight_word_can_carry_glyph(
@@ -770,9 +780,40 @@ struct GeometrySeed<'a> {
     replayed_entry: bool,
     prefix_start: usize,
     earlier: usize,
-    unpublished: Option<usize>,
+    prior_pending: Option<PriorPendingSlot>,
     advance_marker: Option<usize>,
     editable_pass: bool,
+}
+
+#[derive(Clone, Copy)]
+enum PriorPendingSlot {
+    Buffered(usize),
+    Projected(usize),
+}
+
+impl PriorPendingSlot {
+    fn at_entry(slot: Option<usize>, state: &super::ZeroAdvanceState) -> Option<Self> {
+        slot.filter(|_| state.has_pending_glyph()).map(|slot| {
+            if state.can_project_prior_slot() {
+                Self::Buffered(slot)
+            } else {
+                Self::Projected(slot)
+            }
+        })
+    }
+
+    fn owner(self) -> usize {
+        match self {
+            Self::Buffered(owner) | Self::Projected(owner) => owner,
+        }
+    }
+
+    fn unpublished(self) -> Option<usize> {
+        match self {
+            Self::Buffered(owner) => Some(owner),
+            Self::Projected(_) => None,
+        }
+    }
 }
 
 // A continuation can make the previous trailing HORIZ printable. Its
@@ -820,11 +861,10 @@ impl GeometrySeed<'_> {
                 placement,
                 prefix_start: prefix.start,
                 earlier,
-                unpublished: context
-                    .zero_advance
-                    .has_pending_glyph()
-                    .then_some(prefix.pending_cell)
-                    .flatten(),
+                prior_pending: PriorPendingSlot::at_entry(
+                    prefix.pending_cell,
+                    context.zero_advance,
+                ),
                 replace_tail: 0,
                 replayed_entry: false,
                 advance_marker,
@@ -841,7 +881,7 @@ impl GeometrySeed<'_> {
                 replayed_entry: automatic > 0,
                 prefix_start: 0,
                 earlier: 0,
-                unpublished: None,
+                prior_pending: None,
                 advance_marker: None,
                 editable_pass: false,
             }
@@ -890,7 +930,7 @@ impl GeometrySeed<'_> {
                 replayed_entry,
                 prefix_start: 0,
                 earlier: 0,
-                unpublished: None,
+                prior_pending: None,
                 advance_marker: None,
                 editable_pass: false,
             }

@@ -260,6 +260,12 @@ impl ZeroAdvanceState {
             && self.machine.deferred_projection().is_empty()
     }
 
+    pub(super) fn can_replay_projected_prior_slot(&self) -> bool {
+        self.machine.has_projected_pending()
+            && self.held.is_empty()
+            && self.machine.deferred_projection().is_empty()
+    }
+
     pub(super) fn project_prior_slot(&mut self, survives: bool) -> Vec<Inline> {
         self.resolved_preexisting = true;
         if survives {
