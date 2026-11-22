@@ -445,7 +445,28 @@ impl FieldBuffer {
         if self.cells.len() == entry.saturating_add(proof.cells) {
             // The exact ending font run can be replayed. Earlier paint
             // remains valid even when a later cursor cannot revisit it.
-            if !(entry == 0 && proof.pending)
+            // An exact fresh append can end in authored SP after its
+            // decorated glyphs. That SP does not fence the earlier raw
+            // paint: term_word()/encode() have not flushed any of it.
+            let complete_spaced_word = entry == 0
+                && self.projection_owner == super::FieldProjectionOwner::Active
+                && !self.backafter_armed
+                && self.raw_slot_fence == 0
+                && self.resume == 0
+                && self.projected_pass_ends.is_empty()
+                && self.deferred_blanks.is_empty()
+                && self.cells.last() == Some(&FieldCell::BreakableBlank)
+                && proof.cells <= super::MAX_EDITABLE_APPEND_CELLS / 5
+                && proof.fonts.len() == 1
+                && self.cells.iter().all(|cell| {
+                    matches!(
+                        cell,
+                        FieldCell::BreakableBlank | FieldCell::Graph { width: 1, .. }
+                    )
+                });
+            if complete_spaced_word {
+                self.hold_editable_passes();
+            } else if !(entry == 0 && proof.pending)
                 && let Some(tail) = proof.replay_tail
             {
                 self.raw_edit_fence = self.cells.len().saturating_sub(tail);

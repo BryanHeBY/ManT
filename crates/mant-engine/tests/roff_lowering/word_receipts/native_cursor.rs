@@ -235,6 +235,28 @@ fn a_fresh_retreat_keeps_inner_and_trailing_native_advances_editable() {
 }
 
 #[test]
+fn trailing_authored_blanks_keep_decorated_native_words_live() {
+    // term.c::encode() writes trailing SP without committing the earlier
+    // font cells. The later HORIZ can replace a glyph with NBRZW and
+    // leave just its underline on the first accepted row.
+    for (font, ink, next, columns, expected) in [
+        ("Sy", " DJ ", "Sy", 8, &["", "F"][..]),
+        ("Sy", " DJ ", "No", 8, &["", "FJ"]),
+        ("Sy", " DJ ", "Sy", 6, &[" D", "F"]),
+        ("Sy", "DJ ", "No", 3, &["DJ", "F"]),
+        ("No", " DJ ", "Sy", 8, &["", "F"]),
+        ("Em", " DJ ", "No", 6, &[" _", "F"]),
+        ("Em", "DJ ", "Sy", 3, &["D_", "F"]),
+    ] {
+        let source = format!(r#"{HEADER}.{font} "{ink}" {next} "\h'-{columns}n'\&\p\:F\p"{END}"#);
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), expected, "{source}");
+    }
+}
+
+#[test]
 fn a_complete_absolute_cursor_leaves_later_slots_available_to_replay() {
     // term.c::term_word() moves col to the absolute target while
     // bufferc() keeps lastcol. The next word can write at the early

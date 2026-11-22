@@ -127,7 +127,7 @@ impl FieldBuffer {
         }
     }
 
-    fn hold_editable_passes(&mut self) {
+    pub(super) fn hold_editable_passes(&mut self) {
         if self.resume == 0 && matches!(self.word_scan, super::WordScanPolicy::Incremental) {
             self.word_scan = super::WordScanPolicy::AwaitFlush;
             self.scan = None;

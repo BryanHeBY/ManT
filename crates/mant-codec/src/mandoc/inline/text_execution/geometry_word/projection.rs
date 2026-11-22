@@ -294,10 +294,21 @@ fn release_unpaired_underlines(
         let retains_backline = slots
             .get(index + 1)
             .is_some_and(|next| next.cell == FieldCell::Backline);
+        let glyph = index + 2;
         let overwritten_by_marker = domain == ReplayDomain::Filled
-            && slots
-                .get(index + 2)
-                .is_some_and(|next| next.cell == FieldCell::BreakMarker);
+            && (slots
+                .get(glyph)
+                .is_some_and(|next| next.cell == FieldCell::BreakMarker)
+                || slots.get(glyph..glyph + 3).is_some_and(|tail| {
+                    // NBRZW contributes graph but no paint to this pass.
+                    // The marker and separator end it before later ink.
+                    tail[0].cell == FieldCell::ZeroWidthGraph
+                        && tail[1].cell == FieldCell::BreakMarker
+                        && matches!(
+                            tail[2].cell,
+                            FieldCell::Breakpoint | FieldCell::BreakableBlank
+                        )
+                }));
         if !retains_backline || overwritten_by_marker {
             slots[index].owner = Some(Placement::push_reading(
                 reading,
