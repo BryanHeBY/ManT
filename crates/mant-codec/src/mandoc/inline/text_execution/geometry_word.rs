@@ -205,6 +205,7 @@ fn can_place_word(context: &TextExecutionContext<'_>) -> bool {
 enum LocalOverwrite {
     Covered,
     HoldsGlyph,
+    EditableDecoration,
 }
 
 /// A complete in-word backspace stays editable until the native field
@@ -218,6 +219,7 @@ fn local_overwrite(
     let mut armed = false;
     let mut backbefore = false;
     let mut wrote_pair = false;
+    let mut retain_no_space_decoration = false;
     let mut projected_padding = false;
     for event in events {
         match event {
@@ -225,6 +227,13 @@ fn local_overwrite(
                 if !inherited_glyph || !armed && !backbefore && !wrote_pair =>
             {
                 armed = true;
+            }
+            RoffInlineEvent::NoSpace if armed && !inherited_glyph && !backbefore && !wrote_pair => {
+                // term_word() consumes BACKAFTER here unless a glyph
+                // such as UTF-8 NBSP already did so through encode1().
+                // Defer the actual register transitions to placement.
+                armed = false;
+                retain_no_space_decoration = true;
             }
             RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) => {
                 // term.c::encode does not consume BACKAFTER on a blank.
@@ -266,7 +275,7 @@ fn local_overwrite(
     // BACKBEFORE (term.c:946-967). Preserve the complete decorated word
     // so the next HORIZ can revisit its font slots. Ordinary words
     // already retain the editable blank through the shared word path.
-    let held_decorated_glyph = backbefore
+    let retain_decoration = (backbefore || retain_no_space_decoration)
         && !inherited_glyph
         && context.slot_entry.domain == ReplayDomain::Filled
         && !context.slot_entry.cursor.has_input()
@@ -276,13 +285,17 @@ fn local_overwrite(
         // separator around BACKBEFORE. Leave that owner on the shared path.
         && !projected_padding
         && decorated_word(events, context.font.current)
-        && (events.last().is_some_and(
-            |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
-        ) || fits_editable_font_slots(events));
+        && (fits_editable_font_slots(events)
+            || backbefore
+                && events.last().is_some_and(
+                    |event| matches!(event, RoffInlineEvent::Text(value) if value.ends_with(' ')),
+                ));
     if armed || inherited_glyph && backbefore {
         None
+    } else if retain_no_space_decoration {
+        retain_decoration.then_some(LocalOverwrite::EditableDecoration)
     } else if backbefore {
-        (wrote_pair || held_decorated_glyph).then_some(LocalOverwrite::HoldsGlyph)
+        (wrote_pair || retain_decoration).then_some(LocalOverwrite::HoldsGlyph)
     } else {
         wrote_pair.then_some(LocalOverwrite::Covered)
     }

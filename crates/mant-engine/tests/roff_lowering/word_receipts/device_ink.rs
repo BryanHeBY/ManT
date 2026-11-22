@@ -145,6 +145,14 @@ fn edited_font_copies_keep_unchanged_whitespace_and_styling() {
             include_str!("live_replay/replay-keeps-separate-repeated-font-glyphs.1"),
             "D KK LRR",
         ),
+        (
+            include_str!("live_replay/replay-keeps-repeated-font-glyph-after-cancelled-arm.1"),
+            "CJJ",
+        ),
+        (
+            include_str!("live_replay/replay-keeps-repeated-font-glyph-after-nbsp-arm.1"),
+            "DD",
+        ),
     ] {
         let content =
             json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
@@ -159,6 +167,19 @@ fn edited_font_copies_keep_unchanged_whitespace_and_styling() {
             assert_eq!(body.trim(), expected, "{source}");
         }
     }
+}
+
+#[test]
+fn canceling_an_arm_does_not_publish_a_previously_rejected_buffer() {
+    // term.c::term_word() cancels the armed glyph locally. This does not
+    // bypass term_fill() when the rest of the control word rejects its
+    // prefix and suffix together.
+    let source = include_str!("live_replay/replay-keeps-rejection-after-cancelled-arm.1");
+    let content = json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+    let rendered = mant_render::render_query_man(&content);
+    let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+    let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+    assert!(body.trim().is_empty(), "{rendered}");
 }
 
 #[test]
