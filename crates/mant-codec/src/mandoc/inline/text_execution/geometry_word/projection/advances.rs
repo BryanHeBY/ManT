@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use super::{FieldCell, FillSlot, ReadingCell, ReadingGlyph};
+use super::{AdvanceReading, FieldCell, FillSlot, ReadingCell, ReadingGlyph};
 use crate::mandoc::inline::flow::field_buffer::{DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS};
 
 pub(super) fn prepare_reading_blanks(
@@ -10,15 +10,61 @@ pub(super) fn prepare_reading_blanks(
     reading: &mut Vec<ReadingCell<'_>>,
     earlier: usize,
     word_owner: Option<u64>,
-    exact_inner_blanks: bool,
+    advances: AdvanceReading,
     advance_marker: Option<usize>,
 ) {
-    if exact_inner_blanks {
-        publish_inner_advances(slots, reading, earlier);
+    match advances {
+        AdvanceReading::Inner => publish_inner_advances(slots, reading, earlier),
+        AdvanceReading::DeferredTail => {
+            if let Some(owner) = word_owner {
+                defer_trailing_advance(slots, reading, owner);
+            }
+        }
+        AdvanceReading::Unprojected => {}
     }
     let advance =
         advance_marker.and_then(|marker| split_buffered_advance(slots, reading, earlier, marker));
     defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
+}
+
+fn defer_trailing_advance(
+    slots: &mut Vec<FillSlot>,
+    reading: &mut Vec<ReadingCell<'_>>,
+    owner: u64,
+) {
+    // term.c::term_field() delays trailing NBRSP until it finds the
+    // next printable cell. Keep the native slots, with no reading
+    // scalars until the accepted range proves that output.
+    let Some(tail) = slots.last().filter(|slot| slot.drawing_advance) else {
+        return;
+    };
+    let Some(style) = tail.owner.map(|id| reading[id]) else {
+        return;
+    };
+    let start = slots.len() - 1;
+    let count = tail.count;
+    slots.pop();
+    for offset in 0..count {
+        let id = reading.len();
+        reading.push(ReadingCell {
+            glyph: ReadingGlyph::DeferredBlank(DeferredSourceBlank {
+                owner,
+                write: start + offset,
+                font: style.font,
+                replayable_tail: true,
+            }),
+            link: None,
+            ..style
+        });
+        slots.push(FillSlot {
+            cell: FieldCell::NonBreakingBlank,
+            count: 1,
+            owner: Some(id),
+            drawing_advance: true,
+            advance_source: None,
+            underline_decoration: false,
+        });
+    }
 }
 
 /// `term_word()` buffers a positive HORIZ before writing the break marker.
@@ -171,6 +217,7 @@ fn defer_retained_separator_advances(
                 owner: word_owner,
                 write: index,
                 font: reading[owner].font,
+                replayable_tail: false,
             }),
             link: None,
             ..reading[owner]

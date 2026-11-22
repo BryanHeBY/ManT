@@ -49,11 +49,8 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
     for event in events {
         match event {
             RoffInlineEvent::LineBreak => marker = true,
-            RoffInlineEvent::HorizontalMotion {
-                argument: Some(value),
-                ..
-            } => {
-                if let Some((absolute, units)) = motion_columns(value) {
+            RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                if let Some((absolute, units)) = argument.as_deref().and_then(motion_columns) {
                     absolute_edit |= absolute;
                     relative_retreat |= !absolute && units < 0;
                     relative_advance |= !absolute && units > 0;
@@ -121,6 +118,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || marker && marker_replay(events, context).is_some()
                 || control_replay.is_proved()
                 || relative_advance && can_publish_inner_advances(events, context)
+                || relative_advance && can_defer_trailing_advance(events, context)
                 || draws
                 || overstrike_edit && has_proved_overstrike_entry(context)
                 || absolute_edit
@@ -414,6 +412,54 @@ fn can_publish_inner_advances(
     followed
 }
 
+fn can_defer_trailing_advance(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    let single_paint = |font| {
+        !matches!(
+            font,
+            RoffFont::Strong | RoffFont::CodeStrong | RoffFont::StrongEmphasis
+        )
+    };
+    if context.slot_entry.domain != ReplayDomain::Filled
+        || context.slot_entry.cursor.has_input()
+        || context.zero_advance.is_armed()
+        || context.defer_leading_blanks
+        || context.zero_advance.has_annotation_output_owner()
+        || context.zero_advance.native_word_owner().is_none()
+        || !single_paint(context.font.current)
+    {
+        return false;
+    }
+    let Some((
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(argument),
+            ..
+        },
+        prefix,
+    )) = events.split_last()
+    else {
+        return false;
+    };
+    let width = libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument);
+    let Some(budget @ 1..) = MAX_EDITABLE_APPEND_CELLS.checked_sub(width) else {
+        return false;
+    };
+    let ink = prefix.iter().try_fold(0usize, |count, event| match event {
+        RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte.is_ascii_graphic()) => {
+            Some(count.saturating_add(text.len()))
+        }
+        // Keep the ordinary receipt when the ink itself can have multiple
+        // raw paint copies with independent coverage ownership.
+        RoffInlineEvent::Font(font) if single_paint(*font) => Some(count),
+        _ => None,
+    });
+    width > 1 && ink.is_some_and(|count| count > 0 && count <= budget / 5)
+}
+
 enum RetainedAdvancePhase {
     Inherited,
     Armed,
@@ -421,6 +467,13 @@ enum RetainedAdvancePhase {
     Settled,
     Advance,
     InkAfterAdvance,
+}
+
+#[derive(Clone, Copy)]
+enum AdvanceReading {
+    Unprojected,
+    Inner,
+    DeferredTail,
 }
 
 fn has_retained_advance_entry(context: &TextExecutionContext<'_>, seed: &GeometrySeed<'_>) -> bool {
@@ -1158,8 +1211,15 @@ fn execute_seed<'a>(
     // placed. Falling back to the live word executor must not run them twice.
     let mut font = context.font.clone();
     let mut continuation = None;
-    let include_advances = can_publish_inner_advances(events, context)
-        || can_publish_retained_advances(events, context, &seed);
+    let advances = if can_publish_inner_advances(events, context)
+        || can_publish_retained_advances(events, context, &seed)
+    {
+        AdvanceReading::Inner
+    } else if can_defer_trailing_advance(events, context) {
+        AdvanceReading::DeferredTail
+    } else {
+        AdvanceReading::Unprojected
+    };
     if context.zero_advance.is_armed() {
         seed.placement.slots.arm_backafter();
     }
@@ -1167,8 +1227,12 @@ fn execute_seed<'a>(
         if matches!(event, RoffInlineEvent::NoSpace) && index + 1 == events.len() {
             continuation = Some(!seed.placement.slots.backafter());
         }
-        seed.placement
-            .input(event, &mut font, context.line_width_units, include_advances);
+        seed.placement.input(
+            event,
+            &mut font,
+            context.line_width_units,
+            !matches!(advances, AdvanceReading::Unprojected),
+        );
         if let Some(edit) = seed.placement.slots.prior_edit() {
             return Err(edit);
         }
@@ -1243,7 +1307,7 @@ fn execute_seed<'a>(
     let placed = PlacedWord::prepare(
         seed,
         retain_suffix,
-        include_advances,
+        advances,
         editable_marker,
         context.zero_advance.native_word_owner(),
     )?;

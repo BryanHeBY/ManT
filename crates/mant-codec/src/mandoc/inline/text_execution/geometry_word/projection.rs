@@ -2,8 +2,8 @@
 
 use super::super::{WordOutput, references};
 use super::{
-    FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorPendingSlot, PriorSlotEdit,
-    ReadingCell, ReadingGlyph, TextExecutionContext, WordExecution,
+    AdvanceReading, FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorPendingSlot,
+    PriorSlotEdit, ReadingCell, ReadingGlyph, TextExecutionContext, WordExecution,
 };
 use crate::mandoc::inline::{
     flow::{
@@ -37,7 +37,7 @@ impl<'a> PlacedWord<'a> {
     pub(super) fn prepare(
         seed: GeometrySeed<'a>,
         retain_suffix: bool,
-        exact_inner_blanks: bool,
+        advances: AdvanceReading,
         editable_marker: bool,
         word_owner: Option<u64>,
     ) -> Result<Self, PriorSlotEdit> {
@@ -75,7 +75,7 @@ impl<'a> PlacedWord<'a> {
             &mut reading,
             earlier,
             word_owner,
-            exact_inner_blanks,
+            advances,
             replaced_advance_marker,
         );
         let settled = settle_replay_slots(

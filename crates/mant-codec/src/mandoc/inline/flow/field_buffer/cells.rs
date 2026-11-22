@@ -195,6 +195,9 @@ pub(in crate::mandoc) struct DeferredSourceBlank {
     pub(in crate::mandoc::inline) owner: u64,
     pub(in crate::mandoc::inline) write: usize,
     pub(in crate::mandoc::inline) font: super::super::super::Font,
+    /// The whole native word was retained to allow a later edit of this
+    /// generated trailing advance before its deferred output.
+    pub(in crate::mandoc::inline) replayable_tail: bool,
 }
 
 impl DeferredSourceBlank {

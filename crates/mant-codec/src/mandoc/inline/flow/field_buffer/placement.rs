@@ -220,10 +220,10 @@ impl FieldBuffer {
         live_replay: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
         let control_prefix = self.has_editable_control_prefix();
+        let complete_tail = self.has_replayable_trailing_advance();
         if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
             || self.resume == 0 && !self.projected_pass_ends.is_empty()
-            || !live_replay
-                && !control_prefix
+            || !(live_replay || control_prefix || complete_tail)
                 && (self.resume != 0 || !self.deferred_blanks.is_empty())
         {
             return None;
@@ -235,7 +235,7 @@ impl FieldBuffer {
             live_replay && self.projection_owner == super::FieldProjectionOwner::Detached;
         let fence = if control_prefix {
             0
-        } else if detached_replay {
+        } else if detached_replay || complete_tail {
             // term.c::encode1() can overwrite only part of a decoration.
             // A generated run-in blank may attach projection metadata inside
             // that pair, but both slots still belong to the live buffer.
@@ -323,6 +323,17 @@ impl FieldBuffer {
                 super::super::native_slots::ReplayPass::Incremental
             },
         })
+    }
+
+    fn has_replayable_trailing_advance(&self) -> bool {
+        self.resume == 0
+            && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+            && matches!(self.write_cursor, WriteCursor::Placed(_))
+            && !self.deferred_blanks.is_empty()
+            && self
+                .deferred_blanks
+                .iter()
+                .all(|run| run.start >= self.raw_slot_fence && run.source.replayable_tail)
     }
 
     fn retained_cursor_fence(&self, fence: usize) -> usize {

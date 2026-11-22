@@ -173,6 +173,46 @@ fn a_bounded_relative_retreat_keeps_unread_markers_and_later_ink() {
 }
 
 #[test]
+fn a_trailing_native_advance_is_only_printed_before_later_ink() {
+    // term_word() writes each HORIZ advance. term_field() prints those
+    // columns only if a later printable cell remains in the same pass.
+    // A replay can revisit those columns without adding a second gap.
+    let cases = [
+        (r#".No "A\h'2n'" No X"#, "A   X"),
+        (r#".No "A\h'2n'" Ns No X"#, "A  X"),
+        (r#".No "A\h'2n'" Ns No "\h'-1n'X""#, "A X"),
+        (r#".No "A\h'2n'""#, "A"),
+        (
+            r#".No "A\h'2n'" No "\z\h'-1n'\h'1n'" Ns No " F\pG\p\c" No "\h'-4n'X""#,
+            "A     XG",
+        ),
+        (
+            r#".Em "A\h'2n'" Em "\z\h'-1n'\h'1n'" Ns No " F\pG\p\c" Sy "\h'-4n'X""#,
+            "A     X",
+        ),
+        (
+            r#".Em "A\h'2n'" Em "\z\h'-1n'\h'1n'" Ns No " F\pG\p\c" No "\h'-4n'X""#,
+            "A     XG",
+        ),
+        (
+            r#".Em "A\h'2n'" Em "\h'1n'" Ns No " F\pG\p\c" Sy "\h'-4n'X""#,
+            "A     X",
+        ),
+        (
+            r#".Em "A\h'1n'" Em "\z\h'-1n'\h'1n'" Ns No " F\pG\p\c" Sy "\h'-4n'X""#,
+            "A    X",
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!("{HEADER}{body}{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let text = mant_render::render_query_man(&content);
+        assert_eq!(description_rows(&text, &source), [expected], "{source}");
+    }
+}
+
+#[test]
 fn a_complete_absolute_cursor_leaves_later_slots_available_to_replay() {
     // term.c::term_word() moves col to the absolute target while
     // bufferc() keeps lastcol. The next word can write at the early

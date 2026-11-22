@@ -133,6 +133,7 @@ impl WordPassProjection {
             && entry.receipt.first_content_cell >= word_start
             && let Some((gap, previous)) = buffer.device_gap_before(gap_end, replayed)
             && !entry.retains_blank(gap)
+            && !(plain_output && buffer.has_deferred_blank_at(gap))
             // A scalar-bearing SP within the earlier ink's word is
             // already represented. An intervening invisible word's is not.
             && (buffer.projection_length(gap, gap + 1) == 0

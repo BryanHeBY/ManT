@@ -596,6 +596,7 @@ impl InlineBuilder {
             owner: self.execution.native_owner_serial,
             write: 0,
             font: self.execution.font.display_current(),
+            replayable_tail: false,
         };
         let mut projected = Vec::new();
         let writes = if let Some(slots) = retained_slots {

@@ -220,6 +220,7 @@ impl WordOutput<'_> {
             owner,
             write: writes.len(),
             font: self.font,
+            replayable_tail: false,
         };
         writes.push(FieldWrite::DeferredBlanks {
             source: blank,
