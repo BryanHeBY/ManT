@@ -45,7 +45,11 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     };
     let has_drawing_advance = buffer.has_deferred_drawing_advances();
     let unowned_prefix = handoff.is_none() && has_unowned_prefix_rows(buffer, anchors, passes);
-    for (pass, next) in passes[..count].iter().zip(passes.iter().skip(1)) {
+    for (pass_index, (pass, next)) in passes[..count]
+        .iter()
+        .zip(passes.iter().skip(1))
+        .enumerate()
+    {
         if buffer.has_projected_pass(pass.end) || pass.boundary == FillBoundary::Hyphen {
             // An encoded ASCII_HYPH candidate locates the final device row
             // for BODY. The responsive reading projection keeps that source
@@ -66,79 +70,15 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         }
         let cell = next.start;
         let owner = projected_restart_owner(buffer, anchors, pass, next, unowned_prefix);
-        if let Some(mut index) = owner.checked_sub(1) {
-            let definition = definition_handoff(handoff, buffer, anchors, pass, next);
-            if let Some(DefinitionBoundary::Body(index)) = definition {
-                // The detached HEAD cannot carry its closing boundary in
-                // the BODY output, so put it before the first BODY scalar.
-                boundaries
-                    .entry(anchors[index].owner.clone())
-                    .or_default()
-                    .push(RecordedRowSplit::hard(0, pass.end));
-                continue;
-            }
-            let section_seam = matches!(
+        if let Some(index) = owner.checked_sub(1) {
+            record_accepted_pass_boundary(
+                (buffer, anchors),
+                (pass, next, pass_index + 2 < passes.len()),
+                (cell, index, owner),
+                (has_drawing_advance, pending_gap),
                 handoff,
-                Some(NativePassHandoff::Section(section))
-                    if section.closes_at_section_seam(
-                        buffer, pass.start..pass.end, anchors[index].content,
-                    )
+                (&mut offsets, &mut boundaries),
             );
-            if handoff.is_none()
-                && project_detached_gap_restart(
-                    buffer,
-                    anchors,
-                    pass,
-                    (cell, owner),
-                    &offsets.first_owners,
-                    &mut boundaries,
-                )
-            {
-                continue;
-            }
-            let mut cut = cell;
-            let detached = if let Some(DefinitionBoundary::Head {
-                receiver,
-                last,
-                anchor,
-            }) = definition
-                && anchor >= offsets.preceding
-            {
-                index = anchor;
-                cut = last + 1;
-                Some(receiver)
-            } else {
-                None
-            };
-            if detached.is_none()
-                && !section_seam
-                && let Some((actual, earlier_cut)) = offsets.earlier_cut(
-                    buffer,
-                    pass,
-                    (index, cell),
-                    pass_cut_bounds(buffer, pass, cell, has_drawing_advance),
-                    pending_gap,
-                    handoff,
-                )
-            {
-                index = actual;
-                cut = earlier_cut;
-            }
-            let anchor = &anchors[index];
-            cut = exclude_skipped_gap(buffer, anchor.content, cut, pass.end..next.start);
-            let offset = offsets.at(buffer, index, cut);
-            if let Some(receiver) = detached {
-                receiver.accept_hard_row(&anchor.owner, offset);
-                buffer.acknowledge_projected_pass(pass.end);
-            } else {
-                boundaries
-                    .entry(anchor.owner.clone())
-                    .or_default()
-                    .push(RecordedRowSplit {
-                        section_seam,
-                        ..RecordedRowSplit::hard(offset, pass.end)
-                    });
-            }
         }
     }
     if !boundaries.is_empty() {
@@ -146,6 +86,98 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         // suffix is traversed, once per real flush (term.c:233-237).
         let pending = nodes.split_off(output_start.min(nodes.len()));
         nodes.extend(project_recorded_passes(&pending, boundaries, buffer, true));
+    }
+}
+
+fn record_accepted_pass_boundary<'a>(
+    (buffer, anchors): (
+        &mut super::super::field_buffer::FieldBuffer,
+        &'a [super::super::NativeWordAnchor],
+    ),
+    (pass, next, has_following_pass): (
+        &super::super::field_buffer::FillPass,
+        &super::super::field_buffer::FillPass,
+        bool,
+    ),
+    (cell, mut index, owner): (usize, usize, usize),
+    (has_drawing_advance, pending_gap): (bool, bool),
+    handoff: Option<NativePassHandoff<'_>>,
+    (offsets, boundaries): (
+        &mut OwnerOffsets<'a>,
+        &mut BTreeMap<String, Vec<RecordedRowSplit>>,
+    ),
+) {
+    let definition = definition_handoff(handoff, buffer, anchors, pass, next, has_following_pass);
+    if let Some(DefinitionBoundary::Body(index)) = definition {
+        // The detached HEAD cannot carry its closing boundary in
+        // the BODY output, so put it before the first BODY scalar.
+        boundaries
+            .entry(anchors[index].owner.clone())
+            .or_default()
+            .push(RecordedRowSplit::hard(0, pass.end));
+        return;
+    }
+    let section_seam = matches!(
+        handoff,
+        Some(NativePassHandoff::Section(section))
+            if section.closes_at_section_seam(
+                buffer, pass.start..pass.end, anchors[index].content,
+            )
+    );
+    if handoff.is_none()
+        && project_detached_gap_restart(
+            buffer,
+            anchors,
+            pass,
+            (cell, owner),
+            &offsets.first_owners,
+            boundaries,
+        )
+    {
+        return;
+    }
+    let mut cut = cell;
+    let detached = if let Some(DefinitionBoundary::Head {
+        receiver,
+        last,
+        anchor,
+    }) = definition
+        && anchor >= offsets.preceding
+    {
+        index = anchor;
+        cut = last + 1;
+        Some(receiver)
+    } else {
+        None
+    };
+    if detached.is_none()
+        && !section_seam
+        && let Some((actual, earlier_cut)) = offsets.earlier_cut(
+            buffer,
+            pass,
+            (index, cell),
+            pass_cut_bounds(buffer, pass, cell, has_drawing_advance),
+            pending_gap,
+            handoff,
+        )
+    {
+        index = actual;
+        cut = earlier_cut;
+    }
+    let anchor = &anchors[index];
+    cut = exclude_skipped_gap(buffer, anchor.content, cut, pass.end..next.start);
+    let offset = offsets.at(buffer, index, cut);
+    if let Some(receiver) = detached {
+        receiver.accept_hard_row(&anchor.owner, offset);
+        buffer.acknowledge_projected_pass(pass.end);
+    } else {
+        boundaries
+            .entry(anchor.owner.clone())
+            .or_default()
+            .push(RecordedRowSplit {
+                section_seam,
+                ..RecordedRowSplit::hard(offset, pass.end)
+            });
     }
 }
 
@@ -363,6 +395,7 @@ fn definition_handoff<'a>(
     anchors: &[super::super::NativeWordAnchor],
     pass: &super::super::field_buffer::FillPass,
     next: &super::super::field_buffer::FillPass,
+    has_following_pass: bool,
 ) -> Option<DefinitionBoundary<'a>> {
     let Some(NativePassHandoff::Definition(head)) = handoff else {
         return None;
@@ -378,7 +411,8 @@ fn definition_handoff<'a>(
         (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)
     else {
         return (pass.boundary == super::super::field_buffer::FillBoundary::WordEndBreak
-            && buffer.printed_content_end(next.start, next.end) > next.start)
+            && (has_following_pass
+                || buffer.printed_content_end(next.start, next.end) > next.start))
             .then_some(DefinitionBoundary::Head {
                 receiver: head,
                 last,
@@ -428,13 +462,14 @@ fn projected_restart_owner(
 ) -> usize {
     use super::super::field_buffer::FillBoundary;
     if pass.boundary == FillBoundary::WordEndBreak
-        && buffer.printed_content_end(pass.start, pass.end) == pass.start
+        && (buffer.printed_content_end(pass.start, pass.end) == pass.start
+            || buffer.projection_length(pass.start, pass.end) == 0)
         && let Some(first) =
             (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) != 0)
     {
-        // An invisible-only pass still ends a line. Its boundary needs
-        // to precede the first accepted glyph, not the last source word
-        // within that next native pass (term.c:205-220).
+        // An invisible-only or unprojected-blank pass still ends a line.
+        // Its boundary needs to precede the first accepted glyph, not the
+        // last source word within that next native pass (term.c:205-220).
         return anchors.partition_point(|anchor| anchor.content <= first);
     }
 
@@ -452,15 +487,22 @@ fn projected_restart_owner(
         // before the first later owner with accepted ink (term.c:205-220).
         return 1;
     }
-    let Some(anchor) = anchors.get(owner).filter(|anchor| anchor.start <= cell) else {
-        return owner;
-    };
-    let end = anchors
-        .get(owner + 1)
-        .map_or(buffer.cells().len(), |next| next.start.min(next.content));
-    let restart_before_payload = buffer.projection_length(cell, anchor.content) == 0
-        && buffer.projection_length(anchor.content, end) > 0;
-    owner + usize::from(anchor.entry_gap_cell().is_some() || restart_before_payload)
+    for candidate in owner..anchors.len() {
+        let anchor = &anchors[candidate];
+        if buffer.projection_length(cell, anchor.content) != 0 {
+            break;
+        }
+        if anchor.start > cell {
+            continue;
+        }
+        let end = anchors
+            .get(candidate + 1)
+            .map_or(buffer.cells().len(), |next| next.start.min(next.content));
+        if anchor.entry_gap_cell().is_some() || buffer.projection_length(anchor.content, end) > 0 {
+            return candidate + 1;
+        }
+    }
+    owner
 }
 
 /// An accepted pass to project in the active formatter word.

@@ -431,6 +431,6 @@ fn restore_restarted_separator(
 ) {
     if projected {
         let anchor = anchors.last_mut().expect("current native word");
-        anchor.content = boundary.max(anchor.start).min(word_first_cell);
+        anchor.content = boundary.min(word_first_cell).max(anchor.start);
     }
 }

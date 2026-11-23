@@ -85,6 +85,25 @@ impl WordPassProjection {
         };
     }
 
+    fn align_separator_owners(
+        &self,
+        anchors: &mut [super::super::NativeWordAnchor],
+        initial_index: usize,
+        content: usize,
+    ) {
+        let owner = anchors.last().map(|anchor| anchor.owner.clone());
+        if let Some(owner) = owner
+            && initial_index + 1 < anchors.len()
+            && anchors[initial_index].owner == owner
+        {
+            let limit = anchors[initial_index + 1].content;
+            self.align_separator_owner(&mut anchors[initial_index], content.min(limit));
+        }
+        if let Some(anchor) = anchors.last_mut() {
+            self.align_separator_owner(anchor, content);
+        }
+    }
+
     fn align_separator_owner(&self, anchor: &mut super::super::NativeWordAnchor, content: usize) {
         if self.separator == SeparatorDisposition::Consumed {
             // The accepted range is traversed with the same scalar
@@ -148,6 +167,88 @@ impl WordPassProjection {
         {
             self.separator = SeparatorDisposition::Keep;
         }
+    }
+}
+
+fn hang_word_anchor(
+    (pending_field_spaces, settled_boundary_glyph, zero_advance_joined, no_fill_word_active): (
+        usize,
+        bool,
+        bool,
+        bool,
+    ),
+    (boundary, native_word_start, separator): (PendingBoundary, usize, usize),
+    (anchor_ir_start, materialized_field_padding, projected_keep, projection): (
+        String,
+        usize,
+        bool,
+        WordProjectionPolicy,
+    ),
+    entry: &ExecutedWordEntry,
+) -> super::super::NativeWordAnchor {
+    let receipt = &entry.receipt;
+    let native_separator = entry.surviving_separator;
+    let suppress_committed_no_fill =
+        no_fill_word_active && boundary == PendingBoundary::CommittedField;
+    let content = if native_separator > 0
+        && pending_field_spaces == 0
+        && !suppress_committed_no_fill
+        && (!boundary.is_tight()
+            || (settled_boundary_glyph && !receipt.prints_padding)
+            || zero_advance_joined
+            || receipt.leading_retreat.is_some()
+            || projected_keep
+            || entry.rewound()
+            || entry.has_replayed_slots()
+            || (separator == 2 && native_separator == 1))
+    {
+        native_word_start
+    } else {
+        receipt.first_content_cell
+    };
+    super::super::NativeWordAnchor {
+        start: native_word_start,
+        owner: anchor_ir_start,
+        content,
+        projected_device_padding: if receipt.prints_padding {
+            pending_field_spaces
+        } else {
+            0
+        }
+        .max(materialized_field_padding),
+        projected_field_prefix: false,
+        projected_gap: ProjectedNativeGap::default(),
+        projection,
+    }
+}
+
+fn plain_unit_word_anchor(
+    (boundary, native_boundary): (PendingBoundary, PendingBoundary),
+    (zero_advance_joined, projected_keep): (bool, bool),
+    (native_word_start, anchor_ir_start, projection): (usize, String, WordProjectionPolicy),
+    entry: &ExecutedWordEntry,
+) -> super::super::NativeWordAnchor {
+    let receipt = &entry.receipt;
+    let content = if entry.surviving_separator > 0
+        && !native_boundary.is_tight()
+        && (!boundary.is_tight()
+            || zero_advance_joined
+            || receipt.leading_retreat.is_some()
+            || projected_keep
+            || entry.rewound())
+    {
+        native_word_start
+    } else {
+        receipt.first_content_cell
+    };
+    super::super::NativeWordAnchor {
+        start: native_word_start,
+        owner: anchor_ir_start,
+        content,
+        projected_device_padding: 0,
+        projected_field_prefix: false,
+        projected_gap: ProjectedNativeGap::default(),
+        projection,
     }
 }
 
@@ -221,34 +322,23 @@ impl InlineBuilder {
         let native_separator = entry.surviving_separator;
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
-        definition
-            .field_word_anchors
-            .push(super::super::NativeWordAnchor {
-                start: native_word_start,
-                owner: anchor_ir_start,
-                content: if native_separator > 0
-                    && self.execution.pending_field_spaces == 0
-                    && (!boundary.is_tight()
-                        || (self.execution.settled_boundary_glyph && !receipt.prints_padding)
-                        || self.execution.zero_advance_joined
-                        || receipt.leading_retreat.is_some()
-                        || projected_keep
-                        || entry.rewound())
-                {
-                    native_word_start
-                } else {
-                    receipt.first_content_cell
-                },
-                projected_device_padding: if receipt.prints_padding {
-                    self.execution.pending_field_spaces
-                } else {
-                    0
-                }
-                .max(materialized_field_padding),
-                projected_field_prefix: false,
-                projected_gap: ProjectedNativeGap::default(),
+        let initial_anchor_index = definition.field_word_anchors.len();
+        definition.field_word_anchors.push(hang_word_anchor(
+            (
+                self.execution.pending_field_spaces,
+                self.execution.settled_boundary_glyph,
+                self.execution.zero_advance_joined,
+                self.execution.no_fill_word_active,
+            ),
+            (boundary, native_word_start, separator),
+            (
+                anchor_ir_start,
+                materialized_field_padding,
+                projected_keep,
                 projection,
-            });
+            ),
+            &entry,
+        ));
         entry.append_owner_intervals(&mut definition.field_word_anchors);
         observe_definition_word(definition, incoming, separator);
         let mut projection = self.record_authored_native_passes(
@@ -266,20 +356,29 @@ impl InlineBuilder {
             projected_keep,
             false,
         );
-        self.align_last_definition_separator(&projection, receipt.first_content_cell);
+        self.align_last_definition_separator(
+            &projection,
+            initial_anchor_index,
+            receipt.first_content_cell,
+        );
         projection.prints_padding = receipt.prints_padding;
         projection.authored_separator = authored_separator;
         projection
     }
 
-    fn align_last_definition_separator(&mut self, projection: &WordPassProjection, content: usize) {
-        if let Some(anchor) = self
+    fn align_last_definition_separator(
+        &mut self,
+        projection: &WordPassProjection,
+        initial_index: usize,
+        content: usize,
+    ) {
+        if let Some(anchors) = self
             .execution
             .definition
             .as_mut()
-            .and_then(|definition| definition.field_word_anchors.last_mut())
+            .map(|definition| &mut definition.field_word_anchors)
         {
-            projection.align_separator_owner(anchor, content);
+            projection.align_separator_owners(anchors, initial_index, content);
         }
     }
 
@@ -334,29 +433,16 @@ impl InlineBuilder {
         let native_separator = entry.surviving_separator;
         let authored_separator =
             take_retreated_source_blank(incoming, &anchor_ir_start, receipt.leading_retreat);
+        let initial_anchor_index = self.execution.plain_input.anchors.len();
         self.execution
             .plain_input
             .anchors
-            .push(super::super::NativeWordAnchor {
-                start: native_word_start,
-                owner: anchor_ir_start,
-                content: if native_separator > 0
-                    && !native_boundary.is_tight()
-                    && (!self.execution.boundary.is_tight()
-                        || self.execution.zero_advance_joined
-                        || receipt.leading_retreat.is_some()
-                        || projected_keep
-                        || entry.rewound())
-                {
-                    native_word_start
-                } else {
-                    receipt.first_content_cell
-                },
-                projected_device_padding: 0,
-                projected_field_prefix: false,
-                projected_gap: ProjectedNativeGap::default(),
-                projection,
-            });
+            .push(plain_unit_word_anchor(
+                (self.execution.boundary, native_boundary),
+                (self.execution.zero_advance_joined, projected_keep),
+                (native_word_start, anchor_ir_start, projection),
+                &entry,
+            ));
         entry.append_owner_intervals(&mut self.execution.plain_input.anchors);
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
@@ -389,11 +475,15 @@ impl InlineBuilder {
             projected_keep,
             true,
         );
-        if let Some(anchor) = unit.anchors.last_mut() {
-            result.align_separator_owner(anchor, receipt.first_content_cell);
-            if let Some(handoff) = &mut self.section_handoff {
-                handoff.note_heading_word(anchor.start.min(anchor.content));
-            }
+        result.align_separator_owners(
+            &mut unit.anchors,
+            initial_anchor_index,
+            receipt.first_content_cell,
+        );
+        if let Some(anchor) = unit.anchors.last()
+            && let Some(handoff) = &mut self.section_handoff
+        {
+            handoff.note_heading_word(anchor.start.min(anchor.content));
         }
         result.prints_padding = receipt.prints_padding;
         result.authored_separator = authored_separator;

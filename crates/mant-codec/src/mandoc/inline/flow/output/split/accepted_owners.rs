@@ -155,7 +155,7 @@ impl AcceptedOwners<'_> {
             // unpainted padding. Only whitespace can fill its scalar
             // positions; do not spend those positions on surviving ink.
             while !self.covered_only
-                && !character.is_whitespace()
+                && !matches!(character, ' ' | '\t' | '\n')
                 && let Some(omit) = omissions.get(*next_omission)
                 && !omit.covered
                 && omit.range.contains(position)

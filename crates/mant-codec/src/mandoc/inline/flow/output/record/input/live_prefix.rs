@@ -147,6 +147,10 @@ impl PrefixEdits {
             let old = anchors[owner_index].clone();
             if anchors.last().is_some_and(|last| last.start == position) {
                 anchors.pop();
+            } else if let Some(last) = anchors.last_mut()
+                && last.content > position
+            {
+                last.content = position;
             }
             let mut resumed = incoming.clone();
             resumed.start = position + 1;
