@@ -364,6 +364,9 @@ fn publish_inner_advances(
                         width = width.saturating_add(gap.count);
                         true
                     }
+                    Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::Scalar(' ')) => {
+                        true
+                    }
                     Some(_) => false,
                     None => matches!(
                         gap.cell,

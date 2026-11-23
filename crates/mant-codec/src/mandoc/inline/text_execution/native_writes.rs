@@ -35,11 +35,18 @@ impl AppendedFonts {
                     self.armed = true;
                     continue;
                 }
+                FieldWrite::CancelBackafter if !self.pending => {
+                    // term.c:662-667: ESCAPE_NOSPACE clears BACKAFTER and
+                    // buffers no bytes into tcol->buf.
+                    self.armed = false;
+                    continue;
+                }
                 FieldWrite::Cell(
                     FieldCell::BreakableBlank
                     | FieldCell::NonBreakingBlank
                     | FieldCell::ZeroWidthGraph
-                    | FieldCell::Breakpoint,
+                    | FieldCell::Breakpoint
+                    | FieldCell::BreakMarker,
                 ) if !self.pending => {}
                 _ => return false,
             }
@@ -86,6 +93,7 @@ pub(super) fn proved_decorated_tail(
                     | RoffInlineEvent::Font(_)
                     | RoffInlineEvent::PreviousFont
                     | RoffInlineEvent::ZeroAdvance
+                    | RoffInlineEvent::NoSpace
                     | RoffInlineEvent::LineBreak
                     | RoffInlineEvent::ZeroWidthGlyph
                     | RoffInlineEvent::Breakpoint
@@ -97,6 +105,7 @@ pub(super) fn proved_decorated_tail(
     let count = writes
         .iter()
         .rev()
+        .skip_while(|write| matches!(write, FieldWrite::CancelBackafter))
         .take_while(
             |write| matches!(write, FieldWrite::Cell(cell) if decorates_single_column(cell)),
         )

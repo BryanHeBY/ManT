@@ -444,27 +444,41 @@ impl FieldBuffer {
         if self.cells.len() == entry.saturating_add(proof.cells) {
             // The exact ending font run can be replayed. Earlier paint
             // remains valid even when a later cursor cannot revisit it.
-            // An exact fresh append can end in authored SP after its
-            // decorated glyphs. That SP does not fence the earlier raw
-            // paint: term_word()/encode() have not flushed any of it.
-            let complete_spaced_word = entry == 0
+            // An exact fresh append whose cells are all proved one-column
+            // glyphs, blanks, or zero-width controls keeps raw_edit_fence at 0
+            // even across multiple font runs or trailing controls:
+            // term_word()/encode() have not flushed any of those bytes.
+            let has_breakable_blank = self.cells.contains(&FieldCell::BreakableBlank);
+            let complete_fresh_word = entry == 0
                 && self.projection_owner == super::FieldProjectionOwner::Active
                 && !self.backafter_armed
                 && self.raw_slot_fence == 0
                 && self.resume == 0
                 && self.projected_pass_ends.is_empty()
                 && self.deferred_blanks.is_empty()
-                && self.cells.last() == Some(&FieldCell::BreakableBlank)
+                && proof.cells > 0
                 && proof.cells <= super::MAX_EDITABLE_APPEND_CELLS / 5
-                && proof.fonts.len() == 1
-                && self.cells.iter().all(|cell| {
+                && self.cells.iter().enumerate().all(|(index, cell)| {
                     matches!(
                         cell,
-                        FieldCell::BreakableBlank | FieldCell::Graph { width: 1, .. }
-                    )
+                        FieldCell::BreakableBlank
+                            | FieldCell::ZeroWidthGraph
+                            | FieldCell::Breakpoint
+                    ) || matches!(cell, FieldCell::BreakMarker) && index + 1 == self.cells.len()
+                        || matches!(
+                            cell,
+                            FieldCell::Graph { text, width: 1 }
+                                if !text.is_whitespace()
+                                    || has_breakable_blank && *text == '\u{a0}'
+                        )
                 });
-            if complete_spaced_word {
-                self.hold_editable_passes();
+            if complete_fresh_word {
+                if matches!(
+                    self.cells.last(),
+                    Some(FieldCell::BreakableBlank | FieldCell::ZeroWidthGraph)
+                ) {
+                    self.hold_editable_passes();
+                }
             } else if !(entry == 0 && proof.pending)
                 && let Some(tail) = proof.replay_tail
             {

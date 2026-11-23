@@ -721,3 +721,71 @@ fn closed_definition_rows_preserve_accepted_underline_strokes() {
         );
     }
 }
+
+#[test]
+fn fresh_words_controls_and_split_bold_copies_keep_raw_slots() {
+    // Verified against pinned reference mandoc (-Tascii and -Tutf8):
+    // - Fresh decorated/switched words with spaces or zero-width controls
+    //   buffer exact raw bytes before term_fill() (term.c:621-667, 899-969).
+    // - ESCAPE_NOSPACE (\c) cancels BACKAFTER without buffering bytes and
+    //   sets continuation only at word end (term.c:662-667).
+    // - Positive HORIZ in a fresh filled word writes NBRSP or consumes
+    //   BACKBEFORE at word end (term.c:678-699).
+    // - Trailing spaces after \p advance col without overwriting existing
+    //   cells when col < lastcol (term.c:868-871).
+    // - Overwriting the backspace between a bold glyph's two copies leaves
+    //   both copies visible in the accepted row (term.c:915-925).
+    verify_rows(&[
+        (r#".Sy " D J " Sy "\h'-8n'\&\p\:F\p""#, &["D", "F"]),
+        (r#".Sy " DJ\c" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " D\&J" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " D\:J" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " \fRDJ" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy "D\z\c J" Ns No "\h'-5n'\p ""#, &["D", "J"]),
+        (r#".Sy "D \zJ\c" Ns No "\h'-5n'\p ""#, &["DD", "J"]),
+        (r#".Sy "\h'1n'C\zJ" Ns No "\h'-5n'\p ""#, &["CJ"]),
+        (r#".Sy "C\zJ\h'1n'" Ns No "\h'-5n'\p ""#, &["CCJ"]),
+        (r#".Sy "CD \zJ\h'1n'" Ns No "\h'-5n'\p ""#, &["CD", "J"]),
+        (r#".Sy "D \zJ" Ns No "\h'-5n'\p ""#, &["DD", "J"]),
+        (r#".No "\h'-3n'BC\p" Ns No "\h'-3n'Y""#, &["YC"]),
+        (
+            r#".Sy "A\c" Em "\z\h'-1n'\h'1n'" Sy "F\p\h'-1n'G\p\h'-1n'\c\h'-1n'" No "\h'-4n'X ""#,
+            &["A  XG"],
+        ),
+        (r#".Sy "CD \zJ" Ns No "\h'-8n'\& \pX""#, &["CCXD", "J"]),
+        (r#".Sy "CD \zJ" Ns Em "\h'-8n'\& \pX""#, &["CCXJ"]),
+        (r#".Sy "CD \zJ" Ns No "\h'-8n'\&\p X""#, &["CDXD", "J"]),
+        (r#".Sy "CD \zJ" Ns No "\h'-7n'\&\pX""#, &["XD", "J"]),
+    ]);
+}
+
+#[test]
+fn fresh_motion_nbsp_and_rearmed_words_preserve_raw_slots() {
+    // Verified against pinned reference mandoc (-Tascii and -Tutf8):
+    // - Fresh decorated words ending in \p or containing UTF-8 U+00A0 alongside
+    //   ordinary SP keep raw_edit_fence at 0 (term.c:620-661, 899-969).
+    // - A re-armed local word (\zJ\z) followed by a control-only HORIZ cancels
+    //   BACKAFTER before the second HORIZ retreats (term.c:678-682, 701-705).
+    // - Fresh filled words with leading, inner, or trailing positive HORIZ
+    //   retain both reading spaces beside authored SP and multi-cell
+    //   FixedDrawingAdvance overprints (term.c:389-434, 678-699, 915-925).
+    verify_rows(&[
+        (r#".Sy " DJ\p" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " DJ\p" Sy "\c\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " \~DJ" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy "\0 DJ" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy " D\0J\0" Sy "\h'-8n'\&\p\:F\p""#, &["D", "F"]),
+        (r#".Sy " D\~J\~" Sy "\h'-8n'\&\p\:F\p""#, &["D", "F"]),
+        (r#".Sy "D \zJ\z" No "\h'-5n'\h'-2n'\p""#, &["D JJ"]),
+        (r#".Sy " DJ\h'1n'" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Em " DJ\h'1n'" Sy "\h'-10n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy "\h'2n' DJ" Sy "\h'-4n'\&\p\:F\p""#, &["D", "F"]),
+        (r#".Sy "\h'3n' DJ" Sy "\h'-8n'\&\p\:F\p""#, &["F"]),
+        (r#".Sy "C\h'1n'\zJ\h'1n'" No "\h'-7n'\&""#, &["CC J"]),
+        (r#".Sy "C\h'3n'\zJ\h'3n'" No "\h'-10n'\&""#, &["J"]),
+        (r#".Sy "D\h'2n' \zJ\h'2n'" No "\h'-5n'\p""#, &["D  J"]),
+        (r#".Sy "D\h'3n' \zJ\h'3n'" No "\h'-5n'\p""#, &["D    JJ"]),
+        (r#".Sy "\h'3n'\~D \zJ" Ns No "\h'-1n'\p\fP""#, &["D JJ"]),
+        (r#".Sy "\h'3n'\~D \zJ" Ns Em "\h'-1n'\p\h'3n'""#, &["D JJ"]),
+    ]);
+}
