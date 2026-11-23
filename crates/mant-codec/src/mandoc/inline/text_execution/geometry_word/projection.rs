@@ -65,12 +65,12 @@ impl<'a> PlacedWord<'a> {
         let (extent, cursor_retreat) = slots.extent_and_retreat();
         let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
-        if retain_suffix && editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS {
+        let can_edit_tail = retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS;
+        if can_edit_tail && (editable_pass || domain == ReplayDomain::Filled) {
             release_unpaired_underlines(&mut slots, &mut reading, domain);
         }
-        let replaced_advance_marker = advance_marker.filter(|_| {
-            retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS && word_owner.is_some()
-        });
+        let replaced_advance_marker =
+            advance_marker.filter(|_| can_edit_tail && word_owner.is_some());
         prepare_reading_blanks(
             &mut slots,
             &mut reading,
@@ -95,7 +95,7 @@ impl<'a> PlacedWord<'a> {
         let retain_suffix = retain_suffix || split_bold_copy;
         let editable_marker = editable_marker || split_bold_copy;
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
-        retire_trailing_entry_blanks(&mut slots, &reading, earlier);
+        retire_trailing_entry_blanks(&mut slots, &mut reading, earlier);
         preserve_author_separators(&slots, &mut reading);
         let (inherited_pending, prior) =
             settle_prior_slot(prior_pending, pending_owner, &slots, &reading, earlier)?;
@@ -350,6 +350,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
                     drawing_advance: true,
                     advance_source,
                     underline_decoration: false,
+                    owned_deferred_blank: false,
                 }),
             );
         }
@@ -550,7 +551,7 @@ fn retain_earlier_advances(
 
 fn retire_trailing_entry_blanks(
     slots: &mut [FillSlot],
-    reading: &[ReadingCell<'_>],
+    reading: &mut [ReadingCell<'_>],
     earlier: usize,
 ) {
     let Some(graph) = slots.iter().rposition(|slot| {
@@ -574,6 +575,23 @@ fn retire_trailing_entry_blanks(
             .is_some_and(|id| matches!(reading[id].glyph, ReadingGlyph::EntryBlank))
         {
             slot.owner = None;
+        }
+    }
+    // An entry blank that survives between incoming glyphs (after a rewound
+    // first_incoming glyph and before a later graph) is not counted in
+    // replay_prefix().entry_blanks. Project it as an inline space so its
+    // 1-scalar native cell matches the emitted word output.
+    if let Some(first_incoming) = slots.iter().position(|slot| {
+        slot.owner.is_some_and(|id| {
+            id >= earlier && !matches!(reading[id].glyph, ReadingGlyph::EntryBlank)
+        })
+    }) {
+        for slot in &slots[first_incoming + 1..=graph] {
+            if let Some(id) = slot.owner
+                && matches!(reading[id].glyph, ReadingGlyph::EntryBlank)
+            {
+                reading[id].glyph = ReadingGlyph::Scalar(' ');
+            }
         }
     }
 }

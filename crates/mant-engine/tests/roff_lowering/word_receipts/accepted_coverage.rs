@@ -1284,7 +1284,7 @@ const LIVE_REPLAY_CASES: &[(&str, &[&str], Option<&str>)] = &[
     ),
     (
         include_str!("live_replay/replay-marker-with-suffix.1"),
-        &["FGD", " X"],
+        &["FGD", "X"],
         None,
     ),
     (

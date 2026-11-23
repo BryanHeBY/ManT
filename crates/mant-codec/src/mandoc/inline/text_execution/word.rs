@@ -215,7 +215,9 @@ impl WordExecution {
                 ));
         let mut rewind_entry = false;
         if context.policy.record_native_cells {
-            if let Some(columns) = super::super::word_input::negative_entry_columns(argument) {
+            if !armed
+                && let Some(columns) = super::super::word_input::negative_entry_columns(argument)
+            {
                 rewind_entry = self.native_writes.is_empty();
                 self.native_writes
                     .push(FieldWrite::RewindWordEntry(columns));

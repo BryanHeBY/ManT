@@ -661,6 +661,11 @@ fn infer_gap_landing(
             FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
             _ => break,
         };
+        if buffer.has_deferred_blank_at(start + source) {
+            // A deferred blank carries its own DeferredBlankRun and is never
+            // counted in retained_motion_gap's projected prefix width.
+            continue;
+        }
         if source != offset && locations[source].is_some_and(|(index, _, _)| index != owner_index) {
             // A source blank keeps its own scalar and moves independently.
             continue;

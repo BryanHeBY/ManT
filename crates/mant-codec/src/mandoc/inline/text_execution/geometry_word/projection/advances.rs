@@ -14,17 +14,22 @@ pub(super) fn prepare_reading_blanks(
     advance_marker: Option<usize>,
 ) {
     match advances {
-        AdvanceReading::Inner => publish_inner_advances(slots, reading, earlier),
+        AdvanceReading::Inner => {
+            if let Some(owner) = word_owner {
+                defer_inner_trailing_advances(slots, reading, earlier, owner);
+            }
+            publish_inner_advances(slots, reading, earlier);
+        }
         AdvanceReading::DeferredTail => {
             if let Some(owner) = word_owner {
                 let start = slots.len().saturating_sub(1);
-                defer_trailing_advances(slots, reading, owner, start);
+                defer_trailing_advances(slots, reading, owner, start, true);
                 publish_inner_advances(slots, reading, earlier);
             }
         }
         AdvanceReading::DeferredBlankTail => {
             if let Some(owner) = word_owner {
-                defer_trailing_advances(slots, reading, owner, 0);
+                defer_trailing_advances(slots, reading, owner, 0, true);
             }
         }
         AdvanceReading::Unprojected => {}
@@ -34,11 +39,54 @@ pub(super) fn prepare_reading_blanks(
     defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
 }
 
+fn defer_inner_trailing_advances(
+    slots: &mut Vec<FillSlot>,
+    reading: &mut Vec<ReadingCell<'_>>,
+    earlier: usize,
+    owner: u64,
+) {
+    let Some(last_ink) = slots.iter().rposition(|slot| {
+        slot.owner.is_some_and(|owner| {
+            owner >= earlier
+                && matches!(
+                    reading[owner].glyph,
+                    ReadingGlyph::Scalar(ch) if !ch.is_whitespace() || ch == '\u{a0}'
+                )
+        })
+    }) else {
+        return;
+    };
+    let tail_start = last_ink + 1;
+    let mut width = 0usize;
+    let eligible = slots[tail_start..].iter().all(|slot| {
+        if slot.owner.is_some_and(|id| {
+            slot.drawing_advance && matches!(reading[id].glyph, ReadingGlyph::DeviceAdvance)
+        }) {
+            width = width.saturating_add(slot.count);
+            true
+        } else {
+            slot.owner.is_none()
+                && matches!(
+                    slot.cell,
+                    FieldCell::BreakMarker
+                        | FieldCell::Breakpoint
+                        | FieldCell::ZeroWidthGraph
+                        | FieldCell::TabReference
+                )
+        }
+    });
+    if eligible && (1..=MAX_EDITABLE_APPEND_CELLS).contains(&width) {
+        let replayable_tail = !slots.iter().any(|slot| slot.cell == FieldCell::BreakMarker);
+        defer_trailing_advances(slots, reading, owner, tail_start, replayable_tail);
+    }
+}
+
 fn defer_trailing_advances(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
     owner: u64,
     start: usize,
+    replayable_tail: bool,
 ) {
     // term.c::term_field() delays trailing NBRSP until it finds the
     // next printable cell. Keep the native slots, with no reading
@@ -63,7 +111,7 @@ fn defer_trailing_advances(
                             owner,
                             write: end + offset,
                             font: style.font,
-                            replayable_tail: true,
+                            replayable_tail,
                         },
                         imported_cell: None,
                     },
@@ -77,6 +125,7 @@ fn defer_trailing_advances(
                     drawing_advance: true,
                     advance_source: None,
                     underline_decoration: false,
+                    owned_deferred_blank: false,
                 }
             }),
         );
@@ -127,6 +176,7 @@ fn split_buffered_advance(
             drawing_advance: true,
             advance_source: None,
             underline_decoration: false,
+            owned_deferred_blank: false,
         }),
     );
     Some(start..start + count)
@@ -173,6 +223,7 @@ fn defer_retained_separator_advances(
         }
         if motion.cell != FieldCell::NonBreakingBlank
             || motion.count != 1
+            || motion.owned_deferred_blank
             || !motion
                 .owner
                 .is_none_or(|owner| matches!(reading[owner].glyph, ReadingGlyph::Earlier(0)))
@@ -323,7 +374,10 @@ fn publish_inner_advances(
     for (index, slot) in slots.iter().enumerate() {
         let ink = slot.owner.filter(|&owner| {
             owner >= earlier
-                && matches!(reading[owner].glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+                && matches!(
+                    reading[owner].glyph,
+                    ReadingGlyph::Scalar(ch) if !ch.is_whitespace() || ch == '\u{a0}'
+                )
                 && matches!(slot.cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
         });
         if ink.is_none() {
@@ -353,31 +407,7 @@ fn publish_inner_advances(
                 // occupies that same column (term.c::encode1).
                 end -= 2;
             }
-            let between = at + 1..end;
-            let mut advances = Vec::new();
-            let mut width = 0usize;
-            let usable = between.clone().all(|index| {
-                let gap = &slots[index];
-                match gap.owner {
-                    Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::DeviceAdvance) => {
-                        advances.push((index, owner));
-                        width = width.saturating_add(gap.count);
-                        true
-                    }
-                    Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::Scalar(' ')) => {
-                        true
-                    }
-                    Some(_) => false,
-                    None => matches!(
-                        gap.cell,
-                        FieldCell::ZeroWidthGraph
-                            | FieldCell::TabReference
-                            | FieldCell::Breakpoint
-                            | FieldCell::BreakMarker
-                    ),
-                }
-            });
-            if usable && width != 0 {
+            if let Some((advances, width)) = collect_inner_advances(slots, reading, at + 1..end) {
                 if width <= budget {
                     replacements.extend(
                         advances
@@ -407,6 +437,64 @@ fn publish_inner_advances(
     assign_inner_advance_spaces(slots, reading, replacements);
 }
 
+fn collect_inner_advances(
+    slots: &[FillSlot],
+    reading: &[ReadingCell<'_>],
+    mut between: Range<usize>,
+) -> Option<(Vec<(usize, usize)>, usize)> {
+    let mut advances = Vec::new();
+    let mut inherited_advances = Vec::new();
+    let mut width = 0usize;
+    let usable = between.all(|index| {
+        let gap = &slots[index];
+        match gap.owner {
+            Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::DeviceAdvance) => {
+                advances.push((index, owner));
+                width = width.saturating_add(gap.count);
+                true
+            }
+            Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::Scalar(' ')) => true,
+            Some(owner)
+                if matches!(reading[owner].glyph, ReadingGlyph::Earlier(0))
+                    && !gap.owned_deferred_blank
+                    && matches!(
+                        gap.cell,
+                        FieldCell::NonBreakingBlank | FieldCell::BreakableBlank
+                    ) =>
+            {
+                // term.c:868-869: bufferc(ASCII_NBRSP) advances past an
+                // existing unprojected blank at col < lastcol without
+                // replacing it. Publish it alongside the incoming HORIZ once
+                // the later graph proves that pass.
+                inherited_advances.push(index);
+                width = width.saturating_add(gap.count);
+                true
+            }
+            Some(_) => false,
+            None => matches!(
+                gap.cell,
+                FieldCell::ZeroWidthGraph
+                    | FieldCell::TabReference
+                    | FieldCell::Breakpoint
+                    | FieldCell::BreakMarker
+            ),
+        }
+    });
+    if !usable || advances.is_empty() || width == 0 {
+        return None;
+    }
+    let style_owner = advances[0].1;
+    if !inherited_advances.is_empty() {
+        advances.extend(
+            inherited_advances
+                .into_iter()
+                .map(|slot| (slot, style_owner)),
+        );
+        advances.sort_unstable_by_key(|&(slot, _)| slot);
+    }
+    Some((advances, width))
+}
+
 fn assign_inner_advance_spaces(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
@@ -429,6 +517,7 @@ fn assign_inner_advance_spaces(
                     drawing_advance: false,
                     advance_source: None,
                     underline_decoration: false,
+                    owned_deferred_blank: false,
                 }
             })
             .collect::<Vec<_>>();

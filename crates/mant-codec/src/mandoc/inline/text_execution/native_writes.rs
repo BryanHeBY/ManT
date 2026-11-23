@@ -65,6 +65,7 @@ impl AppendedFonts {
         let replay_tail = match styled_tail {
             Some((count, _)) if count == decorated => None,
             Some((count, _)) => Some(count),
+            None if decorated == 0 => None,
             None => Some(0),
         };
         Some(FieldWrite::ProveAppendedSlots(AppendedSlotProof {
@@ -85,32 +86,59 @@ pub(super) fn proved_decorated_tail(
     // `term_word()` can buffer marker and BACKAFTER controls before
     // that run. They do not change the decoration written by encode1.
     // Actual cursor edits require the full placement path.
-    if !has_native_decoration(font)
-        || !events.iter().all(|event| {
-            matches!(
-                event,
-                RoffInlineEvent::Text(_)
-                    | RoffInlineEvent::Font(_)
-                    | RoffInlineEvent::PreviousFont
-                    | RoffInlineEvent::ZeroAdvance
-                    | RoffInlineEvent::NoSpace
-                    | RoffInlineEvent::LineBreak
-                    | RoffInlineEvent::ZeroWidthGlyph
-                    | RoffInlineEvent::Breakpoint
-            )
-        })
-    {
+    if !has_native_decoration(font) {
         return None;
     }
-    let count = writes
-        .iter()
-        .rev()
-        .skip_while(|write| matches!(write, FieldWrite::CancelBackafter))
-        .take_while(
-            |write| matches!(write, FieldWrite::Cell(cell) if decorates_single_column(cell)),
-        )
-        .count();
+    let mut armed = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::Text(value) => {
+                if value.chars().any(uses_native_font) {
+                    armed = false;
+                }
+            }
+            RoffInlineEvent::ZeroAdvance => armed = true,
+            RoffInlineEvent::NoSpace => armed = false,
+            RoffInlineEvent::HorizontalMotion { argument, .. }
+                if std::mem::take(&mut armed)
+                    || super::geometry_word::relative_zero_motion(argument.as_deref()) => {}
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::LineBreak
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint => {}
+            _ => return None,
+        }
+    }
+    let mut count = 0;
+    let mut canceled = false;
+    for write in writes.iter().rev() {
+        match write {
+            FieldWrite::CancelBackafter => canceled = true,
+            FieldWrite::ArmBackafter if canceled => {}
+            FieldWrite::Cell(cell) if decorates_single_column(cell) => {
+                canceled = false;
+                count += 1;
+            }
+            _ => break,
+        }
+    }
     (count != 0).then_some((count, font))
+}
+
+pub(super) fn writes_decorated_graph(writes: &[FieldWrite], font: super::Font) -> bool {
+    has_native_decoration(font)
+        && writes.iter().any(|write| {
+            matches!(
+                write,
+                FieldWrite::Cell(FieldCell::Graph { text, .. }) if uses_native_font(*text)
+            ) || matches!(
+                write,
+                FieldWrite::Cell(FieldCell::Hyphen)
+                    | FieldWrite::DecoratedGraph { .. }
+                    | FieldWrite::UnprojectedGraph { .. }
+            )
+        })
 }
 
 fn decorates_single_column(cell: &FieldCell) -> bool {

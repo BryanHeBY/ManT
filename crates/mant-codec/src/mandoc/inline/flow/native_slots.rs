@@ -17,11 +17,13 @@ pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) drawing_advance: bool,
     pub(in crate::mandoc::inline) advance_source: Option<usize>,
     pub(in crate::mandoc::inline) underline_decoration: bool,
+    pub(in crate::mandoc::inline) owned_deferred_blank: bool,
 }
 
 #[derive(Clone, Debug)]
 enum Pattern {
     Plain(FieldCell),
+    DeferredAdvance(FieldCell),
     UnderlineDecoration,
     DrawingAdvance,
     ImportedAdvance {
@@ -38,7 +40,9 @@ enum Pattern {
 impl Pattern {
     fn cell(&self, offset: usize) -> &FieldCell {
         match self {
-            Self::Plain(cell) | Self::ImportedAdvance { cell, .. } => cell,
+            Self::Plain(cell)
+            | Self::DeferredAdvance(cell)
+            | Self::ImportedAdvance { cell, .. } => cell,
             Self::DrawingAdvance => &FieldCell::NonBreakingBlank,
             Self::UnderlineDecoration => &FieldCell::Graph {
                 text: '_',
@@ -53,6 +57,7 @@ impl Pattern {
     fn shifted(&self, offset: usize) -> Self {
         match self {
             Self::Plain(_)
+            | Self::DeferredAdvance(_)
             | Self::UnderlineDecoration
             | Self::DrawingAdvance
             | Self::ImportedAdvance { .. } => self.clone(),
@@ -82,6 +87,7 @@ impl Pattern {
                     drawing_advance: previous.drawing_advance,
                     advance_source: previous.advance_source,
                     underline_decoration: previous.underline_decoration,
+                    owned_deferred_blank: previous.owned_deferred_blank,
                 };
                 out.push(tail);
             }
@@ -92,6 +98,7 @@ impl Pattern {
                 drawing_advance: self.is_fixed_advance(),
                 advance_source,
                 underline_decoration: matches!(self, Self::UnderlineDecoration),
+                owned_deferred_blank: matches!(self, Self::DeferredAdvance(_)),
             });
         };
         let Self::Overstrike { cells, phase } = self else {
@@ -126,7 +133,7 @@ impl Pattern {
     fn into_independent_tail(self) -> Self {
         match self {
             Self::ImportedAdvance { drawing: true, .. } => Self::DrawingAdvance,
-            Self::ImportedAdvance { cell, .. } => Self::Plain(cell),
+            Self::ImportedAdvance { cell, .. } | Self::DeferredAdvance(cell) => Self::Plain(cell),
             pattern => pattern,
         }
     }
@@ -212,6 +219,7 @@ pub(in crate::mandoc::inline) struct MotionEffect {
 pub(in crate::mandoc::inline) enum PrefixExtension {
     None,
     Word,
+    FilledWord,
     LeadingMarker,
 }
 
@@ -230,6 +238,8 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
     /// Existing reading seams whose originating advance normalized to one NBRSP.
     pub(in crate::mandoc::inline::flow) projected_advances: Vec<usize>,
+    /// Existing deferred-blank slots that already own a `DeferredBlankRun`.
+    pub(in crate::mandoc::inline::flow) deferred_blanks: Vec<usize>,
     pub(in crate::mandoc::inline) automatic: usize,
     pub(in crate::mandoc::inline) cursor_retreat: usize,
     pub(in crate::mandoc::inline) kept: bool,
@@ -243,11 +253,22 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
 
 impl FieldPrefix {
     pub(in crate::mandoc::inline) fn raw_slot_count(&self) -> usize {
-        self.cells.iter().fold(self.automatic, |count, (cell, _)| {
+        let base = self.cells.iter().fold(self.automatic, |count, (cell, _)| {
             count.saturating_add(match cell {
                 FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => *width,
                 _ => 1,
             })
+        });
+        self.tail_fonts.iter().fold(base, |count, (range, font)| {
+            let extra = match font {
+                RoffFont::Strong
+                | RoffFont::Emphasis
+                | RoffFont::CodeStrong
+                | RoffFont::CodeEmphasis => 2,
+                RoffFont::StrongEmphasis => 4,
+                RoffFont::Regular | RoffFont::Code => 0,
+            };
+            count.saturating_add(range.len().saturating_mul(extra))
         })
     }
 }
@@ -411,6 +432,11 @@ impl NativeSlots {
                     );
                 }
                 FieldCell::NonBreakingBlank
+                    if prefix.deferred_blanks.binary_search(&index).is_ok() =>
+                {
+                    slots.write_pattern(Pattern::DeferredAdvance(cell.clone()), 1, Some(owner));
+                }
+                FieldCell::NonBreakingBlank
                     if prefix.projected_advances.binary_search(&index).is_ok() =>
                 {
                     slots.advance_pattern(
@@ -468,10 +494,10 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
-    pub(in crate::mandoc::inline) fn cursor_before_unread_break(&self) -> bool {
+    pub(in crate::mandoc::inline) fn has_break_marker(&self) -> bool {
         self.runs
-            .range(self.cursor..)
-            .any(|(_, run)| matches!(run.pattern, Pattern::Plain(FieldCell::BreakMarker)))
+            .values()
+            .any(|run| matches!(run.pattern, Pattern::Plain(FieldCell::BreakMarker)))
     }
 
     /// The raw position of a buffered break immediately after a fixed advance.

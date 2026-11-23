@@ -791,6 +791,9 @@ impl super::InlineExecutionState {
             PrefixExtension::Word => {
                 !input.has_pending_break_markers() || input.word_scan_deferred()
             }
+            PrefixExtension::FilledWord => {
+                domain == ReplayDomain::Filled && !input.has_pending_break_markers()
+            }
             // A new leading marker is itself a cell write, not a flush of
             // the preceding marker. field_prefix still excludes any pass
             // already consumed by the incremental scanner.
@@ -830,11 +833,6 @@ impl super::InlineExecutionState {
                 })
                 .flatten(),
         }
-    }
-
-    pub(in crate::mandoc::inline) fn has_raw_prefix_after_layout_controls(&self) -> bool {
-        let input = self.word_input().0;
-        input.has_pass_retreats() || input.has_live_run_in_blanks()
     }
 
     pub(super) fn acknowledge_word_input_pass(&mut self, end: usize) {

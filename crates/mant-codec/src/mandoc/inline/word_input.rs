@@ -192,25 +192,43 @@ impl super::InlineExecutionState {
             } => true,
             _ => false,
         });
-        // Layout-only controls preceding a later rewind can still be
-        // represented by the bounded suffix. Revisit them when the live
-        // field retains proved editable space or backspace slots.
-        let rewind = if self.has_raw_prefix_after_layout_controls() {
-            events.iter().find(|event| {
-                !matches!(
-                    event,
-                    RoffInlineEvent::LineBreak
-                        | RoffInlineEvent::Breakpoint
-                        | RoffInlineEvent::ZeroWidthGlyph
-                        | RoffInlineEvent::Font(_)
-                        | RoffInlineEvent::PreviousFont
-                )
-            })
-        } else {
-            events.first()
-        };
-        let leading_retreat = matches!(rewind, Some(RoffInlineEvent::HorizontalMotion { argument, .. })
-            if negative_entry_columns(argument.as_deref()).is_some());
+        // Any non-canceled relative negative HORIZ can retreat into the live
+        // field suffix after writing earlier cells in the same word
+        // (term.c:678-682, 701-718). Positive non-canceled relative HORIZ
+        // extends a filled prefix without pending break markers.
+        let mut armed = self.zero_advance.is_armed();
+        let mut has_negative_motion = false;
+        let mut has_positive_motion = false;
+        for event in events {
+            match event {
+                RoffInlineEvent::ZeroAdvance => armed = true,
+                RoffInlineEvent::NoSpace
+                | RoffInlineEvent::BreakableHyphen
+                | RoffInlineEvent::DeviceName
+                | RoffInlineEvent::Overstrike { .. } => armed = false,
+                RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                    if std::mem::take(&mut armed) {
+                        continue;
+                    }
+                    if negative_entry_columns(argument.as_deref()).is_some() {
+                        has_negative_motion = true;
+                    } else if let Some(argument) = argument.as_deref()
+                        && !argument.starts_with('|')
+                        && libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument) > 0
+                    {
+                        has_positive_motion = true;
+                    }
+                }
+                RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _)
+                    if value
+                        .chars()
+                        .any(|ch| !is_formatter_word_blank(ch) && ch != '\n') =>
+                {
+                    armed = false;
+                }
+                _ => {}
+            }
+        }
         let leading_marker = matches!(
             events.iter().find(|event| !matches!(
                 event,
@@ -227,18 +245,12 @@ impl super::InlineExecutionState {
             )
         }) {
             PrefixExtension::Word
+        } else if has_positive_motion {
+            PrefixExtension::FilledWord
         } else {
             PrefixExtension::None
         };
-        // A local glyph can complete BACKBEFORE and then reposition the
-        // cursor within the unread suffix. The entry may also carry the
-        // preceding word's BACKBEFORE, even without an automatic blank.
-        let retreat_after_zero_advance_glyph = capture_prefix && has_zero_advance_retreat(events);
-        self.native_slot_entry(
-            capture_prefix || pending,
-            extend,
-            leading_retreat || retreat_after_zero_advance_glyph,
-        )
+        self.native_slot_entry(capture_prefix || pending, extend, has_negative_motion)
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {
@@ -251,20 +263,6 @@ impl super::InlineExecutionState {
         let (offset, margin) = self.table_source_bounds(0);
         margin.saturating_sub(offset)
     }
-}
-
-fn has_zero_advance_retreat(events: &[RoffInlineEvent]) -> bool {
-    // Select the bounded raw suffix for a possible write under BACKBEFORE.
-    // term_word() can buffer other cells or change registers between the
-    // glyph and HORIZ. The placement path proves the actual landing.
-    events
-        .iter()
-        .skip_while(|event| !matches!(event, RoffInlineEvent::ZeroAdvance))
-        .skip_while(|event| !matches!(event, RoffInlineEvent::Text(_) | RoffInlineEvent::Glyph(..)))
-        .any(|event| {
-            matches!(event, RoffInlineEvent::HorizontalMotion { argument, .. }
-                if negative_entry_columns(argument.as_deref()).is_some())
-        })
 }
 
 /// Whether a leading motion or marker needs the live BACKBEFORE glyph.

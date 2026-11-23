@@ -509,12 +509,18 @@ impl FieldBuffer {
     ) {
         let start = self.cells.len();
         self.push_placed(cell, 0);
-        self.deferred_blanks.push(super::cells::DeferredBlankRun {
-            start,
-            end: start + 1,
-            source,
-            run_in_overlap: false,
-        });
+        let index = self
+            .deferred_blanks
+            .partition_point(|run| run.start < start);
+        self.deferred_blanks.insert(
+            index,
+            super::cells::DeferredBlankRun {
+                start,
+                end: start + 1,
+                source,
+                run_in_overlap: false,
+            },
+        );
     }
 
     fn unmodeled_word_rewind(&mut self, columns: usize) {
@@ -670,28 +676,6 @@ impl FieldBuffer {
             })
     }
 
-    pub(in crate::mandoc::inline::flow) fn has_live_run_in_blanks(&self) -> bool {
-        // These placed Unicode space slots retain the generated word's
-        // ownership after a distinct TABREF from the first BODY NODE_LINE.
-        // A following HORIZ can still revisit them after buffering \p.
-        // Source blanks use FixedDrawingAdvance or BreakableBlank instead.
-        self.projection_owner == super::FieldProjectionOwner::Detached
-            && self.deferred_blanks.last().is_some_and(|run| {
-                self.raw_slot_fence <= run.start
-                    && matches!(
-                        self.cells.get(run.start..run.end),
-                        Some([FieldCell::Graph {
-                            text: '\u{a0}',
-                            width: 1
-                        }])
-                    )
-                    && matches!(
-                        self.cells.get(run.end..),
-                        Some([] | [FieldCell::TabReference])
-                    )
-            })
-    }
-
     fn advance_run_in_blanks(&mut self, count: usize) {
         let retreat = self.write_cursor.retreat();
         if std::mem::take(&mut self.backafter_armed) {
@@ -724,6 +708,7 @@ impl FieldBuffer {
         let mut previous_font_copy = false;
         for cell in cursor..end {
             let replaces_backline = self.cells[cell] == FieldCell::Backline;
+            let replaces_break_marker = self.cells[cell] == FieldCell::BreakMarker;
             let followed_by_backline = self.cells.get(cell + 1) == Some(&FieldCell::Backline);
             let is_alias = self
                 .raw_copy_aliases
@@ -733,6 +718,7 @@ impl FieldBuffer {
             let split_bold_copy =
                 !followed_by_backline && is_alias && self.projection_length(cell, cell + 1) == 0;
             let replaces_font_pair = cell + 1 < end && bold_copy;
+            let replaces_bold_copy = !replaces_font_pair && bold_copy;
             // A projected U+00A0 also overwrites the anonymous underline
             // slot in encode1(). Leave a bold copy of a literal '_' on
             // its existing ownership path (term.c:909-925).
@@ -744,8 +730,12 @@ impl FieldBuffer {
                         width: 1,
                     })
                 && self.projection_length(cell, cell + 1) == 0;
-            let replaces_decoration =
-                replaces_backline || replaces_font_pair || split_bold_copy || replaces_underline;
+            let replaces_decoration = replaces_backline
+                || replaces_break_marker
+                || replaces_font_pair
+                || replaces_bold_copy
+                || split_bold_copy
+                || replaces_underline;
             let inside_font_pair = previous_font_copy || replaces_font_pair;
             previous_font_copy = replaces_font_pair;
             if pending_break && self.cells[cell] == FieldCell::BreakableBlank {
@@ -756,17 +746,23 @@ impl FieldBuffer {
                     width: 1,
                 };
                 self.blank_positions.remove(&cell);
+                self.note_graph_position(cell);
                 self.invalidate_projection_scan(cell);
             }
             if replaces_decoration {
                 // The UTF-8 generated blank goes through encode1() as
                 // U+00A0 and overwrites earlier font bytes. Track the
                 // surviving authored slots through the next word overlay.
-                if replaces_underline || self.backafter_armed && cell == cursor {
+                if replaces_underline
+                    || replaces_bold_copy
+                    || replaces_break_marker
+                    || self.backafter_armed && cell == cursor
+                {
                     self.cells[cell] = FieldCell::Graph {
                         text: '\u{a0}',
                         width: 1,
                     };
+                    self.note_graph_position(cell);
                 } else {
                     self.cells[cell] = FieldCell::FixedDrawingAdvance(1);
                     self.nonbreaking_positions.insert(cell);
@@ -774,6 +770,9 @@ impl FieldBuffer {
                 self.raw_copy_aliases.retain(|&(copy, _)| copy != cell);
                 if replaces_backline {
                     self.pass_retreats.retain(|&(_, mark)| mark != cell + 1);
+                }
+                if replaces_break_marker {
+                    self.break_markers.retain(|&mark| mark != cell);
                 }
                 self.invalidate_projection_scan(cell);
             }
@@ -794,26 +793,51 @@ impl FieldBuffer {
             ) {
                 continue;
             }
-            let index = self.deferred_blanks.partition_point(|run| run.end <= cell);
-            if self
-                .deferred_blanks
-                .get(index)
-                .is_some_and(|run| run.start <= cell)
-            {
-                continue;
-            }
-            self.deferred_blanks.insert(
-                index,
-                super::cells::DeferredBlankRun {
-                    start: cell,
-                    end: cell + 1,
-                    source,
-                    run_in_overlap: true,
-                },
-            );
-            added = true;
+            added |= self.insert_deferred_run_in_blank(cell, source);
         }
         added
+    }
+
+    fn note_graph_position(&mut self, cell: usize) {
+        match self.last_graph_position {
+            None => self.last_graph_position = Some(cell),
+            Some(last) if cell > last => {
+                self.previous_graph_position = Some(last);
+                self.last_graph_position = Some(cell);
+            }
+            Some(last) if cell < last => {
+                self.previous_graph_position = Some(
+                    self.previous_graph_position
+                        .map_or(cell, |prev| prev.max(cell)),
+                );
+            }
+            Some(_) => {}
+        }
+    }
+
+    fn insert_deferred_run_in_blank(
+        &mut self,
+        cell: usize,
+        source: super::cells::DeferredSourceBlank,
+    ) -> bool {
+        let index = self.deferred_blanks.partition_point(|run| run.end <= cell);
+        if self
+            .deferred_blanks
+            .get(index)
+            .is_some_and(|run| run.start <= cell)
+        {
+            return false;
+        }
+        self.deferred_blanks.insert(
+            index,
+            super::cells::DeferredBlankRun {
+                start: cell,
+                end: cell + 1,
+                source,
+                run_in_overlap: true,
+            },
+        );
+        true
     }
 
     pub(in crate::mandoc::inline::flow) fn retain_word_cursor(&mut self, retreat: usize) {
@@ -1187,5 +1211,74 @@ mod sentence_tests {
                 2 * (words - 1)
             );
         }
+    }
+
+    #[test]
+    fn deferred_blanks_stay_sorted_when_placed_out_of_order() {
+        let mut buffer = FieldBuffer::default();
+        for _ in 0..4 {
+            buffer.push_cell(FieldCell::NonBreakingBlank);
+        }
+        let later = super::super::cells::DeferredSourceBlank {
+            owner: 2,
+            write: 0,
+            font: super::super::super::Font::Regular,
+            replayable_tail: false,
+        };
+        let earlier = super::super::cells::DeferredSourceBlank {
+            owner: 1,
+            write: 0,
+            font: super::super::super::Font::Regular,
+            replayable_tail: false,
+        };
+        // Record a run at cell 4, rewind the tail back to cell 2, then place a
+        // new deferred blank at cell 2 and verify sorted order is preserved.
+        buffer.place_deferred_blank(later, &FieldCell::NonBreakingBlank);
+        buffer.replace_placed_tail(3);
+        buffer.place_deferred_blank(earlier, &FieldCell::NonBreakingBlank);
+        assert!(buffer.has_deferred_blank_at(2));
+        assert!(buffer.has_deferred_blank_at(4));
+        assert!(!buffer.has_deferred_blank_at(3));
+        assert_eq!(
+            buffer
+                .deferred_blanks
+                .iter()
+                .map(|run| (run.start, run.end))
+                .collect::<Vec<_>>(),
+            vec![(2, 3), (4, 5)]
+        );
+    }
+
+    #[test]
+    fn defer_run_in_overlap_tracks_both_graph_positions_across_tail_replacement() {
+        let mut buffer = FieldBuffer::default();
+        buffer.push_graph('C', 1);
+        buffer.push_cell(FieldCell::BreakMarker);
+        buffer.push_cell(FieldCell::BreakableBlank);
+        buffer.push_cell(FieldCell::BreakableBlank);
+        // Simulate a 1-cell retreat onto the final BreakableBlank (cell 3)
+        // followed by inset BODY's generated U+00A0 overwriting it.
+        buffer.write_cursor = super::super::WriteCursor::Placed(1);
+        let source = super::super::cells::DeferredSourceBlank {
+            owner: 1,
+            write: 0,
+            font: super::super::super::Font::Regular,
+            replayable_tail: false,
+        };
+        let _ = buffer.defer_run_in_overlap(1, 0, source);
+        assert_eq!(
+            buffer.cells()[3],
+            FieldCell::Graph {
+                text: '\u{a0}',
+                width: 1
+            }
+        );
+        assert_eq!(buffer.last_graph_position, Some(3));
+        assert_eq!(buffer.previous_graph_position, Some(0));
+        assert!(!buffer.only_ignorable_remainder(false));
+
+        // Truncating cell 3 (count = 1) must fall back to previous_graph_position (0).
+        buffer.replace_placed_tail(1);
+        assert_eq!(buffer.last_graph_position, Some(0));
     }
 }

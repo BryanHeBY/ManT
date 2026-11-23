@@ -76,7 +76,7 @@
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nLEFT\\h'1n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFTYTAIL","want":0,"link":false},
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nLEFT\\h'1n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFT YTAIL","want":1,"link":false},
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nLEFT\\h'2n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFTYTAIL","want":0,"link":false},
-{"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nLEFT\\h'2n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFT YTAIL","want":1,"link":false},
+{"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nLEFT\\h'2n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFT  YTAIL","want":1,"link":false},
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\l'1n.' LEFT\\h'0n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFTYTAIL","want":1,"link":false},
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\l'1n.' LEFT\\h'0n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFT YTAIL","want":0,"link":false},
 {"source":".TH PROBE 1 \"November 19, 2026\"\n.SH NAME\nprobe \\- sample\n.SH DESCRIPTION\nQ\\l'1n.' LEFT\\h'1n'\\c\nYTAIL\n.br\nDONE.\n","probe":"LEFTYTAIL","want":0,"link":false},

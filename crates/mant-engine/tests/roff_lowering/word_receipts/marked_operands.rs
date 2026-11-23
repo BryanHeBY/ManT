@@ -879,3 +879,452 @@ fn definition_list_heads_preserve_native_slot_edits_and_deferred_breaks() {
         );
     }
 }
+
+#[test]
+fn non_list_slot_boundaries_preserve_fences_advances_and_retreats() {
+    // Verified against pinned reference mandoc (-Tutf8; -Tascii agrees on
+    // every row once U+00A0 is normalized to ASCII space):
+    // - Empty, space-only, \z\h-canceled, and mid-word \c decorated words
+    //   write no unproved raw slots and keep raw_edit_fence intact
+    //   (term.c:559-590, 662-682, 899-969).
+    // - Non-fresh bounded words ending in positive HORIZ and blank-tail
+    //   \z\h'-1n'\h'1n' keep exact expanded font-slot budgets within
+    //   MAX_EDITABLE_APPEND_CELLS (term.c:678-699, 899-930).
+    // - Post-\p relative retreats retain the live retreated cursor and hold
+    //   pass acceptance until term_flushln(), preserving nbr == 0 rejection
+    //   and overprint coverage (term.c:143-146, 659-660, 701-718).
+    // - U+00A0 (\~) is printable ink in -Tutf8 that releases preceding inner
+    //   HORIZ advances (term.c:345-349, 416-441).
+    // - Overwritten underline backspaces release unpaired '_' in Filled
+    //   flow, and decoration pairs (_\b / c\b) before ink do not hide an
+    //   earlier device gap (term.c:389-441, 911-921).
+    verify_rows(&[
+        // NL-1: non-fresh bounded trailing \h'+Nn' and blank-tail \z\h'-1n'\h'1n'
+        (r#".Sy "A" No "FG\h'2n'" No "\h'-5n'X""#, &["A XG"]),
+        (r#".Em "A" No "FG\h'2n'" No "\h'-3n'X""#, &["A FGX"]),
+        (r#".Sy "A" Em "\z\h'-1n'\h'1n'" No "X""#, &["A   X"]),
+        (r#".Sy "A\h'2n'" No "FG\h'2n'" No "X""#, &["A   FG   X"]),
+        (r#".Sy "A" No "FG\h'2n'" Ns No "\h'-4n'X""#, &["A XG"]),
+        (r#".Em "A" No "FG\h'2n'\c" No "\h'-3n'X""#, &["A FX"]),
+        // NL-2 & NL-3: empty / \z\h-canceled / mid-word \c decorated words
+        (r#".Sy "F\pAB\c\h'-1n'" No "X""#, &["FABX"]),
+        (r#".Sy "F\pAB\c\h'-1n'" Ns No "X""#, &["FAX"]),
+        (r#".Sy "A" Sy "" No "\h'-4n'X""#, &["AXA"]),
+        (r#".Sy "A" Em "" No "\h'-4n'X""#, &["AXA"]),
+        (r#".Sy "A" Em "\z\h'1n'" No "\h'-4n'X""#, &["AXA"]),
+        (r#".Sy "A" Em "\z\h'2n'" No "\h'-4n'X""#, &["AXA"]),
+        (r#".Sy "A" Em "\z\h'1n' " No "\h'-5n'X""#, &["AXA"]),
+        (r#".Sy "A" Em "\z\h'-1n'" No "\h'-4n'X""#, &["AXA"]),
+        (r#".Sy "A" Sy "B\cC" No "\h'-6n'X""#, &["A BXBC"]),
+        (r#".Sy "A" Sy "B\z\h'1n'C" No "\h'-6n'X""#, &["A BXBC"]),
+        // NL-4c: post-\p retreated cursor
+        (r#".Sy "C\p DJ\h'-1n'" No "X""#, &["C", "DJX"]),
+        (r#".Sy "C\p DJ\h'-1n'" Ns No "X""#, &["C", "DX"]),
+        (r#".Sy "C\p DJ\h'-2n'" Ns No "X""#, &["C", "DJXJ"]),
+        // NL-7a/b: U+00A0 inner advances
+        (r#".No "FG\h'2n'\~" No "Z""#, &["FG  \u{a0} Z"]),
+        (r#".Sy "FG\h'2n'\~" No "Z""#, &["FG  \u{a0} Z"]),
+        (r#".Em "FG\h'2n'\~" No "Z""#, &["FG  \u{a0} Z"]),
+        (r#".Sy "A" No "FG\h'2n'\~" No "Z""#, &["A FG  \u{a0} Z"]),
+        (r#".No "FG\h'2n'\~" Ns No "\h'-2n'X""#, &["FG X"]),
+        // NL-8a/b: non-leading negative \h live prefix and nbr == 0 rejection
+        (r#".No "A\p " Ns Sy "X\h'-4n'""#, &["A", "X"]),
+        (r#".No "\p " Ns Sy "X\h'-4n'" No "Z""#, &[]),
+        (r#".No "A\p " Em "\fPX\h'-4n'""#, &["A", "X"]),
+        (r#".No "\p " Em "\fPX\h'-4n'" No "Z""#, &["Z", "X"]),
+        (r#".No "A\p " Ns Sy "X\h'-4n'" No "Z""#, &["A", "X"]),
+        // NL-9a/b/c: unpaired underlines, decoration gap skip, trailing entry blanks
+        (r#".Em "F" No "\h'-3n'X""#, &["_XF"]),
+        (r#".Em "F" Ns No "\h'-2n'X""#, &["_XF"]),
+        (r#".No "A\h'2n'" Em "X""#, &["A   X"]),
+        (r#".No "A\h'2n'" Ns Em "X""#, &["A  X"]),
+        (r#".Em "A" Em "\z\h'-1n'\h'1n'" Sy "X""#, &["A   X"]),
+        (r#".Em "A" No "B" No "\h'-3n'X""#, &["AXB"]),
+        (r#".Sy "A" No "B" No "\h'-3n'X""#, &["AXB"]),
+    ]);
+}
+
+#[test]
+fn positive_matrix_slot_interactions_preserve_advances_and_retreats() {
+    // Verified against pinned reference mandoc (-Tutf8): sorted deferred_blanks,
+    // decoration-skip guard on projected blanks, post-\p retreated cursor with
+    // later ink, bufferc traversing unprojected Earlier(0) blanks, backline
+    // target on ProveRawSlots, and inner+trailing HORIZ before \p\c
+    // (term.c:389-441, 659-660, 678-718, 868-871, 901-921).
+    verify_rows(&[
+        (
+            r#".Ns Em "A\h'1n'" Em "\z\h'-1n'\h'1n'" Ns No " F\zG\p\c" Sy "\h'-4n'X""#,
+            &["A  XG"],
+        ),
+        (
+            r#".Ns Em "A\h'1n'\h'1n'" Em "\z\h'-1n'\fR" Ns No " F\pG\p\c" Sy "\h'-4n'X""#,
+            &["A    X"],
+        ),
+        (
+            r#".Sy "AB" No "\0\h'-4n'\z\p\zC\h'1n'" Ns No "\zFG\h'2n'\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX""#,
+            &["ABCG   X"],
+        ),
+        (
+            r#".Sy "AB" No "Z\h'-6n'\z\p\:C" Sy "\zFG\h'2n'\p\~" Ns Sy "\h'1n'\h'-2n'\fPX\h'-4n'""#,
+            &["A", "CG  X"],
+        ),
+        (
+            r#".Sy "A" Sy "\:\h'1n'\h'-6n'\z\p\cC" Ns No "F\h'2n'\~" Ns Sy "\h'1n'\h'-1n'X""#,
+            &["CF  \u{a0}X"],
+        ),
+        (
+            r#".Em "A" Em "\z\z\h'-1n'\h'1n'" Em " F\p\h'-1n'\h'-1n'G\p\h'-1n'\c" Em "\h'-10n'X""#,
+            &["X  G"],
+        ),
+        (
+            r#".Em "A\zC\fPD\p" Em "\z\h'-8n'\h'2n'" Ns No "F\pG" Ns Em "\h'-5n'\cX""#,
+            &["AD", "XG"],
+        ),
+        (
+            r#".Em "A\zC\fPD" Ns Em "\fP\h'-8n'\fBF\pG" Em "\h'0n'\&" No "\h'-1n'\z\h'-5n'\cX""#,
+            &["FGDX"],
+        ),
+        (
+            r#".Sy "A\zC\zD" Ns Em "\c\h'-8n'\z\pC\h'3n'" Em "\&\:" Ns No " \h'-3n' X""#,
+            &["ACDX"],
+        ),
+        (
+            r#".No "A\z\zC\z\fPD\z" Em "\:\h'-10n'\:" Ns Sy "D  " Em "\h'-1n'\fPX""#,
+            &["ADD  X"],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' " Ns Sy "F\p\h'1n'G\p\h'1n'\c" Sy "\z\h'-4n'X""#,
+            &["A   F G X"],
+        ),
+        (
+            r#".Em "A\p" Em "\z\h'-1n'\h'1n'" Ns No "F\h'2n'\pG\h'2n'\p\c" No "\h'-2n'X""#,
+            &["A", "F  G X"],
+        ),
+    ]);
+    // Inset run-in head with rewound body \& followed by decorated word must
+    // not double-emit the projected separator across X\b (term.c:389-434).
+    for body in [
+        ".Bl -inset\n.It Sy \"C\\&V\" No \"\\h'-1n' X\"\n.No \"\\h'-5n'\\&\"\n.Sy \"X\"\n.El",
+        ".Bl -inset\n.It Sy \"C\\&V\" No \"\\h'-1n' X\"\n.No \"\\h'-1n' \\h'-5n'\\&\"\n.Sy \"X\"\n.El",
+    ] {
+        let source = format!("{HEADER}{body}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let (_, section) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (section, _) = section.split_once("CASE999CASE\n").unwrap();
+        let rows: Vec<_> = section
+            .trim()
+            .lines()
+            .map(|line| line.trim().trim_start_matches("• "))
+            .collect();
+        assert_eq!(rows, ["C X"], "{body}\n{rendered}");
+    }
+}
+
+#[test]
+fn positive_matrix_retreated_advances_and_deferred_runs() {
+    // Verified against pinned reference mandoc (-Tutf8 and -Tascii; in A5,
+    // \0 produces U+00A0 in -Tutf8 and ASCII space in -Tascii, trimmed by
+    // verify_rows at the left margin):
+    // - Trailing entry blanks alone do not force a retreated-cursor word into
+    //   unprojected geometry, while interior surviving entry blanks promote to
+    //   spaces and unread forward advances stay editable (term.c:659-660,
+    //   678-718, 899-930).
+    // - Post-advance \z<glyph>\h'+Nn' clears BACKBEFORE on the first unit of
+    //   positive relative HORIZ, and \: breakpoints preserve inner-advance
+    //   publication (term.c:692-698).
+    // - Live replay from a fresh un-fenced field crosses multi-cell deferred
+    //   HORIZ runs cleanly before later negative retreats (term.c:678-718).
+    verify_rows(&[
+        // Micro-pattern A: trailing \h'+Nn' + \: / unread inner advances
+        (
+            r#".Em "A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\pG" No "F\zG\h'2n'\:" No "\p\h'0n'\fPX""#,
+            &["AFG", "FG  X"],
+        ),
+        (
+            r#".Em "A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\pG" No "F\zG\h'2n'\:" No "\p\h'1n'\fPX""#,
+            &["AFG", "FG   X"],
+        ),
+        (
+            r#".Em "A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\h'3n'\pG\h'3n'\h'-1n'" Ns Em "\h'3n'F\zG\h'2n'\:\h'3n'" No "\p\h'-1n'\fPX""#,
+            &["AD G     FG", "X"],
+        ),
+        (
+            r#".Em "\0A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\pG" No "F\h'1n'\zG\h'1n'\h'2n'\:" Ns No "\p\h'-2n'\fPX""#,
+            &["AFG", "F G  X"],
+        ),
+        // Micro-pattern B: fresh multi-cell deferred \h'+Nn' runs with \p/\z retreats
+        (
+            r#".Em "A\zC\fPD" Em "\z\h'-8n'\h'2n'" Ns No "F\p\zG" Ns Em "\h'-5n'\cX""#,
+            &["ADXFG"],
+        ),
+        (
+            r#".Em "A\zC\fPD" Em "\z\h'-8n'\h'2n'\h'3n'" Ns No "F\z\pG" Ns Em "\h'-5n'\cX""#,
+            &["AD   XFG"],
+        ),
+        (
+            r#".Em "A\zC\fPD" Em "\z\h'-8n'\h'2n'" Ns No "F\p\zG" Ns Em "\p\h'-5n'\cX""#,
+            &["AD XG"],
+        ),
+        // Retreated cursor before a trailing EntryBlank stays live so a
+        // following Ns word overwrites the blank and cancels the \p break
+        // (term.c:288-307, 706-707).
+        (
+            r#".Sy "AB" No "\h'1n'\h'-4n'\z\h'3n'\pC" Ns No "\zFG\h'2n'\~\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX""#,
+            &["ABCG  \u{a0} X"],
+        ),
+        (
+            r#".Sy "AB" No "\h'-3n'\pC" Ns No "\zFG\h'2n'\~\p\h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX""#,
+            &["ABCG  \u{a0} X"],
+        ),
+        (
+            r#".Em "A\zC\fPD" No "\h'-1n'\h'-4n'\h'1n'F\pG" Ns No "F\zG\h'2n'\:" No "\p\h'0n'\fPX""#,
+            &["AFGFG", "X"],
+        ),
+        // Overwritten intermediate owner rebased onto a decorated restart word
+        // keeps the preceding \p break; \u{a0} trailing advance deferral does
+        // not double-defer an earlier word's NBRSP; marker-bearing retreated
+        // words keep overprint and trailing advance counts (term.c:205-220,
+        // 345-349, 692-698, 868-869).
+        (
+            r#".Sy "C\p DJ" No "\h'-5n'\p\:F\p" No "\c\p\~" Ns Em "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Sy "C\p DJ" No "\h'-5n'\p\:F\p" No "\c\p\h'-1n'\~" Sy "\h'-2n'X""#,
+            &["C", "D", "F", "X"],
+        ),
+        (
+            r#".Ns Em "C\pDJ" No "\h'-5n'\p\:F\p" No "\p\~" Ns Sy "\h'-2n'X\h'-4n'""#,
+            &["C_", "F", "X"],
+        ),
+        (
+            r#".Sy "C\p DJ" Ns Em "\h'-5n'\p\:F\p\h'2n'" Ns Sy "\c\p\~" No "\h'-2n'X""#,
+            &["C", "D", "F  X"],
+        ),
+        (
+            r#".No "AB" No "\h'1n'\h'-6n'\zZC" Ns No "\zF\(hyG\h'2n'\p \h'2n'" Ns Sy "\h'1n'\h'-2n'\fPX""#,
+            &["C\u{2010}G", "X"],
+        ),
+        (
+            r#".No "AAB" No "\0\h'1n'\h'-6n'\z\pC" Ns No "\zFG\h'2n'\p\h'2n'" Ns Sy "\h'1n'\z\h'-2n'\fPX""#,
+            &["G     X"],
+        ),
+        (
+            r#".No "AB" No "\h'1n'\~\h'-6n'\z\pC" Ns No "\zFG\h'2n'\p\p\h'2n'" Ns Sy "\h'1n'\z\h'-2n'\fPX""#,
+            &["G     X"],
+        ),
+    ]);
+}
+
+fn verify_definition_list_cases(cases: &[(&str, &[&str])]) {
+    let rows_of = |rendered: &str| {
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+        let mut rows: Vec<_> = body.lines().map(|line| line.trim().to_owned()).collect();
+        while rows.last().is_some_and(String::is_empty) {
+            rows.pop();
+        }
+        rows
+    };
+    let words_on_row = |row: &str| row.split_whitespace().collect::<Vec<_>>().join(" ");
+    for &(words, expected) in cases {
+        let source = format!("{HEADER}{words}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(rows_of(&rendered), expected, "{words}\n{rendered}");
+
+        let rendered = mant_render::render_query_man(&readback);
+        let rows: Vec<_> = rows_of(&rendered)
+            .iter()
+            .map(|row| words_on_row(row.strip_prefix('•').unwrap_or(row)))
+            .filter(|row| !row.is_empty())
+            .collect();
+        let expected_nonempty: Vec<_> = expected
+            .iter()
+            .filter(|row| !row.is_empty())
+            .map(|row| words_on_row(row))
+            .collect();
+        assert_eq!(rows, expected_nonempty, "{words}\n{rendered}\n{markdown}");
+    }
+}
+
+#[test]
+fn definition_list_replays_and_marked_operands_preserve_edits() {
+    // Verified against pinned reference mandoc (-Tutf8; -Tascii also checked
+    // on every case; inset's generated BODY `\ ` separator renders as ASCII
+    // space per row_handoff.rs):
+    // - DL-3: Replayed body slots after \z<glyph> include their surviving
+    //   automatic separator in anchor.content so trailing \pZ keeps its
+    //   scalar quota (term.c:573-589, 903-908).
+    // - DL-8 & DL-4 #2/#3: Fresh DefinitionLine operands with leading
+    //   negative relative HORIZ or inner positive HORIZ before \p keep
+    //   bounded editable raw slots until term_flushln() (term.c:659-660,
+    //   678-718).
+    // - DL-6/7: Bounded marked HEAD operands across DefinitionLine and
+    //   Scoped fields defer pass commitment until flush, rebasing retired
+    //   row origins/presentations past omitted scalars; inset's generated
+    //   U+00A0 overwrites a live BreakMarker at col (term.c:205-220, 922-923).
+    verify_definition_list_cases(&[
+        // DL-3
+        (
+            ".Bl -hang -width 3n\n.It Sy \"CJ\" Sy \" \"\n.No \"\\zB\" No \"\\pZ\"\n.El",
+            &["CJ   BZ"],
+        ),
+        (
+            ".Bl -tag -width 2n\n.It Sy \"CJ\" No \" \"\n.No \" B\\zY\"\n.Sy \"\\pZ\"\n.El",
+            &["CJ", "BYZ"],
+        ),
+        (
+            ".Bl -inset\n.It No \"CJ\" Em \"\"\n.No \"B\\zY\"\n.No \"\\pZ\"\n.El",
+            &["CJ  BYZ"],
+        ),
+        // DL-8
+        (
+            ".Bl -tag -width 2n\n.It Sy \"C-D\" Sy \"\"\n.No \"\\h'-1n' B\\pV\" No \"\\h'-2n'Y\"\n.El",
+            &["C-D", "BY"],
+        ),
+        (
+            ".Bl -tag -width 2n\n.It Em \"CV\" Em \"\"\n.No \"\\h'-1n' B\\pV\" No \"\\h'-3n'Y\"\n.El",
+            &["CV", "BYV"],
+        ),
+        (
+            ".Bl -hang -width 3n\n.It Em \"C-D\" No \" \"\n.No \"\\h'-1n' B\\pV\" No \"\\h'-3n'Y\"\n.El",
+            &["C-D   BYV"],
+        ),
+        // DL-4 #3 & #2
+        (
+            ".Bl -inset\n.It Em \"\\h'-1n'C\\pJ\" No \"\\h'-2n'\\p\"\n.Bd -literal\n.No X\n.Ed\n.El",
+            &["C", "", "X"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\h'1n'\\pJJ\" No \"\\h'-2n'\\p\"\n.Pp\n.No X\n.El",
+            &["C J", "", "X"],
+        ),
+        // DL-6/7
+        (
+            ".Bl -inset\n.It Em \"C\\p J\" No \"\\h'-7n'F\"\n.No \"\" No \"Y\"\n.El",
+            &["F  J"],
+        ),
+        (
+            ".Bl -hang -width 3n\n.It Sy \"C\\p J\" Em \"\\h'-6n'F\"\n.No \"BC\" No \"Y\"\n.El",
+            &["CJ   BC Y"],
+        ),
+        (
+            ".Bl -tag -width 2n\n.It Sy \"C\\p J\" No \"\\h'-7n'F\"\n.No \"BY\"\n.El",
+            &["F", "J", "BY"],
+        ),
+    ]);
+}
+
+#[test]
+fn definition_list_paint_origins_viscol_gaps_and_run_in_overlaps() {
+    // Verified against pinned reference mandoc (-Tutf8 and -Tascii; inset's
+    // generated BODY `\ ` separator renders as ASCII space per row_handoff.rs):
+    // - DL-6/7 #4 & DL-10: Definition HEADs record fresh-row device paint
+    //   origins, prove trailing unpaired Backline overhangs, and carry the
+    //   exact native viscol gap when term.c:434 subtracts getwidth(NBRZW)==0
+    //   (term.c:389-442, term_ascii.c:199-242).
+    // - DL-9 #2: Inset run-in overlap over a single-cell bold copy replaces
+    //   that slot with U+00A0 and retires its alias (term.c:915-925).
+    // - Unprojected-blank and empty intermediate passes across HEAD/BODY keep
+    //   their authored \p row breaks (term.c:205-220).
+    verify_definition_list_cases(&[
+        // DL-6/7 #4 & DL-10
+        (
+            ".Bl -tag -width 2n\n.It Sy \"\\zC\\pJ\" No \"\\h'-7n'\\&\"\n.No \"\"\n.br\n.No \"Y\"\n.El",
+            &["JC", "Y"],
+        ),
+        (
+            ".Bl -tag -width 2n\n.It Sy \"CV\" No \"\\h'-2n'\\&\"\n.No \" B\"\n.br\n.No \"Z\"\n.El",
+            &["C    B", "Z"],
+        ),
+        (
+            ".Bl -hang -width 3n\n.It Sy \"C\\zD\\zJ\" Em \"\\h'-3n'\\&\"\n.No \"B\" No \"Z\"\n.El",
+            &["J   B Z"],
+        ),
+        (
+            ".Bl -hang -width 3n\n.It Em \"C\\zD\\zJ\" Em \"\\h'-3n'\\&\"\n.No \"\" No \"X\"\n.El",
+            &["J    X"],
+        ),
+        // DL-9 #2
+        (
+            ".Bl -inset\n.It Sy \"CDV\" Em \"\\h'-7n'\\~\"\n.No \"BV\"\n.Sy \"Z\"\n.El",
+            &["C\u{a0} BV Z"],
+        ),
+        // Unprojected-blank & empty intermediate passes across HEAD/BODY
+        (
+            ".Bl -inset\n.It No \"C\\pJ\" Ns No \"\\h'-7n'\\&\"\n.No \"\\p\\:\"\n.Sy \"\\pZ\"\n.El",
+            &["", "Z"],
+        ),
+        (
+            ".Bl -inset\n.It Sy \"C\\p J\" Em \"\\h'-4n'\\&\"\n.No \"\\p\\c\\:\"\n.Sy \"\\pZ\"\n.El",
+            &["C", "", "Z"],
+        ),
+    ]);
+}
+
+#[test]
+fn cross_review_utf8_gaps_offset_containers_tabs_and_monotonic_anchors() {
+    // Every expectation below was verified directly against pinned reference
+    // mandoc (-Tutf8):
+    // - utf8_getwidth('\b') == 0 and utf8_getwidth('\n') == 0
+    //   (term_ascii.c:227-242), so open-head viscol stays in UTF-8 columns.
+    // - Offset containers (.Bd -offset 4n, nested .Bl) compute body_units in
+    //   the same container-relative frame as device.viscol.
+    // - Tabs after omitted scalars rebase against NativeFieldDevice's omitted
+    //   scalar ranges on both .br (hard_breaks.rs) and .mc (no_break.rs).
+    // - Inset run-in overlap over a trailing breakable blank after \p tracks
+    //   last_graph_position so the trailing U+00A0 row is not dropped.
+    // - Rewound words with relocated earlier glyphs keep anchor.content
+    //   monotonically non-decreasing across append_owner_intervals().
+    // - CommittedField in no-fill mode suppresses duplicate EntryBlank
+    //   projection, and retain_text() treats U+00A0 as printable ink.
+    verify_rows(&[
+        (r#".No "AB" No "\h'-3n'\p X""#, &["BX"]),
+        (r#".No "AB" No "\h'-3n'\p X\p Y""#, &["BX", "Y"]),
+        (r#".No "A\zB\~C""#, &["A\u{a0}C"]),
+    ]);
+    verify_definition_list_cases(&[
+        // P1-1: UTF-8 utf8_getwidth('\b') == 0 gives 3-space gap (6 - 3 = 3)
+        (
+            ".Bl -hang -width 4n\n.It Sy \"\\zC\\pD\\zJ\" No \"\\:\\h'-6n'\\&\\p\\zF\" Em H Ns No \"\\h'-1n'X\"\n.No \"BODY\"\n.El",
+            &["X   BODY"],
+        ),
+        // P1-2: offset container (.Bd -offset 4n) keeps 3-space native gap
+        (
+            ".Bd -offset 4n\n.Bl -hang -width 3n\n.It Sy \"C\\zD\\zJ\" Em \"\\h'-3n'\\&\"\n.No \"B\" No \"Z\"\n.El\n.Ed",
+            &["J   B Z"],
+        ),
+        // P1-2: nested .Bl inside outer .Bl keeps 3-space native gap
+        (
+            ".Bl -tag -width 4n\n.It outer\n.Bl -hang -width 3n\n.It Sy \"C\\zD\\zJ\" Em \"\\h'-3n'\\&\"\n.No \"B\" No \"Z\"\n.El\n.El",
+            &["outer", "", "J   B Z"],
+        ),
+        // P1-3: tabs after omitted scalars on .br-closed head
+        (
+            ".ta 10n\n.Bl -tag -width 12n\n.It A\\zBC\\tD\n.br\n.No X\n.El",
+            &["AC        D", "X"],
+        ),
+        // P1-3: tabs after omitted scalars across .mc
+        (
+            ".ta 10n\n.Bl -tag -width 12n\n.It A\\zBC\\tD\n.mc |\n.No X\n.mc\n.El",
+            &["AC        D   X"],
+        ),
+        // P1-4: inset trailing BreakableBlank overwritten to U+00A0 after \p
+        (
+            ".Bl -inset\n.It No \"C\\p  \" No \"\\h'-1n'\"\n.No \"\"\n.El\n.No AFTER",
+            &["C", "", "AFTER"],
+        ),
+        // P2-6: .nf + .mc CommittedField with negative motion
+        (
+            ".Bl -tag -width 8n\n.It term\n.nf\n.No \"A.\"\n.mc |\n.No \"\\h'-1n'X\"\n.mc\n.fi\n.El",
+            &["term", "A.", "X"],
+        ),
+    ]);
+}

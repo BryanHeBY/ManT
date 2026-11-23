@@ -14,9 +14,10 @@ pub(super) fn bounded_append(events: &[RoffInlineEvent]) -> bool {
     bounded_append_with_leading_columns(events, 0)
 }
 
-/// A positive relative HORIZ in a fresh definition line writes native
-/// NBRSP before any ink. Preserve those cells and later markers until the
-/// line closes so another operand can still edit them.
+/// A relative HORIZ in a fresh definition line either writes native
+/// NBRSP before any ink or retreats the row origin without advancing col.
+/// Preserve those cells and later markers until the line closes so another
+/// operand can still edit them.
 pub(super) fn bounded_field_append(events: &[RoffInlineEvent]) -> bool {
     let Some((
         RoffInlineEvent::HorizontalMotion {
@@ -28,8 +29,15 @@ pub(super) fn bounded_field_append(events: &[RoffInlineEvent]) -> bool {
     else {
         return false;
     };
-    let columns = libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument);
-    columns != 0 && bounded_append_with_leading_columns(remaining, columns)
+    let Some((false, units)) = motion_columns(argument) else {
+        return false;
+    };
+    let initial = if units > 0 {
+        libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument)
+    } else {
+        0
+    };
+    units != 0 && bounded_append_with_leading_columns(remaining, initial)
 }
 
 fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usize) -> bool {

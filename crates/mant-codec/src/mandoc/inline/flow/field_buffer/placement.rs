@@ -120,6 +120,12 @@ impl FieldBuffer {
                 }
                 self.write_cursor = WriteCursor::Placed(*cursor_retreat);
                 self.backbefore_armed = *backbefore;
+                if *backbefore && self.backline_projection_target.is_none() {
+                    let cursor = self.cells.len().saturating_sub(*cursor_retreat);
+                    self.backline_projection_target = (self.resume..cursor)
+                        .rev()
+                        .find(|&cell| self.projection_length(cell, cell + 1) > 0);
+                }
                 self.raw_copy_aliases.retain(|&(copy, owner)| {
                     prior_raw_fence.is_some_and(|fence| fence <= copy && owner < appended_start)
                 });
@@ -288,6 +294,10 @@ impl FieldBuffer {
             || !detached_replay
                 && start != 0
                 && self.projection_length(start, self.cells.len()) == 0
+                && self
+                    .deferred_blanks
+                    .last()
+                    .is_none_or(|run| run.end <= start)
             || first_alias != 0 && self.raw_copy_aliases[first_alias - 1].1 >= start
             || self
                 .raw_copy_aliases
@@ -296,23 +306,7 @@ impl FieldBuffer {
         {
             return None;
         }
-        let mut cells = Vec::with_capacity(self.cells.len() - start);
-        let trailing_marker =
-            (self.cells.last() == Some(&FieldCell::BreakMarker)).then(|| self.cells.len() - 1);
-        for (offset, cell) in self.cells[start..].iter().enumerate() {
-            let index = start + offset;
-            let length = self.projection_length(index, index + 1);
-            let raw = match cell {
-                FieldCell::DrawnSpaces(1) => FieldCell::BreakableBlank,
-                // Keep the advance's origin when replay still owns the
-                // adjacent break; a later operand can write through it.
-                FieldCell::FixedDrawingAdvance(1) if trailing_marker != Some(index + 1) => {
-                    FieldCell::NonBreakingBlank
-                }
-                _ => cell.clone(),
-            };
-            cells.push((raw, length));
-        }
+        let cells = self.prefix_cells(start);
         Some(super::super::native_slots::FieldPrefix {
             start,
             deferred_tail: if complete_tail && start == 0 {
@@ -326,6 +320,7 @@ impl FieldBuffer {
             },
             cells,
             projected_advances: Vec::new(),
+            deferred_blanks: self.deferred_blank_offsets(start),
             automatic,
             cursor_retreat: self.write_cursor.retreat(),
             kept,
@@ -352,6 +347,40 @@ impl FieldBuffer {
                 super::super::native_slots::ReplayPass::Incremental
             },
         })
+    }
+
+    fn prefix_cells(&self, start: usize) -> Vec<(FieldCell, usize)> {
+        let mut cells = Vec::with_capacity(self.cells.len() - start);
+        let trailing_marker =
+            (self.cells.last() == Some(&FieldCell::BreakMarker)).then(|| self.cells.len() - 1);
+        for (offset, cell) in self.cells[start..].iter().enumerate() {
+            let index = start + offset;
+            let length = self.projection_length(index, index + 1);
+            let raw = match cell {
+                FieldCell::DrawnSpaces(1) => FieldCell::BreakableBlank,
+                // Keep the advance's origin when replay still owns the
+                // adjacent break; a later operand can write through it.
+                FieldCell::FixedDrawingAdvance(1) if trailing_marker != Some(index + 1) => {
+                    FieldCell::NonBreakingBlank
+                }
+                _ => cell.clone(),
+            };
+            cells.push((raw, length));
+        }
+        cells
+    }
+
+    fn deferred_blank_offsets(&self, start: usize) -> Vec<usize> {
+        let mut offsets = Vec::new();
+        let first = self.deferred_blanks.partition_point(|run| run.end <= start);
+        for run in &self.deferred_blanks[first..] {
+            for cell in run.start.max(start)..run.end.min(self.cells.len()) {
+                offsets.push(cell - start);
+            }
+        }
+        offsets.sort_unstable();
+        offsets.dedup();
+        offsets
     }
 
     pub(in crate::mandoc::inline::flow) fn has_replayable_trailing_advance(&self) -> bool {
@@ -411,7 +440,14 @@ impl FieldBuffer {
         let Some(deferred) = self.deferred_blanks.last() else {
             return self.raw_edit_fence;
         };
-        if self.has_retained_word_cursor() && deferred.end == self.raw_edit_fence {
+        if live_replay
+            && self.resume == 0
+            && self.projected_pass_ends.is_empty()
+            && self.raw_edit_fence == 0
+            && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+        {
+            0
+        } else if self.has_retained_word_cursor() && deferred.end == self.raw_edit_fence {
             deferred.start
         } else if live_replay {
             self.raw_edit_fence.max(deferred.start)
@@ -539,26 +575,63 @@ impl FieldBuffer {
         replayed: bool,
     ) -> Option<(usize, usize)> {
         let end = end.min(self.cells.len());
-        let gap = self.nonbreaking_positions.range(..end).next_back().max(
-            self.blank_positions
-                .range(..end)
-                .next_back()
-                .filter(|&&gap| replayed || matches!(self.cells[gap], FieldCell::DrawnSpaces(1..))),
-        );
+        let mut scan_end = end;
+        loop {
+            let mut probe = scan_end;
+            while probe > self.resume
+                && matches!(
+                    self.cells[probe - 1],
+                    FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint
+                )
+            {
+                probe -= 1;
+            }
+            if probe >= self.resume + 2
+                && self.cells[probe - 1] == FieldCell::Backline
+                && matches!(
+                    self.cells[probe - 2],
+                    FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen
+                )
+                && self.projection_length(probe - 2, probe - 1) == 0
+            {
+                // A font decoration pair (`_\b` or `c\b` from term.c::encode1)
+                // occupies the incoming glyph's column, not the gap before it
+                // (term.c:389-434, 911-921).
+                scan_end = probe - 2;
+            } else {
+                break;
+            }
+        }
+        let allow_replayed_blank = replayed && scan_end == end;
+        let gap = self
+            .nonbreaking_positions
+            .range(..scan_end)
+            .next_back()
+            .max(
+                self.blank_positions
+                    .range(..scan_end)
+                    .next_back()
+                    .filter(|&&gap| {
+                        allow_replayed_blank
+                            || matches!(self.cells[gap], FieldCell::DrawnSpaces(1..))
+                    }),
+            );
         let &gap = gap?;
-        if gap < self.resume {
+        if gap < self.resume || scan_end < end && self.projection_length(gap, gap + 1) > 0 {
             return None;
         }
         // term_field() defers these cells until the next printed graph.
         // Source-row references and zero-width operands do not end that
         // pending advance. A prior author graph makes it a word separator.
         let mut fixed = false;
-        for index in (self.resume..end).rev() {
+        for index in (self.resume..scan_end).rev() {
             match self.cells[index] {
                 FieldCell::FixedDrawingAdvance(1..) | FieldCell::DrawnSpaces(1..) => fixed = true,
-                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank if replayed => fixed = true,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank if allow_replayed_blank => {
+                    fixed = true;
+                }
                 FieldCell::TabReference | FieldCell::ZeroWidthGraph | FieldCell::Breakpoint => {}
-                FieldCell::Backline if replayed && fixed => {}
+                FieldCell::Backline if allow_replayed_blank && fixed => {}
                 FieldCell::Graph { width: 1.., .. } | FieldCell::Hyphen => {
                     return (fixed && self.projection_length(index, index + 1) > 0)
                         .then_some((gap, index));
@@ -638,19 +711,25 @@ impl FieldBuffer {
             match self.cells[cell] {
                 FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => {
                     saw_motion = true;
-                    gap = cell;
                     let known = self.deferred_blanks.partition_point(|run| run.end <= cell);
                     if self
                         .deferred_blanks
                         .get(known)
                         .is_some_and(|run| run.start <= cell)
                     {
+                        if gap == end {
+                            gap = cell;
+                        }
                         continue;
                     }
+                    gap = cell;
                     width = width.saturating_add(count);
                     projection_is_complete &= self.projection_length(cell, cell + 1) == count;
                 }
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
+                    if self.has_deferred_blank_at(cell) {
+                        continue;
+                    }
                     width += 1;
                     projection_is_complete &= self.projection_length(cell, cell + 1) == 1;
                 }
@@ -755,7 +834,15 @@ impl FieldBuffer {
         let graph = self.cells.len().checked_sub(from_end);
         self.backbefore_armed = graph.is_some();
         self.backbefore_graph = graph;
-        self.backline_projection_target = graph;
+        // term_field() flushes any projected blank buffered after the pending
+        // graph before emitting the later backspace, skipping zero-width
+        // controls (term.c:389-439, 901-908).
+        self.backline_projection_target = graph.map(|start| {
+            (start..self.cells.len())
+                .rev()
+                .find(|&cell| self.projection_length(cell, cell + 1) > 0)
+                .unwrap_or(start)
+        });
     }
 }
 

@@ -215,7 +215,9 @@ fn execute_formatter_word_events(
     } else {
         None
     };
-    let mut opaque_slots = native_writes::has_native_decoration(context.font.current);
+    let entry_decorated = native_writes::has_native_decoration(context.font.current);
+    let mut non_font_opaque = false;
+    let mut wrote_decorated = false;
     let retained_previous_glyph =
         context.slot_entry.retreat_blanks > 0 || context.zero_advance.has_pending_glyph();
     let can_record_last_font =
@@ -223,7 +225,7 @@ fn execute_formatter_word_events(
     let mut last_font = None;
     let mut appended_fonts = (can_record_last_font
         && context.policy.field_authoritative
-        && (opaque_slots
+        && (entry_decorated
             || events.iter().any(|event| {
                 matches!(
                     event,
@@ -233,25 +235,17 @@ fn execute_formatter_word_events(
     .then(native_writes::AppendedFonts::default);
     let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
+        let armed_before = context.zero_advance.is_armed();
         unproved_motion |= context.policy.field_authoritative
             && retained_previous_glyph
-            && !context.zero_advance.is_armed()
+            && !armed_before
             && geometry_word::absolute_motion(event);
-        opaque_slots = opaque_slots || needs_native_slot_proof(event);
+        non_font_opaque |= needs_native_slot_proof(event, armed_before);
         let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt
         // separate from FieldBuffer's graph/width model. Once any column has
         // buffered input its later flush retires BACKAFTER for the whole row.
-        word.table_device_buffer_written |= match event {
-            RoffInlineEvent::HorizontalMotion {
-                argument: Some(argument),
-                ..
-            } if !context.zero_advance.is_armed() => {
-                libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input(argument)
-            }
-            RoffInlineEvent::Overstrike { buffered, .. } => *buffered,
-            _ => false,
-        };
+        word.table_device_buffer_written |= event_writes_table_device_buffer(event, armed_before);
         if context.policy.record_native_cells
             && (!context.policy.field_authoritative || !matches!(event, RoffInlineEvent::Text(_)))
         {
@@ -268,7 +262,14 @@ fn execute_formatter_word_events(
             context.font.current,
         );
         if word.native_writes.len() > write_start {
-            last_font = Some((context.font.current, write_start));
+            wrote_decorated |= native_writes::writes_decorated_graph(
+                &word.native_writes[write_start..],
+                context.font.current,
+            );
+            last_font = match last_font {
+                Some((font, start)) if font == context.font.current => Some((font, start)),
+                _ => Some((context.font.current, write_start)),
+            };
             if appended_fonts.as_mut().is_some_and(|append| {
                 !append.record(&word.native_writes[write_start..], context.font.current)
             }) {
@@ -287,7 +288,14 @@ fn execute_formatter_word_events(
     {
         word.native_writes.push(FieldWrite::UnprovedMotion);
     }
-    if opaque_slots && context.policy.record_native_cells && context.policy.field_authoritative {
+    if (non_font_opaque
+        || wrote_decorated
+        || retained_previous_glyph
+            && context.zero_advance.has_annotation_output_owner()
+            && !word.native_writes.is_empty())
+        && context.policy.record_native_cells
+        && context.policy.field_authoritative
+    {
         record_word_slot_proof(
             events,
             &mut word.native_writes,
@@ -300,16 +308,25 @@ fn execute_formatter_word_events(
     finish_text_execution(events, context.zero_advance, word)
 }
 
-fn needs_native_slot_proof(event: &RoffInlineEvent) -> bool {
+fn event_writes_table_device_buffer(event: &RoffInlineEvent, armed: bool) -> bool {
     match event {
-        RoffInlineEvent::Font(_)
-        | RoffInlineEvent::PreviousFont
-        | RoffInlineEvent::Overstrike { .. } => true,
-        // ESCAPE_HORIZ can clear BACKAFTER, but a parsed zero relative
-        // motion writes no raw slots (term.c:678-699). Keep the ordinary
-        // word execution and its separate register effect.
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(argument),
+            ..
+        } if !armed => libmandoc_rs::TableColumnMetrics::horizontal_motion_has_input(argument),
+        RoffInlineEvent::Overstrike { buffered, .. } => *buffered,
+        _ => false,
+    }
+}
+
+fn needs_native_slot_proof(event: &RoffInlineEvent, armed: bool) -> bool {
+    match event {
+        RoffInlineEvent::Overstrike { .. } => true,
+        // ESCAPE_HORIZ clears BACKAFTER without buffering or moving when
+        // armed (term.c:678-682), and a parsed zero relative motion writes
+        // no raw slots (term.c:678-699). Keep ordinary word execution.
         RoffInlineEvent::HorizontalMotion { argument, .. } => {
-            !geometry_word::relative_zero_motion(argument.as_deref())
+            !armed && !geometry_word::relative_zero_motion(argument.as_deref())
         }
         _ => false,
     }
