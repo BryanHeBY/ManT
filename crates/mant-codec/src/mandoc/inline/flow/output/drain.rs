@@ -519,6 +519,14 @@ impl InlineBuilder {
                 state.field_buffer.has_deferred_blanks()
                     || state.field_buffer.has_positioned_slots()
                     || state.field_buffer.has_pass_retreats()
+                    || self.execution.author_execution.is_some_and(|author| {
+                        author.break_effect == super::super::AuthorBreakEffect::Line
+                    }) && state.field_buffer.awaits_flush()
+                        && state.field_buffer.has_pending_break_markers()
+                        && state
+                            .field_buffer
+                            .projection_length(0, state.field_buffer.cells().len())
+                            > 0
                     || state
                         .field_buffer
                         .cells()

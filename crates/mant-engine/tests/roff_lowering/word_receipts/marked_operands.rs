@@ -789,3 +789,93 @@ fn fresh_motion_nbsp_and_rearmed_words_preserve_raw_slots() {
         (r#".Sy "\h'3n'\~D \zJ" Ns Em "\h'-1n'\p\h'3n'""#, &["D JJ"]),
     ]);
 }
+
+#[test]
+fn definition_list_heads_preserve_native_slot_edits_and_deferred_breaks() {
+    // Verified against pinned reference mandoc (-Tutf8):
+    // - Scoped (-tag/-hang) and DefinitionLine (-inset) HEAD words keep raw
+    //   bold-copy aliases and marked decoration slots before term_flushln()
+    //   (mdoc_term.c:760-838, term.c:915-929).
+    // - Inset HEADs whose word scan awaits flush still hand off deferred
+    //   hard-row breaks to head_presentation when BODY flushes (term.c:205-220).
+    let cases = [
+        (
+            r#".Bl -tag -width 2n
+.It Sy "C D" Sy "\h'-7n'\&"
+.No "\h'-5n'B"
+.El"#,
+            &["CC D", "B"][..],
+        ),
+        (
+            r#".Bl -hang -width 3n
+.It Em "C\p\zJ" Em "\h'-4n'\pJ"
+.No "B"
+.El"#,
+            &["CJ   B"][..],
+        ),
+        (
+            r#".Bl -inset
+.It Em "A" Ns No "\h'-3n'\z"
+.No " B"
+.El"#,
+            &["B"][..],
+        ),
+        (
+            r#".Bl -inset
+.It Em "\~C\pJ" No "\h'-2n'\p"
+.br
+.No X
+.El"#,
+            &["C", "X"][..],
+        ),
+        (
+            r#".Bl -inset
+.It Em "\~C\pJ" No "\fP\p\(hy"
+.br
+.No X
+.El"#,
+            &["CJ", "‐", "X"][..],
+        ),
+        (
+            r#".Bl -inset
+.It Em "\z\z\pJ" No "\fP\p"
+.br
+.No X
+.El"#,
+            &["J", "", "X"][..],
+        ),
+    ];
+    for (words, expected) in cases {
+        let source = format!("{HEADER}{words}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let readback =
+            json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+        let rows_of = |rendered: &str| {
+            let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+            let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+            body.trim()
+                .lines()
+                .map(|line| line.trim().to_owned())
+                .collect::<Vec<_>>()
+        };
+        let rendered = mant_render::render_query_man(&content);
+        assert_eq!(rows_of(&rendered), expected, "{words}\n{rendered}");
+
+        let rendered = mant_render::render_query_man(&readback);
+        let words_on_row = |row: &str| row.split_whitespace().collect::<Vec<_>>().join(" ");
+        let rows: Vec<_> = rows_of(&rendered)
+            .iter()
+            .map(|row| words_on_row(row.strip_prefix("• ").unwrap_or(row)))
+            .collect();
+        assert_eq!(
+            rows,
+            expected
+                .iter()
+                .map(|row| words_on_row(row))
+                .collect::<Vec<_>>(),
+            "{words}\n{rendered}"
+        );
+    }
+}

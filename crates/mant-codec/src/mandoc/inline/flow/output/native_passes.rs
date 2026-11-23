@@ -374,8 +374,17 @@ fn definition_handoff<'a>(
     if !head.owns_word(&anchors[anchor].owner) {
         return None;
     }
-    let first =
-        (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)?;
+    let Some(first) =
+        (next.start..next.end).find(|&cell| buffer.projection_length(cell, cell + 1) > 0)
+    else {
+        return (pass.boundary == super::super::field_buffer::FillBoundary::WordEndBreak
+            && buffer.printed_content_end(next.start, next.end) > next.start)
+            .then_some(DefinitionBoundary::Head {
+                receiver: head,
+                last,
+                anchor,
+            });
+    };
     let following = anchors
         .partition_point(|anchor| anchor.content <= first)
         .checked_sub(1)?;

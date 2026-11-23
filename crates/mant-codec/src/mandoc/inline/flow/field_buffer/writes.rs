@@ -218,6 +218,10 @@ impl FieldBuffer {
         !matches!(self.word_scan, WordScanPolicy::Incremental)
     }
 
+    pub(in crate::mandoc::inline::flow) const fn awaits_flush(&self) -> bool {
+        matches!(self.word_scan, WordScanPolicy::AwaitFlush)
+    }
+
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
         // A source row only inserts TABREF after native buffer writes.
         if !self.cells.is_empty() && self.write_cursor.retreat() == 0 {
