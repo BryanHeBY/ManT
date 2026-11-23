@@ -72,6 +72,11 @@ impl InlineBuilder {
             state
                 .hang_row
                 .cover_open_head_ink(native.inherited_row_advance);
+            if let Some(accepted) = native.receipt.accepted_passes() {
+                state
+                    .field_buffer
+                    .record_definition_paint_origins(accepted.all(), &native.pass_paint_origins);
+            }
         }
         self.capture_consumed_run_in_boundaries(native);
         let _ = self.capture_consumed_native_tabs(native);
@@ -160,7 +165,7 @@ impl InlineBuilder {
             if !owner_boundary {
                 self.project_closed_field_underlines(passes, native);
                 self.project_accepted_field_passes(passes);
-                self.project_accepted_field_omissions(passes);
+                self.project_accepted_field_omissions(passes, native);
                 let start = self
                     .execution
                     .author_execution
@@ -188,7 +193,7 @@ impl InlineBuilder {
         if owner_boundary && !*definitive {
             return false;
         }
-        self.project_rejected_field_prefix(passes, !owner_boundary);
+        self.project_rejected_field_prefix(passes, !owner_boundary, native);
         self.project_completed_empty_passes(&empty_pass_ends);
         self.finish_rejected_field_state(
             owner_boundary,
@@ -201,6 +206,7 @@ impl InlineBuilder {
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
         return_to_head: bool,
+        native: Option<&NativeFieldDevice>,
     ) {
         let definition = self.execution.definition.as_mut().expect("native field");
         definition.hang_row.field_discarded = true;
@@ -210,6 +216,12 @@ impl InlineBuilder {
             passes,
             false,
         );
+        if let Some(device) = native {
+            device.record_omitted_scalars(&accepted_owners);
+        } else {
+            definition.omitted_scalars =
+                NativeFieldDevice::collect_omitted_scalars(&accepted_owners);
+        }
         if return_to_head && let Some(head) = &definition.deferred_head_projection {
             head.accept_coverage(&accepted_owners);
         }
@@ -260,7 +272,8 @@ impl InlineBuilder {
 
     fn record_definition_operand_covers(&self, passes: &[super::super::field_buffer::FillPass]) {
         let field = self.execution.definition.as_ref().expect("native field");
-        if !field.field_buffer.has_pass_retreats() {
+        if !field.field_buffer.has_pass_retreats() && !field.field_buffer.has_plain_paint_origins()
+        {
             return;
         }
         let operands = self.head_operand_capture.clone().or_else(|| {
@@ -345,6 +358,7 @@ impl InlineBuilder {
     fn project_accepted_field_omissions(
         &mut self,
         passes: &[super::super::field_buffer::FillPass],
+        native: Option<&NativeFieldDevice>,
     ) {
         let definition = self.execution.definition.as_ref().expect("native field");
         // A run-in BODY can overwrite the active HEAD buffer. A detached
@@ -355,6 +369,7 @@ impl InlineBuilder {
         let pending_field_edits = definition.field_buffer.has_unprinted_projection(passes)
             || definition.field_buffer.has_pass_retreats()
             || definition.field_buffer.has_edited_font_copies()
+            || definition.field_buffer.has_plain_paint_origins()
             || definition.deferred_head_projection.is_some();
         if !pending_field_edits && !shared_tail {
             return;
@@ -365,8 +380,15 @@ impl InlineBuilder {
             passes,
             true,
         );
+        if let Some(device) = native {
+            device.record_omitted_scalars(&accepted);
+        }
         if pending_field_edits && let Some(head) = &definition.deferred_head_projection {
             head.accept_coverage(&accepted);
+        }
+        if native.is_none() {
+            self.definition_state_mut().omitted_scalars =
+                NativeFieldDevice::collect_omitted_scalars(&accepted);
         }
         let start = self
             .execution

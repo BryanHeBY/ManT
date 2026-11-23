@@ -273,6 +273,7 @@ impl InlineBuilder {
             if definition.field_buffer.only_ignorable_remainder(false) {
                 definition.field_buffer.clear();
                 definition.field_word_anchors.clear();
+                definition.omitted_scalars.clear();
             }
             // Restore the one separator that was waiting for the next real
             // field instead of consuming it or manufacturing a second one.

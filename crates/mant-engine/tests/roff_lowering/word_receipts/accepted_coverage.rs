@@ -1146,9 +1146,11 @@ fn accepted_drawing_cells_keep_their_rows_through_motion_and_appended_styles() {
 #[test]
 fn an_open_head_keeps_its_ink_only_until_the_body_paints_the_same_cells() {
     // Both fixed devices give X ownership of the current column after
-    // consecutive backspaces. The F beyond the cursor stays painted if
-    // roff_term_pre_br or Pp ends the row before term_field emits BODY.
-    for (list, width, shared_gap, body_indent) in [("hang", "4n", 5, 6), ("tag", "12n", 13, 14)] {
+    // consecutive backspaces. Under UTF-8 (term_ascii.c:227-242),
+    // utf8_getwidth('\b') == 0 so viscol ends at 3 (gaps 3 and 11). The F
+    // beyond the cursor stays painted if roff_term_pre_br or Pp ends the
+    // row before term_field emits BODY.
+    for (list, width, shared_gap, body_indent) in [("hang", "4n", 3, 6), ("tag", "12n", 11, 14)] {
         for boundary in ["", ".br\n", ".Pp\n"] {
             let source = format!(
                 r#".Dd November 19, 2026

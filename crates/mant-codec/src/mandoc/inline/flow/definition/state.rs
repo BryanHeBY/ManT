@@ -127,6 +127,10 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// Native word start, stable private owner marker, and content start.
     /// Markers retain ownership through style/link wrapping and compaction.
     pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<super::super::NativeWordAnchor>,
+    /// Omitted scalar ranges removed when a flush projects acceptance before
+    /// constructing its `NativeFieldDevice` (for example `.mc` no-break flushes).
+    pub(in crate::mandoc::inline::flow) omitted_scalars:
+        std::collections::BTreeMap<String, Vec<std::ops::Range<usize>>>,
     pub(in crate::mandoc::inline::flow) deferred_head_projection:
         Option<super::head_presentation::DeferredHeadProjection>,
     pub(in crate::mandoc::inline::flow) outcome: DefinitionOutcome,
@@ -199,6 +203,8 @@ pub(in crate::mandoc::inline::flow) struct HangNativeRow {
 pub(in crate::mandoc::inline::flow) struct OpenHeadInk {
     pub(super) scope_depth: usize,
     pub(super) text: String,
+    pub(super) viscol: usize,
+    pub(super) minbl: usize,
     pub(super) covered: bool,
 }
 

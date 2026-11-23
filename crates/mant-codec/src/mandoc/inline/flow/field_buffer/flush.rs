@@ -56,10 +56,11 @@ impl FieldBuffer {
         &self,
         pass: &FillPass,
     ) -> Option<String> {
-        if !self.has_pass_retreats() {
+        let origin = self.plain_paint_origin(pass);
+        if !self.has_pass_retreats() && origin.is_none() {
             return None;
         }
-        self.prove_device_overprint(pass.start, pass.end, None)?
+        self.prove_device_overprint(pass.start, pass.end, origin)?
             .overhang
     }
     pub(in crate::mandoc::inline::flow) fn has_deferred_blanks(&self) -> bool {

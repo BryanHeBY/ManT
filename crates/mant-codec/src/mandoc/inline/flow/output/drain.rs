@@ -370,19 +370,24 @@ impl InlineBuilder {
             && occupied_head_row
             && self.execution.has_persistent_native_field_scope())
         .then(|| {
-            let accepted = native.as_ref()?.receipt.accepted_passes()?;
+            let device = native.as_ref()?;
+            let accepted = device.receipt.accepted_passes()?;
             let pass = accepted.all().last()?;
-            self.execution
-                .definition
-                .as_ref()?
-                .field_buffer
-                .proved_open_ink(pass)
+            let state = self.execution.definition.as_ref()?;
+            let text = state.field_buffer.proved_open_ink(pass)?;
+            // device.viscol is measured from presentation.parent, so subtract
+            // the HEAD's own relative field_offset_units to keep viscol in the
+            // same HEAD-relative frame as retire_covered_head_ink().
+            let head_viscol = device
+                .viscol
+                .saturating_sub(state.field_offset_units.saturating_add(11) / 24);
+            Some((text, head_viscol, device.next_field_gap_cells))
         })
         .flatten();
         self.flush_zero_advance();
         self.retire_native_field_with_device(native.as_ref());
-        if let Some(ink) = open_ink {
-            self.execution.remember_open_head_ink(ink);
+        if let Some((ink, viscol, minbl)) = open_ink {
+            self.execution.remember_open_head_ink(ink, viscol, minbl);
         }
         // term_flushln() consumed every old input cell, including the
         // automatic separator after an empty HEAD operand. The persistent

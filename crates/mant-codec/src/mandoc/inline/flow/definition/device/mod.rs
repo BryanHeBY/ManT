@@ -50,6 +50,7 @@ struct NativeFieldSweep {
     row_origins: Vec<(String, usize, i32, bool)>,
     field_padding: Vec<(String, usize, usize, bool)>,
     tab_spaces: Vec<(usize, usize)>,
+    pass_paint_origins: Vec<(usize, usize)>,
     unprojected_origin_units: usize,
     /// Outcome of the last pass-loop endline (term.c:217) of this flush.
     loop_row_end: LoopRowEnd,
@@ -154,7 +155,9 @@ impl NativeFieldSweep {
             row_origins: self.row_origins,
             field_padding: self.field_padding,
             tab_spaces: self.tab_spaces,
+            pass_paint_origins: self.pass_paint_origins,
             tab_projection: std::cell::OnceCell::new(),
+            omitted_scalars: std::cell::OnceCell::new(),
             output_start,
         }
     }
@@ -176,12 +179,12 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     /// after a control changed BRIND/NOBREAK.
     pub(in crate::mandoc::inline::flow) receipt: FlushReceipt,
     pub(super) width: usize,
-    pub(super) viscol: usize,
+    pub(in crate::mandoc::inline::flow) viscol: usize,
     pub(super) ends_row: bool,
     pub(super) overruns: bool,
     /// `term_flushln()` restores minbl for any consumed buffer, including a
     /// graphless or empty field (term.c:233-253). Backend endline clears it.
-    pub(super) next_field_gap_cells: usize,
+    pub(in crate::mandoc::inline::flow) next_field_gap_cells: usize,
     pub(super) tab_offset: i64,
     /// Origin advances on the final printed row, including the row just
     /// closed by this flush. Unlike live viscol, this receipt survives the
@@ -212,9 +215,16 @@ pub(in crate::mandoc) struct NativeFieldDevice {
     /// Native cell index and actual printed spaces, observed in `term_field`.
     /// Zero denotes a deferred TAB which never reached a printed graph.
     pub(super) tab_spaces: Vec<(usize, usize)>,
+    /// Fresh-row device origins (pass start cell, physical columns before
+    /// first graph) captured for device overprint/overhang proof.
+    pub(super) pass_paint_origins: Vec<(usize, usize)>,
     /// Filled only when this receipt enters real consumption. A row close
     /// may clear the live buffer before its text owner receives these edits.
     pub(in crate::mandoc::inline::flow) tab_projection: std::cell::OnceCell<Vec<TabExpansion>>,
+    /// Scalar ranges already removed from the live output by owner acceptance
+    /// before retirement projects row origins, presentations and tabs.
+    pub(in crate::mandoc::inline::flow) omitted_scalars:
+        std::cell::OnceCell<std::collections::BTreeMap<String, Vec<std::ops::Range<usize>>>>,
     /// Outcome of the pass loop's last `endline()` (term.c:217). With
     /// [`LoopRowEnd::Authored`], an authored hard row end exists even
     /// though the final tail comparison (250-253) left the fresh row open;
@@ -227,6 +237,66 @@ pub(in crate::mandoc) struct NativeFieldDevice {
 }
 
 impl NativeFieldDevice {
+    pub(in crate::mandoc::inline::flow) fn collect_omitted_scalars(
+        accepted: &std::collections::BTreeMap<
+            String,
+            super::super::output::native_passes::OwnerAcceptance,
+        >,
+    ) -> std::collections::BTreeMap<String, Vec<std::ops::Range<usize>>> {
+        accepted
+            .iter()
+            .filter(|(_, acceptance)| !acceptance.omitted_scalars.is_empty())
+            .map(|(owner, acceptance)| {
+                (
+                    owner.clone(),
+                    acceptance
+                        .omitted_scalars
+                        .iter()
+                        .map(|omission| omission.range.clone())
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect()
+    }
+
+    pub(in crate::mandoc::inline::flow) fn record_omitted_scalars(
+        &self,
+        accepted: &std::collections::BTreeMap<
+            String,
+            super::super::output::native_passes::OwnerAcceptance,
+        >,
+    ) {
+        let map = Self::collect_omitted_scalars(accepted);
+        if !map.is_empty() {
+            let _ = self.omitted_scalars.set(map);
+        }
+    }
+
+    pub(super) fn seed_omitted_scalars(
+        &self,
+        omitted: &std::collections::BTreeMap<String, Vec<std::ops::Range<usize>>>,
+    ) {
+        if !omitted.is_empty() {
+            let _ = self.omitted_scalars.set(omitted.clone());
+        }
+    }
+
+    pub(in crate::mandoc::inline::flow) fn rebase_scalar(
+        &self,
+        owner: &str,
+        scalar: usize,
+    ) -> usize {
+        let Some(ranges) = self.omitted_scalars.get().and_then(|map| map.get(owner)) else {
+            return scalar;
+        };
+        let removed: usize = ranges
+            .iter()
+            .take_while(|range| range.start < scalar)
+            .map(|range| range.end.min(scalar).saturating_sub(range.start))
+            .sum();
+        scalar.saturating_sub(removed)
+    }
+
     pub(in crate::mandoc::inline::flow) fn remap_output_projection(
         &mut self,
         edits: &super::super::output::row_origins::OutputNodeEdits,
@@ -387,7 +457,7 @@ impl InlineBuilder {
         let ends_row = !flags.contains(FieldFlag::Hang) && (!no_break || overruns);
         #[cfg(test)]
         super::control_trace::device_tail(if ends_row { 0 } else { sweep.viscol }, ends_row);
-        Some(sweep.into_device(
+        let device = sweep.into_device(
             width,
             tab_offset,
             &NativeFieldTail {
@@ -399,7 +469,9 @@ impl InlineBuilder {
             state.no_break.or(resumed),
             self.native_field_output_start(),
             receipt,
-        ))
+        );
+        device.seed_omitted_scalars(&state.omitted_scalars);
+        Some(device)
     }
 
     pub(super) fn native_field_output_start(&self) -> usize {

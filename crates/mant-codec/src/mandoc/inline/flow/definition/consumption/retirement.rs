@@ -26,13 +26,20 @@ impl InlineBuilder {
     ) -> [row_origins::OutputNodeEdits; 2] {
         self.execution.row_presentation = device.presentation;
         self.execution.partial_row_alignment |= device.partial_alignment;
+        let presentations: Vec<_> = device
+            .row_presentations
+            .iter()
+            .map(|(owner, scalar, hint)| {
+                (owner.clone(), device.rebase_scalar(owner, *scalar), *hint)
+            })
+            .collect();
         if let Some(receiver) = self
             .execution
             .definition
             .as_ref()
             .and_then(|state| state.deferred_head_projection.as_ref())
         {
-            receiver.accept(&device.row_presentations);
+            receiver.accept(&presentations);
             if let Some(receipt) = &device.cleared_alignment {
                 receiver.accept(std::slice::from_ref(receipt));
             }
@@ -52,11 +59,8 @@ impl InlineBuilder {
         };
         let mut output_start = device.output_start;
         cleared.remap(&mut output_start);
-        let presented = row_origins::project_row_presentations(
-            &mut self.nodes,
-            &device.row_presentations,
-            output_start,
-        );
+        let presented =
+            row_origins::project_row_presentations(&mut self.nodes, &presentations, output_start);
         self.remap_output_projection(&presented);
         [cleared, presented]
     }
@@ -96,26 +100,7 @@ impl InlineBuilder {
                 separator_field,
                 &mut output_start,
             );
-            let edits = row_origins::project_native_positions_with_tabs(
-                &mut self.nodes,
-                &device.row_origins,
-                &device.field_padding,
-                tabs,
-                output_start,
-                self.execution
-                    .definition
-                    .as_ref()
-                    .is_some_and(|state| state.column_origin_units.is_none()),
-            );
-            self.remap_output_projection(&edits);
-            // All native acceptance and layout receipts still address the
-            // original scalar stream. Resolve TAB text only after those
-            // receipts have been consumed, at this real field retirement.
-            if let Some(state) = &self.execution.definition
-                && let Some(receiver) = &state.deferred_head_projection
-            {
-                receiver.accept_tabs(tabs);
-            }
+            self.project_rebased_native_positions(device, tabs, output_start);
             if let Some(author) = &mut self.execution.author_execution {
                 author.field_output_start = self.nodes.len();
             }
@@ -159,6 +144,69 @@ impl InlineBuilder {
             state.field_buffer.clear_consumed_field();
             state.no_pad = false;
             state.field_word_anchors.clear();
+            state.omitted_scalars.clear();
+        }
+    }
+
+    fn project_rebased_native_positions(
+        &mut self,
+        device: &NativeFieldDevice,
+        tabs: &[super::super::super::output::tab_projection::TabExpansion],
+        output_start: usize,
+    ) {
+        let row_origins: Vec<_> = device
+            .row_origins
+            .iter()
+            .map(|(owner, scalar, origin, hidden)| {
+                (
+                    owner.clone(),
+                    device.rebase_scalar(owner, *scalar),
+                    *origin,
+                    *hidden,
+                )
+            })
+            .collect();
+        let field_padding: Vec<_> = device
+            .field_padding
+            .iter()
+            .map(|(owner, scalar, cells, hidden)| {
+                (
+                    owner.clone(),
+                    device.rebase_scalar(owner, *scalar),
+                    *cells,
+                    *hidden,
+                )
+            })
+            .collect();
+        let tabs: Vec<_> = tabs
+            .iter()
+            .map(
+                |tab| super::super::super::output::tab_projection::TabExpansion {
+                    owner: tab.owner.clone(),
+                    scalar: device.rebase_scalar(&tab.owner, tab.scalar),
+                    spaces: tab.spaces,
+                },
+            )
+            .collect();
+        let edits = row_origins::project_native_positions_with_tabs(
+            &mut self.nodes,
+            &row_origins,
+            &field_padding,
+            &tabs,
+            output_start,
+            self.execution
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.column_origin_units.is_none()),
+        );
+        self.remap_output_projection(&edits);
+        // All native acceptance and layout receipts still address the
+        // original scalar stream. Resolve TAB text only after those
+        // receipts have been consumed, at this real field retirement.
+        if let Some(state) = &self.execution.definition
+            && let Some(receiver) = &state.deferred_head_projection
+        {
+            receiver.accept_tabs(&tabs);
         }
     }
 }

@@ -125,7 +125,7 @@ use head::{definition_head_nodes, lower_definition_head};
 #[cfg(test)]
 pub(super) use layout::split_definition_terms;
 use layout::{
-    apply_executed_definition_body_layout, carry_completed_head_rows,
+    apply_executed_definition_body_layout, apply_retired_head_gap, carry_completed_head_rows,
     normalize_executed_definition_head, transfer_completed_empty_head_rows,
 };
 
@@ -205,27 +205,20 @@ pub(super) fn definition_item(
     {
         capture_deferred_operands(context, head, captured);
     }
-    retire_covered_head_ink(formatter, &mut terms, context, head);
-    let observed = finish_definition_body_execution(formatter, man_node);
-    carry_completed_head_rows(
-        node,
-        &terms,
-        closed_head_row || deferred_head_projection.is_some() && observed.term_carried_row_close(),
-        empty_head_rows,
-        carried_head_rows,
-        &mut description,
+    let retired_head_gap = retire_covered_head_ink(
+        formatter,
+        &mut terms,
+        context,
+        head,
+        (indent_columns, body_origin, geometry.gap),
     );
-    if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {
-        finish_man_ip_head(&mut terms, &mut geometry, finished.definition_field_exited);
-    }
-    apply_executed_definition_body_layout(
-        &mut geometry,
-        flow,
-        closed_head_row,
-        finished.definition_field_exited,
+    let observed = finish_definition_body_execution(formatter, man_node);
+    finish_definition_body_layout(
+        (node, &mut terms, &mut geometry, &mut description),
+        (flow, closed_head_row, finished.definition_field_exited),
+        (head_source_continues, deferred_head_projection.is_some()),
+        (empty_head_rows, carried_head_rows, retired_head_gap),
         &observed,
-        head_source_continues,
-        &description,
     );
     let layout = geometry.layout(indent_columns, body_origin, &terms);
     let item = assemble_definition_item(
@@ -240,12 +233,51 @@ pub(super) fn definition_item(
     session.finish(formatter);
     LoweredDefinitionItem {
         item,
-        // Layout may already own the last authored HEAD boundary, and tbl
-        // data can look just like plain digits after its rows are projected.
         ordinal_label_can_be_replaced: !closed_head_row
             && empty_head_rows == 0
             && !finished.head_layout_must_survive,
     }
+}
+
+fn finish_definition_body_layout(
+    (node, terms, geometry, description): (
+        &Node,
+        &mut Vec<Vec<Inline>>,
+        &mut crate::mandoc::layout::DefinitionGeometry,
+        &mut Vec<Block>,
+    ),
+    (flow, closed_head_row, field_exited): (DefinitionFlow, bool, bool),
+    (head_source_continues, has_deferred_head): (bool, bool),
+    (empty_head_rows, carried_head_rows, retired_head_gap): (u16, u16, Option<u16>),
+    observed: &crate::mandoc::formatter::DefinitionBodyObservation,
+) {
+    carry_completed_head_rows(
+        node,
+        terms,
+        closed_head_row || has_deferred_head && observed.term_carried_row_close(),
+        empty_head_rows,
+        carried_head_rows,
+        description,
+    );
+    if node.macro_token.as_ref() == Some(&Man(ManMacro::Ip)) {
+        finish_man_ip_head(terms, geometry, field_exited);
+    }
+    apply_executed_definition_body_layout(
+        geometry,
+        flow,
+        closed_head_row,
+        field_exited,
+        observed,
+        head_source_continues,
+        description,
+    );
+    apply_retired_head_gap(
+        geometry,
+        closed_head_row,
+        field_exited,
+        observed,
+        retired_head_gap,
+    );
 }
 
 fn finish_man_ip_head(
@@ -308,13 +340,21 @@ fn capture_deferred_operands(
 
 // The device receipt proves the final single-cell glyphs were overpainted
 // by the BODY. Retire their spelling within the original styled owners.
+// When `term.c:434` subtracted a zero-width preceding cell (e.g. NBRZW)
+// during a HEAD backspace, the device `viscol` can exceed the surviving
+// term width; return the exact native gap so layout preserves it.
 fn retire_covered_head_ink(
     formatter: &mut crate::mandoc::formatter::FormatterState,
     terms: &mut [Vec<Inline>],
     context: &LoweringContext<'_>,
     head: &[Node],
-) {
-    if let Some(covered) = formatter.execution.take_covered_head_ink()
+    (indent_columns, body_origin, min_gap): (
+        crate::mandoc::layout::SourceIndent,
+        crate::mandoc::layout::SourceIndent,
+        u16,
+    ),
+) -> Option<u16> {
+    if let Some((covered, viscol, minbl)) = formatter.execution.take_covered_head_ink()
         && let Some(term) = terms.last_mut()
     {
         let mut candidate = term.clone();
@@ -324,8 +364,27 @@ fn retire_covered_head_ink(
                 .native_heads
                 .borrow_mut()
                 .retire_painted_suffix(head.as_ptr() as usize, &covered);
+            let body_units = body_origin
+                .source_basic_units()
+                .saturating_sub(indent_columns.source_basic_units());
+            let native_gap = body_units
+                .saturating_sub(viscol.saturating_mul(24))
+                .max(minbl.saturating_mul(24))
+                .saturating_add(11)
+                / 24;
+            let term_width =
+                mant_ir::geometry::text_width(&crate::mandoc::inline::plain_text(term));
+            let body_indent =
+                usize::try_from(body_origin.offset_from(indent_columns).max(0)).unwrap_or(0);
+            let standard_gap = body_indent
+                .saturating_sub(term_width)
+                .max(usize::from(min_gap));
+            if native_gap != standard_gap {
+                return Some(u16::try_from(native_gap).unwrap_or(u16::MAX));
+            }
         }
     }
+    None
 }
 
 fn retire_painted_suffix<'a>(nodes: &mut [Inline], mut suffix: &'a str) -> Option<&'a str> {

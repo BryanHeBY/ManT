@@ -61,6 +61,7 @@ impl InlineBuilder {
             row_origins: Vec::new(),
             field_padding: Vec::new(),
             tab_spaces: Vec::new(),
+            pass_paint_origins: Vec::new(),
             unprojected_origin_units: row.unprojected_origin_units,
             loop_row_end: LoopRowEnd::Open,
             loop_rows: Vec::new(),
@@ -147,6 +148,15 @@ impl InlineBuilder {
             !fresh,
         );
         if fresh {
+            if self.execution.macro_set == libmandoc_rs::MacroSet::Mdoc
+                && self.execution.text_alignment == mant_ir::TextAlignment::Left
+                && state.column_origin_units.is_none()
+            {
+                sweep.pass_paint_origins.push((
+                    pass.print.start,
+                    placement.fresh_device_origin_columns(sweep.presentation.parent),
+                ));
+            }
             let mut hint = sweep
                 .presentation
                 .hint_at_signed(self.execution.text_alignment, pass.print.origin_units);

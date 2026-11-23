@@ -27,22 +27,26 @@ pub(in crate::mandoc) use state::PreservedDefinitionField;
 pub(super) use state::{DefinitionFieldState, PendingFieldGapOrigin};
 
 impl super::InlineExecutionState {
-    pub(in crate::mandoc) fn take_covered_head_ink(&mut self) -> Option<String> {
+    pub(in crate::mandoc) fn take_covered_head_ink(&mut self) -> Option<(String, usize, usize)> {
         let row = &mut self.definition.as_mut()?.hang_row;
         if row.open_head_ink.as_ref()?.scope_depth != self.native_field_scope_depth {
             return None;
         }
         let receipt = row.open_head_ink.take()?;
-        receipt.covered.then_some(receipt.text)
+        receipt
+            .covered
+            .then_some((receipt.text, receipt.viscol, receipt.minbl))
     }
 
-    pub(super) fn remember_open_head_ink(&mut self, text: String) {
+    pub(super) fn remember_open_head_ink(&mut self, text: String, viscol: usize, minbl: usize) {
         if let Some(definition) = &mut self.definition
             && definition.hang_row.open_head_ink.is_none()
         {
             definition.hang_row.open_head_ink = Some(state::OpenHeadInk {
                 scope_depth: self.native_field_scope_depth,
                 text,
+                viscol,
+                minbl,
                 covered: false,
             });
         }

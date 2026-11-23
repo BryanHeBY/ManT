@@ -75,4 +75,9 @@ impl FieldPlacement {
         let remaining = margin.saturating_sub(self.target_consumption).max(0);
         usize::try_from(remaining).unwrap_or(usize::MAX)
     }
+
+    pub(in crate::mandoc::inline::flow) fn fresh_device_origin_columns(self, parent: i32) -> usize {
+        let units = i64::from(parent).saturating_add(self.padding).max(0);
+        usize::try_from(units.saturating_add(11).div_euclid(24)).unwrap_or_default()
+    }
 }

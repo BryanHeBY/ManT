@@ -37,6 +37,10 @@ impl SourceIndent {
         usize::try_from(self.source.basic_units().saturating_add(5 * 24).max(0)).unwrap_or_default()
     }
 
+    pub(in crate::mandoc) fn source_basic_units(self) -> usize {
+        usize::try_from(self.source.basic_units().max(0)).unwrap_or_default()
+    }
+
     pub(in crate::mandoc) fn content_origin(self) -> Self {
         Self {
             source: self.source,

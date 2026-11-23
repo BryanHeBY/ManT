@@ -81,6 +81,35 @@ pub(super) fn apply_executed_definition_body_layout(
     }
 }
 
+pub(super) fn apply_retired_head_gap(
+    geometry: &mut crate::mandoc::layout::DefinitionGeometry,
+    closed_head_row: bool,
+    definition_field_exited: bool,
+    observed: &crate::mandoc::formatter::DefinitionBodyObservation,
+    retired_head_gap: Option<u16>,
+) {
+    if let Some(gap) = retired_head_gap
+        && !matches!(
+            geometry.placement,
+            crate::mandoc::layout::TermPlacement::Stacked
+        )
+        && !closed_head_row
+        && !definition_field_exited
+        && !observed.placement_breaks()
+        && geometry.relation_override.is_none()
+    {
+        geometry.gap = gap;
+        geometry.relation_override = Some((
+            if gap == 0 {
+                mant_ir::HeadBodyRelation::joined()
+            } else {
+                mant_ir::HeadBodyRelation::separated()
+            },
+            mant_ir::DefinitionBodyAlignment::AfterTerm,
+        ));
+    }
+}
+
 pub(super) fn normalize_executed_definition_head(
     term: Vec<Inline>,
     term_breaks: &[usize],

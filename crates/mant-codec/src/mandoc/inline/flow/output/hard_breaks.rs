@@ -70,15 +70,23 @@ impl InlineBuilder {
             // caller. Its row reset already consumed the live buffer, so
             // deliver the captured text receipt without re-running the tail
             // or changing the existing row-origin/padding projection.
-            let tabs = self.capture_consumed_native_tabs(&native);
-            tab_projection::apply_from(&mut self.nodes, native.current_output_start(), tabs);
+            let tabs: Vec<_> = self
+                .capture_consumed_native_tabs(&native)
+                .iter()
+                .map(|tab| tab_projection::TabExpansion {
+                    owner: tab.owner.clone(),
+                    scalar: native.rebase_scalar(&tab.owner, tab.scalar),
+                    spaces: tab.spaces,
+                })
+                .collect();
+            tab_projection::apply_from(&mut self.nodes, native.current_output_start(), &tabs);
             if let Some(receiver) = self
                 .execution
                 .definition
                 .as_ref()
                 .and_then(|state| state.deferred_head_projection.as_ref())
             {
-                receiver.accept_tabs(tabs);
+                receiver.accept_tabs(&tabs);
             }
         } else {
             self.hard_break_using_field(None, false, origin, false);

@@ -31,6 +31,42 @@ impl FieldBuffer {
         }
     }
 
+    pub(in crate::mandoc::inline::flow) fn record_definition_paint_origins(
+        &mut self,
+        passes: &[FillPass],
+        origins: &[(usize, usize)],
+    ) {
+        if self.projection_owner == super::super::FieldProjectionOwner::Detached
+            || origins.is_empty()
+        {
+            return;
+        }
+        for pass in passes {
+            if !self.fresh_paint_pass(pass)
+                || self
+                    .plain_paint_origins
+                    .last()
+                    .is_some_and(|&(start, _)| start >= pass.start)
+            {
+                continue;
+            }
+            let Ok(index) = origins.binary_search_by_key(&pass.start, |&(start, _)| start) else {
+                continue;
+            };
+            let printed_end = self.printed_content_end(pass.start, pass.end);
+            let printed = &self.cells[pass.start..printed_end];
+            if emits_backspace_after_control_or_advance(printed)
+                || printed.last() == Some(&FieldCell::Backline)
+                || self
+                    .edited_font_copy_end(pass.start, pass.end, true)
+                    .is_some()
+            {
+                self.plain_paint_origins
+                    .push((pass.start, origins[index].1));
+            }
+        }
+    }
+
     pub(in crate::mandoc::inline::flow) const fn has_plain_paint_origins(&self) -> bool {
         !self.plain_paint_origins.is_empty()
     }
@@ -104,7 +140,9 @@ impl FieldBuffer {
             .flatten();
         if !detached
             && !if blank_origin.is_some() {
-                edited_font_end.is_some() || emits_backspace_after_control_or_advance(cells)
+                edited_font_end.is_some()
+                    || emits_backspace_after_control_or_advance(cells)
+                    || cells.last() == Some(&FieldCell::Backline)
             } else {
                 edited_font_end.is_some()
                     || cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]

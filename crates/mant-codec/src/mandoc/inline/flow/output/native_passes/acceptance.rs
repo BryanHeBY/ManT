@@ -36,7 +36,7 @@ pub(in crate::mandoc::inline::flow::output) struct OrderedGlyph {
 
 #[derive(Clone, Debug)]
 pub(in crate::mandoc::inline::flow) struct ScalarOmission {
-    pub(in crate::mandoc::inline::flow::output) range: std::ops::Range<usize>,
+    pub(in crate::mandoc::inline::flow) range: std::ops::Range<usize>,
     pub(in crate::mandoc::inline::flow::output) covered: bool,
 }
 
