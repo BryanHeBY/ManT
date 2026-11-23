@@ -21,7 +21,9 @@ impl FieldBuffer {
         for (index, pass) in passes.iter().enumerate() {
             if self.fresh_paint_pass(pass)
                 && (emits_backspace_after_control_or_advance(&self.cells[pass.start..pass.end])
-                    || self.edited_font_copy_end(pass.start, pass.end).is_some())
+                    || self
+                        .edited_font_copy_end(pass.start, pass.end, true)
+                        .is_some())
             {
                 self.plain_paint_origins
                     .push((pass.start, if index == 0 { first } else { rest }));
@@ -47,10 +49,21 @@ impl FieldBuffer {
             && !self.has_projected_pass(pass.end)
     }
 
+    pub(in crate::mandoc::inline::flow) fn has_edited_font_copies(&self) -> bool {
+        self.raw_copy_aliases
+            .iter()
+            .any(|&(copy, owner)| copy > owner)
+    }
+
     /// An editable raw word can overwrite a font backspace and leave both
     /// copies printable. Ordinary decoration is exactly glyph, BS, glyph
     /// (`term.c::encode1`) and never needs a paint pass on its own.
-    fn edited_font_copy_end(&self, start: usize, end: usize) -> Option<usize> {
+    fn edited_font_copy_end(
+        &self,
+        start: usize,
+        end: usize,
+        include_unsplit_aliases: bool,
+    ) -> Option<usize> {
         let end = end.min(start.saturating_add(MAX_REPLAY_PREFIX_CELLS));
         let first = self
             .raw_copy_aliases
@@ -61,7 +74,8 @@ impl FieldBuffer {
             .filter_map(|&(copy, owner)| {
                 let low = copy.min(owner);
                 let high = copy.max(owner);
-                (start <= low
+                ((include_unsplit_aliases || copy > owner)
+                    && start <= low
                     && high < end
                     && (high != low + 2 || self.cells[low + 1] != FieldCell::Backline))
                     .then_some(high - start)
@@ -84,14 +98,18 @@ impl FieldBuffer {
         }
         let end = self.printed_content_end(start, end);
         let cells = &self.cells[start..end];
-        let edited_font_end = blank_origin.and_then(|_| self.edited_font_copy_end(start, end));
-        if self.projection_owner != super::super::FieldProjectionOwner::Detached
+        let detached = self.projection_owner == super::super::FieldProjectionOwner::Detached;
+        let edited_font_end = (!detached || blank_origin.is_some())
+            .then(|| self.edited_font_copy_end(start, end, blank_origin.is_some()))
+            .flatten();
+        if !detached
             && !if blank_origin.is_some() {
                 edited_font_end.is_some() || emits_backspace_after_control_or_advance(cells)
             } else {
-                cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
-                    .windows(2)
-                    .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
+                edited_font_end.is_some()
+                    || cells[..cells.len().min(MAX_REPLAY_PREFIX_CELLS)]
+                        .windows(2)
+                        .any(|cells| cells == [FieldCell::Backline, FieldCell::Backline])
             }
         {
             return None;
@@ -109,15 +127,16 @@ impl FieldBuffer {
                 .paint_device_interval(start, cells, last_edit, origin, true, true)
                 .map(|(proof, _)| proof);
         }
+        let keep_distinct = !detached && edited_font_end.is_some();
         let (mut proof, stepped_left) =
-            self.paint_device_interval(start, cells, last_edit, 1, false, false)?;
+            self.paint_device_interval(start, cells, last_edit, 1, false, keep_distinct)?;
         if stepped_left {
             // term_field() writes the backspace (term.c:430–434). Whether
             // the terminal can step one cell before this field depends on
             // the device origin. Require the same owned ink with and
             // without that one cell. Larger retreats remain unproved.
             let (clipped, _) =
-                self.paint_device_interval(start, cells, last_edit, 0, true, false)?;
+                self.paint_device_interval(start, cells, last_edit, 0, true, keep_distinct)?;
             if proof.order_groups != clipped.order_groups
                 || !proof
                     .covered
@@ -173,8 +192,23 @@ impl FieldBuffer {
                 FieldCell::Graph { width: 1, .. }
                 | FieldCell::Hyphen
                 | FieldCell::BreakableBlank
-                | FieldCell::NonBreakingBlank
-                | FieldCell::FixedDrawingAdvance(1) => {}
+                | FieldCell::NonBreakingBlank => {}
+                FieldCell::FixedDrawingAdvance(width)
+                    if *width > 0 && cursor.saturating_add(*width) <= row.len() =>
+                {
+                    for _ in 0..*width {
+                        if let Some(previous) = row[cursor].replace(index) {
+                            let owner = owner_at(previous).checked_sub(start)?;
+                            if owner >= MAX_REPLAY_PREFIX_CELLS {
+                                return None;
+                            }
+                            covered_by[owner] = Some(index);
+                        }
+                        cursor += 1;
+                    }
+                    extent = extent.max(cursor);
+                    continue;
+                }
                 FieldCell::BreakMarker
                 | FieldCell::ZeroWidthGraph
                 | FieldCell::Breakpoint
@@ -389,7 +423,7 @@ fn emits_backspace_after_control_or_advance(cells: &[FieldCell]) -> bool {
                 prior_advance_or_retreat = matches!(
                     cell,
                     FieldCell::Backline
-                        | FieldCell::FixedDrawingAdvance(1)
+                        | FieldCell::FixedDrawingAdvance(1..)
                         | FieldCell::BreakableBlank
                         | FieldCell::NonBreakingBlank
                         | FieldCell::Graph { text: '\u{a0}', .. }

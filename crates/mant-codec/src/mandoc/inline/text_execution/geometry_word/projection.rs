@@ -84,6 +84,16 @@ impl<'a> PlacedWord<'a> {
             editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS,
         );
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
+        // A native edit that overwrites the backspace between a bold glyph's
+        // two copies leaves both copies visible (`term.c::encode1`). Keep
+        // the alias proof and hold pass retirement until `retire_plain_paint`
+        // can run `edited_font_copy_end()` on the accepted row.
+        let split_bold_copy = matches!(
+            domain,
+            ReplayDomain::Filled | ReplayDomain::Scoped | ReplayDomain::DefinitionLine
+        ) && duplicates.iter().any(|&(copy, owner)| copy > owner);
+        let retain_suffix = retain_suffix || split_bold_copy;
+        let editable_marker = editable_marker || split_bold_copy;
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
         retire_trailing_entry_blanks(&mut slots, &reading, earlier);
         preserve_author_separators(&slots, &mut reading);

@@ -354,6 +354,7 @@ impl InlineBuilder {
             && definition.field_buffer.has_unprinted_tail(passes);
         let pending_field_edits = definition.field_buffer.has_unprinted_projection(passes)
             || definition.field_buffer.has_pass_retreats()
+            || definition.field_buffer.has_edited_font_copies()
             || definition.deferred_head_projection.is_some();
         if !pending_field_edits && !shared_tail {
             return;

@@ -572,12 +572,23 @@ impl FieldBuffer {
                 if !self.backafter_armed {
                     return (retreat.min(count), false);
                 }
-                if count > 0
-                    && retreat == 1
-                    && self.cells.last() == Some(&FieldCell::BreakableBlank)
+                if (count == 1 || retreat == 1)
+                    && count > 0
+                    && retreat >= 1
+                    && let Some(cursor) = self.cells.len().checked_sub(retreat)
+                    && (self.cells[cursor] == FieldCell::BreakableBlank
+                        || self.projection_length(cursor, cursor + 1) == 0
+                            && (self.cells[cursor] == FieldCell::Backline
+                                || cursor == 0
+                                    && self.cells[cursor]
+                                        == FieldCell::Graph {
+                                            text: '_',
+                                            width: 1,
+                                        }))
                 {
-                    // The first generated graph consumes BACKAFTER; any
-                    // second write then starts at the true end of the buffer.
+                    // The first generated graph consumes BACKAFTER at col
+                    // and arms BACKBEFORE; any second write continues from
+                    // the next slot (term.c:920-929).
                     return (1, true);
                 }
             }
@@ -696,11 +707,13 @@ impl FieldBuffer {
         for cell in cursor..end {
             let replaces_backline = self.cells[cell] == FieldCell::Backline;
             let followed_by_backline = self.cells.get(cell + 1) == Some(&FieldCell::Backline);
-            let bold_copy = followed_by_backline
-                && self
-                    .raw_copy_aliases
-                    .binary_search_by_key(&cell, |&(copy, _)| copy)
-                    .is_ok();
+            let is_alias = self
+                .raw_copy_aliases
+                .binary_search_by_key(&cell, |&(copy, _)| copy)
+                .is_ok();
+            let bold_copy = followed_by_backline && is_alias;
+            let split_bold_copy =
+                !followed_by_backline && is_alias && self.projection_length(cell, cell + 1) == 0;
             let replaces_font_pair = cell + 1 < end && bold_copy;
             // A projected U+00A0 also overwrites the anonymous underline
             // slot in encode1(). Leave a bold copy of a literal '_' on
@@ -713,7 +726,8 @@ impl FieldBuffer {
                         width: 1,
                     })
                 && self.projection_length(cell, cell + 1) == 0;
-            let replaces_decoration = replaces_backline || replaces_font_pair || replaces_underline;
+            let replaces_decoration =
+                replaces_backline || replaces_font_pair || split_bold_copy || replaces_underline;
             let inside_font_pair = previous_font_copy || replaces_font_pair;
             previous_font_copy = replaces_font_pair;
             if pending_break && self.cells[cell] == FieldCell::BreakableBlank {
@@ -730,7 +744,7 @@ impl FieldBuffer {
                 // The UTF-8 generated blank goes through encode1() as
                 // U+00A0 and overwrites earlier font bytes. Track the
                 // surviving authored slots through the next word overlay.
-                if replaces_underline {
+                if replaces_underline || self.backafter_armed && cell == cursor {
                     self.cells[cell] = FieldCell::Graph {
                         text: '\u{a0}',
                         width: 1,
@@ -748,7 +762,8 @@ impl FieldBuffer {
             // These advances replace the earlier label's own font bytes.
             // Its lexical separator already precedes that label scalar.
             if cell < projected_start
-                || (inside_font_pair || !replaces_decoration) && cell < printed_end
+                || (inside_font_pair || split_bold_copy || !replaces_decoration)
+                    && cell < printed_end
             {
                 continue;
             }

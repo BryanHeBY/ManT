@@ -375,6 +375,7 @@ impl FieldBuffer {
         mut order: impl FnMut(Vec<usize>),
     ) {
         let can_paint_without_origin = self.has_pass_retreats()
+            || self.has_edited_font_copies()
             || self.projection_owner == super::FieldProjectionOwner::Detached;
         if !can_paint_without_origin && self.plain_paint_origins.is_empty() {
             return;

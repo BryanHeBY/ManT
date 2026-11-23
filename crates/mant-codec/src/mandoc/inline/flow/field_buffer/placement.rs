@@ -602,14 +602,32 @@ impl FieldBuffer {
         let mut gap = end;
         let floor = self.resume.max(end.saturating_sub(MAX_REPLAY_PREFIX_CELLS));
         let mut before_ink = end;
-        while before_ink >= floor + 2
-            && self.cells[before_ink - 1] == FieldCell::Backline
-            && matches!(self.cells[before_ink - 2], FieldCell::Graph { text, width: 1 }
-                if text.is_whitespace() || self.projection_length(before_ink - 2, before_ink - 1) == 0)
-        {
-            // A decoration or fixed source space followed by a backline
-            // occupies the covering glyph's column, not the earlier gap.
-            before_ink -= 2;
+        loop {
+            let mut probe = before_ink;
+            while probe > floor
+                && matches!(
+                    self.cells[probe - 1],
+                    FieldCell::ZeroWidthGraph
+                        | FieldCell::Breakpoint
+                        | FieldCell::TabReference
+                        | FieldCell::BreakMarker
+                )
+            {
+                probe -= 1;
+            }
+            if probe >= floor + 2
+                && self.cells[probe - 1] == FieldCell::Backline
+                && matches!(self.cells[probe - 2], FieldCell::Graph { text, width: 1 }
+                    if text.is_whitespace() || self.projection_length(probe - 2, probe - 1) == 0)
+            {
+                // A decoration or fixed source space followed by a backline
+                // (possibly separated by zero-width controls skipped by
+                // term_field()) occupies the covering glyph's column, not
+                // the earlier gap (term.c:389-434).
+                before_ink = probe - 2;
+            } else {
+                break;
+            }
         }
         let mut covered_before_gap = None;
         let mut can_cover_preceding_glyph = plain_output;
