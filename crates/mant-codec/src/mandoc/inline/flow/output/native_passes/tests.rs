@@ -462,3 +462,64 @@ fn many_owner_passes_keep_every_accepted_piece_in_source_order() {
     let output = split_native_field_passes(&input, &boundaries);
     assert_eq!(plain_text(&output), "x\ny".repeat(1_024));
 }
+
+#[test]
+fn deferred_pass_keeps_intra_owner_break_inside_inline_link_wrapper() {
+    use super::super::super::field_buffer::{
+        FieldBuffer, FieldCell, FieldWrite, FillTargets, FlushReceipt,
+    };
+    use super::{accepted_owner_lengths, project_accepted_native_passes};
+
+    // Verified against reference mandoc (`-Tutf8` / `-Tascii`):
+    // `\l'1n.'\h'-1n'\X'tty: link https://x.io'\p XYZ\X'tty: link'` leaves
+    // `[ZeroWidthGraph, BreakMarker, BreakableBlank, X, Y, Z]` in one owner
+    // (term.c:205-220). When deferred pass projection runs on an editable
+    // marker, the consumed SP must stay inside the link wrapper so LineBreak
+    // lands before `XYZ` inside the link and `accepted_owner_lengths` keeps
+    // all 3 scalars of `XYZ` without double-omission.
+    let mut buffer = FieldBuffer::default();
+    let mut writes = vec![
+        FieldWrite::Cell(FieldCell::ZeroWidthGraph),
+        FieldWrite::Cell(FieldCell::BreakMarker),
+    ];
+    writes.extend(FieldWrite::literal(" XYZ"));
+    buffer.apply_writes(&writes);
+    let targets = FillTargets {
+        first: usize::MAX / 2,
+        rest: usize::MAX / 2,
+        unbounded: true,
+    };
+    let FlushReceipt::Accepted { passes, .. } = buffer.flush_receipt(targets, false) else {
+        panic!("expected accepted passes");
+    };
+    assert_eq!(passes.len(), 2);
+
+    let word = marker("linked");
+    let anchors = [super::super::super::NativeWordAnchor {
+        start: 0,
+        owner: word.clone(),
+        content: 0,
+        projected_device_padding: 0,
+        projected_field_prefix: false,
+        projected_gap: ProjectedNativeGap::default(),
+        projection: crate::mandoc::inline::flow::WordProjectionPolicy::Printed,
+    }];
+    let mut nodes = vec![
+        Inline::anchor(word.clone()),
+        Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: "https://x.io".into(),
+            },
+            title: None,
+            children: vec![text(" XYZ")],
+        },
+    ];
+    project_accepted_native_passes(&mut nodes, &mut buffer, &anchors, &passes, 0, None);
+    let Inline::Link { children, .. } = &nodes[1] else {
+        panic!("expected link wrapper: {nodes:?}");
+    };
+    assert_eq!(plain_text(children), "\nXYZ");
+    let accepted = accepted_owner_lengths(&buffer, &anchors, &passes, false);
+    assert_eq!(accepted[&word].scalars, 3);
+    assert!(accepted[&word].omitted_scalars.is_empty());
+}

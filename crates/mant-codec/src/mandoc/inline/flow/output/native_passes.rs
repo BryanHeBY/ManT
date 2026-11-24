@@ -59,15 +59,12 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
         }
         // The final flush can reach a pass that was still editable when
         // words were recorded. Its skipped SP still has provisional
-        // reading positions. Keep those positions until owner acceptance
-        // removes them, rather than letting them spend the next glyph's
-        // scalar quota (term.c:205-220).
+        // reading positions. Defer them until owner acceptance unless
+        // `record_accepted_pass_boundary` lets `trim_native_pass_rows`
+        // consume an intra-owner leading blank in place (term.c:205-220).
         let pending_gap = pass.boundary == FillBoundary::WordEndBreak
             && pass.end < next.start
             && buffer.projection_length(pass.end, next.start) != 0;
-        if pending_gap {
-            buffer.defer_projected_gap(pass.end, next.start);
-        }
         let cell = next.start;
         let owner = projected_restart_owner(buffer, anchors, pass, next, unowned_prefix);
         if let Some(index) = owner.checked_sub(1) {
@@ -79,6 +76,8 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
                 handoff,
                 (&mut offsets, &mut boundaries),
             );
+        } else if pending_gap {
+            buffer.defer_projected_gap(pass.end, next.start);
         }
     }
     if !boundaries.is_empty() {
@@ -113,6 +112,9 @@ fn record_accepted_pass_boundary<'a>(
 ) {
     let definition = definition_handoff(handoff, buffer, anchors, pass, next, has_following_pass);
     if let Some(DefinitionBoundary::Body(index)) = definition {
+        if pending_gap {
+            buffer.defer_projected_gap(pass.end, next.start);
+        }
         // The detached HEAD cannot carry its closing boundary in
         // the BODY output, so put it before the first BODY scalar.
         boundaries
@@ -138,6 +140,9 @@ fn record_accepted_pass_boundary<'a>(
             boundaries,
         )
     {
+        if pending_gap {
+            buffer.defer_projected_gap(pass.end, next.start);
+        }
         return;
     }
     let mut cut = cell;
@@ -154,6 +159,7 @@ fn record_accepted_pass_boundary<'a>(
     } else {
         None
     };
+    let mut used_earlier_cut = false;
     if detached.is_none()
         && !section_seam
         && let Some((actual, earlier_cut)) = offsets.earlier_cut(
@@ -167,8 +173,18 @@ fn record_accepted_pass_boundary<'a>(
     {
         index = actual;
         cut = earlier_cut;
+        used_earlier_cut = true;
     }
     let anchor = &anchors[index];
+    let trim_leading_gap_inside_owner = pending_gap
+        && handoff.is_none()
+        && detached.is_none()
+        && !section_seam
+        && !used_earlier_cut
+        && trims_leading_gap_inside_owner(buffer, anchors, index, pass, next, offsets);
+    if pending_gap && !trim_leading_gap_inside_owner {
+        buffer.defer_projected_gap(pass.end, next.start);
+    }
     cut = exclude_skipped_gap(buffer, anchor.content, cut, pass.end..next.start);
     let offset = offsets.at(buffer, index, cut);
     if let Some(receiver) = detached {
@@ -333,6 +349,43 @@ fn exclude_skipped_gap(
     } else {
         cut
     }
+}
+
+/// When `term_flushln()` skips ordinary `SP` inside the same owner before that
+/// owner's continuing text (`term.c:205-207`), keep `cut = next.start` like
+/// incremental `record/passes.rs` so `trim_native_pass_rows` consumes the blank
+/// inside any enclosing inline wrapper (such as `\X'tty: link'`).
+fn trims_leading_gap_inside_owner(
+    buffer: &super::super::field_buffer::FieldBuffer,
+    anchors: &[super::super::NativeWordAnchor],
+    index: usize,
+    pass: &super::super::field_buffer::FillPass,
+    next: &super::super::field_buffer::FillPass,
+    offsets: &OwnerOffsets<'_>,
+) -> bool {
+    let anchor = &anchors[index];
+    let anchor_end = anchors
+        .get(index + 1)
+        .map_or(buffer.cells().len(), |following| {
+            following.start.min(following.content)
+        });
+    anchor.content <= pass.end
+        && next.start < anchor_end
+        && buffer.projection_length(anchor.content, pass.end) == 0
+        && offsets
+            .lengths
+            .get(anchor.owner.as_str())
+            .copied()
+            .unwrap_or(0)
+            == 0
+        && buffer.projection_length(next.start, anchor_end.min(next.end)) > 0
+        && (pass.end..next.start).all(|gap_cell| {
+            buffer.projection_length(gap_cell, gap_cell + 1) == 0
+                || matches!(
+                    buffer.cells()[gap_cell],
+                    super::super::field_buffer::FieldCell::BreakableBlank
+                ) && !buffer.has_deferred_blank_at(gap_cell)
+        })
 }
 
 fn project_detached_gap_restart<'a>(
