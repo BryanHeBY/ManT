@@ -84,14 +84,45 @@ impl InlineBuilder {
     /// witness; eventual acceptance decides whether this is a visible seam.
     pub(in crate::mandoc) fn observe_run_in_boundary(&mut self) -> Option<RunInBoundaryReceipt> {
         let state = self.execution.definition.as_mut()?;
-        let anchor = state.field_word_anchors.last()?;
+        let owner = format!(
+            "{}{}",
+            super::super::output::INTERNAL_FIELD_WORD,
+            self.execution.native_owner_serial
+        );
+        // When `ReplaceLivePrefix` relocates surviving HEAD ink after the
+        // generated U+00A0 cells, `append_owner_intervals` appends resumed
+        // anchors at the end of `field_word_anchors`. Locate the first anchor
+        // of this run-in word within the bounded replay window so `start..end`
+        // spans the actual generated U+00A0 slots.
+        let mut index = state
+            .field_word_anchors
+            .iter()
+            .rposition(|anchor| anchor.owner == owner)?;
+        let floor = index.saturating_sub(MAX_EDITABLE_APPEND_CELLS);
+        while index > floor {
+            if let Some(earlier) = state.field_word_anchors[floor..index]
+                .iter()
+                .rposition(|anchor| anchor.owner == owner)
+            {
+                index = floor + earlier;
+            } else {
+                break;
+            }
+        }
+        let start = state.field_word_anchors[index].content;
+        let end = state
+            .field_word_anchors
+            .get(index + 1)
+            .map_or(state.field_buffer.cells().len(), |next| {
+                next.start.min(next.content)
+            });
         let receipt = RunInBoundaryReceipt {
             id: self.execution.native_owner_serial,
             facts: Rc::new(Cell::new(RunInBoundaryFacts::default())),
         };
         state.run_in_boundaries.push(PendingRunInBoundary {
-            start: anchor.content,
-            end: state.field_buffer.cells().len(),
+            start,
+            end,
             receipt: receipt.share(),
             awaiting_following_word: true,
         });
@@ -148,6 +179,23 @@ impl InlineBuilder {
                     break;
                 }
                 let covered = covered.get_or_insert_with(|| buffer.covered_pass_retreats(passes));
+                // A `PlacedBlank` U+00A0 has `projection_length == 0` until
+                // `deferred_blanks` materializes it at flush; if it is not
+                // covered by a backline, mark the boundary materialized so
+                // `unprojected_gap` does not double-count the separator.
+                if buffer.has_deferred_blank_at(cell) && covered.binary_search(&cell).is_err() {
+                    facts.materialized = true;
+                    break;
+                }
+                // If `append_run_in_cells` relocated surviving HEAD ink into
+                // BODY after this cell and `.br` flushed before any BODY word
+                // ran, `TERMP_NOSPACE` (`mdoc_term.c:772`) still joined that
+                // ink to the run-in seam with no automatic word separator.
+                if boundary.awaiting_following_word
+                    && has_local_ink(buffer, covered, boundary.end..printed.end)
+                {
+                    facts.following_word_joined = true;
+                }
                 // An accepted U+00A0 can outlive its projection, for
                 // example when later input rewrites the tail after an
                 // escape marker (term.c:659-661,701-714). It contributes

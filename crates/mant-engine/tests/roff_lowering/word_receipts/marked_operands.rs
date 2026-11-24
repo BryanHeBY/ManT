@@ -1328,3 +1328,346 @@ fn cross_review_utf8_gaps_offset_containers_tabs_and_monotonic_anchors() {
         ),
     ]);
 }
+
+#[test]
+fn wave4a_non_list_core_and_link_head_cursor_contracts() {
+    // Every expectation below was verified directly against pinned reference
+    // mandoc (-Tutf8; -Tascii matches on every non-NBSP row):
+    // - A1-a: multi-cell unowned blanks expand when proving a live retreated
+    //   cursor so `cells.len() == extent >= cursor_retreat` (term.c:678-718).
+    // - A1-b: `SeparatorDisposition::Consumed` survives replay when no entry
+    //   gap survives (term.c:389-439, 901-908).
+    // - A2-a: acknowledged passes record the actual `LineBreak` `cut` so
+    //   `pass_projection_end` preserves unprinted blanks in `cut..pass.end`
+    //   (term.c:205-220).
+    // - A2-b: a re-armed tail (`\zJ\z`) followed by `BACKAFTER`-canceling
+    //   control + `HORIZ` + ink keeps `PriorPendingSlot` via
+    //   `has_buffered_glyph()` (term.c:662-682, 701-718, 924-927).
+    // - A3/A4/A5-a: exact `!self.pending` `AppendedFonts` keeps `raw_edit_fence`
+    //   open while `rewind.rs` refuses to index compressed `raw_tail_fonts`
+    //   (term.c:620-638, 899-969).
+    // - A5-b: `can_defer_trailing_advance` accepts `\~` (U+00A0) and
+    //   `BACKAFTER`-canceled `HORIZ` (term.c:678-682, 915-929).
+    // - A6: `marker_replay` retains bounded filled `Breakpoint` prefixes and
+    //   `\c`-terminated `\p` words (term.c:659-667).
+    // - A8: proved `PassStop::Rejected` (`nbr == 0`) survives unreachable
+    //   relative unmodeled rewinds (term.c:143-146, 701-718).
+    // - C1/C2/C3a/C6/C7/C8: link-head `bounded_append`, `split_copy_max` in
+    //   `buffer_tail_glyph`, and `DefinitionLine`/`Scoped` cursor retention
+    //   (term.c:620-638, 659-718, 915-925; mdoc_term.c:760-838).
+    verify_rows(&[
+        // A1-a
+        (
+            r#".No "\h'-1n'F\p\h'2n'\h'-4n'" Ns Sy "\~" No "\h'-2n'X""#,
+            &["X"],
+        ),
+        // A1-b
+        (
+            r#".Sy "A" Em "\p\&\h'-1n'\h'1n' K" Ns No "F\pG\p\c" No "\h'-4n'X""#,
+            &["A", "KXG"],
+        ),
+        (
+            r#".Sy "A" Em "\z\p\h'-1n'\h'1n' K" Ns No "F\pG\p\c" No "\h'-4n'X""#,
+            &["A", "KXG"],
+        ),
+        // A2-a
+        (
+            r#".No "C\h'3n'D\h'3n' \zJ\h'3n'" Ns No "\h'-7n'\pX""#,
+            &["C   DX", "J"],
+        ),
+        (
+            r#".Sy "C\h'2n'D\h'2n' \zJ\h'2n'" Ns No "\h'-9n'\&\pX""#,
+            &["C  DX", "J"],
+        ),
+        // A2-b
+        (
+            r#".Em "CD \zJ\z" Ns Em "\h'-4n'\h'-7n'\pX\h'-1n'""#,
+            &["X", "J"],
+        ),
+        (
+            r#".Em "CD \zJ\z" Ns Em "\h'-4n'\h'-8n'\pX\h'-1n'""#,
+            &["_XD", "J"],
+        ),
+        (r#".Em "CD \zJ\z" Ns Em "\c\h'-7n'\pX\h'-1n'""#, &["X", "J"]),
+        // A3 & A4
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" Em "F\pG\p\c" No "\h'-4n'X""#,
+            &["A   K FG"],
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' " Em "F\pG\p\c " No "\h'-4n'X""#,
+            &["A    FX"],
+        ),
+        // A5-a
+        (
+            r#".Em "\h'-1n'F\p\h'2n'" Ns Sy "\~" No "\h'-10n'X""#,
+            &["F"],
+        ),
+        (
+            r#".Em "\h'-1n'F\p\h'2n'" Ns Sy "\~" Ns Em "\h'-9n'X""#,
+            &["X"],
+        ),
+        // A5-b
+        (
+            r#".Em "A" Em "\~\z\h'-1n'\h'1n'" Sy "F\p\pG\p\p\c" No "\p\h'-4n'X""#,
+            &["A \u{a0}  FX"],
+        ),
+        // A6
+        (
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Ns No "F\p\:G\p\c" No "\h'-4n'X""#,
+            &["A  FXG"],
+        ),
+        // A8
+        (
+            r#".Sy "\p" Zm "\z\h'-1n'\h'1n' " Sy "F\pG\p\c\h'-1n'" No "\h'-4n'X""#,
+            &[],
+        ),
+    ]);
+    verify_definition_list_cases(&[
+        // C7a: split bold copy after tail glyph in linked -tag HEAD
+        (
+            ".Bl -tag -width 4n\n.It Sy \"\\X'tty: link https://k.test'C\\X'tty: link'DV\" No \"\\h'-3n'\\zF\"\n.No X\n.El",
+            &["CDVFV", "X"],
+        ),
+        // C2 / C7b: link HEAD with \p + ink + space in bounded_append
+        (
+            ".Bl -tag -width 4n\n.It Sy \"\\X'tty: link https://k.test'C\\X'tty: link'\\p D\" No \"\\h'-5n'X\"\n.No Y\n.El",
+            &["CXD   Y"],
+        ),
+        // C1 / C8: DefinitionLine (-inset) fresh bounded retreat + \p and linked HEAD
+        (
+            ".Bl -inset\n.It Sy \"C\\p\\h'-2n'D\" No \"\\h'-2n'X\"\n.br\n.No Y\n.El",
+            &["X", "Y"],
+        ),
+        (
+            ".Bl -inset\n.It Sy \"\\X'tty: link https://k.test'C\\X'tty: link'\\p D\" No \"\\h'-5n'X\"\n.br\n.No Y\n.El",
+            &["CXD", "Y"],
+        ),
+        // C3a: Scoped (-tag) fresh bounded retreat + \p
+        (
+            ".Bl -tag -width 4n\n.It Em \"C\\p\\h'-2n'D\" No \"\\h'-2n'X\"\n.No Y\n.El",
+            &["X     Y"],
+        ),
+        // C6: Scoped (-hang) fresh bounded \z covered + \p
+        (
+            ".Bl -hang -width 4n\n.It Sy \"\\zC\\pD\" No \"\\h'-3n'X\"\n.br\n.No Y\n.El",
+            &["DXD", "Y"],
+        ),
+    ]);
+}
+
+#[test]
+fn wave4b_run_in_native_slots_and_detached_overprints() {
+    // Derived from pinned `target/mandoc-migration/reference/mandoc -Tutf8`
+    // (`-Tascii` also checked; `-inset`/`-diag`'s generated BODY `\ ` / `\ \ `
+    // `encode1(0x00A0)` cells render as ASCII spaces in reading output per
+    // `mdoc_term.c:757-772, 939-945`, `chars.c:50`, `term.c:620-636, 888-930`):
+    // - Unified run-in replay through `NativeSlots::with_field_prefix` +
+    //   `PlacedWord::prepare` overwrites bold copies, `\b`, owner glyphs,
+    //   blanks, and controls at `col`, transitions `BACKAFTER -> BACKBEFORE`,
+    //   and retains `pending_cell` + `can_replay_projected_prior_slot`.
+    // - `FieldProjectionOwner::Detached` records fresh-row `pass_paint_origins`
+    //   and enables `edited_font_copy_end` / gated `keep_distinct` so split
+    //   bold copies (`mXm`, `mZm`) and overprinted head glyphs resolve cleanly.
+    verify_definition_list_cases(&[
+        // .Bl -diag Cases 1-6
+        (
+            ".Bl -diag\n.It Sy \"CJ\" No \"\\h'-7n'\"\n.No \" \\h'-2n'BY\"\n.Sy \"Y\"\n.El",
+            &["Sy CJ  BYoY"],
+        ),
+        (
+            ".Bl -diag\n.It Em \"C J\" Sy \"\\h'-8n'\"\n.No \"\\&\" No \"Y\"\n.El",
+            &["Em C J  Sy"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CJ\" Em \"\\h'-7n'\"\n.No \"\\&\"\n.No \"X\"\n.El",
+            &["Sy CJ   mXm"],
+        ),
+        (
+            ".Bl -diag\n.It Em \"A\" Em \"\\h'-8n'\\p\"\n.No \"B\" No \"Z\"\n.El",
+            &["Em A  BmZm"],
+        ),
+        (
+            ".Bl -diag\n.It Em \"CJ\" Em \"\\h'-8n'\\pJ\"\n.No \"BV\"\n.Sy \"Y\"\n.El",
+            &["Em CJJ  BV", "Y"],
+        ),
+        (
+            ".Bl -diag\n.It Em \"C\\pJ\" No \"\\h'-5n'\\:\"\n.No \"\\h'-1n' BC\"\n.br\n.No \"Y\"\n.El",
+            &["Em CJ", "BC", "Y"],
+        ),
+        // .Bl -diag -1n..-7n sweep
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-1n'\"\n.No \"X\"\n.El",
+            &["Sy CV No  X"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-2n'\"\n.No \"X\"\n.El",
+            &["Sy CV N  X"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-3n'\"\n.No \"X\"\n.El",
+            &["Sy CV No  X"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-4n'\"\n.No \"X\"\n.El",
+            &["Sy CV N  X"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-5n'\"\n.No \"X\"\n.El",
+            &["Sy CV   Xo"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-6n'\"\n.No \"X\"\n.El",
+            &["Sy CV N  o"],
+        ),
+        (
+            ".Bl -diag\n.It Sy \"CV\" No \"\\h'-7n'\"\n.No \"X\"\n.El",
+            &["Sy CV   Xo"],
+        ),
+        // .Bl -inset C3b, C4, C5 (BACKAFTER -> BACKBEFORE across run-in `\ `)
+        (
+            ".Bl -inset\n.It Em \"C\\zJ\" No \"\\h'-3n'\\z\"\n.No \"\\p\\cB\"\n.El",
+            &["CB"],
+        ),
+        (
+            ".Bl -inset\n.It Sy \"\\X'tty: link https://k.test'C\\X'tty: link'\\p\\zJ\" Em \"\\h'-6n'\\z\"\n.No \"\\p\\&\\&\"\n.El",
+            &["J"],
+        ),
+        (
+            ".Bl -inset\n.It No \"\\X'tty: link https://k.test'C\\X'tty: link'V\" Sy \"\\h'-8n'\\z\"\n.No \"\\p B\"\n.El",
+            &["B"],
+        ),
+        // Unpaired italic underline released by run-in `\ ` stays on the shared row before `.br`
+        (
+            ".Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.No \"\\z\\:\"\n.br\n.No \"\\pZ\"\n.El",
+            &["C_", "Z"],
+        ),
+        // Split bold copy whose 2nd copy is overwritten by `\p` retains 1st copy before `\ `
+        (
+            ".Bl -inset\n.It Sy \"\\X'tty: link https://k.test'C\\X'tty: link'-D\" No \"\\h'-3n'\"\n.No \"\\p\\z\" No \"\\h'-3n'Y\"\n.El",
+            &["C-D", "Y"],
+        ),
+    ]);
+}
+
+#[test]
+fn wave4e_cross_review_structural_run_in_rejections_and_expanded_tails() {
+    // Every expectation below was verified directly against pinned
+    // `target/mandoc-migration/reference/mandoc -Tutf8`:
+    // - P1-1: Structural row closes (`.Bd -ragged`, `.D1`, nested `.Bl -dash`,
+    //   nested `.Bl -inset`, tables) observe run-in relocated BODY ink before
+    //   marking `StructuralRowClosed` (`mdoc_term.c:757-772, 1128`, `term.c:475-480`).
+    // - P1-2: `replay_run_in_word` / `project_run_in` resolve `self.prior`
+    //   against `encode1(0x00A0)` (`term.c:903-929`) and restore surviving
+    //   HEAD-owned pending ink into `DeferredHeadProjection` instead of leaking
+    //   it into BODY output.
+    // - P1-3: `finish_preserving_execution` retains `deferred_head` when a
+    //   `proved_rejection` (`word_scan == UnmodeledRewind`, `term.c:143-146`)
+    //   must omit HEAD ink at BODY flush.
+    // - P1-4: `begin_word_writes` handles `WriteCursor::Placed(1..)` fallback
+    //   direct writes with conservative `min_raw_cursor` (`term.c:678-718`).
+    // - P2-5: `PlacedWord::prepare` syncs `DeviceTail::fill_cells` after
+    //   `expand_replay_advances()` splits multi-cell unowned advances
+    //   (`term.c:678-718, 860-872`).
+    let long_word = "A".repeat(66);
+    let long_p1_4 = format!(r#".No "\p " No "{long_word}" No "CD\h'-1n'" Ns No "\o'ab'""#);
+    let long_p2_5 = format!(r#".No "{long_word}" No "A\p\h'3n'" No "\h'-2n'X""#);
+    let long_p2_5_expected = format!("{long_word} A  X");
+    verify_rows(&[
+        // P1-4
+        (r#".No "CD\h'-1n'" Ns No "\o'ab'""#, &["Cb"]),
+        (r#".No "\p " No "CD\h'-1n'" Ns No "\o'ab'""#, &[]),
+        (&long_p1_4, &[]),
+        // P2-5
+        (r#".No "A\p\h'3n'" No "\h'-2n'X""#, &["A  X"]),
+        (
+            r#".No "A\p\h'3n'" No "\h'-2n'X\h'1n'" No "Y""#,
+            &["A  X", "Y"],
+        ),
+        (r#".No "A\p\h'3n'" No "X\h'1n'""#, &["A", "X"]),
+        (&long_p2_5, &[long_p2_5_expected.as_str()]),
+    ]);
+    let long_p1_3_inset =
+        format!(".Bl -inset\n.It No \"\\p \" No \"{long_word}\" No \"\\h'-1n'X\"\n.No \"Y\"\n.El");
+    verify_definition_list_cases(&[
+        // P1-1: structural row close after run-in relocated BODY ink
+        (
+            ".Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.Bd -ragged\nZ\n.Ed\n.El",
+            &["C_ V", "", "Z"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.D1 Z\n.El",
+            &["C_ V", "Z"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.Bl -inset\n.It H\nZ\n.El\n.El",
+            &["C_ V", "", "H Z"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.TS\nl.\nZ\n.TE\n.El",
+            &["C_ V", "Z"],
+        ),
+        // P1-2: run-in replay BACKBEFORE overwrite and HEAD-owned pending ink
+        (".Bl -inset\n.It Em \"C\\p\\zJ\"\n.No \"B\"\n.El", &["C B"]),
+        (".Bl -inset\n.It Em \"C\\zJ\"\n.No \"B\"\n.El", &["C B"]),
+        (
+            ".Bl -inset\n.It Em \"C\\p\\zJ\\z\"\n.No \"B\"\n.El",
+            &["CB"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\p\\zJ\\z\"\n.No \"\\h'-2n'X\"\n.El",
+            &["CJX"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"C\\p\\zJ\\z\"\n.No \"\\h'-1n'X\"\n.El",
+            &["CX"],
+        ),
+        (".Bl -inset\n.It Em \"C\\zJ \\z\"\n.No \"B\"\n.El", &["CJB"]),
+        (
+            ".Bl -diag\n.It Em \"C\\p\\zJ\"\n.No \"B\"\n.El",
+            &["Em C  B"],
+        ),
+        (
+            ".Bl -diag\n.It Em \"C\\p\\zJ\\z\"\n.No \"B\"\n.El",
+            &["Em C B"],
+        ),
+        // P1-3: proved rejection in -tag and -inset HEAD
+        (
+            ".Bl -tag -width 4n\n.It Em \"\\p\" Em \"ABCDEF\" No \"\\h'-1n'\\o'ab'\"\n.No \"X\"\n.El",
+            &["X"],
+        ),
+        (
+            ".Bl -inset\n.It Em \"\\p\" Em \"ABCDEF\" No \"\\h'-1n'\\o'ab'\"\n.No \"X\"\n.El",
+            &[],
+        ),
+        (&long_p1_3_inset, &[]),
+    ]);
+    // P1-1 nested `.Bl -dash`: roff renders `-   Z` and Markdown readback
+    // renders the nested unordered list item as `• Z`, both after `C_ V` on
+    // the shared outer run-in row.
+    let nested_dash = format!(
+        "{HEADER}.Bl -inset\n.It Em \"C\\&V\" Ns No \"\\h'-2n'\"\n.Bl -dash\n.It\nZ\n.El\n.El\n{END}"
+    );
+    let content =
+        json_string_roundtrip(&mant_loader::load_roff_bytes(nested_dash.as_bytes()).unwrap());
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let readback =
+        json_string_roundtrip(&mant_loader::load_markdown_text(&markdown, None).unwrap());
+    let extract_rows = |rendered: &str| {
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE\n").unwrap();
+        let mut rows: Vec<_> = body.lines().map(|line| line.trim().to_owned()).collect();
+        while rows.last().is_some_and(String::is_empty) {
+            rows.pop();
+        }
+        rows
+    };
+    let rendered = mant_render::render_query_man(&content);
+    assert_eq!(extract_rows(&rendered), ["C_ V", "", "-   Z"], "{rendered}");
+    let readback_rendered = mant_render::render_query_man(&readback);
+    assert_eq!(
+        extract_rows(&readback_rendered),
+        ["• C_ V", "", "• Z"],
+        "{readback_rendered}\n{markdown}"
+    );
+}

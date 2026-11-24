@@ -227,7 +227,7 @@ fn can_place_word(
     {
         return None;
     }
-    (!context.zero_advance.has_pending_glyph() || can_place_pending(context)).then_some(controls)
+    (!context.zero_advance.has_buffered_glyph() || can_place_pending(context)).then_some(controls)
 }
 
 fn first_control_cancels_backafter(events: &[RoffInlineEvent]) -> bool {
@@ -239,24 +239,48 @@ fn first_control_cancels_backafter(events: &[RoffInlineEvent]) -> bool {
     }) else {
         return false;
     };
-    matches!(
+    if !matches!(
         events[first],
         RoffInlineEvent::NoSpace | RoffInlineEvent::HorizontalMotion { .. }
-    ) && events[first + 1..]
-        .iter()
-        .any(|event| matches!(event, RoffInlineEvent::HorizontalMotion { .. }))
-        && events[first + 1..].iter().all(|event| {
-            matches!(
-                event,
-                RoffInlineEvent::HorizontalMotion { .. }
-                    | RoffInlineEvent::LineBreak
-                    | RoffInlineEvent::ZeroWidthGlyph
-                    | RoffInlineEvent::Breakpoint
-                    | RoffInlineEvent::NoSpace
-                    | RoffInlineEvent::Font(_)
-                    | RoffInlineEvent::PreviousFont
-            ) || matches!(event, RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte == b' '))
-        })
+    ) {
+        return false;
+    }
+    let mut seen_motion = false;
+    let mut consumed_backbefore = false;
+    for event in &events[first + 1..] {
+        match event {
+            RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                seen_motion = true;
+                // term.c:678-718: a non-zero HORIZ consumes BACKBEFORE before
+                // later ink reaches encode1(), while non-motion `\cX` stays on
+                // the zero-advance path.
+                if argument
+                    .as_deref()
+                    .and_then(motion_columns)
+                    .is_some_and(|(absolute, units)| absolute || units != 0)
+                {
+                    consumed_backbefore = true;
+                }
+            }
+            RoffInlineEvent::LineBreak
+            | RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
+            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont => {}
+            RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte == b' ') => {}
+            RoffInlineEvent::Text(_)
+            | RoffInlineEvent::Glyph(..)
+            | RoffInlineEvent::BreakableHyphen
+            | RoffInlineEvent::NonBreakingWordBlank
+            | RoffInlineEvent::ZeroAdvance
+            | RoffInlineEvent::Link(_)
+            | RoffInlineEvent::DeviceName
+                if consumed_backbefore => {}
+            _ => return false,
+        }
+    }
+    seen_motion
 }
 
 #[derive(PartialEq, Eq)]
@@ -289,6 +313,9 @@ fn allows_fresh_decoration(
                 ))
 }
 
+/// Check whether a local `\z` word can stay in bounded raw slots (`term.c:662-667,
+/// 678-699, 888-969`: `ESCAPE_NOSPACE` clears `BACKAFTER`, positive `HORIZ`
+/// clears `BACKAFTER`/`BACKBEFORE`, and `encode1` consumes `BACKBEFORE`).
 fn local_overwrite(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -407,6 +434,8 @@ fn local_overwrite(
     }
 }
 
+/// `encode1()` expands decorated glyphs to 3-5 raw bytes (`term.c:911-925`),
+/// and `encode()` preserves `BACKBEFORE` across a trailing `SP` (`term.c:946-967`).
 fn retains_decorated_word(events: &[RoffInlineEvent], backbefore: bool) -> bool {
     fits_editable_font_slots(events)
         || backbefore
@@ -678,18 +707,101 @@ fn deferred_trailing_entry_slots(context: &TextExecutionContext<'_>) -> Option<u
         .map(crate::mandoc::inline::flow::native_slots::FieldPrefix::raw_slot_count)
 }
 
-fn can_defer_trailing_advance(
-    mut events: &[RoffInlineEvent],
-    context: &TextExecutionContext<'_>,
-) -> bool {
-    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+struct DeferredTrailingScan {
+    size: usize,
+    has_space: bool,
+    has_inner_motion: bool,
+    has_zero_advance: bool,
+}
 
+fn scan_deferred_trailing_prefix(
+    prefix: &[RoffInlineEvent],
+    leading_retreat: bool,
+) -> Option<(DeferredTrailingScan, bool)> {
     let single_paint = |font| {
         !matches!(
             font,
             RoffFont::Strong | RoffFont::CodeStrong | RoffFont::StrongEmphasis
         )
     };
+    let mut armed_local = false;
+    let mut has_space = false;
+    let mut has_inner_motion = false;
+    let mut has_zero_advance = false;
+    let size = prefix.iter().try_fold(0usize, |count, event| match event {
+        RoffInlineEvent::Text(text)
+            if text
+                .bytes()
+                .all(|byte| byte.is_ascii_graphic() || !leading_retreat && byte == b' ') =>
+        {
+            has_space |= text.bytes().any(|byte| byte == b' ');
+            if text.bytes().any(|byte| byte.is_ascii_graphic()) {
+                armed_local = false;
+            }
+            Some(count.saturating_add(text.len().saturating_mul(5)))
+        }
+        // `\~` (U+00A0) encodes as a decorated glyph and clears BACKAFTER
+        // (term.c:915-929).
+        RoffInlineEvent::Glyph(text, _) if text == "\u{a0}" => {
+            armed_local = false;
+            Some(count.saturating_add(5))
+        }
+        RoffInlineEvent::ZeroAdvance if !leading_retreat && !armed_local => {
+            armed_local = true;
+            has_zero_advance = true;
+            Some(count.saturating_add(1))
+        }
+        RoffInlineEvent::NoSpace => {
+            armed_local = false;
+            Some(count)
+        }
+        // HORIZ under BACKAFTER clears BACKAFTER without buffering bytes
+        // (term.c:678-682).
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(value),
+            ..
+        } if armed_local && motion_columns(value).is_some() => {
+            armed_local = false;
+            Some(count)
+        }
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(value),
+            ..
+        } if count > 0
+            && !armed_local
+            && motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0) =>
+        {
+            has_inner_motion = true;
+            Some(
+                count.saturating_add(libmandoc_rs::TableColumnMetrics::relative_motion_columns(
+                    value,
+                )),
+            )
+        }
+        // Keep the ordinary receipt when the ink itself can have multiple
+        // raw paint copies with independent coverage ownership.
+        RoffInlineEvent::Font(font) if single_paint(*font) => Some(count),
+        _ => None,
+    })?;
+    Some((
+        DeferredTrailingScan {
+            size,
+            has_space,
+            has_inner_motion,
+            has_zero_advance,
+        },
+        armed_local,
+    ))
+}
+
+/// Keep bounded words ending in positive `HORIZ` in raw slots (`term.c:678-718,
+/// 915-929`) so trailing `ASCII_NBRSP` advances stay editable until `term_fill()`.
+fn can_defer_trailing_advance(
+    mut events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
     let Some(earlier) = deferred_trailing_entry_slots(context) else {
         return false;
     };
@@ -728,50 +840,25 @@ fn can_defer_trailing_advance(
     } else {
         (false, prefix)
     };
-    let mut armed_local = false;
-    let mut has_space = false;
-    let mut has_inner_motion = false;
-    let mut has_zero_advance = false;
-    let size = prefix.iter().try_fold(0usize, |count, event| match event {
-        RoffInlineEvent::Text(text)
-            if text
-                .bytes()
-                .all(|byte| byte.is_ascii_graphic() || !leading_retreat && byte == b' ') =>
-        {
-            has_space |= text.bytes().any(|byte| byte == b' ');
-            if text.bytes().any(|byte| byte.is_ascii_graphic()) {
-                armed_local = false;
-            }
-            Some(count.saturating_add(text.len().saturating_mul(5)))
-        }
-        RoffInlineEvent::ZeroAdvance if !leading_retreat && !armed_local => {
-            armed_local = true;
-            has_zero_advance = true;
-            Some(count.saturating_add(1))
-        }
-        RoffInlineEvent::NoSpace => {
-            armed_local = false;
-            Some(count)
-        }
-        RoffInlineEvent::HorizontalMotion {
-            argument: Some(value),
-            ..
-        } if count > 0
-            && !armed_local
-            && motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0) =>
-        {
-            has_inner_motion = true;
-            Some(
-                count.saturating_add(libmandoc_rs::TableColumnMetrics::relative_motion_columns(
-                    value,
-                )),
-            )
-        }
-        // Keep the ordinary receipt when the ink itself can have multiple
-        // raw paint copies with independent coverage ownership.
-        RoffInlineEvent::Font(font) if single_paint(*font) => Some(count),
-        _ => None,
-    });
+    let Some((
+        DeferredTrailingScan {
+            size,
+            has_space,
+            has_inner_motion,
+            has_zero_advance,
+        },
+        armed_local,
+    )) = scan_deferred_trailing_prefix(prefix, leading_retreat)
+    else {
+        return false;
+    };
+    let single_paint = |font| {
+        !matches!(
+            font,
+            RoffFont::Strong | RoffFont::CodeStrong | RoffFont::StrongEmphasis
+        )
+    };
+    let size = Some(size);
     // Bounded filled words with a trailing advance keep exact raw font
     // slots (and bold copy aliases) until a later HORIZ or term_fill().
     let single_owner =
@@ -1107,6 +1194,8 @@ enum MarkerReplay {
     AwaitFieldFlush,
 }
 
+/// `ESCAPE_BREAK` (`\p`) buffers `'\n'` without running `term_fill()` until
+/// flush (`term.c:281-366, 659-660`); keep bounded marked words editable.
 fn awaits_bounded_marker_flush(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -1127,6 +1216,8 @@ fn awaits_bounded_marker_flush(
             }
 }
 
+/// Allow `ESCAPE_HORIZ` alongside `\p` when `p->col` moves inside the live
+/// `tcol->buf` before `term_fill()` executes (`term.c:659-660, 678-718`).
 fn allows_marker_motion(
     value: &str,
     index: usize,
@@ -1141,6 +1232,68 @@ fn allows_marker_motion(
             && motion_columns(value).is_some_and(|(absolute, units)| !absolute && units < 0)
 }
 
+fn fits_bounded_filled_prefix(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    context.slot_entry.domain == ReplayDomain::Filled
+        && context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+            let per_glyph = if decorated_word(events, context.font.current) {
+                5
+            } else {
+                1
+            };
+            let incoming = events.iter().fold(0usize, |acc, event| {
+                acc.saturating_add(match event {
+                    RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _) => {
+                        text.len().saturating_mul(per_glyph)
+                    }
+                    RoffInlineEvent::Font(_)
+                    | RoffInlineEvent::PreviousFont
+                    | RoffInlineEvent::Link(_)
+                    | RoffInlineEvent::NoSpace => 0,
+                    _ => 1,
+                })
+            });
+            prefix.start == 0
+                && prefix.raw_slot_count().saturating_add(incoming)
+                    <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
+        })
+}
+
+fn is_trailing_no_space_marker(tail: &[RoffInlineEvent]) -> bool {
+    tail.iter().all(|next| {
+        matches!(
+            next,
+            RoffInlineEvent::LineBreak
+                | RoffInlineEvent::NoSpace
+                | RoffInlineEvent::Font(_)
+                | RoffInlineEvent::PreviousFont
+        )
+    })
+}
+
+fn allows_structured_marker_text(
+    text: &str,
+    fresh_structured: bool,
+    fresh: bool,
+    domain: ReplayDomain,
+    (owns_link, opens_link, filled, has_marker, has_backstep): (bool, bool, bool, bool, bool),
+) -> bool {
+    fresh_structured
+        && text.chars().all(|ch| {
+            ch == '\u{a0}'
+                || ch == ' ' && (owns_link && filled || opens_link || has_marker && has_backstep)
+                || ch.is_ascii_graphic()
+        })
+        || fresh
+            && domain == ReplayDomain::DefinitionLine
+            && !has_marker
+            && text
+                .bytes()
+                .all(|byte| byte == b' ' || byte.is_ascii_graphic())
+}
+
 /// A marker sets breakline during the eventual `term_fill()`, while
 /// `term_word()` can still overwrite raw slots on either side of it.
 fn marker_replay(
@@ -1152,6 +1305,8 @@ fn marker_replay(
     }
     let fresh = is_fresh_word_entry(context);
     let filled = fresh && context.slot_entry.domain == ReplayDomain::Filled;
+    let bounded_filled_prefix = fits_bounded_filled_prefix(events, context);
+    let ends_with_no_space = matches!(events.last(), Some(RoffInlineEvent::NoSpace));
     let fresh_structured = filled
         || fresh
             && matches!(
@@ -1187,19 +1342,13 @@ fn marker_replay(
                 ink_after_marker |= has_marker && !text.is_empty();
             }
             RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _)
-                if fresh_structured
-                    && text.chars().all(|ch| {
-                        ch == '\u{a0}'
-                            || ch == ' '
-                                && (owns_link && filled || opens_link || has_marker && has_backstep)
-                            || ch.is_ascii_graphic()
-                    })
-                    || fresh
-                        && context.slot_entry.domain == ReplayDomain::DefinitionLine
-                        && !has_marker
-                        && text
-                            .bytes()
-                            .all(|byte| byte == b' ' || byte.is_ascii_graphic()) =>
+                if allows_structured_marker_text(
+                    text,
+                    fresh_structured,
+                    fresh,
+                    context.slot_entry.domain,
+                    (owns_link, opens_link, filled, has_marker, has_backstep),
+                ) =>
             {
                 let ink = text.bytes().any(|byte| byte.is_ascii_graphic());
                 has_ink |= ink;
@@ -1208,10 +1357,14 @@ fn marker_replay(
             }
             RoffInlineEvent::LineBreak => {
                 has_marker = true;
-                // A final marker in a moving operand leaves its earlier
-                // marker and graph editable. term_word() keeps the raw
-                // suffix available to the next word until term_fill().
-                ink_after_marker &= has_motion;
+                // A final marker in a moving operand or a `\c`-terminated
+                // operand leaves its earlier marker and graph editable.
+                // term_word() keeps the raw suffix available to the next
+                // word until term_fill() (term.c:659-667).
+                let trailing_no_space_marker = ends_with_no_space
+                    && (filled || has_other_padding_controls)
+                    && is_trailing_no_space_marker(&events[index + 1..]);
+                ink_after_marker &= has_motion || trailing_no_space_marker;
             }
             RoffInlineEvent::HorizontalMotion {
                 argument: Some(value),
@@ -1223,7 +1376,7 @@ fn marker_replay(
             RoffInlineEvent::Breakpoint
             | RoffInlineEvent::BreakableHyphen
             | RoffInlineEvent::NonBreakingWordBlank
-                if filled =>
+                if filled || bounded_filled_prefix =>
             {
                 has_other_padding_controls = true;
             }
@@ -1629,7 +1782,9 @@ enum PriorPendingSlot {
 
 impl PriorPendingSlot {
     fn at_entry(slot: Option<usize>, state: &super::ZeroAdvanceState) -> Option<Self> {
-        slot.filter(|_| state.has_pending_glyph()).map(|slot| {
+        // A completed BACKBEFORE glyph still occupies `slot` even when a
+        // subsequent `\z` has armed BACKAFTER (term.c:662-682, 701-705, 924-927).
+        slot.filter(|_| state.has_buffered_glyph()).map(|slot| {
             if state.can_project_prior_slot() {
                 Self::Buffered(slot)
             } else {
@@ -1778,24 +1933,112 @@ impl GeometrySeed<'_> {
     }
 }
 
+struct SeedPlan {
+    existing_tail: bool,
+    deferred_trailing: bool,
+    tracks_origin_retreat: bool,
+    marker: Option<MarkerReplay>,
+}
+
+/// Execute `-inset`/`-diag` BODY pre's generated `\ ` / `\ \ ` word
+/// (`mdoc_term.c:757-772, 939-945`, `chars.c:50`, `term.c:620-636, 888-930`)
+/// through `NativeSlots::with_field_prefix` and `PlacedWord::prepare`.
+///
+/// In UTF-8, `\ ` calls `encode1(p, 0x00A0)`, which unconditionally overwrites
+/// `buf[p->col]` (including bold copies, `\b`, owner glyphs, blanks, and
+/// controls), transitions `TERMP_BACKAFTER -> TERMP_BACKBEFORE`, and consumes
+/// `TERMP_BACKBEFORE` via `\b` or blank retreat.
+pub(in crate::mandoc::inline) fn replay_run_in_word(
+    prefix: &crate::mandoc::inline::flow::native_slots::FieldPrefix,
+    (count, native_count): (usize, usize),
+    owner_serial: u64,
+    display_font: Font,
+    domain: ReplayDomain,
+    zero_advance: &mut super::ZeroAdvanceState,
+    (projected, pending_head_ink): (&mut Vec<mant_ir::Inline>, &mut Vec<mant_ir::Inline>),
+) -> Option<Vec<FieldWrite>> {
+    use crate::mandoc::inline::flow::field_buffer::{
+        DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS,
+    };
+
+    let mut placement = Placement::empty(NativeSlots::with_field_prefix(prefix));
+    let earlier = prefix.cells.len();
+    for (_, scalars) in &prefix.cells {
+        placement.mark(ReadingGlyph::Earlier(*scalars), Font::Regular);
+    }
+    let projected_start = native_count.saturating_sub(count);
+    for index in 0..native_count {
+        let owner = (index >= projected_start).then(|| {
+            placement.mark(
+                ReadingGlyph::DeferredBlank {
+                    source: DeferredSourceBlank {
+                        owner: owner_serial,
+                        write: index,
+                        font: display_font,
+                        replayable_tail: false,
+                    },
+                    imported_cell: None,
+                },
+                display_font,
+            )
+        });
+        placement.slots.native_write(
+            FieldWrite::Cell(FieldCell::Graph {
+                text: '\u{a0}',
+                width: 1,
+            }),
+            RoffFont::Regular,
+            owner,
+        );
+        if placement.slots.prior_edit().is_some() {
+            return None;
+        }
+    }
+    let (extent, _) = placement.slots.extent_and_retreat();
+    if extent > MAX_EDITABLE_APPEND_CELLS {
+        return None;
+    }
+    let editable_marker = placement.slots.has_break_marker() || placement.slots.cursor_before_end();
+    let seed = GeometrySeed {
+        placement,
+        replace_tail: 0,
+        replayed_entry: false,
+        prefix_start: prefix.start,
+        earlier,
+        prior_pending: PriorPendingSlot::at_entry(prefix.pending_cell, zero_advance),
+        advance_marker: None,
+        editable_pass: prefix.pass == ReplayPass::Editable,
+    };
+    let placed = PlacedWord::prepare(
+        seed,
+        true,
+        AdvanceReading::Unprojected,
+        editable_marker,
+        domain,
+        Some(owner_serial),
+    )
+    .ok()?;
+    Some(placed.project_run_in(zero_advance, projected, pending_head_ink))
+}
+
 pub(super) fn try_execute(
     events: &[RoffInlineEvent],
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
 ) -> Result<(), PriorSlotEdit> {
     let existing_tail = can_defer_live_advances(events, context);
-    let deferred_trailing = !existing_tail && can_defer_trailing_advance(events, context);
-    let tracks_origin_retreat = marked_operands::tracks_literal_control_retreat(events, context);
-    let seed = GeometrySeed::begin(context, events);
-    execute_seed(
-        seed,
-        events,
-        context,
-        word,
+    let plan = SeedPlan {
         existing_tail,
-        deferred_trailing,
-        tracks_origin_retreat,
-    )
+        deferred_trailing: !existing_tail && can_defer_trailing_advance(events, context),
+        tracks_origin_retreat: marked_operands::tracks_literal_control_retreat(events, context),
+        marker: events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::LineBreak))
+            .then(|| marker_replay(events, context))
+            .flatten(),
+    };
+    let seed = GeometrySeed::begin(context, events);
+    execute_seed(seed, events, context, word, &plan)
 }
 
 fn execute_seed<'a>(
@@ -1803,9 +2046,7 @@ fn execute_seed<'a>(
     events: &'a [RoffInlineEvent],
     context: &mut TextExecutionContext<'_>,
     word: &mut WordExecution,
-    existing_tail: bool,
-    deferred_trailing: bool,
-    tracks_origin_retreat: bool,
+    plan: &SeedPlan,
 ) -> Result<(), PriorSlotEdit> {
     // Font and reading owners only commit after all addressed bytes can be
     // placed. Falling back to the live word executor must not run them twice.
@@ -1816,9 +2057,9 @@ fn execute_seed<'a>(
         || can_defer_retreated_advances(events, context)
     {
         AdvanceReading::Inner
-    } else if existing_tail {
+    } else if plan.existing_tail {
         AdvanceReading::DeferredBlankTail
-    } else if deferred_trailing {
+    } else if plan.deferred_trailing {
         AdvanceReading::DeferredTail
     } else {
         AdvanceReading::Unprojected
@@ -1843,54 +2084,8 @@ fn execute_seed<'a>(
     let has_marker = events
         .iter()
         .any(|event| matches!(event, RoffInlineEvent::LineBreak));
-    let marker = has_marker.then(|| marker_replay(events, context)).flatten();
-    // The bounded overlay knows both col and lastcol. A marker in this
-    // operand does not reset that cursor (term.c:659-660,678-714).
-    // Carry the exact cursor if the next word must still write there.
-    let slots = &seed.placement.slots;
-    // A marker after new ink leaves an open cursor at the end of that
-    // native segment, even when the old tail still holds glyphs.
-    let live_cursor = retains_word_cursor(&seed, &context.slot_entry, events);
-    // A placed glyph can still be waiting under BACKBEFORE after a marker.
-    // Keep its raw decoration and the invisible label slots around it, so
-    // the next word can revisit the same native suffix (term.c::encode1).
-    let pending_glyph = seed.placement.slots.pending_owner().is_some();
-    // term_word() writes a marker at col. An unpainted native suffix can
-    // carry it through continuation, motion or a second break control.
-    // Keep its slots editable until term_fill() accepts a pass.
-    let terminal_marker = has_terminal_marker(seed.earlier, slots, events);
-    let bounded_inner_definition_marker = has_marker
-        && matches!(advances, AdvanceReading::Inner)
-        && context.slot_entry.domain == ReplayDomain::DefinitionLine
-        && is_fresh_word_entry(context)
-        && slots.extent_and_retreat().0
-            <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
-    let retain_suffix = context.policy.field_authoritative
-        && (!has_marker
-            || marker.is_some()
-            || live_cursor
-            || pending_glyph
-            || terminal_marker
-            || seed.editable_pass
-            || existing_tail
-            || bounded_inner_definition_marker
-            || matches!(advances, AdvanceReading::Inner)
-                && context.slot_entry.domain == ReplayDomain::Filled
-                && slots.has_unpainted_marker_tail()
-                && slots.extent_and_retreat().0
-                    <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS);
-    let editable_marker = matches!(marker, Some(MarkerReplay::AwaitFieldFlush))
-        || bounded_inner_definition_marker
-        || has_marker && seed.editable_pass && slots.cursor_before_end()
-        || (has_marker || seed.earlier != 0 && slots.has_break_marker()) && live_cursor
-        || has_marker && existing_tail
-        // BACKBEFORE can hold a glyph inside material still following
-        // col. Leave the marker editable until a real device flush.
-        || has_marker && pending_glyph && seed.earlier != 0 && slots.cursor_before_end()
-        // term_fill() advances past buffered blanks before the next graph.
-        // Leave that separator to the real flush while keeping the raw
-        // cursor and its owners available to intervening native writes.
-        || terminal_marker && seed.placement.marker_after_blank;
+    let (retain_suffix, editable_marker) =
+        seed_retention_flags(&seed, events, context, plan, advances, has_marker);
     if retain_suffix
         && events.iter().any(absolute_motion)
         && seed.placement.slots.cursor_before_owner()
@@ -1913,11 +2108,89 @@ fn execute_seed<'a>(
     *context.font = font;
     context.zero_advance.take_armed();
     word.source_continuation = continuation;
-    if tracks_origin_retreat {
+    if plan.tracks_origin_retreat {
         word.native_origin_retreat_units = pre_column_retreat;
     }
     placed.project(context, word);
     Ok(())
+}
+
+fn seed_retention_flags(
+    seed: &GeometrySeed<'_>,
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+    plan: &SeedPlan,
+    advances: AdvanceReading,
+    has_marker: bool,
+) -> (bool, bool) {
+    // The bounded overlay knows both col and lastcol. A marker in this
+    // operand does not reset that cursor (term.c:659-660,678-714).
+    // Carry the exact cursor if the next word must still write there.
+    let slots = &seed.placement.slots;
+    let has_surviving_marker = slots.has_break_marker();
+    let extent = slots.extent_and_retreat().0;
+    let bounded_complete_field = covers_field_start(seed, context.slot_entry.cursor)
+        && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+    // Fresh bounded Filled, DefinitionLine, and Scoped fields share the same
+    // live `tcol->buf` before `term_flushln()` (term.c:659-660, 678-718;
+    // mdoc_term.c:760-838). LiteralDefinitionLine stays excluded.
+    let bounded_editable_domain = matches!(
+        context.slot_entry.domain,
+        ReplayDomain::Filled | ReplayDomain::DefinitionLine | ReplayDomain::Scoped
+    );
+    let bounded_edited_field = !context.slot_entry.cursor.has_input()
+        && bounded_complete_field
+        && bounded_editable_domain
+        && (seed.placement.retreated
+            || !events
+                .iter()
+                .any(|event| matches!(event, RoffInlineEvent::Breakpoint))
+                && local_overwrite(events, context) == Some(LocalOverwrite::Covered));
+    // A marker after new ink leaves an open cursor at the end of that
+    // native segment, even when the old tail still holds glyphs.
+    let live_cursor = retains_word_cursor(seed, &context.slot_entry, events);
+    // A placed glyph can still be waiting under BACKBEFORE after a marker.
+    // Keep its raw decoration and the invisible label slots around it, so
+    // the next word can revisit the same native suffix (term.c::encode1).
+    let pending_glyph = slots.pending_owner().is_some();
+    // term_word() writes a marker at col. An unpainted native suffix can
+    // carry it through continuation, motion or a second break control.
+    // Keep its slots editable until term_fill() accepts a pass.
+    let terminal_marker = has_terminal_marker(seed.earlier, slots, events);
+    let bounded_inner_definition_marker = has_marker
+        && matches!(advances, AdvanceReading::Inner)
+        && context.slot_entry.domain == ReplayDomain::DefinitionLine
+        && is_fresh_word_entry(context)
+        && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+    let retain_suffix = context.policy.field_authoritative
+        && (!has_marker
+            || !has_surviving_marker && bounded_complete_field
+            || bounded_edited_field
+            || plan.marker.is_some()
+            || live_cursor
+            || pending_glyph
+            || terminal_marker
+            || seed.editable_pass
+            || plan.existing_tail
+            || bounded_inner_definition_marker
+            || matches!(advances, AdvanceReading::Inner)
+                && context.slot_entry.domain == ReplayDomain::Filled
+                && slots.has_unpainted_marker_tail()
+                && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS);
+    let editable_marker = matches!(plan.marker, Some(MarkerReplay::AwaitFieldFlush))
+        || bounded_inner_definition_marker
+        || bounded_edited_field && has_surviving_marker
+        || has_marker && seed.editable_pass && slots.cursor_before_end()
+        || (has_marker || seed.earlier != 0 && has_surviving_marker) && live_cursor
+        || has_marker && plan.existing_tail
+        // BACKBEFORE can hold a glyph inside material still following
+        // col. Leave the marker editable until a real device flush.
+        || has_marker && pending_glyph && seed.earlier != 0 && slots.cursor_before_end()
+        // term_fill() advances past buffered blanks before the next graph.
+        // Leave that separator to the real flush while keeping the raw
+        // cursor and its owners available to intervening native writes.
+        || terminal_marker && seed.placement.marker_after_blank;
+    (retain_suffix, editable_marker)
 }
 
 fn has_terminal_marker(earlier: usize, slots: &NativeSlots, events: &[RoffInlineEvent]) -> bool {
@@ -1945,6 +2218,8 @@ fn has_terminal_marker(earlier: usize, slots: &NativeSlots, events: &[RoffInline
             })
 }
 
+/// Carry `p->col < p->tcol->lastcol` across `term_word()` boundaries
+/// (`term.c:659-660, 678-718, 860-872`) while the field stays un-flushed.
 fn retains_word_cursor(
     seed: &GeometrySeed<'_>,
     entry: &SlotEntry,
@@ -1966,8 +2241,10 @@ fn retains_word_cursor(
                     <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
                 && slots.cursor_in_unread_advance_after_marker()
             || retains_repositioned_word_cursor(seed, entry, events)
-            || entry.domain == ReplayDomain::Filled
-                && covers_field_start(seed, entry.cursor)
+            || matches!(
+                entry.domain,
+                ReplayDomain::Filled | ReplayDomain::DefinitionLine | ReplayDomain::Scoped
+            ) && covers_field_start(seed, entry.cursor)
                 && slots.extent_and_retreat().0
                     <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
                 && seed.placement.retreated
@@ -2009,7 +2286,10 @@ fn retains_repositioned_word_cursor(
         && match seed.placement.reposition {
             Some(CursorReposition::Absolute) => true,
             Some(CursorReposition::RelativeRetreat) => {
-                entry.domain == ReplayDomain::Filled
+                matches!(
+                    entry.domain,
+                    ReplayDomain::Filled | ReplayDomain::DefinitionLine | ReplayDomain::Scoped
+                )
                     // A previously relocated cursor can have rewritten the
                     // span before these markers. Forward writes leave the
                     // earlier slots in place (term.c::bufferc). When a live

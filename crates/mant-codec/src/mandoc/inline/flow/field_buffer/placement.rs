@@ -11,6 +11,9 @@ pub(in crate::mandoc::inline::flow) struct RetainedMotionGap {
     pub(in crate::mandoc::inline::flow) width: usize,
     pub(in crate::mandoc::inline::flow) previous_graph: usize,
     pub(in crate::mandoc::inline::flow) projection_is_complete: bool,
+    /// Projected blanks in this gap that lie behind a covered earlier glyph
+    /// still sitting in `self.nodes` until flush (`term.c:389-434`).
+    pub(in crate::mandoc::inline::flow) hidden_projected_blanks: usize,
 }
 
 impl FieldBuffer {
@@ -239,6 +242,8 @@ impl FieldBuffer {
         }
     }
 
+    /// Snapshot the live un-flushed `tcol->buf` suffix and cursor/backtracking
+    /// registers (`term.c:573-590, 678-718, 888-930`) for `NativeSlots` replay.
     pub(in crate::mandoc::inline::flow) fn field_prefix(
         &self,
         automatic: usize,
@@ -554,6 +559,10 @@ impl FieldBuffer {
         self.backbefore_armed
     }
 
+    pub(in crate::mandoc::inline::flow) const fn has_backafter_armed(&self) -> bool {
+        self.backafter_armed
+    }
+
     pub(in crate::mandoc::inline::flow) fn ends_with_unresolved_backline(&self) -> bool {
         // term_field skips NBRZW and the source tab reference. The next
         // word can supply the advance that actually covers this glyph.
@@ -642,9 +651,13 @@ impl FieldBuffer {
         None
     }
 
+    /// Measure buffered `HORIZ`/blank columns queued by `term_field()` before
+    /// the incoming graph (`term.c:389-442`), skipping zero-width controls and
+    /// overprinted decoration pairs.
     pub(in crate::mandoc::inline::flow) fn retained_motion_gap(
         &self,
         end: usize,
+        word_start: usize,
         plain_output: bool,
     ) -> Option<RetainedMotionGap> {
         let end = (end..self.cells.len())
@@ -673,35 +686,12 @@ impl FieldBuffer {
         let mut projection_is_complete =
             self.projection_owner == super::FieldProjectionOwner::Active;
         let mut gap = end;
-        let floor = self.resume.max(end.saturating_sub(MAX_REPLAY_PREFIX_CELLS));
-        let mut before_ink = end;
-        loop {
-            let mut probe = before_ink;
-            while probe > floor
-                && matches!(
-                    self.cells[probe - 1],
-                    FieldCell::ZeroWidthGraph
-                        | FieldCell::Breakpoint
-                        | FieldCell::TabReference
-                        | FieldCell::BreakMarker
-                )
-            {
-                probe -= 1;
-            }
-            if probe >= floor + 2
-                && self.cells[probe - 1] == FieldCell::Backline
-                && matches!(self.cells[probe - 2], FieldCell::Graph { text, width: 1 }
-                    if text.is_whitespace() || self.projection_length(probe - 2, probe - 1) == 0)
-            {
-                // A decoration or fixed source space followed by a backline
-                // (possibly separated by zero-width controls skipped by
-                // term_field()) occupies the covering glyph's column, not
-                // the earlier gap (term.c:389-434).
-                before_ink = probe - 2;
-            } else {
-                break;
-            }
-        }
+        let floor = self
+            .pass_start_for(end)
+            .max(end.saturating_sub(MAX_REPLAY_PREFIX_CELLS));
+        let (before_ink, stepped_over_projected_graph) =
+            self.step_over_covered_prefix(end, floor, word_start);
+        let mut projected_blanks = 0usize;
         let mut covered_before_gap = None;
         let mut can_cover_preceding_glyph = plain_output;
         for cell in (floor..before_ink).rev() {
@@ -724,14 +714,22 @@ impl FieldBuffer {
                     }
                     gap = cell;
                     width = width.saturating_add(count);
-                    projection_is_complete &= self.projection_length(cell, cell + 1) == count;
+                    let projected = self.projection_length(cell, cell + 1);
+                    if cell < word_start {
+                        projected_blanks = projected_blanks.saturating_add(projected);
+                    }
+                    projection_is_complete &= projected == count;
                 }
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => {
                     if self.has_deferred_blank_at(cell) {
                         continue;
                     }
                     width += 1;
-                    projection_is_complete &= self.projection_length(cell, cell + 1) == 1;
+                    let projected = self.projection_length(cell, cell + 1);
+                    if cell < word_start {
+                        projected_blanks = projected_blanks.saturating_add(projected);
+                    }
+                    projection_is_complete &= projected == 1;
                 }
                 // A word-end request can put the advance on a different
                 // accepted row from the backspace or the earlier ink.
@@ -754,12 +752,81 @@ impl FieldBuffer {
                             width,
                             previous_graph: cell,
                             projection_is_complete,
+                            hidden_projected_blanks: if stepped_over_projected_graph {
+                                projected_blanks
+                            } else {
+                                0
+                            },
                         });
                 }
                 _ => return None,
             }
         }
         None
+    }
+
+    fn pass_start_for(&self, end: usize) -> usize {
+        // Once incremental term_fill() commits an earlier pass, `self.resume`
+        // advances past `end`; use that committed pass's start as the floor
+        // (term.c:140-237, 389-434).
+        if end < self.resume {
+            let index = self
+                .committed_passes
+                .partition_point(|pass| pass.end <= end);
+            self.committed_passes
+                .get(index)
+                .filter(|pass| pass.start <= end)
+                .map_or(self.resume, |pass| pass.start)
+        } else {
+            self.resume
+        }
+    }
+
+    fn step_over_covered_prefix(
+        &self,
+        end: usize,
+        floor: usize,
+        word_start: usize,
+    ) -> (usize, bool) {
+        let mut stepped_over_projected_graph = false;
+        let mut before_ink = end;
+        loop {
+            let mut probe = before_ink;
+            while probe > floor
+                && matches!(
+                    self.cells[probe - 1],
+                    FieldCell::ZeroWidthGraph
+                        | FieldCell::Breakpoint
+                        | FieldCell::TabReference
+                        | FieldCell::BreakMarker
+                )
+            {
+                probe -= 1;
+            }
+            if probe >= floor + 2
+                && self.cells[probe - 1] == FieldCell::Backline
+                && let FieldCell::Graph { text, width: 1 } = self.cells[probe - 2]
+            {
+                let projected_graph = self.projection_length(probe - 2, probe - 1) > 0;
+                let covered_by_retreat = !text.is_whitespace()
+                    && projected_graph
+                    && self
+                        .pass_retreats
+                        .binary_search_by_key(&(probe, probe - 2), |&(target, mark)| (mark, target))
+                        .is_ok();
+                if text.is_whitespace() || !projected_graph || covered_by_retreat {
+                    // A decoration, covered graph, or fixed source space followed by
+                    // a backline (possibly separated by zero-width controls skipped
+                    // by term_field()) occupies the covering glyph's column, not
+                    // the earlier gap (term.c:389-434).
+                    stepped_over_projected_graph |= projected_graph && probe - 2 < word_start;
+                    before_ink = probe - 2;
+                    continue;
+                }
+            }
+            break;
+        }
+        (before_ink, stepped_over_projected_graph)
     }
 
     fn gap_covers_preceding_glyph(&self, glyph: usize, gap: usize) -> bool {
@@ -782,6 +849,12 @@ impl FieldBuffer {
         let start = self.cells.len().saturating_sub(count);
         debug_assert!(start >= self.resume);
         self.invalidate_projection_scan(start);
+        if let Some(rejection) = &mut self.proved_rejection {
+            rejection.min_raw_cursor = rejection.min_raw_cursor.min(start);
+            if rejection.min_raw_cursor < rejection.scanned_end {
+                self.proved_rejection = None;
+            }
+        }
         self.cells.truncate(start);
         self.truncate_raw_slot_proof(start);
         self.projection_prefix.truncate(start + 1);

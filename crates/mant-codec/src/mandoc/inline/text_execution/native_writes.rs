@@ -10,8 +10,10 @@ pub(super) struct AppendedFonts {
 }
 
 impl AppendedFonts {
-    /// `encode1()` adds decoration at each graph, not at the end of a
-    /// source word. A final pending glyph hasn't yet caused a retreat.
+    /// `encode1()` (`term.c:900-929`) adds decoration at each graph and
+    /// converts `TERMP_BACKAFTER` to `TERMP_BACKBEFORE` after writing it;
+    /// non-graph blanks in `encode()`/`bufferc()` (`term.c:860-872, 947-967`)
+    /// do not advance that state. A final pending glyph hasn't yet retreated.
     pub(super) fn record(&mut self, writes: &[FieldWrite], font: super::Font) -> bool {
         for write in writes {
             match write {
@@ -31,7 +33,9 @@ impl AppendedFonts {
                         }
                     }
                 }
-                FieldWrite::ArmBackafter if !self.pending => {
+                FieldWrite::ArmBackafter => {
+                    // term.c:773-775: ESCAPE_SKIPCHAR only sets TERMP_BACKAFTER
+                    // without writing any buffer bytes or triggering encode1().
                     self.armed = true;
                     continue;
                 }
@@ -47,7 +51,13 @@ impl AppendedFonts {
                     | FieldCell::ZeroWidthGraph
                     | FieldCell::Breakpoint
                     | FieldCell::BreakMarker,
-                ) if !self.pending => {}
+                )
+                | FieldWrite::UnprojectedBlank
+                    if !self.pending => {}
+                FieldWrite::DeferredBlanks { count, .. } if !self.pending => {
+                    self.cells += *count;
+                    continue;
+                }
                 _ => return false,
             }
             self.cells += 1;
@@ -55,6 +65,10 @@ impl AppendedFonts {
         true
     }
 
+    /// Emit the appended-slot font proof. When `pending` is set, the next
+    /// word's `encode1()` (`term.c:903-921`) retreats via `TERMP_BACKBEFORE`
+    /// (`term.c:926-929`) before decorating, so `replay_tail` tracks any tail
+    /// copies outside `self.fonts`.
     pub(super) fn proof(self, styled_tail: Option<(usize, super::Font)>) -> Option<FieldWrite> {
         if (self.pending || self.armed)
             && self.cells > super::super::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
@@ -62,11 +76,19 @@ impl AppendedFonts {
             return None;
         }
         let decorated: usize = self.fonts.iter().map(|(range, _)| range.len()).sum();
-        let replay_tail = match styled_tail {
-            Some((count, _)) if count == decorated => None,
-            Some((count, _)) => Some(count),
-            None if decorated == 0 => None,
-            None => Some(0),
+        // When `!self.pending`, every decorated cell in this word was recorded
+        // in `self.fonts` without a pending encode1() retreat, so
+        // `raw_tail_fonts` is exact for `NativeSlots::with_field_prefix`
+        // (term.c:899-969).
+        let replay_tail = if self.pending {
+            match styled_tail {
+                Some((count, _)) if count == decorated => None,
+                Some((count, _)) => Some(count),
+                None if decorated == 0 => None,
+                None => Some(0),
+            }
+        } else {
+            None
         };
         Some(FieldWrite::ProveAppendedSlots(AppendedSlotProof {
             cells: self.cells,
@@ -77,6 +99,10 @@ impl AppendedFonts {
     }
 }
 
+/// Prove a final single-column decorated run (`encode1()`, `term.c:900-925`).
+/// Buffered `ESCAPE_SKIPCHAR` / `ESCAPE_NOSPACE` / zero-width `ESCAPE_HORIZ`
+/// (`term.c:662-682, 773-775`) and font/break controls (`term.c:640-661, 800`)
+/// do not alter that decoration until a real cursor retreat executes.
 pub(super) fn proved_decorated_tail(
     events: &[RoffInlineEvent],
     writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
@@ -104,9 +130,13 @@ pub(super) fn proved_decorated_tail(
                     || super::geometry_word::relative_zero_motion(argument.as_deref()) => {}
             RoffInlineEvent::Font(_)
             | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::Link(_)
             | RoffInlineEvent::LineBreak
             | RoffInlineEvent::ZeroWidthGlyph
             | RoffInlineEvent::Breakpoint => {}
+            RoffInlineEvent::Glyph(text, _) if text == "\u{a0}" => {
+                armed = false;
+            }
             _ => return None,
         }
     }

@@ -22,6 +22,7 @@ pub(super) struct WordPassProjection {
     pub(super) authored_separator: Option<Inline>,
     pub(super) split_word: Option<Vec<Inline>>,
     pub(super) retained_motion_width: usize,
+    pub(super) retained_motion_hidden_blanks: usize,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -85,6 +86,9 @@ impl WordPassProjection {
         };
     }
 
+    /// Advance `anchor.content` past a consumed entry separator (`term.c:573-581`)
+    /// so `term_fill()`/`term_flushln()` cuts (`term.c:205-220`) align with the
+    /// word's live payload rather than skipped prefix blanks.
     fn align_separator_owners(
         &self,
         anchors: &mut [super::super::NativeWordAnchor],
@@ -133,7 +137,7 @@ impl WordPassProjection {
             word_start
         };
         if let Some(ink) = entry.incoming_ink()
-            && let Some(gap) = buffer.retained_motion_gap(ink, plain_output)
+            && let Some(gap) = buffer.retained_motion_gap(ink, word_start, plain_output)
             && gap.width >= self.native_separator
         {
             if plain_output
@@ -148,6 +152,7 @@ impl WordPassProjection {
             } else {
                 self.separator = SeparatorDisposition::DeviceAdvance(gap.marker);
                 self.retained_motion_width = gap.width;
+                self.retained_motion_hidden_blanks = gap.hidden_projected_blanks;
             }
         } else if self.native_separator == 0
             && entry.receipt.prints_padding
@@ -170,6 +175,9 @@ impl WordPassProjection {
     }
 }
 
+/// Choose the native start cell (`content`) and `minbl`/padding carry for a
+/// `TERMP_HANG`/`TERMP_NOBREAK` list word (`mdoc_term.c:790-835`,
+/// `term.c:115-116, 236, 250-253, 573-581`).
 fn hang_word_anchor(
     (pending_field_spaces, settled_boundary_glyph, zero_advance_joined, no_fill_word_active): (
         usize,

@@ -18,11 +18,15 @@ fn control_only_rewinds_leave_the_existing_extent_editable() {
     // can replace the old graph, or term_fill() can accept its suffix.
     let cases: &[CursorCase] = &[
         (
+            // Pinned `mandoc -Tutf8` (`mdoc_term.c:764-766`, `chars.c:50`,
+            // `term.c:630-632, 888-930`): `\ ` writes `encode1(0x00A0)` over
+            // the `\b` after `\n` and `\&` overwrites `A`, so `term_field()`
+            // emits one row containing U+00A0 (`""` once trimmed).
             r#".Bl -inset
 .It Em "A" No "\h'-7n'\p"
 .No "\&"
 .El"#,
-            &[],
+            &[""],
             &[("A", 0)],
         ),
         (

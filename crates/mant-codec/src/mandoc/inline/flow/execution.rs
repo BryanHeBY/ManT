@@ -196,11 +196,12 @@ impl InlineBuilder {
         if let Some(state) = &mut self.execution.definition {
             // A nested original It HEAD installs its own pre flags on the
             // same native cells/device row. An enclosing HEAD's completed
-            // post is not evidence that this new HEAD's flags were cleared.
+            // post or deferred projection belongs to that outer HEAD, not this one.
             state.no_break = None;
             state.no_break_cleared = false;
             state.head_flags_cleared = false;
             state.cleared_field_capacity_columns = 0;
+            state.deferred_head_projection = None;
         }
         if let Some(author) = &mut self.execution.author_execution {
             author.break_effect = effect;
@@ -560,8 +561,9 @@ impl InlineBuilder {
     }
 
     /// Execute the generated no-break word between an mdoc inset/diagnostic
-    /// head and body.  Its `term_word()` transition still runs when the only
-    /// fixed cell was consumed by a completed HEAD glyph.
+    /// head and body (`mdoc_term.c:757-772, 939-945`, `chars.c:50`,
+    /// `term.c:620-636, 888-930`). Its `term_word()` transition still runs
+    /// when the only fixed cell was consumed by a completed HEAD glyph.
     pub(in crate::mandoc) fn append_run_in_cells(
         &mut self,
         count: usize,
@@ -569,6 +571,9 @@ impl InlineBuilder {
         generated_word: bool,
     ) {
         if !generated_word {
+            return;
+        }
+        if self.try_replay_run_in_cells(count, native_count) {
             return;
         }
 
@@ -631,12 +636,116 @@ impl InlineBuilder {
             );
             generated_run_in_writes(traversed, native_count, count)
         };
+        self.finish_run_in_word(projected, writes, count);
+    }
+
+    /// Execute `-inset`/`-diag` generated `\ ` / `\ \ ` through
+    /// `NativeSlots::with_field_prefix` + `PlacedWord::prepare` when the live
+    /// HEAD prefix is retreated or positioned with `BACKAFTER` armed
+    /// (`mdoc_term.c:757-772, 939-945`, `chars.c:50`, `term.c:620-636, 888-930`).
+    fn try_replay_run_in_cells(&mut self, count: usize, native_count: usize) -> bool {
+        let Some(prefix) = (self.execution.font.current == super::Font::Regular
+            && native_count > 0)
+            .then(|| {
+                let (input, anchors) = self.execution.word_input();
+                if !(input.has_retained_word_cursor()
+                    || input.has_positioned_slots() && input.has_backafter_armed())
+                {
+                    return None;
+                }
+                let mut prefix = input.field_prefix(0, false, true)?;
+                if prefix.raw_slot_count().saturating_add(native_count + 1)
+                    > super::field_buffer::MAX_EDITABLE_APPEND_CELLS
+                {
+                    return None;
+                }
+                retain_projected_advances(&mut prefix, input, anchors);
+                if prefix.pending_cell.is_none()
+                    && prefix.backbefore
+                    && self.execution.zero_advance.has_buffered_glyph()
+                {
+                    // `detach_projection_owner()` cleared `backbefore_graph` on
+                    // HEAD drain while `TERMP_BACKBEFORE` and the buffered glyph
+                    // stay live (`term.c:903-929`). Identify the pending slot
+                    // before `cursor` so `settle_prior_slot()` proves survival.
+                    let cursor = prefix.cells.len().saturating_sub(prefix.cursor_retreat);
+                    prefix.pending_cell =
+                        prefix.cells[..cursor].iter().rposition(|(cell, scalars)| {
+                            matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
+                                || *scalars > 0 && matches!(cell, FieldCell::ZeroWidthGraph)
+                        });
+                }
+                Some(prefix)
+            })
+            .flatten()
+        else {
+            return false;
+        };
+        let domain = if self
+            .execution
+            .author_execution
+            .is_some_and(|author| author.break_effect == AuthorBreakEffect::Line)
+        {
+            ReplayDomain::DefinitionLine
+        } else {
+            ReplayDomain::Scoped
+        };
+        let display_font = self.execution.font.display_current();
+        let owner_serial = self.execution.native_owner_serial.wrapping_add(1);
+        let pending_owner = self.execution.zero_advance.pending_word_owner();
+        let mut replay_zero_advance = self.execution.zero_advance.clone();
+        replay_zero_advance
+            .set_native_word_owner(owner_serial, self.head_operand_capture.is_some());
+        let mut projected = Vec::new();
+        let mut pending_head_ink = Vec::new();
+        let Some(writes) = crate::mandoc::inline::text_execution::replay_run_in_word(
+            &prefix,
+            (count.min(native_count), native_count),
+            owner_serial,
+            display_font,
+            domain,
+            &mut replay_zero_advance,
+            (&mut projected, &mut pending_head_ink),
+        ) else {
+            return false;
+        };
+        if !pending_head_ink.is_empty() {
+            if let Some(owner) = pending_owner
+                && let Some(receiver) = self
+                    .execution
+                    .definition
+                    .as_ref()
+                    .and_then(|definition| definition.deferred_head_projection.as_ref())
+            {
+                receiver.restore_pending_ink(owner, &mut pending_head_ink);
+            }
+            if !pending_head_ink.is_empty() {
+                projected.splice(0..0, pending_head_ink);
+            }
+        }
+        self.execution.native_word_boundary = Some(PendingBoundary::Tight);
+        self.note_produced_formatter_cell(native_count > 0);
+        self.tighten_next_boundary();
+        self.begin_word_projection(true);
+        self.begin_native_word_owner();
+        debug_assert_eq!(self.execution.native_owner_serial, owner_serial);
+        self.execution.zero_advance = replay_zero_advance;
+        self.finish_run_in_word(projected, writes, count.min(native_count));
+        true
+    }
+
+    fn finish_run_in_word(
+        &mut self,
+        projected: Vec<Inline>,
+        writes: Vec<FieldWrite>,
+        count: usize,
+    ) {
         self.execution.native_word_writes = Some(writes);
         self.append_word(projected);
         if count > 0 {
             self.execution.trailing_output = TrailingOutput::FixedBlank;
         }
-        // CVS sets TERMP_NOSPACE again before executing BODY children.
+        // CVS sets TERMP_NOSPACE again before executing BODY children (`mdoc_term.c:772`).
         self.tighten_next_boundary();
         self.execution.final_word_join = Some(false);
         self.execution.final_source_continuation = Some(false);
@@ -789,7 +898,9 @@ impl super::InlineExecutionState {
         let extend = match extend {
             PrefixExtension::None => false,
             PrefixExtension::Word => {
-                !input.has_pending_break_markers() || input.word_scan_deferred()
+                !input.has_pending_break_markers()
+                    || input.word_scan_deferred()
+                    || input.pending_pass_is_definitively_rejected()
             }
             PrefixExtension::FilledWord => {
                 domain == ReplayDomain::Filled && !input.has_pending_break_markers()

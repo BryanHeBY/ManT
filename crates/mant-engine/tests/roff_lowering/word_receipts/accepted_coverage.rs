@@ -1438,8 +1438,12 @@ fn accepted_run_in_writes_keep_word_boundaries_and_interleaved_ink() {
             "CX",
         ),
         (
+            // Pinned `mandoc -Tutf8` (`mdoc_term.c:760-763`, `chars.c:50`,
+            // `term.c:630-632, 888-930`): `\ \ ` writes two `encode1(0x00A0)`
+            // cells after `N\b[NBRZW]`, covering `N` and leaving `' '` + two
+            // non-breaking spaces before `oY` (`"Sy CV   oY"`).
             include_str!("live_replay/run-in-keeps-surviving-font-word-joined.1"),
-            "Sy CV oY",
+            "Sy CV   oY",
             "o Y",
         ),
     ] {

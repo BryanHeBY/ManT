@@ -16,6 +16,7 @@ use super::flow::{
     native_slots::{PriorSlotEdit, SlotEntry},
 };
 use event_state::append_text_event;
+pub(in crate::mandoc::inline) use geometry_word::replay_run_in_word;
 pub(in crate::mandoc::inline) use native_writes::record_native_event;
 use references::append_empty_destination;
 

@@ -5,6 +5,9 @@ use std::ops::Range;
 use super::{AdvanceReading, FieldCell, FillSlot, ReadingCell, ReadingGlyph};
 use crate::mandoc::inline::flow::field_buffer::{DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS};
 
+/// Project buffered `HORIZ` advances (`term.c:691-699`) and `bufferc` gaps
+/// (`term.c:860-872`) into reading spaces or deferred blanks pending
+/// `term_field()` acceptance (`term.c:389-428`).
 pub(super) fn prepare_reading_blanks(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
@@ -39,6 +42,9 @@ pub(super) fn prepare_reading_blanks(
     defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
 }
 
+/// `term_fill()` (`term.c:288-302, 363-366`) and `term_field()` (`term.c:389-428`)
+/// drop trailing `ASCII_NBRSP` advances unless a later printable cell
+/// triggers output; zero-width controls (`term.c:395-401`) do not flush them.
 fn defer_inner_trailing_advances(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
@@ -361,8 +367,9 @@ fn reading_ink(slot: &FillSlot, reading: &[ReadingCell<'_>]) -> Option<usize> {
 }
 
 /// A short advance inside one operand is already part of its reading
-/// line. Give its spaces their own cells instead of attaching a collapsed
-/// separator to the next graph: that graph may be overwritten later.
+/// line (`term.c:691-699, 868-872, 389-428`). Give its spaces their own
+/// cells instead of attaching a collapsed separator to the next graph:
+/// that graph may be overwritten later.
 fn publish_inner_advances(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
@@ -404,7 +411,7 @@ fn publish_inner_advances(
                 )
             {
                 // The underline paint immediately before the next glyph
-                // occupies that same column (term.c::encode1).
+                // occupies that same column (term.c:911-914).
                 end -= 2;
             }
             if let Some((advances, width)) = collect_inner_advances(slots, reading, at + 1..end) {

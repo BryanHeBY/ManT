@@ -23,6 +23,8 @@ pub(super) struct PlacedWord<'a> {
     links: Vec<&'a str>,
     writes: Vec<FieldWrite>,
     pending: Option<usize>,
+    pending_slot: Option<usize>,
+    split_copy_max: Option<usize>,
     armed: bool,
     prior: Option<PriorSlotProjection>,
 }
@@ -34,6 +36,9 @@ enum PriorSlotProjection {
 }
 
 impl<'a> PlacedWord<'a> {
+    /// Finalize raw `tcol->buf` slots, overprint/backline receipts, and
+    /// unowned `DeviceTail` cell counts after `expand_replay_advances()`
+    /// (`term.c:678-718, 860-872, 911-929`).
     pub(super) fn prepare(
         seed: GeometrySeed<'a>,
         retain_suffix: bool,
@@ -61,10 +66,12 @@ impl<'a> PlacedWord<'a> {
         let armed = slots.backafter();
         let backbefore = slots.backbefore();
         let pending_owner = slots.pending_owner();
+        let raw_backbefore_slot = slots.backbefore_slot();
         let pending = pending_owner.filter(|&owner| owner >= earlier);
         let (extent, cursor_retreat) = slots.extent_and_retreat();
-        let next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
+        let mut next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
+        let tail_fill_sum = device_tail_raw_sum(next_tail.as_ref(), &slots);
         let can_edit_tail = retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS;
         if can_edit_tail && (editable_pass || domain == ReplayDomain::Filled) {
             release_unpaired_underlines(&mut slots, &mut reading, domain);
@@ -81,17 +88,21 @@ impl<'a> PlacedWord<'a> {
         );
         let settled = settle_replay_slots(
             &mut slots,
-            editable_pass && extent <= MAX_EDITABLE_APPEND_CELLS,
+            (editable_pass || editable_marker || cursor_retreat > 0)
+                && extent <= MAX_EDITABLE_APPEND_CELLS,
+            cursor_retreat > 0,
         );
+        sync_device_tail_cells(&mut next_tail, &slots, tail_fill_sum);
         let duplicates = keep_one_copy_per_owner(&mut slots, reading.len());
         // A native edit that overwrites the backspace between a bold glyph's
-        // two copies leaves both copies visible (`term.c::encode1`). Keep
+        // two copies leaves both copies visible (`term.c:915-925`). Keep
         // the alias proof and hold pass retirement until `retire_plain_paint`
         // can run `edited_font_copy_end()` on the accepted row.
+        let split_copy_max = split_bold_copy_max(&duplicates, &slots);
         let split_bold_copy = matches!(
             domain,
             ReplayDomain::Filled | ReplayDomain::Scoped | ReplayDomain::DefinitionLine
-        ) && duplicates.iter().any(|&(copy, owner)| copy > owner);
+        ) && split_copy_max.is_some();
         let retain_suffix = retain_suffix || split_bold_copy;
         let editable_marker = editable_marker || split_bold_copy;
         let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
@@ -99,48 +110,43 @@ impl<'a> PlacedWord<'a> {
         preserve_author_separators(&slots, &mut reading);
         let (inherited_pending, prior) =
             settle_prior_slot(prior_pending, pending_owner, &slots, &reading, earlier)?;
+        let defer_strokes = retain_suffix
+            && editable_pass
+            && domain == ReplayDomain::DefinitionLine
+            && extent <= MAX_EDITABLE_APPEND_CELLS;
         let mut writes = placed_slot_writes(
             &slots,
             &reading,
             (prefix_start, earlier, prior_pending),
             (replace_tail, replayed_entry),
-            retain_suffix
-                && editable_pass
-                && domain == ReplayDomain::DefinitionLine
-                && extent <= MAX_EDITABLE_APPEND_CELLS,
+            defer_strokes,
         );
         let end = slots.len();
-        record_slot_proof(
+        let proof = retain_suffix.then_some(FieldWrite::ProveRawSlots {
+            count: end,
+            cursor_retreat,
+            backbefore,
+            duplicates,
+            editable_marker,
+        });
+        record_slot_proof(&mut writes, &settled, &slots, extent, proof);
+        append_placement_receipts(
             &mut writes,
-            &settled,
-            &slots,
-            extent,
-            retain_suffix.then_some(FieldWrite::ProveRawSlots {
-                count: end,
-                cursor_retreat,
-                backbefore,
-                duplicates,
-                editable_marker,
-            }),
+            end,
+            zero_width_retreats,
+            inherited_pending,
+            next_tail,
         );
-        writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
-            FieldWrite::PlacedZeroWidthRetreat {
-                target_from_end: end - target,
-                mark_from_end: end - mark,
-            }
-        }));
-        writes.extend(
-            inherited_pending.map(|index| FieldWrite::KeepPlacedRetreat {
-                from_end: end - index,
-            }),
-        );
-        writes.extend(next_tail.map(|tail| FieldWrite::RetainDeviceTail(Box::new(tail))));
+        let pending_slot =
+            resolve_pending_slot(&slots, pending, raw_backbefore_slot, backbefore, extent);
         Ok(Self {
             slots,
             reading,
             links,
             writes,
             pending,
+            pending_slot,
+            split_copy_max,
             armed,
             prior,
         })
@@ -211,6 +217,90 @@ impl<'a> PlacedWord<'a> {
         word.native_writes = self.writes;
     }
 
+    /// Project a generated `-inset`/`-diag` run-in word (`\ ` / `\ \ `,
+    /// `mdoc_term.c:757-772`, `chars.c:50`, `term.c:620-636, 888-930`) after
+    /// `NativeSlots::with_field_prefix` executed its `encode1(U+00A0)` writes.
+    ///
+    /// Resolves `self.prior` (`term.c:903-929`) into `pending_head_ink` only
+    /// when the prior `TERMP_BACKBEFORE` slot survived `encode1(U+00A0)`, so
+    /// the caller can restore HEAD-owned pending ink via
+    /// `DeferredHeadProjection::restore_pending_ink` instead of leaking it
+    /// into BODY output.
+    pub(super) fn project_run_in(
+        mut self,
+        zero_advance: &mut super::super::ZeroAdvanceState,
+        output: &mut Vec<mant_ir::Inline>,
+        pending_head_ink: &mut Vec<mant_ir::Inline>,
+    ) -> Vec<FieldWrite> {
+        match self.prior {
+            Some(PriorSlotProjection::Buffered { survives, .. }) => {
+                let restored = zero_advance.project_prior_slot(survives);
+                if survives {
+                    pending_head_ink.extend(restored);
+                }
+            }
+            Some(PriorSlotProjection::ConsumedProjected) => {
+                let discarded = zero_advance.project_prior_slot(false);
+                debug_assert_eq!(discarded, [] as [mant_ir::Inline; 0]);
+            }
+            None => {}
+        }
+        let mut entered_word = false;
+        for slot in &self.slots {
+            let Some(id) = slot.owner else { continue };
+            let current = self.reading[id];
+            match current.glyph {
+                ReadingGlyph::DeferredBlank { source: blank, .. } => {
+                    output.push(mant_ir::Inline::anchor(blank.marker()));
+                    entered_word = true;
+                }
+                ReadingGlyph::Scalar(ch) => {
+                    // `release_unpaired_underlines` publishes a literal `'_'`
+                    // when `encode1(U+00A0)` overwrites the `\b` after an
+                    // italic underline decoration (`term.c:911-914`).
+                    output.push(mant_ir::Inline::Text {
+                        value: ch.to_string(),
+                    });
+                    entered_word = true;
+                }
+                ReadingGlyph::Earlier(scalars)
+                    if entered_word
+                        && (scalars != 0
+                            || matches!(
+                                slot.cell,
+                                FieldCell::BreakableBlank
+                                    | FieldCell::NonBreakingBlank
+                                    | FieldCell::Graph {
+                                        text: '\u{a0}',
+                                        width: 1
+                                    }
+                            )) =>
+                {
+                    output.push(mant_ir::Inline::anchor(format!(
+                        "{}{id}",
+                        crate::mandoc::inline::flow::RELOCATED_GLYPH
+                    )));
+                }
+                _ => {}
+            }
+        }
+        // Synchronize zero_advance with post-encode1 BACKAFTER/BACKBEFORE
+        // state (`term.c:903-929`): clear consumed BACKAFTER, and when a
+        // generated U+00A0 armed BACKBEFORE, keep its slot as `pending_cell`
+        // so the following BODY word can replay `can_replay_projected_prior_slot`.
+        zero_advance.take_armed();
+        if let Some(slot) = self.pending_slot {
+            self.writes.push(FieldWrite::KeepPlacedRetreat {
+                from_end: self.slots.len() - slot,
+            });
+            zero_advance.note_projected_pending_glyph();
+        } else if self.armed {
+            zero_advance.inherit_armed(true);
+            self.writes.push(FieldWrite::ArmBackafter);
+        }
+        self.writes
+    }
+
     fn buffer_tail_glyph(&mut self, context: &mut TextExecutionContext<'_>, links: &[String]) {
         let Some(owner) = self.pending else { return };
         let Some(index) = self
@@ -220,9 +310,13 @@ impl<'a> PlacedWord<'a> {
         else {
             return;
         };
-        if self.slots[index + 1..]
-            .iter()
-            .any(|slot| slot.owner.is_some())
+        // A split bold copy after `index` occupies later columns in the
+        // accepted row (term.c:915-925) and cannot be hidden behind a
+        // tail glyph buffered in zero_advance.
+        if self.split_copy_max.is_some_and(|copy| copy > index)
+            || self.slots[index + 1..]
+                .iter()
+                .any(|slot| slot.owner.is_some())
         {
             return;
         }
@@ -241,6 +335,108 @@ impl<'a> PlacedWord<'a> {
     }
 }
 
+fn device_tail_raw_sum(
+    tail: Option<&crate::mandoc::inline::flow::native_slots::DeviceTail>,
+    slots: &[FillSlot],
+) -> Option<usize> {
+    let tail = tail?;
+    let tail_start = slots.len().saturating_sub(tail.fill_cells);
+    Some(
+        slots[tail_start..]
+            .iter()
+            .map(|slot| slot.count)
+            .sum::<usize>(),
+    )
+}
+
+/// Keep `DeviceTail::fill_cells` aligned with the final expanded `FillSlot`
+/// count after `expand_replay_advances()` splits multi-cell unowned advances
+/// (`term.c:678-718, 860-872`). Drop the tail if any trailing slot acquired
+/// an owner during `release_unpaired_underlines` or `prepare_reading_blanks`.
+fn sync_device_tail_cells(
+    next_tail: &mut Option<crate::mandoc::inline::flow::native_slots::DeviceTail>,
+    slots: &[FillSlot],
+    raw_sum: Option<usize>,
+) {
+    let (Some(tail), Some(mut remaining)) = (next_tail.as_mut(), raw_sum) else {
+        return;
+    };
+    let mut fill_cells = 0;
+    for slot in slots.iter().rev() {
+        if remaining == 0 {
+            break;
+        }
+        if slot.owner.is_some() || slot.count > remaining {
+            *next_tail = None;
+            return;
+        }
+        remaining -= slot.count;
+        fill_cells += 1;
+    }
+    if remaining == 0 {
+        tail.fill_cells = fill_cells;
+    } else {
+        *next_tail = None;
+    }
+}
+
+/// Locate the `TERMP_BACKBEFORE` slot left armed by `encode1()` (`term.c:903-929`).
+fn resolve_pending_slot(
+    slots: &[FillSlot],
+    pending: Option<usize>,
+    raw_backbefore_slot: Option<usize>,
+    backbefore: bool,
+    extent: usize,
+) -> Option<usize> {
+    pending
+        .and_then(|owner| slots.iter().rposition(|slot| slot.owner == Some(owner)))
+        .or_else(|| {
+            raw_backbefore_slot
+                .filter(|&slot| backbefore && slot < slots.len() && extent == slots.len())
+        })
+}
+
+/// Find the furthest bold duplicate whose connecting `\b` was overwritten
+/// (`term.c:915-925`: `encode1` emits `c, '\b', c`, so removing `\b` leaves
+/// both copies visible).
+fn split_bold_copy_max(duplicates: &[(usize, usize)], slots: &[FillSlot]) -> Option<usize> {
+    duplicates
+        .iter()
+        .filter_map(|&(copy, owner)| {
+            let low = copy.min(owner);
+            let high = copy.max(owner);
+            (high != low + 2
+                || slots
+                    .get(low + 1)
+                    .is_none_or(|slot| slot.cell != FieldCell::Backline))
+            .then_some(high)
+        })
+        .max()
+}
+
+fn append_placement_receipts(
+    writes: &mut Vec<FieldWrite>,
+    end: usize,
+    zero_width_retreats: Vec<(usize, usize)>,
+    inherited_pending: Option<usize>,
+    next_tail: Option<crate::mandoc::inline::flow::native_slots::DeviceTail>,
+) {
+    writes.extend(zero_width_retreats.into_iter().map(|(target, mark)| {
+        FieldWrite::PlacedZeroWidthRetreat {
+            target_from_end: end - target,
+            mark_from_end: end - mark,
+        }
+    }));
+    writes.extend(
+        inherited_pending.map(|index| FieldWrite::KeepPlacedRetreat {
+            from_end: end - index,
+        }),
+    );
+    writes.extend(next_tail.map(|tail| FieldWrite::RetainDeviceTail(Box::new(tail))));
+}
+
+/// Resolve an inherited `TERMP_BACKBEFORE` glyph after `encode1()` retreat or
+/// overwrite (`term.c:903-929`).
 fn settle_prior_slot(
     previous: Option<PriorPendingSlot>,
     pending_owner: Option<usize>,
@@ -325,21 +521,33 @@ fn release_unpaired_underlines(
 fn settle_replay_slots(
     slots: &mut Vec<FillSlot>,
     keep_raw_advances: bool,
+    expand_unowned_blanks: bool,
 ) -> Vec<std::ops::Range<usize>> {
     if keep_raw_advances {
-        expand_replay_advances(slots);
+        expand_replay_advances(slots, expand_unowned_blanks);
     }
     super::overprint::settle(slots)
 }
 
-fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
-    // Keep raw advances addressable through the next term_word().
-    // The field scanner may compress them once it consumes them.
+fn expand_replay_advances(slots: &mut Vec<FillSlot>, expand_unowned_blanks: bool) {
+    // Keep raw advances addressable through the next term_word(). When a
+    // live retreated cursor is proved (cursor_retreat > 0), expand multi-cell
+    // unowned blanks too so `cells.len() == extent >= cursor_retreat`
+    // (term.c:678-718). The field scanner may compress them once consumed.
     for index in (0..slots.len()).rev() {
         let slot = &slots[index];
-        if slot.drawing_advance && slot.owner.is_none() && slot.count > 1 {
+        let expandable = slot.owner.is_none()
+            && slot.count > 1
+            && (slot.drawing_advance
+                || expand_unowned_blanks
+                    && matches!(
+                        slot.cell,
+                        FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
+                    ));
+        if expandable {
             let count = slot.count;
             let cell = slot.cell.clone();
+            let drawing_advance = slot.drawing_advance;
             let advance_source = slot.advance_source;
             slots.splice(
                 index..=index,
@@ -347,7 +555,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>) {
                     cell: cell.clone(),
                     count: 1,
                     owner: None,
-                    drawing_advance: true,
+                    drawing_advance,
                     advance_source,
                     underline_decoration: false,
                     owned_deferred_blank: false,
@@ -430,10 +638,11 @@ fn keep_one_copy_per_owner(slots: &mut [FillSlot], owners: usize) -> Vec<(usize,
             continue;
         };
         if let Some(previous) = first[owner] {
-            // Both copies of bold ink have one author. If they still share
-            // a device column, the final copy owns the reading glyph. If a
-            // new write replaced their backspace, retain the original
-            // reading position and keep the second copy as a raw alias.
+            // Both copies of bold ink have one author (`term.c:915-925`). If
+            // they still share a device column, the final copy owns the
+            // reading glyph. If a new write replaced their backspace, retain
+            // the original reading position and keep the second copy as a raw
+            // alias so a later overwrite of `index` leaves `previous` intact.
             if index == previous + 2 && slots[previous + 1].cell == FieldCell::Backline {
                 slots[previous].owner = None;
                 first[owner] = Some(index);
@@ -474,6 +683,8 @@ fn replay_device_tail(
     }
 }
 
+/// Summarize surviving earlier slots and entry blanks after replaying the live
+/// `tcol->buf` prefix (`term.c:573-589, 678-718, 860-872`).
 fn replay_prefix(
     slots: &[FillSlot],
     reading: &[ReadingCell<'_>],
@@ -786,5 +997,80 @@ fn append_range(
             );
         }
         previous_source = Some(id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mandoc::inline::flow::native_slots::NativeSlots;
+    use crate::mandoc::roff_escape::RoffFont;
+
+    #[test]
+    fn prepare_syncs_device_tail_fill_cells_after_expanding_unowned_advances() {
+        // term.c:678-718, 860-872: `A\p\h'3n'` expands the unowned 3-cell
+        // `DrawingAdvance` into 3 single-cell `FixedDrawingAdvance(1)` writes
+        // when `editable_marker` is set. `DeviceTail::fill_cells` must match
+        // all 4 unowned tail cells (`BreakMarker` + 3 advances), not the
+        // pre-expansion count of 2.
+        let mut slots = NativeSlots::after_entry(true);
+        let mut reading = Vec::new();
+        let owner_a =
+            Placement::push_reading(&mut reading, ReadingGlyph::Scalar('A'), Font::Regular, None);
+        slots.native_write(
+            FieldWrite::Cell(FieldCell::Graph {
+                text: 'A',
+                width: 1,
+            }),
+            RoffFont::Regular,
+            Some(owner_a),
+        );
+        slots.native_write(
+            FieldWrite::Cell(FieldCell::BreakMarker),
+            RoffFont::Regular,
+            None,
+        );
+        let _ = slots.motion(Some("3n"), None);
+        assert_eq!(slots.unowned_tail().expect("tail").fill_cells, 2);
+
+        let placement = Placement {
+            slots,
+            reading,
+            marker_boundary: super::super::MarkerBoundary::Clear,
+            links: Vec::new(),
+            active_link: None,
+            marker_after_blank: false,
+            reposition: None,
+            retreated: false,
+            pre_column_retreat_units: 0,
+        };
+        let seed = GeometrySeed {
+            placement,
+            replace_tail: 0,
+            replayed_entry: false,
+            prefix_start: 0,
+            earlier: 0,
+            prior_pending: None,
+            advance_marker: None,
+            editable_pass: false,
+        };
+        let placed = PlacedWord::prepare(
+            seed,
+            true,
+            AdvanceReading::Unprojected,
+            true,
+            ReplayDomain::Filled,
+            None,
+        )
+        .expect("prepared");
+        let tail = placed
+            .writes
+            .iter()
+            .find_map(|write| match write {
+                FieldWrite::RetainDeviceTail(tail) => Some(tail),
+                _ => None,
+            })
+            .expect("retained device tail");
+        assert_eq!(tail.fill_cells, 4);
     }
 }

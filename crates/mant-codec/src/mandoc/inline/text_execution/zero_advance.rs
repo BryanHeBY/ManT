@@ -266,6 +266,13 @@ impl ZeroAdvanceState {
             && self.machine.deferred_projection().is_empty()
     }
 
+    /// Record that a projection-owned native slot (such as a run-in `U+00A0`
+    /// written by `encode1`, `term.c:926-929`) now holds the pending
+    /// `TERMP_BACKBEFORE` retreat without caching an unprojected glyph.
+    pub(in crate::mandoc::inline) fn note_projected_pending_glyph(&mut self) {
+        self.machine.write_projection_owned_glyph();
+    }
+
     pub(super) fn project_prior_slot(&mut self, survives: bool) -> Vec<Inline> {
         self.resolved_preexisting = true;
         if survives {

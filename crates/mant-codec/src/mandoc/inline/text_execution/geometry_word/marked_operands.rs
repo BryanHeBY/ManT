@@ -44,6 +44,9 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
     let Some(mut remaining) = MAX_EDITABLE_APPEND_CELLS.checked_sub(initial) else {
         return false;
     };
+    let has_link = events
+        .iter()
+        .any(|event| matches!(event, RoffInlineEvent::Link(_)));
     let mut marker = false;
     let mut ink_after_marker = false;
     let mut has_space = initial != 0;
@@ -68,9 +71,13 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
             // filled buffer. Reserve the extra backline that encode1()
             // can write when a following glyph covers the pending slot.
             RoffInlineEvent::ZeroAdvance if initial == 0 && marker => 1,
-            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::NoSpace => {
-                0
-            }
+            // `\X'tty: link'` emits ESCAPE_IGNORE (ASCII_NBRZW) via
+            // ZeroWidthGlyph without extra encode1() bytes (term.c:620-638).
+            RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont
+            | RoffInlineEvent::NoSpace
+            | RoffInlineEvent::Link(_) => 0,
+            RoffInlineEvent::ZeroWidthGlyph if has_link => 1,
             RoffInlineEvent::Glyph(text, _) if text == "\u{a0}" => 5,
             _ => return false,
         };

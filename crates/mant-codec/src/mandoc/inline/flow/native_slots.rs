@@ -652,10 +652,13 @@ impl NativeSlots {
     }
 
     pub(in crate::mandoc::inline) fn pending_owner(&self) -> Option<usize> {
-        let slot = self
-            .backbefore_slot
-            .filter(|&slot| self.backbefore && slot < self.extent)?;
+        let slot = self.backbefore_slot()?;
         self.runs.range(..=slot).next_back()?.1.owner
+    }
+
+    pub(in crate::mandoc::inline) fn backbefore_slot(&self) -> Option<usize> {
+        self.backbefore_slot
+            .filter(|&slot| self.backbefore && slot < self.extent)
     }
 
     /// `term_word` holds both col and lastcol. Spacing advances through old
