@@ -345,6 +345,7 @@ fn incremental_pass_acknowledges_only_its_materialized_owner_boundary() {
             vec![RecordedRowSplit {
                 offset: 5,
                 pass_end: pass.end,
+                cut: pass.end,
                 before_cached_glyph,
                 section_seam: false,
             }],

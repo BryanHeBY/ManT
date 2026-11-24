@@ -94,6 +94,25 @@ impl FieldBuffer {
         }
         self.projection_prefix
             .push(self.projection_prefix.last().copied().unwrap_or(0) + projection);
+        if let Some(rejection) = &mut self.proved_rejection {
+            match &cell {
+                FieldCell::BreakableBlank
+                | FieldCell::NonBreakingBlank
+                | FieldCell::BreakMarker
+                | FieldCell::Tab
+                | FieldCell::TabReference
+                | FieldCell::ZeroWidthGraph
+                | FieldCell::Breakpoint => {
+                    rejection.min_raw_cursor = rejection.min_raw_cursor.saturating_add(1);
+                }
+                FieldCell::DrawnSpaces(count) | FieldCell::FixedDrawingAdvance(count) => {
+                    rejection.min_raw_cursor = rejection.min_raw_cursor.saturating_add(*count);
+                }
+                // encode1() can consume BACKBEFORE on a preceding blank for a
+                // net 0 advance (term.c:903-925), so do not raise the bound.
+                FieldCell::Graph { .. } | FieldCell::Hyphen | FieldCell::Backline => {}
+            }
+        }
         self.cells.push(cell);
     }
 
@@ -185,9 +204,11 @@ impl FieldBuffer {
     /// An incremental pass stopped at the same nbr=0 boundary that the
     /// final flush will consume. Later buffered words cannot print in it.
     pub(in crate::mandoc::inline::flow) fn pending_pass_is_definitively_rejected(&self) -> bool {
-        self.scan
-            .as_ref()
-            .is_some_and(|scan| matches!(scan.stopped, Some(PassStop::Rejected)))
+        self.proved_rejection.is_some()
+            || self
+                .scan
+                .as_ref()
+                .is_some_and(|scan| matches!(scan.stopped, Some(PassStop::Rejected)))
     }
 
     pub(in crate::mandoc::inline::flow) fn is_empty(&self) -> bool {
@@ -202,6 +223,7 @@ impl FieldBuffer {
             // their widths must be reconsidered under the new stops. Truly
             // printed fields have already been retired and have no cells.
             self.scan = None;
+            self.proved_rejection = None;
             self.resume = 0;
             self.committed_passes.clear();
             self.pass_tab_offset = self.tab_offset;
@@ -220,6 +242,10 @@ impl FieldBuffer {
 
     pub(in crate::mandoc::inline::flow) const fn awaits_flush(&self) -> bool {
         matches!(self.word_scan, WordScanPolicy::AwaitFlush)
+    }
+
+    pub(in crate::mandoc::inline::flow) const fn has_proved_rejection(&self) -> bool {
+        self.proved_rejection.is_some()
     }
 
     pub(in crate::mandoc::inline::flow) fn note_tab_reference(&mut self) {
@@ -243,6 +269,7 @@ impl FieldBuffer {
             self.tab_offset = offset;
             self.pass_tab_offset = offset;
             self.scan = None;
+            self.proved_rejection = None;
         }
     }
 
@@ -282,6 +309,7 @@ impl FieldBuffer {
         self.nonbreaking_positions.clear();
         self.blank_positions.clear();
         self.scan = None;
+        self.proved_rejection = None;
         self.pass_tab_offset = self.tab_offset;
     }
 
@@ -444,6 +472,9 @@ impl FieldBuffer {
         }
     }
 
+    /// Prove an un-flushed appended word's exact `tcol->buf` bytes and font
+    /// runs so later `term_word()` motion can replay them (`term.c:620-661,
+    /// 888-969`).
     fn prove_appended_slots(&mut self, entry: usize, proof: &super::AppendedSlotProof) {
         if self.cells.len() == entry.saturating_add(proof.cells) {
             // The exact ending font run can be replayed. Earlier paint
@@ -453,6 +484,10 @@ impl FieldBuffer {
             // even across multiple font runs or trailing controls:
             // term_word()/encode() have not flushed any of those bytes.
             let has_breakable_blank = self.cells.contains(&FieldCell::BreakableBlank);
+            // encode1() adds at most 4 extra decoration/backspace bytes per
+            // decorated glyph (term.c:911-925), while ZeroWidthGraph cells from
+            // `\X'tty: link'` occupy 1 raw byte each (term.c:620-638).
+            let decorated_count: usize = proof.fonts.iter().map(|(range, _)| range.len()).sum();
             let complete_fresh_word = entry == 0
                 && self.projection_owner == super::FieldProjectionOwner::Active
                 && !self.backafter_armed
@@ -461,7 +496,11 @@ impl FieldBuffer {
                 && self.projected_pass_ends.is_empty()
                 && self.deferred_blanks.is_empty()
                 && proof.cells > 0
-                && proof.cells <= super::MAX_EDITABLE_APPEND_CELLS / 5
+                && self
+                    .cells
+                    .len()
+                    .saturating_add(decorated_count.saturating_mul(4))
+                    <= super::MAX_EDITABLE_APPEND_CELLS
                 && self.cells.iter().enumerate().all(|(index, cell)| {
                     matches!(
                         cell,
@@ -523,18 +562,52 @@ impl FieldBuffer {
         );
     }
 
+    /// Latch a proved `term_fill()` `nbr == 0` rejection (`term.c:143-146,
+    /// 281-366`) before switching to `UnmodeledRewind` (`term.c:701-718`) so
+    /// rewinds that cannot reach `resume..scanned_end` retain the rejection.
+    pub(super) fn latch_proved_rejection(&mut self) {
+        if self.proved_rejection.is_none()
+            && let Some(scan) = &self.scan
+            && matches!(scan.stopped, Some(PassStop::Rejected))
+        {
+            let min_raw_cursor = self.cells.len().saturating_sub(self.write_cursor.retreat());
+            if min_raw_cursor >= scan.scanned_end {
+                self.proved_rejection = Some(super::ProvedRejection {
+                    scanned_end: scan.scanned_end,
+                    min_raw_cursor,
+                });
+            }
+        }
+    }
+
     fn unmodeled_word_rewind(&mut self, columns: usize) {
         // A rewind left in the stream was either unmodeled
         // at entry or occurred inside a word. term.c:678–714
         // skips it with BACKAFTER, otherwise moves col.
         if !std::mem::take(&mut self.backafter_armed) && (columns > 0 || self.backbefore_armed) {
-            self.invalidate_rewound_scan();
+            self.latch_proved_rejection();
+            if let Some(rejection) = self.proved_rejection {
+                // Conservatively charge an extra cell for a possible
+                // native BACKBEFORE decrement (term.c:701-705).
+                let next = rejection
+                    .min_raw_cursor
+                    .saturating_sub(columns.saturating_add(1));
+                self.proved_rejection =
+                    (next >= rejection.scanned_end).then_some(super::ProvedRejection {
+                        scanned_end: rejection.scanned_end,
+                        min_raw_cursor: next,
+                    });
+            }
+            self.word_scan = WordScanPolicy::UnmodeledRewind;
+            self.scan = None;
+            self.clear_backtracking();
         }
     }
 
     fn invalidate_rewound_scan(&mut self) {
         self.word_scan = WordScanPolicy::UnmodeledRewind;
         self.scan = None;
+        self.proved_rejection = None;
         self.clear_backtracking();
     }
 
@@ -566,6 +639,10 @@ impl FieldBuffer {
         consumed
     }
 
+    /// Direct-write fallback when `p->col < p->tcol->lastcol` (`term.c:573-590,
+    /// 678-718, 860-872`): both `Retreated(1..)` and `Placed(1..)` downgrade
+    /// to `UnmodeledRewind` while preserving any proved `nbr == 0` rejection
+    /// whose `scanned_end` lies at or before `cells.len() - retreat`.
     fn begin_word_writes(&mut self, writes: &[FieldWrite]) {
         if matches!(
             writes.first(),
@@ -573,13 +650,28 @@ impl FieldBuffer {
         ) {
             return;
         }
-        if matches!(
-            std::mem::take(&mut self.write_cursor),
-            WriteCursor::Retreated(1..)
-        ) && !matches!(
-            writes.first(),
-            Some(FieldWrite::ReplacePlacedTail { .. } | FieldWrite::ReplaceLivePrefix { .. })
-        ) {
+        if let WriteCursor::Retreated(retreat @ 1..) | WriteCursor::Placed(retreat @ 1..) =
+            std::mem::take(&mut self.write_cursor)
+            && !matches!(
+                writes.first(),
+                Some(FieldWrite::ReplacePlacedTail { .. } | FieldWrite::ReplaceLivePrefix { .. })
+            )
+        {
+            let min_raw_cursor = self.cells.len().saturating_sub(retreat);
+            if let Some(rejection) = &mut self.proved_rejection {
+                rejection.min_raw_cursor = rejection.min_raw_cursor.min(min_raw_cursor);
+                if rejection.min_raw_cursor < rejection.scanned_end {
+                    self.proved_rejection = None;
+                }
+            } else if let Some(scan) = &self.scan
+                && matches!(scan.stopped, Some(PassStop::Rejected))
+                && min_raw_cursor >= scan.scanned_end
+            {
+                self.proved_rejection = Some(super::ProvedRejection {
+                    scanned_end: scan.scanned_end,
+                    min_raw_cursor,
+                });
+            }
             self.word_scan = WordScanPolicy::UnmodeledRewind;
             self.scan = None;
         }
@@ -690,6 +782,9 @@ impl FieldBuffer {
         self.write_cursor = WriteCursor::Placed(retreat - count);
     }
 
+    /// Record `-inset`/`-diag` run-in `encode1(0x00A0)` writes overlapping
+    /// live HEAD slots at `p->col` (`mdoc_term.c:757-772, 939-945`,
+    /// `chars.c:50`, `term.c:620-636, 888-930`).
     pub(in crate::mandoc::inline::flow) fn defer_run_in_overlap(
         &mut self,
         traversed: usize,
@@ -798,6 +893,9 @@ impl FieldBuffer {
         added
     }
 
+    /// Track the latest two graph positions so `term_flushln()`'s remainder
+    /// check (`term.c:177-198`) observes overwritten `U+00A0` cells and still
+    /// falls back cleanly on tail truncation.
     fn note_graph_position(&mut self, cell: usize) {
         match self.last_graph_position {
             None => self.last_graph_position = Some(cell),
@@ -896,7 +994,11 @@ impl FieldBuffer {
     }
 
     pub(in crate::mandoc::inline::flow) fn has_projected_pass(&self, end: usize) -> bool {
-        self.projected_pass_ends.contains(&end)
+        self.projected_pass_ends.contains_key(&end)
+    }
+
+    pub(in crate::mandoc::inline::flow) fn projected_pass_cut(&self, end: usize) -> Option<usize> {
+        self.projected_pass_ends.get(&end).copied()
     }
 
     pub(in crate::mandoc::inline::flow) fn has_projected_rows(&self) -> bool {

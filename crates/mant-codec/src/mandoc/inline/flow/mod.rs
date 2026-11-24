@@ -79,6 +79,9 @@ struct ProjectedNativeGap {
     cell: Option<usize>,
     /// Exact positioning slots, when their total equals the generated advance.
     motion_span: Option<std::ops::Range<usize>>,
+    /// A later word replayed over this word's covered glyph and emitted the
+    /// full advance for the same native `cell`, superseding this earlier prefix.
+    superseded: bool,
 }
 
 impl NativeWordAnchor {

@@ -388,7 +388,7 @@ fn final_scan_copies_native_facts_without_output_ownership_history() {
     assert_eq!(scan.committed_passes.capacity(), 0);
     assert!(scan.scan.is_none());
     assert_eq!(source.projection_prefix.len(), source.cells.len() + 1);
-    assert!(source.projected_pass_ends.contains(&pass.end));
+    assert!(source.projected_pass_ends.contains_key(&pass.end));
     assert_eq!(source.committed_passes.len(), 1);
 }
 
@@ -968,4 +968,194 @@ fn native_receipt_owns_normalized_keep_cells_without_mutating_source_writes() {
     );
     assert_eq!(receipt.native_cells()[2], FieldCell::BreakableBlank);
     assert_eq!(buffer.cells()[2], FieldCell::NonBreakingBlank);
+}
+
+#[test]
+fn proved_rejection_survives_unreachable_relative_rewind_and_clears_when_reached() {
+    // term.c:143-146, 701-718: a leading `\p` followed by a breakable blank
+    // rejects with `nbr == 0`. A later relative rewind that cannot reach back
+    // into `resume..scanned_end` preserves the definitive rejection, whereas a
+    // rewind reaching `< scanned_end` or an unproved motion clears it.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::BreakMarker),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+    ]);
+    assert_eq!(buffer.fill_pass(78), None);
+    assert!(buffer.pending_pass_is_definitively_rejected());
+
+    // Add 4 cells past scanned_end (= 2), then rewind by 1 column (conservative
+    // charge = 2, min_raw_cursor = 6 - 2 = 4 >= 2): rejection survives.
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+        super::FieldWrite::RewindWordEntry(1),
+    ]);
+    assert!(buffer.pending_pass_is_definitively_rejected());
+    assert!(matches!(
+        buffer.flush_receipt(
+            super::FillTargets {
+                first: 78 * 24,
+                rest: 78 * 24,
+                unbounded: false,
+            },
+            false,
+        ),
+        super::FlushReceipt::Rejected {
+            definitive: true,
+            ..
+        }
+    ));
+
+    // A further rewind of 2 columns (conservative charge = 3, 4 - 3 = 1 < 2)
+    // can reach `resume..scanned_end` and must downgrade to UnmodeledRewind.
+    buffer.apply_writes(&[super::FieldWrite::RewindWordEntry(2)]);
+    assert!(!buffer.pending_pass_is_definitively_rejected());
+    assert!(matches!(
+        buffer.flush_receipt(
+            super::FillTargets {
+                first: 78 * 24,
+                rest: 78 * 24,
+                unbounded: false,
+            },
+            false,
+        ),
+        super::FlushReceipt::UnmodeledRewind
+    ));
+}
+
+#[test]
+fn rewind_refuses_to_step_into_compressed_raw_tail_fonts() {
+    // term.c:899-929: decorated runs stored in `raw_tail_fonts` expand to 3 or
+    // 5 raw `tcol->buf` bytes in `NativeSlots`. `rewind_word_entry` indexes
+    // compressed `FieldBuffer::cells` and must not step into `< range.end`.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::Graph {
+            text: 'A',
+            width: 1,
+        }),
+        super::FieldWrite::ProveAppendedSlots(super::AppendedSlotProof {
+            cells: 1,
+            fonts: vec![(0..1, crate::mandoc::roff_escape::RoffFont::Strong)],
+            replay_tail: None,
+            pending: false,
+        }),
+    ]);
+    let mut writes = vec![super::FieldWrite::RewindWordEntry(1)];
+    let rewind = buffer.rewind_word_entry(&mut writes, 1, |cell| cell + 1);
+    assert!(matches!(rewind, super::EntryRewind::Unmodeled));
+}
+
+#[test]
+fn begin_word_writes_handles_placed_retreat_fallback_and_latches_proved_rejection() {
+    // term.c:143-146, 678-718: when WriteCursor::Placed(retreat @ 1..) is
+    // followed by a fallback direct write (not AdvanceOverBufferedBlanks /
+    // ReplacePlacedTail / ReplaceLivePrefix), downgrade to UnmodeledRewind
+    // while latching proved_rejection when `cells.len() - retreat >= scanned_end`.
+    let mut buffer = FieldBuffer::default();
+    buffer.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::BreakMarker),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+    ]);
+    assert_eq!(buffer.fill_pass(78), None);
+    assert!(buffer.pending_pass_is_definitively_rejected());
+
+    // Append 3 placed cells with cursor_retreat = 1 (min_raw_cursor = 5 - 1 = 4 >= 2).
+    buffer.apply_writes(&[
+        super::FieldWrite::Placed {
+            cell: FieldCell::BreakableBlank,
+            scalars: 1,
+        },
+        super::FieldWrite::Placed {
+            cell: FieldCell::Graph {
+                text: 'C',
+                width: 1,
+            },
+            scalars: 1,
+        },
+        super::FieldWrite::Placed {
+            cell: FieldCell::Graph {
+                text: 'D',
+                width: 1,
+            },
+            scalars: 1,
+        },
+        super::FieldWrite::ProveRawSlots {
+            count: 3,
+            cursor_retreat: 1,
+            backbefore: false,
+            duplicates: Vec::new(),
+            editable_marker: false,
+        },
+    ]);
+    assert_eq!(buffer.fill_pass(78), None);
+
+    // Fallback direct write from Placed(1) must latch proved_rejection and
+    // transition to UnmodeledRewind (so awaits_flush() is false while
+    // has_proved_rejection() is true).
+    buffer.apply_writes(&[super::FieldWrite::Cell(FieldCell::Graph {
+        text: 'X',
+        width: 1,
+    })]);
+    assert!(!buffer.awaits_flush());
+    assert!(buffer.has_proved_rejection());
+    assert!(matches!(
+        buffer.flush_receipt(
+            super::FillTargets {
+                first: 78 * 24,
+                rest: 78 * 24,
+                unbounded: false,
+            },
+            false,
+        ),
+        super::FlushReceipt::Rejected {
+            definitive: true,
+            ..
+        }
+    ));
+
+    // A fallback from Placed(retreat) whose cursor crosses `< scanned_end` must
+    // drop proved_rejection and downgrade to UnmodeledRewind.
+    let mut reached = FieldBuffer::default();
+    reached.apply_writes(&[
+        super::FieldWrite::Cell(FieldCell::BreakMarker),
+        super::FieldWrite::Cell(FieldCell::BreakableBlank),
+    ]);
+    assert_eq!(reached.fill_pass(78), None);
+    reached.apply_writes(&[
+        super::FieldWrite::Placed {
+            cell: FieldCell::Graph {
+                text: 'C',
+                width: 1,
+            },
+            scalars: 1,
+        },
+        super::FieldWrite::ProveRawSlots {
+            count: 1,
+            cursor_retreat: 2,
+            backbefore: false,
+            duplicates: Vec::new(),
+            editable_marker: false,
+        },
+    ]);
+    assert_eq!(reached.fill_pass(78), None);
+    reached.apply_writes(&[super::FieldWrite::Cell(FieldCell::Graph {
+        text: 'X',
+        width: 1,
+    })]);
+    assert!(!reached.has_proved_rejection());
+    assert!(matches!(
+        reached.flush_receipt(
+            super::FillTargets {
+                first: 78 * 24,
+                rest: 78 * 24,
+                unbounded: false,
+            },
+            false,
+        ),
+        super::FlushReceipt::UnmodeledRewind
+    ));
 }

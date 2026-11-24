@@ -192,6 +192,7 @@ impl FieldBuffer {
             return EntryRewind::Unmodeled;
         }
         let count = columns.saturating_add(usize::from(self.backbefore_armed));
+        let landing = self.cells.len().saturating_sub(count);
         if writes[1..].iter().all(|write| {
             matches!(
                 write,
@@ -201,7 +202,8 @@ impl FieldBuffer {
                 }
             )
         }) && self.write_cursor.retreat() == 0
-            && self.cells.len().saturating_sub(count) >= self.resume
+            && landing >= self.resume
+            && landing >= self.raw_tail_font_end()
         {
             // HORIZ changes the write cursor without truncating lastcol
             // (term.c:678-714). A flush still reads all the old cells.
@@ -212,6 +214,7 @@ impl FieldBuffer {
             return EntryRewind::Positioned(count.min(self.cells.len()));
         }
         let Some(replay) = self.plan_entry_rewind(&writes[1..], word_start, count) else {
+            self.latch_proved_rejection();
             self.word_scan = WordScanPolicy::UnmodeledRewind;
             self.scan = None;
             return EntryRewind::Unmodeled;
@@ -266,6 +269,13 @@ impl FieldBuffer {
         }
     }
 
+    fn raw_tail_font_end(&self) -> usize {
+        // Compressed decorated glyphs in `self.cells` stand for 3 or 5 raw
+        // `tcol->buf` bytes (`term.c::encode1`). Never index into or across
+        // them without expanding `raw_tail_fonts` in `NativeSlots`.
+        self.raw_tail_fonts.last().map_or(0, |(range, _)| range.end)
+    }
+
     fn plan_entry_rewind(
         &self,
         writes: &[FieldWrite],
@@ -278,7 +288,7 @@ impl FieldBuffer {
         // offset, not the input cells. Replaying the word from zero still
         // gives a valid marker/ownership receipt for an empty literal row.
         let mut at = end.saturating_sub(count);
-        (at >= self.resume).then_some(())?;
+        (at >= self.resume && at >= self.raw_tail_font_end()).then_some(())?;
         let mut rewritten = None;
         let mut replay = Vec::new();
         let mut retired_separator = 0;
@@ -413,12 +423,15 @@ impl FieldBuffer {
         writes: &mut Vec<FieldWrite>,
     ) -> Option<usize> {
         // Outside the editable suffix, a compressed HORIZ cannot locate
-        // a raw cell. A source NBSP is itself an encoded graph slot.
-        if overwritten_start < self.raw_edit_fence
-            && !matches!(
-                self.cells[overwritten_start],
-                FieldCell::Graph { text: '\u{a0}', .. }
-            )
+        // a raw cell. A source NBSP is itself an encoded graph slot, but
+        // decorated runs in `raw_tail_fonts` expand in `encode1()` and
+        // cannot be indexed directly on compressed `FieldBuffer::cells`.
+        if overwritten_start < self.raw_tail_font_end()
+            || overwritten_start < self.raw_edit_fence
+                && !matches!(
+                    self.cells[overwritten_start],
+                    FieldCell::Graph { text: '\u{a0}', .. }
+                )
         {
             return None;
         }

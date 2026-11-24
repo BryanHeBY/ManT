@@ -366,6 +366,7 @@ fn record_row_split(
         .push(RecordedRowSplit {
             offset,
             pass_end,
+            cut: pass_end,
             before_cached_glyph,
             section_seam: false,
         });

@@ -278,7 +278,47 @@ impl InlineBuilder {
             }
         });
         let trailing = super::super::trailing_ascii_spaces(&self.nodes);
-        let represented = trailing.saturating_add(leading);
+        let hidden = if trailing == 0 {
+            projection.retained_motion_hidden_blanks
+        } else {
+            0
+        };
+        let represented = trailing.max(hidden).saturating_add(leading);
+        if trailing == 0
+            && leading == 0
+            && width > hidden
+            && let Some(gap) = projection.projected_gap(false)
+        {
+            // This word is emitting the remaining unprojected width for `gap`
+            // after stepping over an earlier word's covered glyph
+            // (term.c:389-434). Mark any earlier anchor claiming the same `gap`
+            // superseded so the unprojected part does not print twice.
+            let anchors = if self.execution.uses_definition_word_buffer() {
+                &mut self
+                    .execution
+                    .definition
+                    .as_mut()
+                    .expect("authored word field")
+                    .field_word_anchors
+            } else {
+                &mut self.execution.plain_input.anchors
+            };
+            let gap_end = projection
+                .first_payload_cell
+                .unwrap_or(gap + 1)
+                .max(gap + 1);
+            if let Some((_, earlier)) = anchors.split_last_mut() {
+                for anchor in earlier.iter_mut().rev() {
+                    if anchor
+                        .projected_gap
+                        .cell
+                        .is_some_and(|cell| (gap..gap_end).contains(&cell))
+                    {
+                        anchor.projected_gap.superseded = true;
+                    }
+                }
+            }
+        }
         if represented > width {
             trim_trailing_breakable_spaces(&mut self.nodes, trailing.min(represented - width));
         }

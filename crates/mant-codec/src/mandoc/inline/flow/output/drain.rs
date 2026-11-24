@@ -366,6 +366,9 @@ impl InlineBuilder {
         } else {
             self.execution.zero_advance.take_armed()
         };
+        // TERMP_NOBREAK / TERMP_HANG keep p->viscol and p->minbl open across
+        // HEAD post into BODY (`mdoc_term.c:790-816, 950-952`; `term.c:113-116,
+        // 250-253, 389-442`), so record proved open ink for later coverage.
         let open_ink = (preserve_rows
             && occupied_head_row
             && self.execution.has_persistent_native_field_scope())
@@ -494,6 +497,7 @@ impl InlineBuilder {
         if let Some(state) = &mut self.execution.definition {
             state.field_buffer.clear();
             state.field_word_anchors.clear();
+            state.deferred_head_projection = None;
             state.run_in_continuation = false;
         }
         // term_flushln()235-237 clears the consumed buffer for every field,
@@ -511,6 +515,12 @@ impl InlineBuilder {
     /// visible.  CVS mandoc carries its backtracking flags through nested
     /// `term_word()` calls, so the caller must continue the state in the
     /// surrounding inline stream before committing it at a real boundary.
+    ///
+    /// Run-in `-inset`/`-diag` HEAD post does not call `term_newln()`
+    /// (`mdoc_term.c:757-772, 939-945`). Keep `deferred_head_projection` live
+    /// whenever pending layout, editable/positioned/retreated slots, deferred
+    /// blanks, or a proved `nbr == 0` rejection (`term.c:143-146, 205-220`)
+    /// must resolve against HEAD at the eventual BODY flush.
     pub(in crate::mandoc) fn finish_preserving_execution(
         mut self,
     ) -> (Vec<Inline>, PreservedInlineState, InlineExecutionState) {
@@ -524,9 +534,8 @@ impl InlineBuilder {
                 state.field_buffer.has_deferred_blanks()
                     || state.field_buffer.has_positioned_slots()
                     || state.field_buffer.has_pass_retreats()
-                    || self.execution.author_execution.is_some_and(|author| {
-                        author.break_effect == super::super::AuthorBreakEffect::Line
-                    }) && state.field_buffer.awaits_flush()
+                    || state.field_buffer.has_proved_rejection()
+                    || state.field_buffer.awaits_flush()
                         && state.field_buffer.has_pending_break_markers()
                         && state
                             .field_buffer
@@ -538,15 +547,13 @@ impl InlineBuilder {
                         .iter()
                         .any(|cell| matches!(cell, super::super::field_buffer::FieldCell::Tab))
             });
-        if deferred_head && let Some(definition) = &mut self.execution.definition {
-            definition.deferred_head_projection = Some(
+        if let Some(definition) = &mut self.execution.definition {
+            definition.deferred_head_projection = deferred_head.then(|| {
                 super::super::definition::head_presentation::DeferredHeadProjection::new(
                     &definition.field_word_anchors,
                     self.head_operand_capture.clone(),
-                ),
-            );
-        }
-        if let Some(definition) = &mut self.execution.definition {
+                )
+            });
             definition.row.retire_row_origin();
             definition.field_buffer.detach_projection_owner();
         }

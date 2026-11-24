@@ -130,7 +130,12 @@ impl ExecutedWordEntry {
             .prefix
             .entry_gap
             .filter(|&gap| self.prefix.word_start.is_some_and(|start| start < gap));
-        if self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some() {
+        // Do not overwrite an already-consumed separator when replay has no
+        // surviving entry gap (term.c:389-439, 901-908).
+        if (self.prefix.first_incoming().is_some() || self.placed_entry_blanks.is_some())
+            && !(projection.separator == SeparatorDisposition::Consumed
+                && projection.replayed_entry_gap.is_none())
+        {
             projection.native_separator = self.surviving_separator;
             projection.separator = if self.surviving_separator > 0 {
                 SeparatorDisposition::Keep

@@ -89,6 +89,10 @@ pub(in crate::mandoc::inline::flow) fn project_accepted_native_passes(
     }
 }
 
+/// Map an accepted `term_flushln()` pass boundary (`term.c:143-163, 205-220`)
+/// to its owner cut, handling detached definition heads (`mdoc_term.c:783-835`),
+/// section seams, and skipped blanks (`term.c:389-428`) before calling
+/// `acknowledge_projected_pass_cut`.
 fn record_accepted_pass_boundary<'a>(
     (buffer, anchors): (
         &mut super::super::field_buffer::FieldBuffer,
@@ -169,12 +173,14 @@ fn record_accepted_pass_boundary<'a>(
     let offset = offsets.at(buffer, index, cut);
     if let Some(receiver) = detached {
         receiver.accept_hard_row(&anchor.owner, offset);
-        buffer.acknowledge_projected_pass(pass.end);
+        // Mark the committed term_flushln() pass (term.c:163) as projected at `cut`.
+        buffer.acknowledge_projected_pass_cut(pass.end, cut);
     } else {
         boundaries
             .entry(anchor.owner.clone())
             .or_default()
             .push(RecordedRowSplit {
+                cut,
                 section_seam,
                 ..RecordedRowSplit::hard(offset, pass.end)
             });
@@ -361,6 +367,7 @@ fn project_detached_gap_restart<'a>(
         .push(RecordedRowSplit {
             offset: 0,
             pass_end: pass.end,
+            cut: pass.end,
             before_cached_glyph: false,
             section_seam: false,
         });
@@ -509,6 +516,10 @@ fn projected_restart_owner(
 pub(super) struct RecordedRowSplit {
     pub(super) offset: usize,
     pub(super) pass_end: usize,
+    /// Native cell index where the `LineBreak` was actually placed. Blanks in
+    /// `cut..pass_end` remain after the `LineBreak` and are not trimmed by
+    /// `trim_native_pass_rows`.
+    pub(super) cut: usize,
     /// The following native scalar already exists in this word but its
     /// cached zero-advance glyph cannot appear in the current fragment.
     pub(super) before_cached_glyph: bool,
@@ -520,6 +531,7 @@ impl RecordedRowSplit {
         Self {
             offset,
             pass_end,
+            cut: pass_end,
             before_cached_glyph: false,
             section_seam: false,
         }
@@ -561,7 +573,8 @@ fn project_recorded_passes(
     for (owner, splits) in splits {
         let count = projected.get(&owner).map_or(0, |&(_, count)| count);
         for split in splits.into_iter().take(count) {
-            buffer.acknowledge_projected_pass(split.pass_end);
+            // Record each projected term_flushln() split cut (term.c:163, 389-428).
+            buffer.acknowledge_projected_pass_cut(split.pass_end, split.cut);
         }
     }
     output

@@ -15,7 +15,7 @@
 
 //! Final native receipts, accepted pass commits and projection positions.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::{
     EN, FieldBuffer, FieldCell, FillPass, FillTargets, FlushReceipt, WriteCursor, advance_tab,
@@ -175,12 +175,24 @@ impl FieldBuffer {
         output
     }
 
+    /// Mirror `term_flushln()` (`term.c:123-207`): scan `term_fill()` passes
+    /// (`term.c:143-146`), advance `taboff` (`term.c:164-168`), stop on an
+    /// ignorable remainder (`term.c:177-198`, respecting `TERMP_BRTRSP`), and
+    /// otherwise consume break-point blanks (`term.c:205-207`) per pass.
     pub(in crate::mandoc::inline::flow) fn flush_receipt(
         &self,
         targets: FillTargets,
         brtrsp: bool,
     ) -> FlushReceipt {
         if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind) {
+            if self.proved_rejection.is_some() {
+                return FlushReceipt::Rejected {
+                    passes: self.committed_passes.clone(),
+                    native_cells: self.cells.clone(),
+                    rejected_from: self.resume,
+                    definitive: true,
+                };
+            }
             return FlushReceipt::UnmodeledRewind;
         }
         let mut scan = self.native_flush_scan();
@@ -262,9 +274,10 @@ impl FieldBuffer {
             committed_passes: Vec::new(),
             word_scan: super::WordScanPolicy::Incremental,
             break_markers: Vec::new(),
-            projected_pass_ends: BTreeSet::new(),
+            projected_pass_ends: BTreeMap::new(),
             deferred_projected_gaps: BTreeSet::new(),
             scan: None,
+            proved_rejection: None,
             word_first_content: None,
             completed_empty_pass_end: None,
             #[cfg(test)]
@@ -727,7 +740,18 @@ impl FieldBuffer {
     /// emitted the boundary. A still-cached glyph may leave the split
     /// position outside the current projection fragment.
     pub(in crate::mandoc::inline::flow) fn acknowledge_projected_pass(&mut self, end: usize) {
-        self.projected_pass_ends.insert(end);
+        self.acknowledge_projected_pass_cut(end, end);
+    }
+
+    /// Record the exact `LineBreak` cut cell within a committed `term_flushln()`
+    /// pass (`term.c:143-163`), preserving unprinted padding in `cut..end`
+    /// (`term.c:389-428`).
+    pub(in crate::mandoc::inline::flow) fn acknowledge_projected_pass_cut(
+        &mut self,
+        end: usize,
+        cut: usize,
+    ) {
+        self.projected_pass_ends.insert(end, cut.min(end));
     }
 
     pub(in crate::mandoc::inline::flow) fn has_non_ignorable_after(

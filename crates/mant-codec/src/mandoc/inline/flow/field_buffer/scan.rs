@@ -167,6 +167,12 @@ impl FieldBuffer {
     }
 
     pub(super) fn invalidate_projection_scan(&mut self, position: usize) {
+        if self
+            .proved_rejection
+            .is_some_and(|rejection| position < rejection.scanned_end)
+        {
+            self.proved_rejection = None;
+        }
         let Some(scan) = &mut self.scan else {
             return;
         };

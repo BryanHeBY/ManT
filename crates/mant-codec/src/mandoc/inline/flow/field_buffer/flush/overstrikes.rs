@@ -21,9 +21,7 @@ impl FieldBuffer {
         for (index, pass) in passes.iter().enumerate() {
             if self.fresh_paint_pass(pass)
                 && (emits_backspace_after_control_or_advance(&self.cells[pass.start..pass.end])
-                    || self
-                        .edited_font_copy_end(pass.start, pass.end, true)
-                        .is_some())
+                    || self.edited_font_copy_end(pass.start, pass.end).is_some())
             {
                 self.plain_paint_origins
                     .push((pass.start, if index == 0 { first } else { rest }));
@@ -31,14 +29,15 @@ impl FieldBuffer {
         }
     }
 
+    /// Record the `vbl` leading-padding origin (`term.c:113-116, 229-230`) for
+    /// fresh definition passes whose first printed `Backline` or edited font
+    /// copy (`term.c:425-436`) can step back into emitted padding.
     pub(in crate::mandoc::inline::flow) fn record_definition_paint_origins(
         &mut self,
         passes: &[FillPass],
         origins: &[(usize, usize)],
     ) {
-        if self.projection_owner == super::super::FieldProjectionOwner::Detached
-            || origins.is_empty()
-        {
+        if origins.is_empty() {
             return;
         }
         for pass in passes {
@@ -57,9 +56,7 @@ impl FieldBuffer {
             let printed = &self.cells[pass.start..printed_end];
             if emits_backspace_after_control_or_advance(printed)
                 || printed.last() == Some(&FieldCell::Backline)
-                || self
-                    .edited_font_copy_end(pass.start, pass.end, true)
-                    .is_some()
+                || self.edited_font_copy_end(pass.start, pass.end).is_some()
             {
                 self.plain_paint_origins
                     .push((pass.start, origins[index].1));
@@ -85,21 +82,21 @@ impl FieldBuffer {
             && !self.has_projected_pass(pass.end)
     }
 
+    /// True when a cursor retreat (`term.c:694-718, 903-910`) left an
+    /// `encode1()` font copy (`term.c:911-925`) separated from its owner by
+    /// something other than an adjacent `'\b'`.
     pub(in crate::mandoc::inline::flow) fn has_edited_font_copies(&self) -> bool {
-        self.raw_copy_aliases
-            .iter()
-            .any(|&(copy, owner)| copy > owner)
+        self.raw_copy_aliases.iter().any(|&(copy, owner)| {
+            let low = copy.min(owner);
+            let high = copy.max(owner);
+            high != low + 2 || self.cells.get(low + 1) != Some(&FieldCell::Backline)
+        })
     }
 
     /// An editable raw word can overwrite a font backspace and leave both
     /// copies printable. Ordinary decoration is exactly glyph, BS, glyph
-    /// (`term.c::encode1`) and never needs a paint pass on its own.
-    fn edited_font_copy_end(
-        &self,
-        start: usize,
-        end: usize,
-        include_unsplit_aliases: bool,
-    ) -> Option<usize> {
+    /// (`term.c:911-925`) and never needs a paint pass on its own.
+    fn edited_font_copy_end(&self, start: usize, end: usize) -> Option<usize> {
         let end = end.min(start.saturating_add(MAX_REPLAY_PREFIX_CELLS));
         let first = self
             .raw_copy_aliases
@@ -110,8 +107,7 @@ impl FieldBuffer {
             .filter_map(|&(copy, owner)| {
                 let low = copy.min(owner);
                 let high = copy.max(owner);
-                ((include_unsplit_aliases || copy > owner)
-                    && start <= low
+                (start <= low
                     && high < end
                     && (high != low + 2 || self.cells[low + 1] != FieldCell::Backline))
                     .then_some(high - start)
@@ -119,10 +115,11 @@ impl FieldBuffer {
             .max()
     }
 
-    /// `term_field()` emits backspaces and queues blanks independently of
-    /// zero-width fill controls. Before acceptance, a repeated backspace
-    /// may appear to leave its local graph run because a marker or blank
-    /// separates it from the earlier glyph. This pass knows the real row.
+    /// `term_field()` (`term.c:387-443`) skips zero-width controls (`394-398`),
+    /// queues blanks until the next non-blank (`402-428`), and emits `'\b'`
+    /// backspaces against `viscol` (`432-436`). Before acceptance, a repeated
+    /// backspace may appear separated by a marker or blank; this pass proves
+    /// the real row.
     pub(super) fn prove_device_overprint(
         &self,
         start: usize,
@@ -135,9 +132,7 @@ impl FieldBuffer {
         let end = self.printed_content_end(start, end);
         let cells = &self.cells[start..end];
         let detached = self.projection_owner == super::super::FieldProjectionOwner::Detached;
-        let edited_font_end = (!detached || blank_origin.is_some())
-            .then(|| self.edited_font_copy_end(start, end, blank_origin.is_some()))
-            .flatten();
+        let edited_font_end = self.edited_font_copy_end(start, end);
         if !detached
             && !if blank_origin.is_some() {
                 edited_font_end.is_some()
@@ -165,7 +160,7 @@ impl FieldBuffer {
                 .paint_device_interval(start, cells, last_edit, origin, true, true)
                 .map(|(proof, _)| proof);
         }
-        let keep_distinct = !detached && edited_font_end.is_some();
+        let keep_distinct = edited_font_end.is_some();
         let (mut proof, stepped_left) =
             self.paint_device_interval(start, cells, last_edit, 1, false, keep_distinct)?;
         if stepped_left {

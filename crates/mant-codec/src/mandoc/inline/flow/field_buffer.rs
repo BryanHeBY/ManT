@@ -51,7 +51,7 @@ pub(in crate::mandoc::inline) use cells::{AppendedSlotProof, DeferredSourceBlank
 pub(in crate::mandoc) use cells::{FieldCell, FieldWrite};
 pub(super) use cells::{LeadingBlankRetreat, WordWriteReceipt};
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use super::tab_stops::TabStops;
@@ -286,9 +286,11 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// Repeated .ta/word pairs must not replay their growing field history.
     word_scan: WordScanPolicy,
     break_markers: Vec<usize>,
-    /// Accepted native row events already projected. A .ta change restarts
-    /// width scanning, but cannot execute the same marker pass twice.
-    projected_pass_ends: std::collections::BTreeSet<usize>,
+    /// Accepted native row events already projected, mapped to the actual
+    /// native cut index where the `LineBreak` was placed (`cut <= pass.end`).
+    /// A .ta change restarts width scanning, but cannot execute the same
+    /// marker pass twice.
+    projected_pass_ends: BTreeMap<usize, usize>,
     // A word-time restart landed inside an already emitted owner. The
     // final projection ends the row before the skipped blank run and
     // explicitly removes its projected scalars.
@@ -304,6 +306,11 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     nonbreaking_positions: BTreeSet<usize>,
     blank_positions: BTreeSet<usize>,
     scan: Option<FillScanner>,
+    /// A `term_fill()` pass already proved `PassStop::Rejected` (`nbr == 0`)
+    /// over `resume..scanned_end`. Preserved across unreachable relative
+    /// unmodeled rewinds whose conservative raw-cursor lower bound stays
+    /// `>= scanned_end` (term.c:143-146, 701-718).
+    proved_rejection: Option<ProvedRejection>,
     #[cfg(test)]
     scan_work: usize,
     #[cfg(test)]
@@ -353,6 +360,12 @@ struct FillScanner {
     before_last: FillRegisters,
     stopped: Option<PassStop>,
     scanned_end: usize,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct ProvedRejection {
+    scanned_end: usize,
+    min_raw_cursor: usize,
 }
 
 #[derive(Clone, Copy, Debug)]

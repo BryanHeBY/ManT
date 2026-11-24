@@ -118,15 +118,20 @@ impl OwnerAcceptance {
 fn pass_projection_end(buffer: &FieldBuffer, pass: &FillPass) -> (usize, bool, usize, bool) {
     let printed_end = buffer.printed_content_end(pass.start, pass.end);
     let printed = printed_end > pass.start;
-    let projected = buffer.has_projected_pass(pass.end);
-    // Acknowledged endlines already removed trailing SP from the
-    // projection. Do not charge those old scalar slots to later
-    // output when term_field's receipt retires unprinted padding.
-    // Preserve any intervening authored recovery spelling.
+    let projected_cut = buffer.projected_pass_cut(pass.end);
+    let projected = projected_cut.is_some();
+    // Acknowledged endlines already removed trailing SP strictly before
+    // `cut` from the projection. Do not charge those old scalar slots to
+    // later output when term_field's receipt retires unprinted padding,
+    // while keeping blanks in `cut..pass.end` that sit after the LineBreak
+    // so owner acceptance still omits them (term.c:205-220).
     let mut projected_end = pass.end;
-    if projected {
+    if let Some(cut) = projected_cut {
         while projected_end > printed_end {
             let cell = projected_end - 1;
+            if cell >= cut && buffer.projection_length(cell, projected_end) != 0 {
+                break;
+            }
             if !matches!(
                 buffer.cells()[cell],
                 FieldCell::BreakableBlank | FieldCell::NonBreakingBlank
@@ -329,9 +334,10 @@ fn resolve_buffered_prefixes(
     for anchor in anchors {
         if let Some(gap) = anchor.projected_gap_cell() {
             let pass = passes.partition_point(|pass| pass.end <= gap);
-            let printed = passes
-                .get(pass)
-                .is_some_and(|pass_row| pass_row.start <= gap && gap < printed_ends[pass].0);
+            let printed = !anchor.projected_gap.superseded
+                && passes
+                    .get(pass)
+                    .is_some_and(|pass_row| pass_row.start <= gap && gap < printed_ends[pass].0);
             lengths
                 .entry(anchor.owner.clone())
                 .or_default()

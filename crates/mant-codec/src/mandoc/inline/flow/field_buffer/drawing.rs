@@ -74,6 +74,9 @@ impl FieldBuffer {
         } else {
             units
         };
+        if absolute || delta < 0 {
+            self.proved_rejection = None;
+        }
         if delta > 0 {
             // term_word() writes ASCII_NBRSP, not ordinary SP. Its first
             // fill counts this advance as graph, then normalizes the run.
