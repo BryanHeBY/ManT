@@ -19,6 +19,10 @@ pub(super) enum ParagraphDrain {
 }
 
 impl ParagraphFlow {
+    pub(super) fn nodes(&self) -> &[Inline] {
+        &self.nodes
+    }
+
     pub(super) fn output_nodes_mut(&mut self) -> &mut Vec<Inline> {
         &mut self.nodes
     }

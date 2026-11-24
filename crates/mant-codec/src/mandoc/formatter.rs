@@ -276,6 +276,14 @@ impl FormatterState {
         }
     }
 
+    pub(super) fn run_in_boundary_id(&self) -> Option<u64> {
+        self.definition_bodies
+            .last()?
+            .run_in_boundary
+            .as_ref()
+            .map(super::inline::RunInBoundaryReceipt::id)
+    }
+
     pub(super) fn note_definition_run_in_executed(
         &mut self,
         boundary: Option<super::inline::RunInBoundaryReceipt>,

@@ -418,6 +418,7 @@ impl BlockLowerer<'_, '_> {
         if formatter_control.is_some_and(|control| control.boundary == FormatterBoundary::Line) {
             // This is the actual request dispatch, after HEAD execution and
             // before BODY output. The definition checkpoint records it once.
+            self.state.note_relocated_body_ink_before_boundary();
             self.state.formatter.note_definition_boundary();
         }
         let single_line_literal = self.display_fill == Some(DisplayFillMode::SingleLine);

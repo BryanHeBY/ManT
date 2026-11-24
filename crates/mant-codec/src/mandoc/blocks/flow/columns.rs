@@ -41,6 +41,7 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn finish_mdoc_structural_row(&mut self) {
+        self.note_relocated_body_ink_before_boundary();
         if self.finish_native_structural_row() {
             self.formatter.note_definition_structural_row_close();
             self.settle_definition_line_boundary();
@@ -51,6 +52,7 @@ impl BlockState {
     /// Borrow the active destination so a detached HEAD row is consumed even
     /// when the BODY has no local glyph (`mdoc_term.c::termp_bl_pre`).
     pub(in crate::mandoc::blocks) fn finish_native_structural_row(&mut self) -> bool {
+        self.note_relocated_body_ink_before_boundary();
         let no_fill = self.formatter.no_fill;
         if self.uses_literal_output()
             || (!self.formatter.execution.has_column_output_scope()

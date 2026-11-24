@@ -262,7 +262,23 @@ impl BlockState {
         self.paragraph.is_empty()
     }
 
+    pub(in crate::mandoc::blocks) fn note_relocated_body_ink_before_boundary(&mut self) {
+        if self.formatter.definition_before_visible()
+            && super::has_run_in_visible_ink(
+                self.paragraph.nodes(),
+                self.formatter.run_in_boundary_id(),
+            )
+        {
+            // When a run-in replay relocated surviving HEAD ink or released an
+            // unpaired underline `'_'` into BODY (`mdoc_term.c:757-772`,
+            // `term.c:888-930`), BODY already carries visible content on the
+            // shared row when a line/vertical break arrives.
+            self.formatter.note_definition_visible();
+        }
+    }
+
     pub(in crate::mandoc::blocks) fn hard_break(&mut self) {
+        self.note_relocated_body_ink_before_boundary();
         self.formatter.note_definition_boundary();
         self.paragraph.hard_break(&mut self.formatter);
         self.settle_definition_line_boundary();
@@ -342,6 +358,7 @@ impl BlockState {
                 // NODE_LINE closed the actual inherited physical row.
                 // Deliver that fact before an owner drain clears its local
                 // leading break; its eventual Block kind is irrelevant.
+                self.note_relocated_body_ink_before_boundary();
                 self.formatter.note_definition_boundary();
             }
             // The native print receipt already delivered every completed
@@ -416,6 +433,7 @@ impl BlockState {
     /// fi/nf have selected the next output mode in the block driver, but
     /// their `pre_br` still consumes the request node's original source owner.
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
+        self.note_relocated_body_ink_before_boundary();
         self.formatter.note_definition_boundary();
         let close = |builder: &mut InlineBuilder| {
             builder.control_line_break_with_origin(CompletedRowOrigin::for_source_mode(no_fill));
@@ -452,6 +470,7 @@ impl BlockState {
 
     /// Execute a real BODY post's `term_newln` while its output owner is live.
     pub(in crate::mandoc::blocks) fn finish_native_body_line(&mut self) {
+        self.note_relocated_body_ink_before_boundary();
         self.finish_native_line_in_source_mode(self.formatter.no_fill);
     }
 
@@ -487,6 +506,7 @@ impl BlockState {
     }
 
     pub(in crate::mandoc::blocks) fn resolve_vertical_space(&mut self, rows: i32) -> u16 {
+        self.note_relocated_body_ink_before_boundary();
         self.formatter.note_definition_boundary();
         self.paragraph
             .resolve_vertical_space(&mut self.formatter, rows)

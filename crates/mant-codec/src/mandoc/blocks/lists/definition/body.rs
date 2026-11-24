@@ -118,9 +118,11 @@ pub(super) fn close_pending_definition_prefix(
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) {
     if formatter.definition_before_visible() {
-        // CVS termp_it_pre() enters a new list item as a structural row.
-        // That closes the outer definition's pending head/body prefix before
-        // this item's HEAD is executed.
+        // CVS termp_it_pre() enters a new list item as a structural row
+        // (`mdoc_term.c:757-772, 1128`, `term.c:475-480`). Callers must have
+        // observed any run-in relocated BODY ink via
+        // `note_relocated_body_ink_before_boundary()` before flushing; if
+        // still before visible, close the outer definition's pending prefix.
         formatter.note_definition_boundary();
         formatter.note_definition_visible();
     }

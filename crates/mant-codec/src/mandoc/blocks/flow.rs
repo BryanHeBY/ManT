@@ -337,6 +337,38 @@ impl BlockState {
     }
 }
 
+pub(super) fn has_run_in_visible_ink(nodes: &[Inline], run_in_id: Option<u64>) -> bool {
+    fn scan(nodes: &[Inline], run_in_id: Option<u64>, owned_by_run_in: &mut bool) -> bool {
+        for node in nodes {
+            match node {
+                Inline::Anchor { id, .. } => {
+                    if let Some(rest) = id.as_str().strip_prefix("\0mant:field-word:") {
+                        *owned_by_run_in = rest.contains(":relocated:")
+                            || run_in_id.is_some() && rest.parse::<u64>().ok() == run_in_id;
+                    }
+                }
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    if *owned_by_run_in && value.chars().any(|ch| !ch.is_whitespace()) {
+                        return true;
+                    }
+                }
+                Inline::Strong { children }
+                | Inline::Emphasis { children }
+                | Inline::Link { children, .. } => {
+                    if scan(children, run_in_id, owned_by_run_in) {
+                        return true;
+                    }
+                }
+                Inline::LineBreak { .. } => {}
+            }
+        }
+        false
+    }
+    scan(nodes, run_in_id, &mut false)
+}
+
 fn has_formatter_text_cell(nodes: &[Inline]) -> bool {
     nodes.iter().any(|node| match node {
         Inline::Text { .. } | Inline::Code { .. } | Inline::Equation { .. } => true,
