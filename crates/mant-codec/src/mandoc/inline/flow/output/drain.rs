@@ -535,6 +535,8 @@ impl InlineBuilder {
                     || state.field_buffer.has_positioned_slots()
                     || state.field_buffer.has_pass_retreats()
                     || state.field_buffer.has_proved_rejection()
+                    || state.field_buffer.has_marked_backbefore_tail()
+                        && self.execution.zero_advance.can_project_prior_slot()
                     || state.field_buffer.awaits_flush()
                         && state.field_buffer.has_pending_break_markers()
                         && state

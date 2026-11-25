@@ -46,6 +46,19 @@ impl RunInWordSlots {
 }
 
 impl FieldBuffer {
+    /// With an unread marker, BACKBEFORE refers to the raw tail, not to
+    /// the nearest visible glyph. Replaying the generated NBSP can either
+    /// append a backline or replace the preceding SP. The latter must
+    /// retire that SP from its HEAD owner too (term.c:903–929).
+    pub(in crate::mandoc::inline::flow) fn has_marked_backbefore_tail(&self) -> bool {
+        self.backbefore_armed
+            && matches!(
+                self.cells.last(),
+                Some(FieldCell::BreakMarker | FieldCell::BreakableBlank)
+            )
+            && self.has_pending_break_markers()
+    }
+
     pub(in crate::mandoc::inline::flow) fn generated_blank_overlap(
         &self,
         count: usize,

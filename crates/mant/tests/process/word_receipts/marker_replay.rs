@@ -245,3 +245,66 @@ fn a_long_styled_head_remains_editable_until_the_native_break() {
         Vec::<(mant_ir::LinkTarget, String)>::new()
     );
 }
+
+#[test]
+fn inset_body_replays_the_raw_marker_tail_before_retiring_head_ink() {
+    // Inset BODY writes an NBSP into the same open buffer as HEAD
+    // (mdoc_term.c:757–772). A pending backspace consumes a raw SP or
+    // appends a raw backline; it does not necessarily replace the
+    // previous visible glyph (term.c:659–660, 903–929).
+    for (head, body, word, linked) in [
+        (
+            r#".It No "\zA\p""#,
+            r#".No "\h'-4n'" No "\pB" No C"#,
+            "ABC",
+            false,
+        ),
+        (
+            r#".It No "\z\X'tty: link https://x.io'A\X'tty: link'\p""#,
+            r#".No "\h'-4n'" No "\pB" No C"#,
+            "ABC",
+            true,
+        ),
+        (r#".It Em "\zA\p ""#, r#".No "\h'-4n'\zB" No C"#, "C", false),
+        (
+            r#".It Em "\z\X'tty: link https://x.io'A\X'tty: link'\p ""#,
+            r#".No "\h'-4n'\zB" No C"#,
+            "AC",
+            true,
+        ),
+    ] {
+        let mut source = format!("{EDITABLE_FIELD}.Bl -inset\n{head}\n{body}\n.El\n");
+        for round in 0..=2 {
+            let format = if round == 0 { "roff" } else { "markdown" };
+            let plain = render(&source, format, "text", "never", false);
+            let visible = description(&plain).trim();
+            // Ordinary Markdown represents the inset as a list item.
+            assert_eq!(
+                visible.strip_prefix("• ").unwrap_or(visible),
+                word,
+                "{head}, round {round}"
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, format, word),
+                1
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, format, "A"),
+                0
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, format, "BC"),
+                0
+            );
+            if linked {
+                super::assert_link(&source, format, "A");
+            } else {
+                assert_eq!(
+                    super::document_links(&source, format),
+                    Vec::<(mant_ir::LinkTarget, String)>::new()
+                );
+            }
+            source = render(&source, format, "markdown", "never", false);
+        }
+    }
+}
