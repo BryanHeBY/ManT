@@ -13,7 +13,7 @@ pub(in crate::mandoc) use zero_advance::ZeroAdvanceState;
 
 use super::flow::{
     field_buffer::FieldWrite,
-    native_slots::{PriorSlotEdit, SlotEntry},
+    native_slots::{EntryCursor, PriorSlotEdit, SlotEntry},
 };
 use event_state::append_text_event;
 pub(in crate::mandoc::inline) use geometry_word::replay_run_in_word;
@@ -241,7 +241,12 @@ fn execute_formatter_word_events(
             && retained_previous_glyph
             && !armed_before
             && geometry_word::absolute_motion(event);
-        non_font_opaque |= needs_native_slot_proof(event, armed_before);
+        let allows_single_advance_append = !retained_previous_glyph
+            && !armed_before
+            && !context.zero_advance.has_pending_glyph()
+            && context.slot_entry.cursor != EntryCursor::NeedsReplay;
+        non_font_opaque |=
+            needs_native_slot_proof(event, armed_before, allows_single_advance_append);
         let write_start = word.native_writes.len();
         // These native writes have no reading-text glyph. Keep their receipt
         // separate from FieldBuffer's graph/width model. Once any column has
@@ -278,15 +283,7 @@ fn execute_formatter_word_events(
             }
         }
     }
-    if unproved_motion
-        || prior_edit.is_some_and(|edit| {
-            edit == PriorSlotEdit::Unresolved
-                || !matches!(
-                    word.native_writes.first(),
-                    Some(FieldWrite::RewindWordEntry(_))
-                )
-        })
-    {
+    if unproved_motion || unrecorded_prior_edit(prior_edit, &word.native_writes) {
         word.native_writes.push(FieldWrite::UnprovedMotion);
     }
     if (non_font_opaque
@@ -309,6 +306,13 @@ fn execute_formatter_word_events(
     finish_text_execution(events, context.zero_advance, word)
 }
 
+fn unrecorded_prior_edit(edit: Option<PriorSlotEdit>, writes: &[FieldWrite]) -> bool {
+    edit.is_some_and(|edit| {
+        edit == PriorSlotEdit::Unresolved
+            || !matches!(writes.first(), Some(FieldWrite::RewindWordEntry(_)))
+    })
+}
+
 fn event_writes_table_device_buffer(event: &RoffInlineEvent, armed: bool) -> bool {
     match event {
         RoffInlineEvent::HorizontalMotion {
@@ -320,14 +324,25 @@ fn event_writes_table_device_buffer(event: &RoffInlineEvent, armed: bool) -> boo
     }
 }
 
-fn needs_native_slot_proof(event: &RoffInlineEvent, armed: bool) -> bool {
+fn needs_native_slot_proof(
+    event: &RoffInlineEvent,
+    armed: bool,
+    allows_single_advance_append: bool,
+) -> bool {
     match event {
         RoffInlineEvent::Overstrike { .. } => true,
         // ESCAPE_HORIZ clears BACKAFTER without buffering or moving when
-        // armed (term.c:678-682), and a parsed zero relative motion writes
-        // no raw slots (term.c:678-699). Keep ordinary word execution.
+        // armed (term.c:678-682), a parsed zero relative motion writes no raw
+        // slots, and a 1-column positive relative motion at lastcol without
+        // pending BACKBEFORE writes one exact ASCII_NBRSP byte (term.c:691-698).
         RoffInlineEvent::HorizontalMotion { argument, .. } => {
-            !armed && !geometry_word::relative_zero_motion(argument.as_deref())
+            !(armed
+                || geometry_word::relative_zero_motion(argument.as_deref())
+                || allows_single_advance_append
+                    && argument.as_deref().is_some_and(|value| {
+                        !value.starts_with('|')
+                            && libmandoc_rs::TableColumnMetrics::relative_motion_columns(value) == 1
+                    }))
         }
         _ => false,
     }

@@ -649,7 +649,10 @@ impl InlineBuilder {
             .then(|| {
                 let (input, anchors) = self.execution.word_input();
                 if !(input.has_retained_word_cursor()
-                    || input.has_positioned_slots() && input.has_backafter_armed())
+                    || input.has_positioned_slots()
+                        && (input.has_backafter_armed()
+                            || input.has_entry_retreat()
+                                && self.execution.zero_advance.can_project_prior_slot()))
                 {
                     return None;
                 }
@@ -895,6 +898,9 @@ impl super::InlineExecutionState {
         } else {
             ReplayDomain::Scoped
         };
+        let filled_line_domain =
+            matches!(domain, ReplayDomain::Filled | ReplayDomain::DefinitionLine);
+        let leading_marker_extend = matches!(extend, PrefixExtension::LeadingMarker);
         let extend = match extend {
             PrefixExtension::None => false,
             PrefixExtension::Word => {
@@ -903,7 +909,8 @@ impl super::InlineExecutionState {
                     || input.pending_pass_is_definitively_rejected()
             }
             PrefixExtension::FilledWord => {
-                domain == ReplayDomain::Filled && !input.has_pending_break_markers()
+                filled_line_domain
+                    && (!input.has_pending_break_markers() || input.word_scan_deferred())
             }
             // A new leading marker is itself a cell write, not a flush of
             // the preceding marker. field_prefix still excludes any pass
@@ -922,6 +929,10 @@ impl super::InlineExecutionState {
             automatic_blanks,
             kept_blanks,
             trailing_tab_reference: input.has_live_tab_reference(),
+            definition_row_occupied: self
+                .definition
+                .as_ref()
+                .is_some_and(|state| state.hang_row.native_row_occupied()),
             retreat_blanks: if !kept_blanks && input.has_entry_retreat() {
                 automatic_blanks
             } else {
@@ -931,13 +942,16 @@ impl super::InlineExecutionState {
             prefix: (capture_prefix
                 || live_edit
                 || leading_retreat && !input.has_entry_retreat()
-                || domain == ReplayDomain::Filled && input.has_replayable_trailing_advance()
+                || filled_line_domain && input.has_replayable_trailing_advance()
                 || extend)
                 .then(|| {
                     let mut prefix = input.field_prefix(
                         automatic_blanks,
                         kept_blanks,
-                        leading_retreat || input.has_retained_word_cursor(),
+                        leading_retreat
+                            || leading_marker_extend
+                            || input.has_retained_word_cursor()
+                            || filled_line_domain && input.awaits_flush(),
                     )?;
                     retain_projected_advances(&mut prefix, input, anchors);
                     Some(prefix)

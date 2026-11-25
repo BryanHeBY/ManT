@@ -225,7 +225,10 @@ impl FieldBuffer {
                 FieldCell::Graph { width: 1, .. }
                 | FieldCell::Hyphen
                 | FieldCell::BreakableBlank
-                | FieldCell::NonBreakingBlank => {}
+                | FieldCell::NonBreakingBlank
+                // A queued one-column drawn SP has the same width as
+                // an ordinary SP in the admitted row (term.c:389–434).
+                | FieldCell::DrawnSpaces(1) => {}
                 FieldCell::FixedDrawingAdvance(width)
                     if *width > 0 && cursor.saturating_add(*width) <= row.len() =>
                 {

@@ -25,7 +25,9 @@ pub(super) fn first_pass(
             RoffInlineEvent::Presentation {
                 kind: PresentationKind::HorizontalLine,
                 argument: Some(argument),
-            } => scratch.line(argument, cell_width, font.current, None),
+            } => {
+                scratch.line(argument, cell_width, font.current, None);
+            }
             RoffInlineEvent::Overstrike { source, .. } => {
                 scratch.overstrike(source, font.current, |_| None);
             }

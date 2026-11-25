@@ -2,6 +2,7 @@
 
 use super::{ReplayDomain, ReplayPass, RoffInlineEvent, TextExecutionContext, motion_columns};
 use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+use crate::mandoc::roff_escape::GlyphInput;
 
 /// A marker followed by authored ink and buffered SP can leave live raw
 /// slots even when the final event is another marker. `term.c::encode1()`
@@ -87,6 +88,237 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
         remaining = left;
     }
     has_space && ink_after_marker
+}
+
+fn starts_with_graphless_break(events: &[RoffInlineEvent]) -> bool {
+    // A graphless NBRZW / LF / ASCII_BREAK prefix contributes no ink to
+    // the prior row. With no native edit, let the established pass
+    // scanner retain the authored separator for the restarted row.
+    // See term.c:281–366 and 394–398.
+    matches!(
+        events,
+        [
+            RoffInlineEvent::ZeroWidthGlyph,
+            RoffInlineEvent::LineBreak,
+            RoffInlineEvent::Breakpoint,
+            ..
+        ]
+    ) && !events.iter().any(|event| {
+        matches!(
+            event,
+            RoffInlineEvent::HorizontalMotion { .. } | RoffInlineEvent::ZeroAdvance
+        )
+    })
+}
+
+/// Bounded `ReplayDomain::Filled` / `ReplayDomain::DefinitionLine` words
+/// containing `\p` (`ESCAPE_BREAK`) can combine `\z` (`ESCAPE_SKIPCHAR`),
+/// `\:` (`ASCII_BREAK`), `\(hy` (`NativeSpecial`), and relative `\h`
+/// (`ESCAPE_HORIZ`) while `term_word()` keeps `tcol->buf` live before
+/// `term_flushln()` (`term.c:559-822`). Reserve worst-case raw slot counts
+/// against `MAX_EDITABLE_APPEND_CELLS` so later rewinds stay addressable.
+pub(super) fn bounded_filled_marked_append(events: &[RoffInlineEvent], initial: usize) -> bool {
+    if starts_with_graphless_break(events) {
+        return false;
+    }
+    let Some(mut remaining) = MAX_EDITABLE_APPEND_CELLS.checked_sub(initial) else {
+        return false;
+    };
+    // A breakable SP on a separately consumed graphless pass is not
+    // the occupied column of the earlier pending backline. Keep that
+    // case in the word path that already projects source row boundaries
+    // (term.c:288–366, 389–436 and 903–909).
+    let mut blank_on_pending_backline = false;
+    let mut marker = false;
+    let mut ink_after_marker = false;
+    let mut has_space = initial != 0;
+    let mut has_authored_space = false;
+    let mut has_motion = false;
+    let mut has_zero_advance = false;
+    let mut armed = false;
+    let mut backbefore = false;
+    for event in events {
+        let count = match event {
+            RoffInlineEvent::Text(text) if is_bounded_native_text(text) => {
+                let spaces = text.bytes().filter(|&byte| byte == b' ').count();
+                let ink = text.len() - spaces;
+                has_space |= spaces != 0;
+                has_authored_space |= spaces != 0;
+                blank_on_pending_backline |= marker && backbefore && spaces != 0 && ink == 0;
+                ink_after_marker |= marker && ink != 0;
+                for byte in text.bytes() {
+                    if byte != b' ' {
+                        backbefore = std::mem::take(&mut armed);
+                        blank_on_pending_backline = false;
+                    }
+                }
+                spaces.saturating_add(ink.saturating_mul(5))
+            }
+            RoffInlineEvent::LineBreak => {
+                if blank_on_pending_backline && backbefore {
+                    return false;
+                }
+                marker = true;
+                1
+            }
+            RoffInlineEvent::ZeroAdvance => {
+                has_zero_advance = true;
+                armed = true;
+                1
+            }
+            RoffInlineEvent::HorizontalMotion {
+                argument: Some(value),
+                ..
+            } => {
+                let Some((false, units)) = motion_columns(value) else {
+                    return false;
+                };
+                has_motion = true;
+                if !std::mem::take(&mut armed) && units != 0 {
+                    backbefore = false;
+                }
+                if units > 0 {
+                    libmandoc_rs::TableColumnMetrics::relative_motion_columns(value)
+                } else {
+                    0
+                }
+            }
+            RoffInlineEvent::NoSpace => {
+                armed = false;
+                0
+            }
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::Link(_) => {
+                0
+            }
+            RoffInlineEvent::ZeroWidthGlyph
+            | RoffInlineEvent::Breakpoint
+            | RoffInlineEvent::NonBreakingWordBlank => 1,
+            RoffInlineEvent::BreakableHyphen => {
+                ink_after_marker |= marker;
+                backbefore = std::mem::take(&mut armed);
+                5
+            }
+            RoffInlineEvent::Glyph(text, source) if is_bounded_native_glyph(text, *source) => {
+                let chars = text.chars().count();
+                ink_after_marker |= marker;
+                backbefore = std::mem::take(&mut armed) && chars == 1;
+                chars.saturating_mul(5)
+            }
+            _ => return false,
+        };
+        let Some(left) = remaining.checked_sub(count) else {
+            return false;
+        };
+        remaining = left;
+    }
+    let ends_with_no_space = matches!(events.last(), Some(RoffInlineEvent::NoSpace));
+    // When an authored space precedes an uncovered trailing BACKBEFORE glyph
+    // without `\c`, leave it to the live word executor so its scalar offset
+    // stays aligned with the word's anchor (`c8c69972`/`4848db03`).
+    marker
+        && (ink_after_marker || has_motion || has_zero_advance && has_native_graph(events))
+        && (has_space || has_motion || has_zero_advance)
+        && (!backbefore || ends_with_no_space || !has_authored_space)
+}
+
+// A graphless arm plus LF has no editable graph. The ordinary word
+// path lets a following .mc retire the native register alongside the
+// occupied field (term.c:233–237, 659–660 and roff_term.c:147–150).
+fn has_native_graph(events: &[RoffInlineEvent]) -> bool {
+    events.iter().any(|event| match event {
+        RoffInlineEvent::Text(text) => text.bytes().any(|byte| byte.is_ascii_graphic()),
+        RoffInlineEvent::BreakableHyphen | RoffInlineEvent::Glyph(_, _) => true,
+        _ => false,
+    })
+}
+
+fn is_bounded_native_text(text: &str) -> bool {
+    text.bytes()
+        .all(|byte| byte.is_ascii_graphic() || byte == b' ')
+}
+
+fn is_bounded_native_glyph(text: &str, source: GlyphInput) -> bool {
+    use super::super::native_writes::is_single_column_ink;
+
+    text == "\u{a0}"
+        || matches!(source, GlyphInput::Codepoint | GlyphInput::NativeSpecial)
+            && !text.is_empty()
+            && text
+                .chars()
+                .all(|ch| ch == '\u{a0}' || is_single_column_ink(ch))
+}
+
+/// Retain native decoration around marked HEAD words even when a
+/// breakpoint or a motion means there are no authored spaces.
+pub(super) fn bounded_definition_marked_head(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    !context.zero_advance.has_annotation_output_owner()
+        && events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::ZeroAdvance))
+        && events.iter().any(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::Breakpoint
+                    | RoffInlineEvent::HorizontalMotion { .. }
+                    | RoffInlineEvent::ZeroWidthGlyph
+            ) || matches!(event, RoffInlineEvent::Glyph(text, _) if text == "\u{a0}")
+        })
+        && !events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::Link(_)))
+        && bounded_filled_marked_append(events, 0)
+}
+
+/// A negative HORIZ followed by a paragraph marker can overwrite a live
+/// decorated byte without itself producing any ink (term.c:659-660, 701-718).
+pub(super) fn bounded_definition_marker_edit(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    let entry = &context.slot_entry;
+    if entry.domain != ReplayDomain::DefinitionLine
+        || entry.kept_blanks
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_annotation_output_owner()
+        || context.defer_leading_blanks
+    {
+        return false;
+    }
+    let Some(prefix) = entry.prefix.as_ref().filter(|prefix| {
+        prefix.start == 0
+            && !prefix.backafter
+            && (!prefix.backbefore || prefix.pending_cell.is_some())
+    }) else {
+        return false;
+    };
+    let Some((
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(argument),
+            ..
+        },
+        tail,
+    )) = events.split_first()
+    else {
+        return false;
+    };
+    if !matches!(tail, [RoffInlineEvent::LineBreak])
+        && !matches!(tail, [RoffInlineEvent::Glyph(text, crate::mandoc::roff_escape::GlyphInput::NativeSpecial), RoffInlineEvent::LineBreak] if text == "‐")
+    {
+        return false;
+    }
+    let Some((false, units @ ..=-1)) = motion_columns(argument) else {
+        return false;
+    };
+    let extent = prefix.raw_slot_count();
+    let retreat = units.unsigned_abs() as usize / 24 + usize::from(prefix.backbefore);
+    units % 24 == 0
+        && extent <= MAX_EDITABLE_APPEND_CELLS
+        && extent
+            .checked_sub(prefix.cursor_retreat.saturating_add(retreat))
+            .is_some_and(|landing| landing < extent.saturating_sub(prefix.automatic))
 }
 
 /// A continued no-fill definition line has not run `term_newln()` yet.
@@ -207,7 +439,7 @@ pub(super) fn control_replay(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
 ) -> ControlReplay {
-    if context.slot_entry.domain != ReplayDomain::Filled
+    if !super::is_filled_line_domain(context.slot_entry.domain)
         || context.zero_advance.has_annotation_output_owner()
         || !context
             .slot_entry

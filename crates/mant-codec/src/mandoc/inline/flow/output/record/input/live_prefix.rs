@@ -182,6 +182,11 @@ impl PrefixEdits {
     pub(super) fn retains_blank(&self, cell: usize) -> bool {
         self.gaps.retained_before_incoming == Some(cell)
             || self
+                .gaps
+                .retained_ranges
+                .iter()
+                .any(|range| range.contains(&cell))
+            || self
                 .retained_blanks
                 .iter()
                 .any(|&(position, _, _)| position == cell)
@@ -418,6 +423,7 @@ struct GapEdits {
     remove: BTreeMap<String, GapRemoval>,
     relocate: BTreeMap<usize, GapLanding>,
     retained_before_incoming: Option<usize>,
+    retained_ranges: Vec<std::ops::Range<usize>>,
 }
 
 struct GapLanding {
@@ -451,6 +457,7 @@ fn rebase_earlier_words(
     let GapOverlay(positions, _, _, _) = overlay;
     let first_touched = earlier.partition_point(|owner| owner.content < start);
     let mut gaps = GapEdits::default();
+    let incoming_start = word_start_after_overlay(positions, start, first_incoming);
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
         if let Some(old) = owner.projected_gap_cell()
             && let Some(offset) = old
@@ -470,6 +477,12 @@ fn rebase_earlier_words(
             let Some(offset) = index.checked_sub(start) else {
                 return index;
             };
+            if offset >= positions.len() {
+                // A zero-width source word at the old endpoint must
+                // precede the incoming word's anchor, not its first
+                // painted graph following a separator or decoration.
+                return incoming_start;
+            }
             positions
                 .get(offset..)
                 .and_then(|suffix| suffix.iter().find_map(|cell| *cell))
@@ -541,6 +554,13 @@ impl GapEdits {
             // This native slot still has its earlier geometry marker.
             // term_field() releases the blank only once before new ink.
             self.retained_before_incoming = self.retained_before_incoming.max(Some(cell));
+            self.retained_ranges.push(
+                owner
+                    .projected_gap
+                    .motion_span
+                    .clone()
+                    .unwrap_or(cell..cell + 1),
+            );
             if lost_columns == 0 {
                 return;
             }
@@ -680,6 +700,35 @@ fn infer_gap_landing(
             break;
         }
         lost_columns = lost_columns.saturating_add(width);
+    }
+    if landing.is_none() && buffer.has_deferred_blank_at(start + offset) {
+        // When `projected_gap` points at a deferred blank whose run had an
+        // earlier non-deferred blank immediately to its left, keep the gap
+        // anchored on that surviving blank instead of dropping it
+        // (`term.c:389-442`).
+        for source in (0..offset).rev() {
+            let width = match buffer.cells()[start + source] {
+                FieldCell::DrawnSpaces(width) | FieldCell::FixedDrawingAdvance(width) => width,
+                FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => 1,
+                _ => break,
+            };
+            if buffer.has_deferred_blank_at(start + source) {
+                continue;
+            }
+            if locations[source].is_some_and(|(index, _, _)| index != owner_index) {
+                continue;
+            }
+            if let Some(&(cell, kept)) = retained_advances.get(&(start + source)) {
+                lost_columns = lost_columns.saturating_add(width.saturating_sub(kept));
+                landing = Some((source, cell));
+                break;
+            }
+            if let Some(cell) = positions[source] {
+                landing = Some((source, cell));
+                break;
+            }
+            lost_columns = lost_columns.saturating_add(width);
+        }
     }
     if landing.is_some_and(|(_, cell)| cell >= first_incoming) {
         // term_field() queues one run before a graph. Some consumed

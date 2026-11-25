@@ -507,6 +507,7 @@ impl FieldBuffer {
                         FieldCell::BreakableBlank
                             | FieldCell::ZeroWidthGraph
                             | FieldCell::Breakpoint
+                            | FieldCell::Hyphen
                     ) || matches!(cell, FieldCell::BreakMarker) && index + 1 == self.cells.len()
                         || matches!(
                             cell,
@@ -518,7 +519,11 @@ impl FieldBuffer {
             if complete_fresh_word {
                 if matches!(
                     self.cells.last(),
-                    Some(FieldCell::BreakableBlank | FieldCell::ZeroWidthGraph)
+                    Some(
+                        FieldCell::BreakableBlank
+                            | FieldCell::ZeroWidthGraph
+                            | FieldCell::BreakMarker
+                    )
                 ) {
                     self.hold_editable_passes();
                 }

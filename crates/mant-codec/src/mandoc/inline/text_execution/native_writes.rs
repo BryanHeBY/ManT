@@ -54,6 +54,7 @@ impl AppendedFonts {
                 )
                 | FieldWrite::UnprojectedBlank
                     if !self.pending => {}
+                FieldWrite::MotionPadding { .. } if !self.pending && !self.armed => {}
                 FieldWrite::DeferredBlanks { count, .. } if !self.pending => {
                     self.cells += *count;
                     continue;

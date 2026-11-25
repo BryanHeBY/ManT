@@ -127,3 +127,91 @@ fn generated_words_consume_every_pending_and_held_cell_state() {
     }
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
+
+#[test]
+fn inset_head_paragraph_marker_overwrites_only_addressed_raw_slots() {
+    // Frozen UTF-8 reference rows from pristine CVS mandoc. Both inline
+    // words execute in It HEAD; the following .br/.Pp performs the first
+    // real flush. The glyphs overwritten by LF must not leak into output.
+    let cases: &[(&str, &str, &str, &[&str])] = &[
+        (r"\zC\p\:J", "-2n", "br", &["C", "", "X"]),
+        (r"\:\zC\pJ", "-2n", "br", &["", "X"]),
+        (r"\zC\h'1n'\pJJ", "-2n", "Pp", &["CJ", "", "X"]),
+        // These negative controls land on the separator or append at
+        // lastcol; neither should erase J.
+        (r"\zC\pJ", "-1n", "br", &["J", "X"]),
+        (r"\zC\pJ", "0n", "br", &["J", "", "X"]),
+        (r"\zC\pJ", "|1n", "br", &["_J", "X"]),
+        (r"\zC\pJ", "|0n", "br", &["J", "X"]),
+    ];
+    for (head, retreat, flush, expected) in cases {
+        let source = format!(
+            ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n\
+             .Sh DESCRIPTION\n.Bl -inset\n.It Em \"{head}\" No \"\\h'{retreat}'\\p\"\n\
+             .{flush}\n.No X\n.El\n.Sh NEXT\nDone.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut rows = body_rows(&mant_render::render_query_man(&query));
+        while rows.last().is_some_and(String::is_empty) {
+            rows.pop();
+        }
+        assert_eq!(&rows, expected, "{source}");
+    }
+}
+
+#[test]
+fn inset_head_marker_replay_keeps_decoded_controls_and_fonts() {
+    // A lowercase escaped first word is literal to the mdoc parser; its
+    // authored separator and the quoted argument share one term_word().
+    // CVS UTF-8 fixtures also cover NBSP, an arm before SP, and a hyphen
+    // whose single native slot is written before the paragraph marker.
+    let cases: &[(&str, &str, &[&str])] = &[
+        (
+            r#"\~m "\zC\h'1n'\pJ" No "\h'-2n'\p""#,
+            ".Pp\n.No X",
+            &["m C", "", "X"],
+        ),
+        (
+            r#"\:Em "\zCC\pJ" No "\h'-2n'\p""#,
+            ".br\n.No Z",
+            &["Em C", "Z"],
+        ),
+        (
+            r#"Em "\z C\:\pJJ" No "\h'-2n'\p""#,
+            ".br\n.No X",
+            &["J", "X"],
+        ),
+        (
+            r#"E\&m "\zC\p\h'1n'J" No "\h'-2n'\p""#,
+            ".Pp\n.No X",
+            &["Em C", "", "X"],
+        ),
+        (
+            r#"Em "\z\0C\p\p\:J" No "\h'-2n'\p""#,
+            ".Bd -literal\n.No X\n.Ed",
+            &["C", "", "", "X"],
+        ),
+        (
+            r#"\h'-1n'm "\zC\pJ" No "\h'-2n'\(hy\p""#,
+            ".br\n.No X",
+            &["m ‐", "X"],
+        ),
+        (
+            r#"\(hyEm "\z\h'-1n'C\pJ" No "\h'-2n'\p""#,
+            ".br\n.No X",
+            &["‐Em C", "X"],
+        ),
+    ];
+    for (head, body, expected) in cases {
+        let source = format!(
+            ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field probe\n\
+             .Sh DESCRIPTION\n.Bl -inset\n.It {head}\n{body}\n.El\n.Sh NEXT\nDone.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut rows = body_rows(&mant_render::render_query_man(&query));
+        while rows.last().is_some_and(String::is_empty) {
+            rows.pop();
+        }
+        assert_eq!(&rows, expected, "{source}");
+    }
+}

@@ -4,7 +4,11 @@ use std::{collections::BTreeMap, ops::Range};
 
 use super::{FieldBuffer, FieldCell, FieldWrite, FillBoundary, WriteCursor};
 
-pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 64;
+// Bound native replay by raw slots, not visible columns. encode1()
+// can use up to five slots per styled glyph (term.c:903–929); a short
+// marked definition word with up to 32 such glyphs must remain
+// editable until the following HORIZ can edit its tail.
+pub(super) const MAX_REPLAY_PREFIX_CELLS: usize = 32 * 5;
 
 pub(in crate::mandoc::inline::flow) struct RetainedMotionGap {
     pub(in crate::mandoc::inline::flow) marker: usize,
@@ -186,17 +190,25 @@ impl FieldBuffer {
         };
         // A completed word followed by \p and an authored blank under
         // BACKAFTER can still be overwritten from the pending glyph's
-        // cursor. Keep that one boundary live until term_flushln().
-        if writes[..marker].iter().any(|write| {
+        // cursor, whether the prior graph was written in this word or an
+        // earlier bounded word in `tcol->buf` (`term.c:659-660, 701-718`).
+        let has_prior_graph = writes[..marker].iter().any(|write| {
             matches!(
                 write,
                 FieldWrite::Cell(FieldCell::Graph { .. } | FieldCell::Hyphen)
             )
-        }) && let [
-            FieldWrite::ArmBackafter,
-            FieldWrite::DeferredBlanks { .. },
-            tail @ ..,
-        ] = &writes[marker + 1..]
+        }) || self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+            && self.break_markers.first().is_some_and(|&pos| {
+                self.cells[..pos]
+                    .iter()
+                    .any(|cell| matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen))
+            });
+        if has_prior_graph
+            && let [
+                FieldWrite::ArmBackafter,
+                FieldWrite::DeferredBlanks { .. },
+                tail @ ..,
+            ] = &writes[marker + 1..]
             && !tail.iter().any(FieldWrite::is_break_marker)
         {
             self.hold_editable_passes();
@@ -448,7 +460,7 @@ impl FieldBuffer {
         if live_replay
             && self.resume == 0
             && self.projected_pass_ends.is_empty()
-            && self.raw_edit_fence == 0
+            && self.raw_slot_fence == 0
             && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
         {
             0

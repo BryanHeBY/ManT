@@ -82,6 +82,7 @@ impl<'a> PlacedWord<'a> {
             &mut slots,
             &mut reading,
             earlier,
+            prefix_start == 0,
             word_owner,
             advances,
             replaced_advance_marker,
@@ -949,6 +950,7 @@ fn append_range(
                         slot.cell,
                         FieldCell::BreakableBlank
                             | FieldCell::NonBreakingBlank
+                            | FieldCell::FixedDrawingAdvance(1)
                             | FieldCell::Graph {
                                 text: '\u{a0}',
                                 width: 1
@@ -1040,6 +1042,7 @@ mod tests {
             links: Vec::new(),
             active_link: None,
             marker_after_blank: false,
+            drew_space: false,
             reposition: None,
             retreated: false,
             pre_column_retreat_units: 0,

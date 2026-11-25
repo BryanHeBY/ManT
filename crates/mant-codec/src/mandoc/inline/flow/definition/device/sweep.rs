@@ -29,6 +29,7 @@ struct PresentedPass {
     placement: super::super::super::presentation::FieldPlacement,
     width: usize,
     margin: i64,
+    unprojected_brind_columns: i32,
 }
 
 impl InlineBuilder {
@@ -74,6 +75,7 @@ impl InlineBuilder {
             sweep.printed_row.is_some(),
         );
         let mut vfield = placement.capacity(rmargin);
+        let mut unprojected_brind_columns = 0;
         let mut width = 0;
         let mut width_units = 0;
         let mut tab_offset = state.field_buffer.tab_offset();
@@ -101,6 +103,7 @@ impl InlineBuilder {
                     placement,
                     width: width_units,
                     margin: if no_break { i64::MAX / 2 } else { rmargin },
+                    unprojected_brind_columns,
                 },
                 resumed,
             );
@@ -111,6 +114,26 @@ impl InlineBuilder {
                 .saturating_add(24);
             if index < loop_ends {
                 row_origin_units = end_native_loop_pass(&mut sweep, pass, state, flags, rmargin);
+                // term.c:217-228: even a pass whose only graph was NBRZW
+                // runs endline and restarts at the BRIND right margin.
+                // Printed passes have existing reading seams, but the
+                // deferred empty pass supplies no origin through its ink.
+                unprojected_brind_columns = if flags.contains(FieldFlag::Brind)
+                    && pass.boundary == FillBoundary::WordEndBreak
+                    && !state.field_buffer.has_projected_pass(pass.end)
+                    && sweep.loop_rows.last().is_some_and(|row| !row.printed)
+                {
+                    let nominal = i64::try_from(state.field_offset_units).unwrap_or(i64::MAX);
+                    i32::try_from(
+                        rmargin
+                            .saturating_sub(nominal)
+                            .saturating_add(11)
+                            .div_euclid(24),
+                    )
+                    .unwrap_or(i32::MAX)
+                } else {
+                    0
+                };
                 placement =
                     sweep
                         .presentation
@@ -160,6 +183,9 @@ impl InlineBuilder {
             let mut hint = sweep
                 .presentation
                 .hint_at_signed(self.execution.text_alignment, pass.print.origin_units);
+            hint.indent_columns = hint
+                .indent_columns
+                .saturating_add(pass.unprojected_brind_columns);
             hint.first_line_indent_columns =
                 hint.first_line_indent_columns
                     .saturating_add(self.fresh_row_leading_advance(

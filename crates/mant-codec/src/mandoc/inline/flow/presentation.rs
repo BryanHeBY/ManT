@@ -309,15 +309,21 @@ pub(super) fn pass_receipt(
     if hint.is_empty() {
         return None;
     }
-    let graph = (start..end).find(|cell| {
+    let is_graph = |cell: usize| {
         matches!(
-            buffer.cells().get(*cell),
+            buffer.cells().get(cell),
             Some(
                 super::field_buffer::FieldCell::Graph { .. }
                     | super::field_buffer::FieldCell::Hyphen
             )
         )
-    })?;
+    };
+    // Prefer the first graph that still projects a reading scalar so a covered
+    // unpublished BACKBEFORE glyph at `start` (`projection_length == 0`) does
+    // not precede the first surviving word anchor (`term.c:389-434, 903-929`).
+    let graph = (start..end)
+        .find(|&cell| is_graph(cell) && buffer.projection_length(cell, cell + 1) > 0)
+        .or_else(|| (start..end).find(|&cell| is_graph(cell)))?;
     let anchor = anchors.get(
         anchors
             .partition_point(|anchor| anchor.content <= graph)

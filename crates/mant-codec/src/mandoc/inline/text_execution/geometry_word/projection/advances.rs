@@ -12,6 +12,7 @@ pub(super) fn prepare_reading_blanks(
     slots: &mut Vec<FillSlot>,
     reading: &mut Vec<ReadingCell<'_>>,
     earlier: usize,
+    starts_at_field_origin: bool,
     word_owner: Option<u64>,
     advances: AdvanceReading,
     advance_marker: Option<usize>,
@@ -32,14 +33,22 @@ pub(super) fn prepare_reading_blanks(
         }
         AdvanceReading::DeferredBlankTail => {
             if let Some(owner) = word_owner {
-                defer_trailing_advances(slots, reading, owner, 0, true);
+                let replayable_tail = !slots.iter().any(|slot| slot.cell == FieldCell::BreakMarker);
+                defer_trailing_advances(slots, reading, owner, 0, replayable_tail);
             }
         }
         AdvanceReading::Unprojected => {}
     }
     let advance =
         advance_marker.and_then(|marker| split_buffered_advance(slots, reading, earlier, marker));
-    defer_retained_separator_advances(slots, reading, earlier, word_owner, advance.as_ref());
+    defer_retained_separator_advances(
+        slots,
+        reading,
+        earlier,
+        starts_at_field_origin,
+        word_owner,
+        advance.as_ref(),
+    );
 }
 
 /// `term_fill()` (`term.c:288-302, 363-366`) and `term_field()` (`term.c:389-428`)
@@ -71,14 +80,21 @@ fn defer_inner_trailing_advances(
             width = width.saturating_add(slot.count);
             true
         } else {
-            slot.owner.is_none()
-                && matches!(
-                    slot.cell,
-                    FieldCell::BreakMarker
-                        | FieldCell::Breakpoint
-                        | FieldCell::ZeroWidthGraph
-                        | FieldCell::TabReference
-                )
+            // Replayed zero-width controls and unpaired backlines carry no
+            // advance, and trailing `SP` after the last ink is also queued
+            // without printing trailing `ASCII_NBRSP` advances (`term.c:389-428`).
+            matches!(slot.cell, FieldCell::BreakableBlank)
+                || slot
+                    .owner
+                    .is_none_or(|id| matches!(reading[id].glyph, ReadingGlyph::Earlier(0)))
+                    && matches!(
+                        slot.cell,
+                        FieldCell::Backline
+                            | FieldCell::BreakMarker
+                            | FieldCell::Breakpoint
+                            | FieldCell::ZeroWidthGraph
+                            | FieldCell::TabReference
+                    )
         }
     });
     if eligible && (1..=MAX_EDITABLE_APPEND_CELLS).contains(&width) {
@@ -206,6 +222,7 @@ fn defer_retained_separator_advances(
     slots: &mut [FillSlot],
     reading: &mut Vec<ReadingCell<'_>>,
     earlier: usize,
+    starts_at_field_origin: bool,
     word_owner: Option<u64>,
     advance: Option<&Range<usize>>,
 ) {
@@ -268,13 +285,18 @@ fn defer_retained_separator_advances(
             if let Some(owner) = incoming_ink(&slots[next_ink], reading, earlier) {
                 break Some(owner);
             }
-            if motion.advance_source.is_some()
-                && !motion.drawing_advance
+            if !motion.drawing_advance
                 && reading_ink(&slots[next_ink], reading).is_some_and(|owner| owner < earlier)
-                && continues_owned_advance(slots, reading, earlier, index, next_ink..ink_end)
+                && (motion.advance_source.is_some()
+                    && is_isolated_owned_advance(slots, reading, index, next_ink)
+                    || starts_at_field_origin
+                        && !slots[..index]
+                            .iter()
+                            .any(|slot| reading_ink(slot, reading).is_some()))
             {
-                // term_field() releases the advance at the first printable
-                // slot, which can still belong to an earlier operand.
+                // term_field() (`term.c:389-428`) releases a leading advance
+                // or a single already-owned advance at the first surviving
+                // earlier printable glyph, not at a later incoming glyph.
                 break None;
             }
             next_ink += 1;
@@ -302,17 +324,16 @@ fn defer_retained_separator_advances(
     }
 }
 
-fn continues_owned_advance(
+fn is_isolated_owned_advance(
     slots: &[FillSlot],
     reading: &[ReadingCell<'_>],
-    earlier: usize,
     advance: usize,
-    following: Range<usize>,
+    next_ink: usize,
 ) -> bool {
-    // term_field() flushes all adjacent advances together. Retain this
-    // already-projected single advance only if it still precedes the same
-    // contiguous ink. Compound advances, another separator, or a
-    // backspace still need their own accepted output coordinates.
+    // term_field() flushes all adjacent advances together (`term.c:389-428`).
+    // Retain this already-projected single advance only when it is not part
+    // of a compound advance run and the earlier glyph that releases it is not
+    // immediately covered by a following backspace.
     let another_advance = |slot: &FillSlot| {
         slot.advance_source.is_some()
             || matches!(slot.cell, FieldCell::NonBreakingBlank | FieldCell::Tab)
@@ -321,21 +342,11 @@ fn continues_owned_advance(
         .iter()
         .rev()
         .take_while(|slot| reading_ink(slot, reading).is_none())
-        .chain(slots[advance + 1..following.start].iter())
+        .chain(slots[advance + 1..next_ink].iter())
         .any(another_advance)
-        && slots[following]
-            .iter()
-            .take_while(|slot| {
-                !matches!(
-                    slot.cell,
-                    FieldCell::BreakableBlank
-                        | FieldCell::NonBreakingBlank
-                        | FieldCell::Tab
-                        | FieldCell::BreakMarker
-                        | FieldCell::Backline
-                )
-            })
-            .any(|slot| incoming_ink(slot, reading, earlier).is_some())
+        && slots
+            .get(next_ink + 1)
+            .is_none_or(|slot| slot.cell != FieldCell::Backline)
 }
 
 fn advance_between_replayed_glyphs(
@@ -461,6 +472,16 @@ fn collect_inner_advances(
                 true
             }
             Some(owner) if matches!(reading[owner].glyph, ReadingGlyph::Scalar(' ')) => true,
+            // A traversed deferred NBRSP already has a claim on the
+            // accepted row. Allow new motion beside it without copying or
+            // swallowing its existing claim (term.c:389–428, 860–872).
+            Some(owner)
+                if gap.owned_deferred_blank
+                    && gap.cell == FieldCell::NonBreakingBlank
+                    && matches!(reading[owner].glyph, ReadingGlyph::Earlier(0)) =>
+            {
+                true
+            }
             Some(owner)
                 if matches!(reading[owner].glyph, ReadingGlyph::Earlier(0))
                     && !gap.owned_deferred_blank

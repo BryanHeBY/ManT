@@ -204,6 +204,7 @@ pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) automatic_blanks: usize,
     pub(in crate::mandoc::inline) kept_blanks: bool,
     pub(in crate::mandoc::inline) trailing_tab_reference: bool,
+    pub(in crate::mandoc::inline) definition_row_occupied: bool,
     pub(in crate::mandoc::inline) retreat_blanks: usize,
     pub(in crate::mandoc::inline) device_tail: Option<DeviceTail>,
     pub(in crate::mandoc::inline) prefix: Option<FieldPrefix>,
@@ -494,6 +495,28 @@ impl NativeSlots {
         self.cursor < self.extent
     }
 
+    /// Whether `self.cursor` currently points at an existing blank cell in
+    /// `tcol->buf` (`term.c:946-955`: `bufferc(' ')` at `col < lastcol` only
+    /// preserves a blank when the traversed byte itself is a blank).
+    pub(in crate::mandoc::inline) fn cursor_at_blank(&self) -> bool {
+        self.cursor < self.extent
+            && self
+                .runs
+                .range(..=self.cursor)
+                .next_back()
+                .filter(|&(_, run)| self.cursor < run.end)
+                .is_some_and(|(&start, run)| {
+                    matches!(
+                        run.pattern.cell(self.cursor - start),
+                        FieldCell::BreakableBlank
+                            | FieldCell::NonBreakingBlank
+                            | FieldCell::Tab
+                            | FieldCell::DrawnSpaces(_)
+                            | FieldCell::FixedDrawingAdvance(_)
+                    )
+                })
+    }
+
     pub(in crate::mandoc::inline) fn has_break_marker(&self) -> bool {
         self.runs
             .values()
@@ -739,8 +762,11 @@ impl NativeSlots {
                 let available = self.cursor.saturating_sub(backbefore).saturating_mul(EN);
                 effect.before_origin_units = units.saturating_sub(available);
             }
+            // term.c:701-718: clamping p->col to 0 still retreats p->col below
+            // p->tcol->lastcol; record RelativeRetreat whenever cursor moved left.
+            let previous_cursor = self.cursor;
             self.cursor = self.cursor.saturating_sub(retreat);
-            if !absolute && within_slots && retreat > 0 {
+            if !absolute && self.cursor < previous_cursor {
                 effect.reposition = Some(CursorReposition::RelativeRetreat);
             }
         }
@@ -753,9 +779,9 @@ impl NativeSlots {
         cell_width: usize,
         font: RoffFont,
         owner: Option<usize>,
-    ) {
+    ) -> bool {
         let Some(stroke) = horizontal_line_stroke(argument, cell_width) else {
-            return;
+            return false;
         };
         let count = stroke.count;
         let cell = match stroke.glyph {
@@ -793,6 +819,7 @@ impl NativeSlots {
                 );
             }
         }
+        count != 0 && stroke.glyph == ' '
     }
 
     pub(in crate::mandoc::inline) fn overstrike(

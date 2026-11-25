@@ -207,10 +207,18 @@ impl FieldBuffer {
                     passes,
                     native_cells: std::mem::take(&mut scan.cells),
                     rejected_from: scan.resume_offset(),
-                    definitive: scan
-                        .scan
-                        .as_ref()
-                        .is_some_and(|scanner| scanner.stopped.is_some()),
+                    definitive: scan.scan.as_ref().is_some_and(|scanner| {
+                        // A live write cursor before `scanned_end` (including a
+                        // pending BACKBEFORE retreat) can still overwrite the
+                        // rejecting break/blank in a later term_word() before
+                        // term_flushln() runs (`term.c:143-146, 281-366, 659-718`).
+                        scanner.stopped.is_some()
+                            && self.cells.len().saturating_sub(
+                                self.write_cursor
+                                    .retreat()
+                                    .saturating_add(usize::from(self.backbefore_armed)),
+                            ) >= scanner.scanned_end
+                    }),
                 };
             };
             passes.push(pass);

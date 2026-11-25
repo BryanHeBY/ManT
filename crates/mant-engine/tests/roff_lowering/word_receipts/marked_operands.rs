@@ -1671,3 +1671,62 @@ fn wave4e_cross_review_structural_run_in_rejections_and_expanded_tails() {
         "{readback_rendered}\n{markdown}"
     );
 }
+
+#[test]
+fn filled_markers_preserve_an_inherited_backafter_pair_until_flush() {
+    // A trailing \z arms the next source word, not the preceding glyph.
+    // The first \p is unencoded, so the following graph still consumes
+    // BACKBEFORE. The later HORIZ may edit that suffix before it prints.
+    let cases = [
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K\z" Ns No "F\pG\p\c" Ns Em "\h'-4n'X ""#,
+            "A   KFX",
+        ),
+        (
+            r#".Sy "A" Ns Sy "\z\h'-1n'\h'1n' K\z" Ns No "F\pG\p\c" No "\h'-4n'X""#,
+            "A  KFG",
+        ),
+        (
+            r#".Sy "A" Ns No "\z\h'-1n'\h'1n' K\z" Ns No " F\pG\p\c" Sy "\h'-4n'X ""#,
+            "A  K FX",
+        ),
+        (
+            r#".Em "A" Sy "\z\h'-1n'\h'1n'\z" Ns No "F\pG\p\c" Em "\h'-4n'X\fP""#,
+            "A  FX",
+        ),
+        (
+            r#".Sy "A" Em "\z\h'-1n'\h'1n' K" Ns No "F\pG\p\c" Ns Em "\h'-4n'X ""#,
+            "A   KX",
+        ),
+    ];
+    for (case, expected) in cases {
+        let source = format!("{HEADER}{case}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE").unwrap();
+        assert_eq!(body.trim(), expected, "{source}\n{rendered}");
+    }
+}
+
+#[test]
+fn filled_origin_overwrite_does_not_assign_the_entry_blank_to_the_preceding_word() {
+    // The zero-ink operand ends at the preceding owner's raw endpoint.
+    // The following word starts before its first decorated graph, and the
+    // endpoint anchor must not jump ahead of it. Both a retreat to column
+    // zero and an overshooting retreat overwrite A while preserving F/G.
+    let cases = [
+        r#".Em "A\h'-1n'" Em "\z\h'-1n'\h'-1n'\h'1n'" Em "F\p\h'-1n'G\p\h'-1n'\c" Em "\h'-10n'X""#,
+        r#".Em "A\h'-2n'" No "\z\h'-10n'\h'1n'" No "F\fP\p\h'-1n'G\fP\p\h'-1n'\c" Em "\h'-10n'X""#,
+    ];
+    for case in cases {
+        let source = format!("{HEADER}{case}\n{END}");
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let (_, body) = rendered.split_once("CASE0CASE\n").unwrap();
+        let (body, _) = body.split_once("CASE999CASE").unwrap();
+        assert_eq!(body.trim(), "X FG", "{source}\n{rendered}");
+    }
+}

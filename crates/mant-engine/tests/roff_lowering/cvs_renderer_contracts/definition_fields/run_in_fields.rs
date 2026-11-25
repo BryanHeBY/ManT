@@ -159,8 +159,9 @@ fn no_break_field_preserves_formatter_word_order_for_empty_fixed_and_zero_width_
 
 #[test]
 fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
-    // These twenty exact sources ran registered pristine in all five
-    // profiles first. roff_term_pre_mc() clears NOSPACE after retirement;
+    // The exact sources match pinned ASCII and UTF-8; font controls
+    // leave BACKAFTER set without writing a glyph (term.c:639-660).
+    // roff_term_pre_mc() clears NOSPACE after retirement;
     // term_word() writes each empty operand's distinct automatic blank
     // (term.c:573-589). Deferred minbl and buffered blanks have different
     // ownership, including when the first field printed no graph.
@@ -168,6 +169,7 @@ fn invisible_formatter_fields_still_own_their_empty_word_boundary() {
         ("zero-width", r"\&"),
         ("word-end-break", r"\p"),
         ("zero-advance-break", r"\z\p"),
+        ("zero-advance-font-break", r"\z\fB\p"),
         ("visible", "A"),
     ] {
         for (middle, spaces) in [

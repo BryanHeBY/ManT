@@ -192,12 +192,11 @@ impl super::InlineExecutionState {
             } => true,
             _ => false,
         });
-        // Any non-canceled relative negative HORIZ can retreat into the live
-        // field suffix after writing earlier cells in the same word
-        // (term.c:678-682, 701-718). Positive non-canceled relative HORIZ
-        // extends a filled prefix without pending break markers.
+        // Any non-canceled relative negative or absolute HORIZ can reposition
+        // p->col inside the live field suffix (term.c:678-682, 683-718).
+        // Positive non-canceled relative HORIZ extends a filled prefix.
         let mut armed = self.zero_advance.is_armed();
-        let mut has_negative_motion = false;
+        let mut has_cursor_reposition = false;
         let mut has_positive_motion = false;
         for event in events {
             match event {
@@ -210,8 +209,10 @@ impl super::InlineExecutionState {
                     if std::mem::take(&mut armed) {
                         continue;
                     }
-                    if negative_entry_columns(argument.as_deref()).is_some() {
-                        has_negative_motion = true;
+                    if argument.as_deref().is_some_and(|arg| arg.starts_with('|'))
+                        || negative_entry_columns(argument.as_deref()).is_some()
+                    {
+                        has_cursor_reposition = true;
                     } else if let Some(argument) = argument.as_deref()
                         && !argument.starts_with('|')
                         && libmandoc_rs::TableColumnMetrics::relative_motion_columns(argument) > 0
@@ -250,7 +251,7 @@ impl super::InlineExecutionState {
         } else {
             PrefixExtension::None
         };
-        self.native_slot_entry(capture_prefix || pending, extend, has_negative_motion)
+        self.native_slot_entry(capture_prefix || pending, extend, has_cursor_reposition)
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {
