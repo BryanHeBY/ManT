@@ -130,20 +130,50 @@ impl MarkerCursor<'_> {
     }
 }
 
-fn has_marks(nodes: &[Inline]) -> bool {
+pub(in crate::mandoc::inline::flow) fn is_shared_mark(node: &Inline) -> bool {
+    matches!(node, Inline::Anchor { id, .. } if id.as_str().strip_prefix(ORDER).is_some_and(|fields| fields.starts_with('s')))
+}
+
+pub(in crate::mandoc::inline::flow) fn discard_shared(nodes: &mut Vec<Inline>) {
+    nodes.retain_mut(|node| {
+        if is_shared_mark(node) {
+            return false;
+        }
+        if let Some(children) = children(node) {
+            discard_shared(children);
+        }
+        true
+    });
+}
+
+fn has_marks(nodes: &[Inline], shared: bool) -> bool {
     nodes.iter().any(|node| match node {
-        Inline::Anchor { id, .. } => id.as_str().starts_with(ORDER),
+        Inline::Anchor { id, .. } => {
+            id.as_str().starts_with(ORDER) && is_shared_mark(node) == shared
+        }
         Inline::Strong { children }
         | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => has_marks(children),
+        | Inline::Link { children, .. } => has_marks(children, shared),
         _ => false,
     })
 }
 
 pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
-    if !has_marks(nodes) {
-        return;
+    if has_marks(nodes, false) {
+        apply_partitions(nodes, None);
     }
+}
+
+pub(in crate::mandoc::inline::flow) fn apply_shared(
+    head: &mut Vec<Inline>,
+    body: &mut Vec<Inline>,
+) {
+    if has_marks(head, true) && has_marks(body, true) {
+        apply_partitions(head, Some(body));
+    }
+}
+
+fn apply_partitions(nodes: &mut Vec<Inline>, mut body: Option<&mut Vec<Inline>>) {
     let mut scopes = Vec::new();
     let mut leaves = Vec::new();
     flatten(
@@ -152,6 +182,19 @@ pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
         &mut Vec::new(),
         &mut leaves,
     );
+    let shared = body.is_some();
+    if let Some(body) = body.as_deref_mut() {
+        let first_body_leaf = leaves.len();
+        flatten(
+            std::mem::take(body),
+            &mut scopes,
+            &mut Vec::new(),
+            &mut leaves,
+        );
+        for leaf in &mut leaves[first_body_leaf..] {
+            leaf.body = true;
+        }
+    }
     let mut groups = BTreeMap::<String, Vec<Position>>::new();
     let mut markers = Vec::new();
     let mut row = 0;
@@ -160,7 +203,12 @@ pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
         if let Inline::Anchor { id, .. } = node
             && let Some(fields) = id.as_str().strip_prefix(ORDER)
         {
-            markers.extend(parse_mark(fields));
+            let shared_fields = fields.strip_prefix('s');
+            if shared_fields.is_some() == shared {
+                markers.extend(parse_mark(shared_fields.unwrap_or(fields)));
+            } else {
+                leaves.push(leaf);
+            }
             continue;
         }
         let index = leaves.len();
@@ -205,17 +253,34 @@ pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
             }
         }
     }
+    rebuild_partitions(leaves, &scopes, &moved, nodes, body);
+}
+
+fn rebuild_partitions(
+    leaves: Vec<Leaf>,
+    scopes: &[Inline],
+    moved: &[bool],
+    nodes: &mut Vec<Inline>,
+    mut body: Option<&mut Vec<Inline>>,
+) {
     let mut open = Vec::<(usize, Vec<Inline>)>::new();
+    let mut roots = nodes;
+    let mut left_head = false;
     for leaf in leaves {
+        if leaf.body && !left_head {
+            close_scopes(&mut open, scopes, moved, roots, 0);
+            roots = body.take().expect("BODY projection destination");
+            left_head = true;
+        }
         let Some(node) = leaf.node else { continue };
         let shared = open
             .iter()
             .zip(&leaf.path)
             .take_while(|((left, _), right)| left == *right)
             .count();
-        close_scopes(&mut open, &scopes, &moved, nodes, shared);
+        close_scopes(&mut open, scopes, moved, roots, shared);
         open.extend(leaf.path[shared..].iter().map(|&id| (id, Vec::new())));
-        let target = output(&mut open, nodes);
+        let target = output(&mut open, roots);
         if let Some((owner, restore)) = leaf.owner_change {
             target.push(Inline::anchor(format!("{INTERNAL_FIELD_WORD}{owner}")));
             target.push(node);
@@ -224,12 +289,17 @@ pub(in crate::mandoc::inline::flow) fn apply(nodes: &mut Vec<Inline>) {
             target.push(node);
         }
     }
-    close_scopes(&mut open, &scopes, &moved, nodes, 0);
+    close_scopes(&mut open, scopes, moved, roots, 0);
 }
 
 fn is_word_metadata(node: &Inline) -> bool {
     matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(INTERNAL_FIELD_WORD)
-        || id.as_str().starts_with(INTERNAL_FIELD_PREFIX))
+        || id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
+        || is_shared_mark(node)
+        // Unprinted deferred-blank anchors and retired placeholders emit zero
+        // columns and stay on the same physical row (`term.c:389-436`).
+        || id.as_str().starts_with("\0mant:output-scope:deferred-blank:")
+        || id.as_str() == "\0mant:output-scope:retired-blank")
 }
 
 fn is_transparent(node: &Inline) -> bool {
@@ -277,7 +347,10 @@ fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) -> b
     if ink.count() != group.len() {
         return false;
     }
-    let destinations: Vec<_> = group.iter().map(|pos| (pos.index, pos.owner)).collect();
+    let destinations: Vec<_> = group
+        .iter()
+        .map(|pos| (pos.index, pos.owner, leaves[pos.index].body))
+        .collect();
     group.sort_unstable_by_key(|pos| pos.rank);
     if !group.iter().enumerate().all(|(rank, pos)| rank == pos.rank) {
         return false;
@@ -286,7 +359,9 @@ fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) -> b
         .iter()
         .map(|pos| std::mem::take(&mut leaves[pos.index]))
         .collect();
-    for (((index, owner), position), mut leaf) in destinations.into_iter().zip(group).zip(payload) {
+    for (((index, owner, body), position), mut leaf) in
+        destinations.into_iter().zip(group).zip(payload)
+    {
         if index != position.index {
             for &scope in &leaf.path {
                 moved[scope] = true;
@@ -297,6 +372,7 @@ fn reorder(leaves: &mut [Leaf], group: &mut [Position], moved: &mut [bool]) -> b
             // Associate the moved glyph with its own source word there too.
             leaf.owner_change = Some((position.owner, owner));
         }
+        leaf.body = body;
         leaves[index] = leaf;
     }
     true
@@ -307,6 +383,7 @@ struct Leaf {
     node: Option<Inline>,
     path: Vec<usize>,
     owner_change: Option<(u64, u64)>,
+    body: bool,
 }
 
 fn children(node: &mut Inline) -> Option<&mut Vec<Inline>> {
@@ -336,6 +413,7 @@ fn flatten(
                 node: Some(node),
                 path: path.clone(),
                 owner_change: None,
+                body: false,
             });
         }
     }

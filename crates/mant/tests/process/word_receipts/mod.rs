@@ -6,6 +6,7 @@ use mant_ir::{Inline, LinkTarget, inline_plain_text};
 use super::execution_scopes::without_sgr;
 use super::process_support::run_text_input;
 
+mod marker_replay;
 mod motion;
 mod overprint;
 mod publication;

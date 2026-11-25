@@ -6,11 +6,12 @@ use std::{
     rc::Rc,
 };
 
-use mant_ir::{Inline, RowLayoutHint};
+use mant_ir::{Block, Inline, RowLayoutHint};
 
 use super::super::NativeWordAnchor;
 use super::super::field_buffer::{DeferredSourceBlank, RewoundGlyph};
 use super::super::output::native_passes::OwnerAcceptance;
+use super::super::output::split::painted_order;
 use super::super::output::tab_projection::{self, TabExpansion};
 use super::super::output::{INTERNAL_FIELD_WORD, deferred_blanks};
 
@@ -92,11 +93,27 @@ impl DeferredHeadProjection {
     pub(in crate::mandoc) fn resume_terms(
         &self,
         terms: &mut Vec<Vec<Inline>>,
+        body: &mut [Block],
     ) -> Option<crate::definitions::CapturedHeadOperands> {
         if let Some(saved) = self.0.borrow_mut().terms.take() {
             *terms = Rc::unwrap_or_clone(saved);
         }
-        self.apply(terms)
+        let captured = self.apply(terms);
+        if let Some(term) = terms.last_mut()
+            && let Some(Block::Paragraph { children, .. }) = body.first_mut()
+        {
+            painted_order::apply_shared(term, children);
+            super::super::output::strip_native_projection_markers(children);
+        }
+        for term in terms {
+            painted_order::discard_shared(term);
+        }
+        for block in body {
+            if let Block::Paragraph { children, .. } = block {
+                painted_order::discard_shared(children);
+            }
+        }
+        captured
     }
 
     pub(in crate::mandoc::inline::flow) fn restore_pending_ink(
@@ -238,10 +255,11 @@ impl DeferredHeadProjection {
 
     pub(in crate::mandoc::inline::flow) fn accept_coverage(
         &self,
-        accepted: &BTreeMap<String, OwnerAcceptance>,
+        accepted: &mut BTreeMap<String, OwnerAcceptance>,
     ) {
         let mut pending = self.0.borrow_mut();
-        for (owner, acceptance) in accepted {
+        OwnerAcceptance::mark_shared_paint_groups(accepted, |owner| pending.owners.contains(owner));
+        for (owner, acceptance) in accepted.iter() {
             if pending.owners.contains(owner) && acceptance.has_ink_edits() {
                 pending.coverage.insert(owner.clone(), acceptance.clone());
             }

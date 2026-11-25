@@ -201,7 +201,7 @@ pub(super) fn definition_item(
         definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
     );
     if let Some(receiver) = &deferred_head_projection
-        && let Some(captured) = receiver.resume_terms(&mut terms)
+        && let Some(captured) = receiver.resume_terms(&mut terms, &mut description)
     {
         capture_deferred_operands(context, head, captured);
     }

@@ -210,7 +210,7 @@ impl InlineBuilder {
     ) {
         let definition = self.execution.definition.as_mut().expect("native field");
         definition.hang_row.field_discarded = true;
-        let accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
+        let mut accepted_owners = super::super::output::native_passes::accepted_owner_lengths(
             &definition.field_buffer,
             &definition.field_word_anchors,
             passes,
@@ -223,7 +223,7 @@ impl InlineBuilder {
                 NativeFieldDevice::collect_omitted_scalars(&accepted_owners);
         }
         if return_to_head && let Some(head) = &definition.deferred_head_projection {
-            head.accept_coverage(&accepted_owners);
+            head.accept_coverage(&mut accepted_owners);
         }
         // The detached HEAD keeps native owner anchors for deferred blanks
         // and layout. Its accepted final pass has its own structural close;
@@ -374,7 +374,7 @@ impl InlineBuilder {
         if !pending_field_edits && !shared_tail {
             return;
         }
-        let accepted = super::super::output::native_passes::accepted_owner_lengths(
+        let mut accepted = super::super::output::native_passes::accepted_owner_lengths(
             &definition.field_buffer,
             &definition.field_word_anchors,
             passes,
@@ -384,7 +384,7 @@ impl InlineBuilder {
             device.record_omitted_scalars(&accepted);
         }
         if pending_field_edits && let Some(head) = &definition.deferred_head_projection {
-            head.accept_coverage(&accepted);
+            head.accept_coverage(&mut accepted);
         }
         if native.is_none() {
             self.definition_state_mut().omitted_scalars =

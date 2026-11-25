@@ -71,3 +71,44 @@ fn an_incomplete_paint_group_cannot_publish_a_speculative_copy() {
     assert_eq!(nodes.len(), 1);
     assert!(matches!(nodes[0], Inline::Link { .. }));
 }
+
+#[test]
+fn shared_group_moves_the_glyph_but_not_the_partition_boundary() {
+    let mut head = vec![Inline::Strong {
+        children: vec![
+            Inline::anchor(format!("{ORDER}s6:0:0:3:7")),
+            Inline::anchor(format!("{ORDER}s6:0:2:3:7")),
+            Inline::Text { value: "J".into() },
+        ],
+    }];
+    let mut body = vec![
+        Inline::anchor(format!("{ORDER}s6:0:1:3:9")),
+        Inline::Text { value: "B".into() },
+    ];
+    // BODY's local drain must not run an incomplete group.
+    apply(&mut body);
+    super::apply_shared(&mut head, &mut body);
+    assert_eq!(inline_plain_text(&head), "JB");
+    assert_eq!(inline_plain_text(&body), "J");
+    assert!(
+        body.iter()
+            .any(|node| matches!(node, Inline::Strong { .. }))
+    );
+}
+
+#[test]
+fn shared_group_does_not_cross_an_explicit_row_boundary() {
+    let mut head = vec![
+        Inline::anchor(format!("{ORDER}s6:0:0:3:7")),
+        Inline::anchor(format!("{ORDER}s6:0:2:3:7")),
+        Inline::Text { value: "J".into() },
+        Inline::LineBreak {},
+    ];
+    let mut body = vec![
+        Inline::anchor(format!("{ORDER}s6:0:1:3:9")),
+        Inline::Text { value: "B".into() },
+    ];
+    super::apply_shared(&mut head, &mut body);
+    assert_eq!(inline_plain_text(&head), "J\n");
+    assert_eq!(inline_plain_text(&body), "B");
+}

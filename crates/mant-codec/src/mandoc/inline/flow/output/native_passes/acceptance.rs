@@ -45,6 +45,40 @@ impl OwnerAcceptance {
         !self.omitted_scalars.is_empty() || !self.ordered_glyphs.is_empty()
     }
 
+    /// Flag groups that span the two owners of one accepted native `FillPass`.
+    pub(in crate::mandoc::inline::flow) fn mark_shared_paint_groups(
+        owners: &mut BTreeMap<String, Self>,
+        is_head: impl Fn(&str) -> bool,
+    ) {
+        fn group(receipt: &str) -> Option<&str> {
+            let (owner, rest) = receipt.split_once(':')?;
+            let (serial, _) = rest.split_once(':')?;
+            receipt.get(..owner.len() + 1 + serial.len())
+        }
+        let mut sides = BTreeMap::new();
+        for (owner, accepted) in owners.iter() {
+            for receipt in accepted
+                .ordered_glyphs
+                .iter()
+                .flat_map(|glyph| &glyph.receipts)
+            {
+                if let Some(group) = group(receipt) {
+                    *sides.entry(group.to_owned()).or_insert(0) |=
+                        if is_head(owner) { 1 } else { 2 };
+                }
+            }
+        }
+        for receipt in owners
+            .values_mut()
+            .flat_map(|owner| &mut owner.ordered_glyphs)
+            .flat_map(|glyph| &mut glyph.receipts)
+        {
+            if group(receipt).is_some_and(|key| sides.get(key) == Some(&3)) {
+                receipt.insert(0, 's');
+            }
+        }
+    }
+
     fn collect_ordered_glyphs(
         &mut self,
         buffer: &FieldBuffer,

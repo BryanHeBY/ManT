@@ -1,7 +1,7 @@
 use super::super::Inline;
 
 mod accepted_owners;
-pub(super) mod painted_order;
+pub(in crate::mandoc::inline::flow) mod painted_order;
 pub(in crate::mandoc::inline::flow) use accepted_owners::{
     remove_covered_native_glyphs, retain_native_field_owners,
 };

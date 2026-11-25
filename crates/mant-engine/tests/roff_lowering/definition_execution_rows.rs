@@ -11,7 +11,7 @@ fn description_rows(body: &str) -> Vec<String> {
     let json =
         serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).expect("serialize query");
     assert!(
-        !json.contains("\\u0000mant:field-word:"),
+        !json.contains("\\u0000mant:field-word:") && !json.contains("paint-order:"),
         "private execution owner leaked into JSON"
     );
     let decoded: mant_protocol::QueryBundle =
@@ -490,5 +490,35 @@ fn empty_head_operands_do_not_predict_a_native_line_end() {
             };
             assert_eq!(mant_ir::inline_plain_text(children), *expected_readback);
         }
+    }
+}
+
+#[test]
+fn run_in_definition_projects_shared_native_paint_before_splitting_owners() {
+    // CVS mdoc_term.c::termp_it_post() leaves inset HEAD pending until
+    // BODY; term.c::term_field() uses that same row's backline positions.
+    // Exact cases verified against pinned ASCII and UTF-8 device output,
+    // with a column cursor for backspaces (overstrike does not erase).
+    for (body, expected) in [
+        (
+            r#".Bl -inset
+.It No "C\&V" Sy "\h'-4n'\pJ"
+.No "\h'-1n' \h'-4n'B"
+.No "X"
+.El
+"#,
+            "JBJX",
+        ),
+        (
+            r#".Bl -inset
+.It Sy "CDV" Ns No "\h'-4n'\p"
+.No "\h'-1n'\p"
+.No "\&Y"
+.El
+"#,
+            "YD",
+        ),
+    ] {
+        assert_eq!(description_rows(body), [expected], "{body}");
     }
 }

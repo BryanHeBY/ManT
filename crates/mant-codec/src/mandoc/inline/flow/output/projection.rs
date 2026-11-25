@@ -237,7 +237,11 @@ pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>
             };
             true
         }
-        node if crate::mandoc::inline::ownership::is_delayed_origin(node) => true,
+        node if crate::mandoc::inline::ownership::is_delayed_origin(node)
+            || super::split::painted_order::is_shared_mark(node) =>
+        {
+            true
+        }
         Inline::Anchor { .. } => {
             super::row_origins::is_layout_carrier(node)
                 || super::is_term_alternative(node)
