@@ -240,5 +240,8 @@ fn a_long_styled_head_remains_editable_until_the_native_break() {
         without_sgr(&render(&source, "roff", "text", "always", false)),
         plain
     );
-    assert!(super::document_links(&source, "roff").is_empty());
+    assert_eq!(
+        super::document_links(&source, "roff"),
+        Vec::<(mant_ir::LinkTarget, String)>::new()
+    );
 }
