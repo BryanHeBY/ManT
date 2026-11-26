@@ -334,6 +334,14 @@ fn has_word_end_marker(events: &[RoffInlineEvent]) -> bool {
         .any(|event| matches!(event, RoffInlineEvent::LineBreak))
 }
 
+fn is_continued_scoped_word(
+    context: &TextExecutionContext<'_>,
+    events: &[RoffInlineEvent],
+) -> bool {
+    context.slot_entry.domain == ReplayDomain::Scoped
+        && matches!(events.last(), Some(RoffInlineEvent::NoSpace))
+}
+
 fn local_overwrite(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -351,12 +359,7 @@ fn local_overwrite(
     let fresh_filled_motion = (fresh_word || bounded_filled_prefix)
         && is_filled_line_domain(context.slot_entry.domain)
         && (!has_marker_event || bounded_filled_prefix);
-    // One EN after BACKBEFORE consumes the register without an advance
-    // slot. A continued no-fill or column word keeps that proved local
-    // graph writable, without adopting filled source-line behavior.
-    let continued_scoped_motion = fresh_word
-        && context.slot_entry.domain == ReplayDomain::Scoped
-        && matches!(events.last(), Some(RoffInlineEvent::NoSpace));
+    let continued_scoped_motion = fresh_word && is_continued_scoped_word(context, events);
     let mut wrote_ink = false;
     let mut armed = false;
     let mut backbefore = false;
@@ -411,15 +414,11 @@ fn local_overwrite(
                 // term_word() clears BACKAFTER without moving, or uses
                 // the first positive HORIZ unit to clear BACKBEFORE
                 // (term.c:678-699).
-                if !std::mem::take(&mut armed)
+                let settles_motion = fresh_filled_motion || continued_scoped_motion;
+                resolved_motion_retreat |= !std::mem::take(&mut armed)
                     && std::mem::take(&mut backbefore)
-                    && (fresh_filled_motion || continued_scoped_motion)
-                {
-                    resolved_motion_retreat = true;
-                }
-                if !fresh_filled_motion && !continued_scoped_motion {
-                    projected_padding = true;
-                }
+                    && settles_motion;
+                projected_padding |= !settles_motion;
             }
             RoffInlineEvent::Link(_)
             | RoffInlineEvent::Font(_)

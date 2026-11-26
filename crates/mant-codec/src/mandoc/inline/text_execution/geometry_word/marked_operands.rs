@@ -91,7 +91,7 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
 }
 
 /// A decorated label followed by a terminal LF still occupies known
-/// native slots at the next operand. ESCAPE_BREAK writes LF, and the two
+/// native slots at the next operand. `ESCAPE_BREAK` writes LF, and the two
 /// tty link delimiters each write NBRZW; none flushes the field
 /// (term.c:620–638, 659–660). Keep the bounded decorated prefix so a
 /// later absolute motion can edit the label, not append after it.
@@ -113,19 +113,19 @@ pub(super) fn bounded_linked_marker_tail(events: &[RoffInlineEvent]) -> bool {
     }) {
         return false;
     }
-    let mut ink = false;
-    let mut link = false;
+    let mut has_ink = false;
+    let mut opens_annotation = false;
     let Some(mut remaining) = MAX_EDITABLE_APPEND_CELLS.checked_sub(events.len() - marker) else {
         return false;
     };
     for event in &events[..marker] {
         let count = match event {
             RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte.is_ascii_graphic()) => {
-                ink |= !text.is_empty();
+                has_ink |= !text.is_empty();
                 text.len().saturating_mul(5)
             }
             RoffInlineEvent::Link(Some(_)) => {
-                link = true;
+                opens_annotation = true;
                 0
             }
             RoffInlineEvent::Link(None)
@@ -139,7 +139,7 @@ pub(super) fn bounded_linked_marker_tail(events: &[RoffInlineEvent]) -> bool {
         };
         remaining = left;
     }
-    ink && link
+    has_ink && opens_annotation
 }
 
 fn starts_with_graphless_break(events: &[RoffInlineEvent]) -> bool {
