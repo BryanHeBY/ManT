@@ -270,6 +270,18 @@ impl FieldBuffer {
             && self.projection_length(0, self.cells.len()) > 0
     }
 
+    /// BODY pre appends at lastcol after HEAD has cleared both backtracking
+    /// flags. The marked field is still live, so a later BODY word can
+    /// write before the generated U+00A0 (term.c:659, 678–718, 903–929).
+    pub(in crate::mandoc::inline::flow) fn can_defer_inset_separator(&self) -> bool {
+        self.projection_owner == super::FieldProjectionOwner::Detached
+            && self.has_bounded_run_in_projection()
+            && self.has_pending_break_markers()
+            && matches!(self.write_cursor, WriteCursor::Placed(0))
+            && !self.backbefore_armed
+            && !self.backafter_armed
+    }
+
     /// A one-cell generated inset fallback appends after a marked fixed
     /// HEAD slot. The authored graph immediately before it belongs to a
     /// different word; neither BACK register can move the generated write
@@ -279,12 +291,7 @@ impl FieldBuffer {
         writes: Option<&[FieldWrite]>,
     ) -> bool {
         matches!(writes, Some([FieldWrite::OwnedBlank { projected: true }]))
-            && self.projection_owner == super::FieldProjectionOwner::Detached
-            && self.has_bounded_run_in_projection()
-            && self.has_pending_break_markers()
-            && matches!(self.write_cursor, WriteCursor::Placed(0))
-            && !self.backbefore_armed
-            && !self.backafter_armed
+            && self.can_defer_inset_separator()
             && matches!(
                 self.cells.as_slice(),
                 [

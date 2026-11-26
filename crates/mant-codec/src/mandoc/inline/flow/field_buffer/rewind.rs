@@ -107,7 +107,7 @@ impl FieldWrite {
                 scalars: usize::from(*projected),
                 native_cells: 1,
             },
-            Self::UnprojectedGraph { .. } => EntryWrite::Overwrite {
+            Self::DeferredRunInBlank(_) | Self::UnprojectedGraph { .. } => EntryWrite::Overwrite {
                 encode: true,
                 scalars: 0,
                 native_cells: 1,

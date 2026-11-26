@@ -365,12 +365,13 @@ impl FieldBuffer {
                     *self.cells.last_mut().expect("encoded hyphen") = FieldCell::Hyphen;
                 }
                 FieldWrite::OwnedBlank { projected } => {
-                    leading_retreat = leading_retreat.or(self.encode_graph(
-                        '\u{a0}',
-                        1,
-                        *projected,
-                        &mut first_graph,
-                    ));
+                    let retreat = self.encode_graph('\u{a0}', 1, *projected, &mut first_graph);
+                    leading_retreat = leading_retreat.or(retreat);
+                }
+                FieldWrite::DeferredRunInBlank(source) => {
+                    let retreat = self.encode_graph('\u{a0}', 1, false, &mut first_graph);
+                    leading_retreat = leading_retreat.or(retreat);
+                    self.record_deferred_blank(*source, self.cells.len() - 1);
                 }
                 FieldWrite::AdvanceOverBufferedBlanks(count) => {
                     self.advance_run_in_blanks(*count);
@@ -525,6 +526,10 @@ impl FieldBuffer {
     ) {
         let start = self.cells.len();
         self.push_placed(cell, 0);
+        self.record_deferred_blank(source, start);
+    }
+
+    fn record_deferred_blank(&mut self, source: super::cells::DeferredSourceBlank, start: usize) {
         let index = self
             .deferred_blanks
             .partition_point(|run| run.start < start);

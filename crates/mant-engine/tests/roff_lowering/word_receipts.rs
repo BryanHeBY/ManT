@@ -18,6 +18,8 @@ mod field_handoff;
 mod marked_operands;
 #[path = "word_receipts/native_cursor.rs"]
 mod native_cursor;
+#[path = "word_receipts/run_in_separator.rs"]
+mod run_in_separator;
 
 #[derive(Deserialize)]
 struct Matrix {

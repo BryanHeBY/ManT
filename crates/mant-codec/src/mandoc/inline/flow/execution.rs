@@ -594,6 +594,15 @@ impl InlineBuilder {
         let native_count = native_count - traversed;
         let projected_overlap = count.saturating_sub(native_count);
         let count = count.min(native_count);
+        // Leave the existing native append alone. Here the generated graph
+        // needs its own reading owner because a BODY rewind can put it on
+        // either side of incoming ink, overwrite it, or cover its column.
+        let defer_separator = count == 1
+            && native_count == 1
+            && traversed == 0
+            && input.can_defer_inset_separator()
+            && !self.execution.zero_advance.is_armed()
+            && !self.execution.zero_advance.has_buffered_glyph();
         self.execution.native_word_boundary = Some(PendingBoundary::Tight);
         self.note_produced_formatter_cell(native_count > 0);
         self.tighten_next_boundary();
@@ -626,6 +635,9 @@ impl InlineBuilder {
                 projected.push(Inline::anchor(source.marker()));
             }
             retained_run_in_writes(&slots, native_count, count, source)
+        } else if defer_separator {
+            projected.push(Inline::anchor(source.marker()));
+            vec![FieldWrite::DeferredRunInBlank(source)]
         } else {
             if traversed > 0 && self.defer_run_in_overlap(traversed, projected_overlap, source) {
                 projected.push(Inline::anchor(source.marker()));

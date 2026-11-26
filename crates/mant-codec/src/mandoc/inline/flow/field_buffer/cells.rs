@@ -79,6 +79,8 @@ pub(in crate::mandoc) enum FieldWrite {
     OwnedBlank {
         projected: bool,
     },
+    /// The same generated graph, with reading deferred to the accepted pass.
+    DeferredRunInBlank(DeferredSourceBlank),
     /// A generated nonbreaking blank traversed an existing raw cell.
     AdvanceOverBufferedBlanks(usize),
     /// A drawn stroke occupies terminal cells without adding author text.
