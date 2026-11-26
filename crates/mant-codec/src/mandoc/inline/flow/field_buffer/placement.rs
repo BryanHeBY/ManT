@@ -281,6 +281,23 @@ impl FieldBuffer {
                 || !self.underline_strokes.is_empty())
     }
 
+    /// The diagonal BODY's two generated fixed blanks follow this
+    /// complete, still-unflushed HEAD. A zero-width graph does not clear
+    /// BACKBEFORE; unlike a terminal SP it makes encode1 write a backline
+    /// before the two new NBSP cells (term.c:620–660, 903–929).
+    pub(in crate::mandoc::inline::flow) fn has_proved_diag_separator_entry(&self) -> bool {
+        self.has_bounded_run_in_projection()
+            && self.backbefore_armed
+            && !self.backafter_armed
+            && matches!(self.write_cursor, WriteCursor::Placed(0))
+            && matches!(
+                self.cells.as_slice(),
+                [.., FieldCell::BreakableBlank, FieldCell::ZeroWidthGraph]
+            )
+            && self.projection_length(self.cells.len() - 1, self.cells.len()) == 0
+            && self.has_pending_break_markers()
+    }
+
     /// Snapshot the live un-flushed `tcol->buf` suffix and cursor/backtracking
     /// registers (`term.c:573-590, 678-718, 888-930`) for `NativeSlots` replay.
     pub(in crate::mandoc::inline::flow) fn field_prefix(

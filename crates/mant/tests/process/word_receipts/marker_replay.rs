@@ -712,3 +712,50 @@ Done.
         0
     );
 }
+
+#[test]
+fn a_diagonal_body_rewinds_over_the_generated_fixed_blank_pair() {
+    // The source HEAD's NBRZW does not cancel BACKBEFORE. CVS writes a
+    // backline before the BODY's pair, then lets BODY's movement replace
+    // one blank without closing the HEAD's two accepted passes.
+    for (word, expected_words) in [("B", vec!["A", "B", "C"]), (r"\pB", vec!["A", "BC"])] {
+        let source = format!(
+            r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.Bl -diag
+.It "\zA\p \&"
+.No "\h'-4n'" No "{word}" No C
+.El
+.Sh ENDTEST
+Done.
+"#
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        let body = review_body(&text);
+        assert_eq!(
+            body.lines()
+                .map(|row| row.replace(' ', ""))
+                .collect::<Vec<_>>(),
+            ["A", "BC"],
+            "{word}"
+        );
+        if word == "B" {
+            // In the second case ASCII and UTF-8 differ on the second
+            // row's internal gap; assert only the agreed physical rows.
+            assert_eq!(body.split_whitespace().collect::<Vec<_>>(), expected_words);
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", "B"),
+                1
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", "BC"),
+                0
+            );
+        }
+    }
+}
