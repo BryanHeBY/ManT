@@ -22,6 +22,7 @@ struct RunInBoundaryFacts {
     materialized: bool,
     unprojected_gap: u16,
     following_word_joined: bool,
+    starts_after_authored_break: bool,
 }
 
 impl Clone for RunInBoundaryReceipt {
@@ -55,6 +56,10 @@ impl RunInBoundaryReceipt {
 
     pub(in crate::mandoc) fn following_word_joined(&self) -> bool {
         self.facts.get().following_word_joined
+    }
+
+    pub(in crate::mandoc) fn starts_after_authored_break(&self) -> bool {
+        self.facts.get().starts_after_authored_break
     }
 }
 
@@ -140,9 +145,14 @@ impl InlineBuilder {
             return;
         };
         let boundaries = std::mem::take(&mut state.run_in_boundaries);
-        let passes = match &device.receipt {
+        let (passes, rejected_from) = match &device.receipt {
             FlushReceipt::UnmodeledRewind => return,
-            FlushReceipt::Accepted { passes, .. } | FlushReceipt::Rejected { passes, .. } => passes,
+            FlushReceipt::Accepted { passes, .. } => (passes, None),
+            FlushReceipt::Rejected {
+                passes,
+                rejected_from,
+                ..
+            } => (passes, Some(*rejected_from)),
         };
         let mut pass = 0;
         let buffer = &state.field_buffer;
@@ -151,6 +161,17 @@ impl InlineBuilder {
             #[cfg(test)]
             RECEIPT_WORK.with(|work| work.set(work.get() + 1));
             let mut facts = boundary.receipt.facts.get();
+            // term_flushln() can close the HEAD at an authored loop endline
+            // before term_fill() rejects the entire run-in seam (term.c:
+            // 143-146, 205-220). The first BODY word's NOSPACE cannot join
+            // later output to that already closed HEAD row.
+            if device.row_closed_by_author()
+                && rejected_from.is_some_and(|start| start <= boundary.start)
+            {
+                facts.starts_after_authored_break = true;
+                boundary.receipt.facts.set(facts);
+                continue;
+            }
             // The generated word enters with NOSPACE and writes only one
             // or two encode1(U+00A0) glyphs plus possible backlines. The
             // post-write content anchor excludes automatic separators and

@@ -112,8 +112,12 @@ impl DefinitionBodyObservation {
         self.head_row == DefinitionHeadRow::CarriedByTerm
     }
 
-    pub(super) const fn placement_breaks(&self) -> bool {
+    pub(super) fn placement_breaks(&self) -> bool {
         !matches!(self.placement, DefinitionBodyPlacement::Pending)
+            || self
+                .run_in_boundary
+                .as_ref()
+                .is_some_and(super::inline::RunInBoundaryReceipt::starts_after_authored_break)
     }
 
     pub(super) const fn structural_row_closed(&self) -> bool {

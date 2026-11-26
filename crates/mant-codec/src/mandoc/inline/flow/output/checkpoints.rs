@@ -43,6 +43,13 @@ impl InlineBuilder {
         else {
             return false;
         };
+        // A completed-row receipt records a separate native endline, not
+        // the detached HEAD row merely closed by this boundary. Keep that
+        // occurrence for the block owner to publish as a distinct row.
+        let completed = super::RowReceipt::Completed(super::CompletedRowOrigin::Layout).anchor();
+        if self.nodes[..end].contains(&completed) {
+            return false;
+        }
         if has_rendered_formatter_glyph(&self.nodes[..end]) {
             return false;
         }

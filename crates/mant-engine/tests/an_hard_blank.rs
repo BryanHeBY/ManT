@@ -1,0 +1,73 @@
+//! HEAD row settlement through the public JSON bundle.
+#![cfg(feature = "roff")]
+
+const HEADER: &str =
+    ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n.Sh DESCRIPTION\n";
+
+fn rows(body: &str) -> Vec<String> {
+    let source = format!("{HEADER}{body}");
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+    mant_render::render_query_man(&decoded.into())
+        .split_once("DESCRIPTION\n")
+        .unwrap()
+        .1
+        .trim_end_matches('\n')
+        .lines()
+        .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
+        .collect()
+}
+
+#[test]
+fn head_settlement_claims_only_the_represented_row() {
+    // These exact sources were run with pristine CVS -Tascii and -Tutf8.
+    // term.c::term_fill accepts separate word-end markers at their spaces;
+    // term_flushln and mdoc_term.c::termp_it_post settle the actual rows.
+    for (head, body, expected) in [
+        (r"A\p \p ", "", vec!["A", "", "C"]),
+        (r"A\p \p ", "B\n", vec!["A", "", "C"]),
+        (r"A\p\p ", "", vec!["A", "", "C"]),
+        (r"A\p \p", "", vec!["A", "", "C"]),
+        (r"A\p ", "", vec!["A", "", "C"]),
+        (r"A\p\p ", "B\n", vec!["A", "B", "C"]),
+        (r"A\p \p", "B\n", vec!["A", "B", "C"]),
+        (r"A\p ", "B\n", vec!["A", "B", "C"]),
+    ] {
+        let source = format!(".Bl -inset\n.It No \"{head}\"\n{body}.br\nC\n.El\n");
+        assert_eq!(rows(&source), expected, "{source}");
+    }
+}
+
+#[test]
+fn public_json_keeps_the_hard_row_in_the_item_description() {
+    use mant_ir::{Block, HeadBodyRelation, Inline, ResolvedContent};
+
+    // term.c::term_flushln closes A at the loop endline. term_fill rejects
+    // the suffix, including B when present, and the tail ends the empty row.
+    for body in ["", "B\n"] {
+        let source = format!("{HEADER}.Bl -inset\n.It No \"A\\p \\p \"\n{body}.br\nC\n.El\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+        let content = ResolvedContent::from(decoded);
+        let document = content.document.unwrap();
+        let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+            panic!("{source}");
+        };
+        let item = &items[0];
+        assert_eq!(item.head_body_relation, HeadBodyRelation::Separate);
+        let Block::Paragraph { children, .. } = &item.description[0] else {
+            panic!("{source}");
+        };
+        let line = children
+            .iter()
+            .position(|node| matches!(node, Inline::LineBreak {}))
+            .unwrap();
+        let body = children
+            .iter()
+            .position(|node| matches!(node, Inline::Text { value } if value == "C"))
+            .unwrap();
+        assert!(line < body, "{children:?}");
+    }
+}

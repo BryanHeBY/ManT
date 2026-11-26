@@ -756,7 +756,16 @@ impl InlineBuilder {
             return None;
         }
         let (input, anchors) = self.execution.word_input();
-        if decoration == 0
+        // With a live shared HEAD, BODY pre adds its NBSP while term_word()
+        // can still edit the existing slots (mdoc_term.c:757–772). Only BODY
+        // post settles the run-in field (termp_it_post, mdoc_term.c:939–945).
+        let shared_head = self.execution.definition.as_ref().is_some_and(|state| {
+            state.run_in_continuation
+                && state.deferred_head_projection.is_some()
+                && input.has_bounded_run_in_projection()
+        });
+        if !shared_head
+            && decoration == 0
             && input.writes_at_buffer_end()
             && input.has_pending_break_markers()
             && input
@@ -767,9 +776,8 @@ impl InlineBuilder {
                 .find(|cell| **cell != FieldCell::TabReference)
                 == Some(&FieldCell::BreakableBlank)
         {
-            // A following SP already delimits the marked word in
-            // term_fill() (term.c:294–306). The generated blank appends
-            // without rewriting that boundary's existing reading receipt.
+            // Without a shared HEAD, the following SP already provides
+            // the accepted break boundary (term_fill, term.c:294–306).
             return None;
         }
         let marked_backbefore = input.has_marked_backbefore_tail()
@@ -778,11 +786,6 @@ impl InlineBuilder {
         let replaces_source_space = native_count == 1 && input.has_proved_inset_separator_entry();
         let replays_inset_zero_width =
             native_count == 1 && input.has_proved_inset_zero_width_separator_entry();
-        let shared_head = self.execution.definition.as_ref().is_some_and(|state| {
-            state.run_in_continuation
-                && state.deferred_head_projection.is_some()
-                && input.has_bounded_run_in_projection()
-        });
         if !shared_head {
             let replayable = if decoration != 0 {
                 marked_backbefore
