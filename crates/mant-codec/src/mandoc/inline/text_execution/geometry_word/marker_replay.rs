@@ -208,9 +208,11 @@ fn retains_structured_pending_marker(
         || context.zero_advance.is_armed()
         || context.zero_advance.has_annotation_output_owner()
         || !controls.next_back().is_some_and(|event| match event {
-            RoffInlineEvent::NoSpace | RoffInlineEvent::Breakpoint | RoffInlineEvent::LineBreak => {
-                true
-            }
+            RoffInlineEvent::NoSpace | RoffInlineEvent::Breakpoint => true,
+            // A lone LF in a fresh plain HEAD also starts a real pending
+            // pass. Leave it with the normal pass owner; only a copied
+            // glyph or a proved earlier tape needs structured retention.
+            RoffInlineEvent::LineBreak => !fresh || decorated_word(events, context.font.current),
             RoffInlineEvent::Glyph(text, _) => text == "\u{a0}",
             _ => false,
         })
