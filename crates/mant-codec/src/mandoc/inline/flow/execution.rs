@@ -648,7 +648,8 @@ impl InlineBuilder {
             && native_count > 0)
             .then(|| {
                 let (input, anchors) = self.execution.word_input();
-                if !(input.has_retained_word_cursor()
+                if !(input.has_bounded_run_in_projection()
+                    || input.has_retained_word_cursor()
                     || input.has_marked_backbefore_tail()
                         && (!self.execution.zero_advance.has_buffered_glyph()
                             || self.execution.zero_advance.can_project_prior_slot())

@@ -254,6 +254,19 @@ impl FieldBuffer {
         }
     }
 
+    /// A complete, still writable HEAD must keep its owners through BODY.
+    /// The first ordinary BODY word need not mention a move; a later
+    /// `term_word()` can still return to this origin before `termp_it_post()`
+    /// calls `term_newln()` (`mdoc_term.c:939–945`; `term.c:678–718`).
+    pub(in crate::mandoc::inline::flow) fn has_bounded_run_in_projection(&self) -> bool {
+        self.resume == 0
+            && self.raw_slot_fence == 0
+            && self.projected_pass_ends.is_empty()
+            && !matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
+            && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+            && self.projection_length(0, self.cells.len()) > 0
+    }
+
     /// Snapshot the live un-flushed `tcol->buf` suffix and cursor/backtracking
     /// registers (`term.c:573-590, 678-718, 888-930`) for `NativeSlots` replay.
     pub(in crate::mandoc::inline::flow) fn field_prefix(

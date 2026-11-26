@@ -531,7 +531,9 @@ impl InlineBuilder {
             .row_presentation
             .has_pending_layout(self.execution.text_alignment)
             || self.execution.definition.as_ref().is_some_and(|state| {
-                state.field_buffer.has_deferred_blanks()
+                !state.field_word_anchors.is_empty()
+                    && state.field_buffer.has_bounded_run_in_projection()
+                    || state.field_buffer.has_deferred_blanks()
                     || state.field_buffer.has_positioned_slots()
                     || state.field_buffer.has_pass_retreats()
                     || state.field_buffer.has_proved_rejection()

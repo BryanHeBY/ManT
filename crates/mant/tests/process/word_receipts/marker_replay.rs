@@ -530,3 +530,34 @@ Done.
         );
     }
 }
+
+#[test]
+fn a_body_rewind_keeps_the_generated_separator_after_relocated_head_ink() {
+    // Inset adds a generated fixed space before the BODY but HEAD post
+    // does not flush (mdoc_term.c:757–772, 939–945). After absolute
+    // movement the retained label tail still precedes that space.
+    let source = r".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+.Bl -inset
+.It Sy label
+J \h'|0n'Q X
+.El
+.Sh ENDTEST
+Done.
+";
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(review_body(&text), "Xabel J");
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "J"),
+        1
+    );
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "XabelJ"),
+        0
+    );
+}
