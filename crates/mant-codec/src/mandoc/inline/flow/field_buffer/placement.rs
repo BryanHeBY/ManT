@@ -147,8 +147,11 @@ impl FieldBuffer {
                 keeps_prior_slots,
             } => self.record_raw_tail_font(*styled_suffix, *keeps_prior_slots),
             FieldWrite::ReplaceLivePrefix {
-                start, positions, ..
-            } => self.replace_live_prefix(*start, positions),
+                start,
+                positions,
+                trailing_blank_slots,
+                ..
+            } => self.replace_live_prefix(*start, positions, trailing_blank_slots),
             FieldWrite::PlacedZeroWidthRetreat {
                 target_from_end,
                 mark_from_end,
@@ -597,7 +600,12 @@ impl FieldBuffer {
         }
     }
 
-    fn replace_live_prefix(&mut self, start: usize, positions: &[Option<usize>]) {
+    fn replace_live_prefix(
+        &mut self,
+        start: usize,
+        positions: &[Option<usize>],
+        trailing_blank_slots: &[(usize, usize)],
+    ) {
         use super::cells::DeferredBlankRun;
 
         self.underline_strokes
@@ -638,10 +646,15 @@ impl FieldBuffer {
                 surviving.push(DeferredBlankRun { end: start, ..run });
             }
             for cell in run.start.max(start)..run.end {
-                if let Some(&Some(new)) = positions.get(cell - start) {
+                if let Some(&Some(projected)) = positions.get(cell - start) {
+                    let trailing = trailing_blank_slots.iter().find_map(|&(owner, raw)| {
+                        (run.source.generated_run_in && owner == cell).then_some(raw)
+                    });
+                    let new = trailing.unwrap_or(projected);
                     surviving.push(DeferredBlankRun {
                         start: new,
                         end: new + 1,
+                        settled_trailing_run_in: trailing.is_some(),
                         ..run
                     });
                 }

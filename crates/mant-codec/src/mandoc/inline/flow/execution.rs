@@ -63,6 +63,7 @@ fn retained_run_in_writes(
     let mut writes = vec![FieldWrite::ReplaceLivePrefix {
         start: slots.start,
         positions: vec![None; slots.overwritten()],
+        trailing_blank_slots: Vec::new(),
         retained_advances: std::collections::BTreeMap::new(),
         adopted_advances: Vec::new(),
         first_incoming: slots.start,
@@ -603,6 +604,7 @@ impl InlineBuilder {
             write: 0,
             font: self.execution.font.display_current(),
             replayable_tail: false,
+            generated_run_in: true,
         };
         let mut projected = Vec::new();
         let writes = if let Some(slots) = retained_slots {

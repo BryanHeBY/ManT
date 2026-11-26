@@ -315,6 +315,7 @@ impl FieldBuffer {
                 end: cell + 1,
                 source,
                 run_in_overlap: true,
+                settled_trailing_run_in: false,
             },
         );
         true
@@ -340,6 +341,7 @@ mod tests {
             write: 0,
             font: super::super::super::Font::Regular,
             replayable_tail: false,
+            generated_run_in: false,
         };
         let _ = buffer.defer_run_in_overlap(1, 0, source);
         assert_eq!(

@@ -980,3 +980,47 @@ Done.
         }
     }
 }
+
+#[test]
+fn a_settled_run_in_separator_keeps_native_placement_without_a_lexical_gap() {
+    // term_field() emits the UTF-8 U+A0 after C for |2n (term.c:389-436).
+    // ASCII has no trailing output, and neither device separates X and C.
+    // |3n instead covers the generated cell; without motion it remains
+    // between the two owners in UTF-8.
+    for font in ["B", "I"] {
+        for (head, body, expected) in [
+            (r"X\zA\p", r#""\h'|2n'\zB" No C"#, "XC"),
+            (r"X\zA\p", r#""\h'|3n'\zB" No C"#, "XABC"),
+            (r"X\zA\p", r#""\zB" No C"#, "X BC"),
+            ("X", r#""B" No C"#, "X B C"),
+        ] {
+            let source = format!(
+                r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd sample
+.Sh DESCRIPTION
+.ft {font}
+.Bl -inset
+.It No "{head}"
+.No {body}
+.El
+.ft R
+.Sh ENDTEST
+Done.
+"#
+            );
+            let text = render(&source, "roff", "text", "never", false);
+            assert_eq!(review_body(&text).trim(), expected, "{font}: {body}");
+            for query in ["XC", "XABC"] {
+                assert_eq!(
+                    super::search_visible_word_with_format(&source, "roff", query),
+                    u64::from(expected == query),
+                    "{font}: {body}, query={query}"
+                );
+            }
+        }
+    }
+}

@@ -153,7 +153,20 @@ impl FieldBuffer {
                         && covered.binary_search(&cell).is_err()
                         && belongs_to_head(cell)
                 });
-                if start < end && !displaced {
+                // The device may print a generated styled graph after its
+                // last word (term.c:389-436). Its output marker still names
+                // the run-in seam, not an authored lexical space at row end.
+                let trailing = run.settled_trailing_run_in
+                    && start == run.start
+                    && run.end == printed_end
+                    && matches!(
+                        self.cells[start],
+                        FieldCell::Graph {
+                            text: '\u{a0}',
+                            width: 1
+                        }
+                    );
+                if start < end && !displaced && !trailing {
                     // Some authored spaces have no provisional scalar but
                     // can still be covered by an accepted backline.
                     let overwritten = covered.partition_point(|&cell| cell < end)

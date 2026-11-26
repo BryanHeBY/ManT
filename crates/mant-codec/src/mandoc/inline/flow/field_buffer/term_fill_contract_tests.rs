@@ -114,6 +114,7 @@ fn rewind_treats_raw_and_deferred_spaces_as_the_same_native_write() {
         write: 0,
         font: Font::Regular,
         replayable_tail: false,
+        generated_run_in: false,
     };
     let mut reference = None;
     for (blank, projected) in [

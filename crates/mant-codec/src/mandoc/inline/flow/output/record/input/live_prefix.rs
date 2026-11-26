@@ -51,6 +51,7 @@ impl PrefixEdits {
             entry_blanks,
             entry_gap,
             unpublished,
+            ..
         }) = writes.first()
         else {
             return Self::default();

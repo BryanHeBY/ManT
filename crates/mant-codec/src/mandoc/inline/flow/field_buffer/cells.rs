@@ -127,6 +127,8 @@ pub(in crate::mandoc) enum FieldWrite {
     ReplaceLivePrefix {
         start: usize,
         positions: Vec<Option<usize>>,
+        /// Earlier source slot and surviving physical slot for a settled tail.
+        trailing_blank_slots: Vec<(usize, usize)>,
         /// Old advance slot to first surviving slot and columns before new ink.
         retained_advances: std::collections::BTreeMap<usize, (usize, usize)>,
         /// Earlier native advance slots that now have their own output receipt.
@@ -203,6 +205,8 @@ pub(in crate::mandoc) struct DeferredSourceBlank {
     /// The whole native word was retained to allow a later edit of this
     /// generated trailing advance before its deferred output.
     pub(in crate::mandoc::inline) replayable_tail: bool,
+    /// Lexical separator written by the generated inset/diagonal run-in word.
+    pub(in crate::mandoc::inline) generated_run_in: bool,
 }
 
 impl DeferredSourceBlank {
@@ -222,6 +226,9 @@ pub(super) struct DeferredBlankRun {
     pub(super) end: usize,
     pub(super) source: DeferredSourceBlank,
     pub(super) run_in_overlap: bool,
+    /// The owned native slot follows surviving ink after an overprint;
+    /// its reading marker still denotes the original run-in seam.
+    pub(super) settled_trailing_run_in: bool,
 }
 
 impl FieldWrite {

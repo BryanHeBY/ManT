@@ -535,6 +535,7 @@ impl FieldBuffer {
                 end: start + 1,
                 source,
                 run_in_overlap: false,
+                settled_trailing_run_in: false,
             },
         );
     }
@@ -598,6 +599,7 @@ impl FieldBuffer {
             end: self.cells.len(),
             source,
             run_in_overlap: false,
+            settled_trailing_run_in: false,
         });
     }
 
@@ -1042,12 +1044,14 @@ mod sentence_tests {
             write: 0,
             font: super::super::super::Font::Regular,
             replayable_tail: false,
+            generated_run_in: false,
         };
         let earlier = super::super::cells::DeferredSourceBlank {
             owner: 1,
             write: 0,
             font: super::super::super::Font::Regular,
             replayable_tail: false,
+            generated_run_in: false,
         };
         // Record a run at cell 4, rewind the tail back to cell 2, then place a
         // new deferred blank at cell 2 and verify sorted order is preserved.

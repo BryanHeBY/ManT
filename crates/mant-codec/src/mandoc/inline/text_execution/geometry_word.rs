@@ -1165,6 +1165,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
                         write: index,
                         font: display_font,
                         replayable_tail,
+                        generated_run_in: true,
                     },
                     imported_cell: None,
                 },

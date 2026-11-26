@@ -221,6 +221,7 @@ impl WordOutput<'_> {
             write: writes.len(),
             font: self.font,
             replayable_tail: false,
+            generated_run_in: false,
         };
         writes.push(FieldWrite::DeferredBlanks {
             source: blank,

@@ -106,7 +106,7 @@ impl<'a> PlacedWord<'a> {
         ) && split_copy_max.is_some();
         let retain_suffix = retain_suffix || split_bold_copy;
         let editable_marker = editable_marker || split_bold_copy;
-        let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled);
+        let zero_width_retreats = resolve_backlines(&mut slots, retain_suffix, &settled.spans);
         retire_trailing_entry_blanks(&mut slots, &mut reading, earlier);
         preserve_author_separators(&slots, &mut reading);
         let (inherited_pending, prior) =
@@ -120,7 +120,7 @@ impl<'a> PlacedWord<'a> {
             &reading,
             (prefix_start, earlier, prior_pending),
             (replace_tail, replayed_entry),
-            defer_strokes,
+            (defer_strokes, settled.trailing_blank_slots),
         );
         let end = slots.len();
         let proof = retain_suffix.then_some(FieldWrite::ProveRawSlots {
@@ -130,7 +130,7 @@ impl<'a> PlacedWord<'a> {
             duplicates,
             editable_marker,
         });
-        record_slot_proof(&mut writes, &settled, &slots, extent, proof);
+        record_slot_proof(&mut writes, &settled.spans, &slots, extent, proof);
         append_placement_receipts(
             &mut writes,
             end,
@@ -523,7 +523,7 @@ fn settle_replay_slots(
     slots: &mut Vec<FillSlot>,
     keep_raw_advances: bool,
     expand_unowned_blanks: bool,
-) -> Vec<std::ops::Range<usize>> {
+) -> super::overprint::Settlement {
     if keep_raw_advances {
         expand_replay_advances(slots, expand_unowned_blanks);
     }
@@ -571,7 +571,7 @@ fn placed_slot_writes(
     reading: &[ReadingCell<'_>],
     (start, earlier, prior): (usize, usize, Option<PriorPendingSlot>),
     (replace_tail, replayed_entry): (usize, bool),
-    defer_strokes: bool,
+    (defer_strokes, trailing_blank_slots): (bool, Vec<(usize, usize)>),
 ) -> Vec<FieldWrite> {
     let mut writes = Vec::new();
     if earlier != 0 {
@@ -581,6 +581,7 @@ fn placed_slot_writes(
             start,
             earlier,
             prior.and_then(PriorPendingSlot::unpublished),
+            trailing_blank_slots,
         ));
     } else if replace_tail > 0 {
         writes.push(replay_device_tail(
@@ -692,6 +693,7 @@ fn replay_prefix(
     start: usize,
     earlier: usize,
     unpublished: Option<usize>,
+    trailing_blank_slots: Vec<(usize, usize)>,
 ) -> FieldWrite {
     let mut positions = vec![None; earlier];
     let mut first_incoming = slots.len();
@@ -732,6 +734,11 @@ fn replay_prefix(
     FieldWrite::ReplaceLivePrefix {
         start,
         positions,
+        trailing_blank_slots: trailing_blank_slots
+            .into_iter()
+            .filter(|&(owner, _)| owner < earlier)
+            .map(|(owner, slot)| (start + owner, start + slot))
+            .collect(),
         retained_advances: retain_earlier_advances(slots, start, first_incoming),
         adopted_advances,
         first_incoming: start + first_incoming,
