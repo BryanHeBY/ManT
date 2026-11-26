@@ -574,7 +574,11 @@ impl InlineBuilder {
         if !generated_word {
             return;
         }
-        if self.try_replay_run_in_cells(count, native_count) {
+        let append_separator = count == 1
+            && native_count == 1
+            && self.execution.font.current == super::Font::Regular
+            && self.execution.word_input().0.can_append_run_in_separator();
+        if !append_separator && self.try_replay_run_in_cells(count, native_count) {
             return;
         }
 
@@ -600,7 +604,7 @@ impl InlineBuilder {
         let defer_separator = count == 1
             && native_count == 1
             && traversed == 0
-            && input.can_defer_inset_separator()
+            && (append_separator || input.can_defer_inset_separator())
             && !self.execution.zero_advance.is_armed()
             && !self.execution.zero_advance.has_buffered_glyph();
         self.execution.native_word_boundary = Some(PendingBoundary::Tight);
@@ -653,22 +657,15 @@ impl InlineBuilder {
         self.finish_run_in_word(projected, writes, count);
     }
 
-    /// Execute `-inset`/`-diag` generated `\ ` / `\ \ ` through
-    /// `NativeSlots::with_field_prefix` + `PlacedWord::prepare` when the live
-    /// HEAD prefix is retreated or positioned with `BACKAFTER` armed
+    /// Execute `-inset`/`-diag` generated `\ ` / `\ \ ` with the same
+    /// slot and ownership placement that executes authored words
     /// (`mdoc_term.c:757-772, 939-945`, `chars.c:50`, `term.c:620-636, 888-930`).
     fn try_replay_run_in_cells(&mut self, count: usize, native_count: usize) -> bool {
-        // In an inset, a single generated U+00A0 can execute after HEAD's
-        // font scope pops back to an outer bold or italic selection.
-        // UTF-8 encode1 writes two extra raw cells for that selection
-        // (mdoc_term.c:760–772; term.c:903–929). Prove the complete marked
-        // BACKBEFORE tape before extending the existing regular replay.
+        // BODY pre uses the active font after HEAD's scope has popped.
+        // UTF-8 encode1 can add an underline pair and a bold copy pair
+        // for each U+00A0 (mdoc_term.c:760–772; term.c:903–929).
         let native_font = self.execution.font.current;
-        let decoration = match native_font {
-            super::Font::Regular => 0,
-            super::Font::Strong | super::Font::Emphasis if native_count == 1 => 2,
-            _ => return false,
-        };
+        let decoration = super::native_slots::decoration_slots(native_font);
         let Some(prefix) = self.proved_run_in_prefix(native_count, decoration) else {
             return false;
         };
@@ -689,21 +686,26 @@ impl InlineBuilder {
             .set_native_word_owner(owner_serial, self.head_operand_capture.is_some());
         let mut projected = Vec::new();
         let mut pending_head_ink = Vec::new();
-        if decoration != 0
-            && self
-                .execution
-                .word_input()
-                .0
-                .has_proved_inset_styled_append_entry()
-            && matches!(
-                prefix.cells.as_slice(),
-                [
-                    _,
-                    (FieldCell::BreakableBlank, _),
-                    (FieldCell::BreakMarker, _)
-                ]
-            )
+        if replay_zero_advance.has_buffered_glyph()
+            && !replay_zero_advance.can_project_prior_slot()
+            && !replay_zero_advance.can_replay_projected_prior_slot()
         {
+            if !(prefix.pending_cell.is_some()
+                && prefix.backbefore
+                && prefix.cursor_retreat == 0
+                && matches!(
+                    prefix.cells.as_slice(),
+                    [
+                        ..,
+                        (FieldCell::BreakableBlank, _),
+                        (FieldCell::BreakMarker, _)
+                    ]
+                ))
+            {
+                // These held projections do not yet map to distinct raw
+                // slots. Keep them with the formatter's zero-advance path.
+                return false;
+            }
             // BACKBEFORE stops at LF, so the earlier pending glyph and
             // authored SP both survive the separator. Hand them back to
             // the HEAD owner together before the cloned replay retires it.
@@ -754,43 +756,65 @@ impl InlineBuilder {
             return None;
         }
         let (input, anchors) = self.execution.word_input();
+        if decoration == 0
+            && input.writes_at_buffer_end()
+            && input.has_pending_break_markers()
+            && input
+                .cells()
+                .iter()
+                .rev()
+                .take(super::field_buffer::MAX_EDITABLE_APPEND_CELLS)
+                .find(|cell| **cell != FieldCell::TabReference)
+                == Some(&FieldCell::BreakableBlank)
+        {
+            // A following SP already delimits the marked word in
+            // term_fill() (term.c:294–306). The generated blank appends
+            // without rewriting that boundary's existing reading receipt.
+            return None;
+        }
         let marked_backbefore = input.has_marked_backbefore_tail()
             && (!self.execution.zero_advance.has_buffered_glyph()
                 || self.execution.zero_advance.can_project_prior_slot());
         let replaces_source_space = native_count == 1 && input.has_proved_inset_separator_entry();
         let replays_inset_zero_width =
             native_count == 1 && input.has_proved_inset_zero_width_separator_entry();
-        if decoration != 0 {
-            // BACKBEFORE first replaces the trailing SP or appends BS
-            // after another cell. Then encode1 emits the active font's raw
-            // copies (term.c:903–929). Keep the full-prefix check below.
-            if !(marked_backbefore
-                || replaces_source_space
-                || replays_inset_zero_width
-                || native_count == 1 && input.has_proved_inset_styled_append_entry())
-            {
+        let shared_head = self.execution.definition.as_ref().is_some_and(|state| {
+            state.run_in_continuation
+                && state.deferred_head_projection.is_some()
+                && input.has_bounded_run_in_projection()
+        });
+        if !shared_head {
+            let replayable = if decoration != 0 {
+                marked_backbefore
+                    || replaces_source_space
+                    || replays_inset_zero_width
+                    || native_count == 1 && input.has_proved_inset_styled_append_entry()
+            } else {
+                input.has_bounded_decorated_run_in_projection()
+                    || replaces_source_space
+                    || replays_inset_zero_width
+                    || native_count == 2 && input.has_proved_diag_separator_entry()
+                    || input.has_retained_word_cursor()
+                    || marked_backbefore
+                    || input.has_positioned_slots()
+                        && (input.has_backafter_armed()
+                            || input.has_entry_retreat()
+                                && self.execution.zero_advance.can_project_prior_slot())
+            };
+            if !replayable {
                 return None;
             }
-        } else if !(input.has_bounded_decorated_run_in_projection()
-            || replaces_source_space
-            || replays_inset_zero_width
-            || native_count == 2 && input.has_proved_diag_separator_entry()
-            || input.has_retained_word_cursor()
-            || marked_backbefore
-            || input.has_positioned_slots()
-                && (input.has_backafter_armed()
-                    || input.has_entry_retreat()
-                        && self.execution.zero_advance.can_project_prior_slot()))
-        {
-            return None;
         }
         let mut prefix = input.field_prefix(0, false, true)?;
+        // Single-font marked seams with no pending BACKBEFORE already
+        // have an accepted reading separator. Keep its existing receipt.
+        let single_font_marked_seam = decoration == 2 && input.has_pending_break_markers();
         if prefix
             .raw_slot_count()
-            .saturating_add(native_count + decoration + 1)
-            > super::field_buffer::MAX_EDITABLE_APPEND_CELLS
-            || decoration != 0 && (prefix.start != 0 || !prefix.backbefore)
-            || replays_inset_zero_width && prefix.start != 0
+            .saturating_add(native_count.saturating_mul(1 + decoration) + 1)
+            > prefix.slot_limit
+            || (shared_head || decoration != 0 || replays_inset_zero_width) && prefix.start != 0
+            || (single_font_marked_seam || !shared_head && decoration != 0) && !prefix.backbefore
         {
             return None;
         }
@@ -975,6 +999,9 @@ impl super::InlineExecutionState {
         };
         let filled_line_domain =
             matches!(domain, ReplayDomain::Filled | ReplayDomain::DefinitionLine);
+        let continuing_run_in = self.definition.as_ref().is_some_and(|state| {
+            state.run_in_continuation && state.deferred_head_projection.is_some()
+        });
         let leading_marker_extend = matches!(extend, PrefixExtension::LeadingMarker);
         let extend = match extend {
             PrefixExtension::None => false,
@@ -1025,6 +1052,7 @@ impl super::InlineExecutionState {
                         kept_blanks,
                         leading_retreat
                             || leading_marker_extend
+                            || continuing_run_in
                             || input.has_retained_word_cursor()
                             || filled_line_domain && input.awaits_flush(),
                     )?;

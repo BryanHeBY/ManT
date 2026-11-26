@@ -21,6 +21,15 @@ pub(in crate::mandoc::inline::flow) struct RetainedMotionGap {
 }
 
 impl FieldBuffer {
+    pub(in crate::mandoc::inline::flow) fn replay_slot_limit(&self) -> usize {
+        match self.projection_owner {
+            super::FieldProjectionOwner::Active => MAX_REPLAY_PREFIX_CELLS,
+            super::FieldProjectionOwner::RunInHead | super::FieldProjectionOwner::Detached => {
+                super::MAX_RUN_IN_REPLAY_CELLS
+            }
+        }
+    }
+
     /// Find source blank markers whose first surviving slot follows the
     /// incoming word. A marker still owns the accepted count at flush.
     pub(in crate::mandoc::inline::flow) fn relocated_blank_markers(
@@ -261,12 +270,12 @@ impl FieldBuffer {
     /// The first ordinary BODY word need not mention a move; a later
     /// `term_word()` can still return to this origin before `termp_it_post()`
     /// calls `term_newln()` (`mdoc_term.c:939–945`; `term.c:678–718`).
-    fn has_bounded_run_in_projection(&self) -> bool {
+    pub(in crate::mandoc::inline::flow) fn has_bounded_run_in_projection(&self) -> bool {
         self.resume == 0
             && self.raw_slot_fence == 0
             && self.projected_pass_ends.is_empty()
             && !matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
-            && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
+            && self.cells.len() <= self.replay_slot_limit()
             && self.projection_length(0, self.cells.len()) > 0
     }
 
@@ -280,6 +289,13 @@ impl FieldBuffer {
             && matches!(self.write_cursor, WriteCursor::Placed(0))
             && !self.backbefore_armed
             && !self.backafter_armed
+    }
+
+    pub(in crate::mandoc::inline::flow) fn can_append_run_in_separator(&self) -> bool {
+        self.projection_owner == super::FieldProjectionOwner::Detached
+            && self.has_bounded_run_in_projection()
+            && self.writes_at_buffer_end()
+            && !self.has_pending_break_markers()
     }
 
     /// A one-cell generated inset fallback appends after a marked fixed
@@ -461,6 +477,26 @@ impl FieldBuffer {
         kept: bool,
         live_replay: bool,
     ) -> Option<super::super::native_slots::FieldPrefix> {
+        let slot_limit = self.replay_slot_limit();
+        if slot_limit > MAX_REPLAY_PREFIX_CELLS
+            && self.cells.len() <= slot_limit
+            && let Some(prefix) =
+                self.field_prefix_with_limit(automatic, kept, live_replay, slot_limit)
+            && prefix.start == 0
+            && prefix.raw_slot_count() <= slot_limit
+        {
+            return Some(prefix);
+        }
+        self.field_prefix_with_limit(automatic, kept, live_replay, MAX_REPLAY_PREFIX_CELLS)
+    }
+
+    fn field_prefix_with_limit(
+        &self,
+        automatic: usize,
+        kept: bool,
+        live_replay: bool,
+        slot_limit: usize,
+    ) -> Option<super::super::native_slots::FieldPrefix> {
         let control_prefix = self.has_editable_control_prefix();
         let complete_tail = self.has_replayable_trailing_advance();
         if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
@@ -488,7 +524,7 @@ impl FieldBuffer {
         let fence = self.retained_cursor_fence(fence);
         let floor = fence
             .max(self.resume)
-            .max(self.cells.len().saturating_sub(MAX_REPLAY_PREFIX_CELLS));
+            .max(self.cells.len().saturating_sub(slot_limit));
         // A projection-only recovery spelling can fence its own native
         // position without hiding complete glyph slots appended after it.
         let mut start = (floor..self.cells.len())
@@ -525,6 +561,7 @@ impl FieldBuffer {
         let cells = self.prefix_cells(start);
         Some(super::super::native_slots::FieldPrefix {
             start,
+            slot_limit,
             deferred_tail: if complete_tail && start == 0 {
                 if self.deferred_blanks.is_empty() {
                     super::super::native_slots::DeferredTail::Covered
@@ -905,7 +942,7 @@ impl FieldBuffer {
         // their reading owner has already been detached. Its projection
         // counters cannot prove an internal gap in this payload.
         let mut projection_is_complete =
-            self.projection_owner == super::FieldProjectionOwner::Active;
+            self.projection_owner != super::FieldProjectionOwner::Detached;
         let mut gap = end;
         let floor = self
             .pass_start_for(end)

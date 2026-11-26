@@ -33,6 +33,10 @@
 /// otherwise buffer `'\b'`); `term_word()` separator blanks 573-576.
 pub(in crate::mandoc::inline) const MAX_EDITABLE_APPEND_CELLS: usize =
     placement::MAX_REPLAY_PREFIX_CELLS;
+// One complete run-in field may need its origin after BODY overwrites
+// an early slot. Bound the wider replay by the initial CVS tcol capacity
+// (term.c::adjbuf), measured in raw slots including font copies.
+pub(in crate::mandoc::inline) const MAX_RUN_IN_REPLAY_CELLS: usize = 1024;
 
 mod cells;
 mod drawing;
@@ -227,6 +231,7 @@ impl WriteCursor {
 enum FieldProjectionOwner {
     #[default]
     Active,
+    RunInHead,
     Detached,
 }
 

@@ -953,6 +953,7 @@ struct GeometrySeed<'a> {
     prior_pending: Option<PriorPendingSlot>,
     advance_marker: Option<usize>,
     editable_pass: bool,
+    slot_limit: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -1041,6 +1042,7 @@ impl GeometrySeed<'_> {
                 replayed_entry: false,
                 advance_marker,
                 editable_pass: prefix.pass == ReplayPass::Editable,
+                slot_limit: prefix.slot_limit,
             }
         } else if let Some(tail) = context.slot_entry.device_tail.take() {
             let automatic = context.slot_entry.automatic_blanks;
@@ -1056,6 +1058,7 @@ impl GeometrySeed<'_> {
                 prior_pending: None,
                 advance_marker: None,
                 editable_pass: false,
+                slot_limit: crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS,
             }
         } else {
             let mut placement = Placement::empty(NativeSlots::after_entry(
@@ -1105,6 +1108,7 @@ impl GeometrySeed<'_> {
                 prior_pending: None,
                 advance_marker: None,
                 editable_pass: false,
+                slot_limit: crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS,
             }
         };
         seed.placement
@@ -1138,9 +1142,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
     zero_advance: &mut super::ZeroAdvanceState,
     (projected, pending_head_ink): (&mut Vec<mant_ir::Inline>, &mut Vec<mant_ir::Inline>),
 ) -> Option<Vec<FieldWrite>> {
-    use crate::mandoc::inline::flow::field_buffer::{
-        DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS,
-    };
+    use crate::mandoc::inline::flow::field_buffer::DeferredSourceBlank;
 
     let mut placement = Placement::empty(NativeSlots::with_field_prefix(prefix));
     let earlier = prefix.cells.len();
@@ -1185,7 +1187,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
         }
     }
     let (extent, _) = placement.slots.extent_and_retreat();
-    if extent > MAX_EDITABLE_APPEND_CELLS {
+    if extent > prefix.slot_limit {
         return None;
     }
     let editable_marker = placement.slots.has_break_marker() || placement.slots.cursor_before_end();
@@ -1198,6 +1200,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
         prior_pending: PriorPendingSlot::at_entry(prefix.pending_cell, zero_advance),
         advance_marker: None,
         editable_pass: prefix.pass == ReplayPass::Editable,
+        slot_limit: prefix.slot_limit,
     };
     let placed = PlacedWord::prepare(
         seed,
@@ -1306,8 +1309,8 @@ fn seed_retention_flags(
     let slots = &seed.placement.slots;
     let has_surviving_marker = slots.has_break_marker();
     let extent = slots.extent_and_retreat().0;
-    let bounded_complete_field = covers_field_start(seed, context.slot_entry.cursor)
-        && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+    let bounded_complete_field =
+        covers_field_start(seed, context.slot_entry.cursor) && extent <= seed.slot_limit;
     // Fresh bounded Filled, DefinitionLine, and Scoped fields share the same
     // live `tcol->buf` before `term_flushln()` (term.c:659-660, 678-718;
     // mdoc_term.c:760-838). LiteralDefinitionLine stays excluded.
@@ -1339,7 +1342,7 @@ fn seed_retention_flags(
         && matches!(advances, AdvanceReading::Inner)
         && context.slot_entry.domain == ReplayDomain::DefinitionLine
         && is_fresh_word_entry(context)
-        && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+        && extent <= seed.slot_limit;
     let retain_suffix = context.policy.field_authoritative
         && (!has_marker
             || !has_surviving_marker && bounded_complete_field
@@ -1354,7 +1357,7 @@ fn seed_retention_flags(
             || matches!(advances, AdvanceReading::Inner)
                 && context.slot_entry.domain == ReplayDomain::Filled
                 && slots.has_unpainted_marker_tail()
-                && extent <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS);
+                && extent <= seed.slot_limit);
     let editable_marker = matches!(plan.marker, Some(MarkerReplay::AwaitFieldFlush))
         || matches!(plan.marker, Some(MarkerReplay::PreserveSlots))
             && has_surviving_marker
@@ -1439,7 +1442,7 @@ fn retains_word_cursor(
             // inside those fixed cells before term_fill() sees the marker.
             || covers_field_start(seed, entry.cursor)
                 && slots.extent_and_retreat().0
-                    <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
+                    <= seed.slot_limit
                 && slots.cursor_in_unread_advance_after_marker()
             || retains_repositioned_word_cursor(seed, entry, events)
             || matches!(
@@ -1447,7 +1450,7 @@ fn retains_word_cursor(
                 ReplayDomain::Filled | ReplayDomain::DefinitionLine | ReplayDomain::Scoped
             ) && covers_field_start(seed, entry.cursor)
                 && slots.extent_and_retreat().0
-                    <= crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
+                    <= seed.slot_limit
                 && seed.placement.retreated
             || seed.earlier != 0
                 && (slots.cursor_before_invisible_tail()
@@ -1458,14 +1461,11 @@ fn retains_word_cursor(
 }
 
 fn covers_field_start(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
-    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
-
     // An exact prefix starting at col zero and a fresh field both own
     // their origin. Missing prefix evidence with prior input stays opaque.
     seed.prefix_start == 0
         && (seed.earlier != 0
-            || !entry.has_input()
-                && seed.placement.slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS)
+            || !entry.has_input() && seed.placement.slots.extent_and_retreat().0 <= seed.slot_limit)
 }
 
 fn retains_repositioned_word_cursor(
@@ -1473,15 +1473,13 @@ fn retains_repositioned_word_cursor(
     entry: &SlotEntry,
     events: &[RoffInlineEvent],
 ) -> bool {
-    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
-
     // An executed HORIZ in a complete field moves col without discarding
     // later slots. In filled text, a retreat into the raw operand also
     // leaves its subsequent markers available to the next term_word()
     // until term_fill() runs (term.c:659–660, 678–714).
     let slots = &seed.placement.slots;
     covers_field_start(seed, entry.cursor)
-        && slots.extent_and_retreat().0 <= MAX_EDITABLE_APPEND_CELLS
+        && slots.extent_and_retreat().0 <= seed.slot_limit
         && slots.cursor_before_owner()
         && slots.contains_ink_from(seed.earlier)
         && match seed.placement.reposition {

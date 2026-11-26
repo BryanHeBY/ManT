@@ -157,6 +157,10 @@ impl InlineBuilder {
         }
     }
 
+    pub(in crate::mandoc) fn begin_run_in_head(&mut self) {
+        self.definition_state_mut().field_buffer.begin_run_in_head();
+    }
+
     pub(in crate::mandoc) fn set_definition_native_margin(&mut self, units: usize) {
         let presentation = self.execution.row_presentation;
         let state = self.definition_state_mut();

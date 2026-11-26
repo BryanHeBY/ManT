@@ -462,7 +462,7 @@ impl FieldBuffer {
             // `\X'tty: link'` occupy 1 raw byte each (term.c:620-638).
             let decorated_count: usize = proof.fonts.iter().map(|(range, _)| range.len()).sum();
             let complete_fresh_word = entry == 0
-                && self.projection_owner == super::FieldProjectionOwner::Active
+                && self.projection_owner != super::FieldProjectionOwner::Detached
                 && !self.backafter_armed
                 && self.raw_slot_fence == 0
                 && self.resume == 0
@@ -473,7 +473,7 @@ impl FieldBuffer {
                     .cells
                     .len()
                     .saturating_add(decorated_count.saturating_mul(4))
-                    <= super::MAX_EDITABLE_APPEND_CELLS
+                    <= self.replay_slot_limit()
                 && self.cells.iter().enumerate().all(|(index, cell)| {
                     matches!(
                         cell,
@@ -829,6 +829,10 @@ impl FieldBuffer {
         // mdoc_term.c::termp_it_pre() keeps the original inset/diag
         // field live across the HEAD and BODY projection owners.
         self.projection_owner = super::FieldProjectionOwner::Detached;
+    }
+
+    pub(in crate::mandoc::inline::flow) fn begin_run_in_head(&mut self) {
+        self.projection_owner = super::FieldProjectionOwner::RunInHead;
     }
 
     pub(in crate::mandoc::inline::flow) fn push_separator_blank(&mut self) {

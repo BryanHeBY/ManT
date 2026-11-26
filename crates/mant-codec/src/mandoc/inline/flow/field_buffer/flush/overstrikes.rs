@@ -97,7 +97,7 @@ impl FieldBuffer {
     /// copies printable. Ordinary decoration is exactly glyph, BS, glyph
     /// (`term.c:911-925`) and never needs a paint pass on its own.
     fn edited_font_copy_end(&self, start: usize, end: usize) -> Option<usize> {
-        let end = end.min(start.saturating_add(MAX_REPLAY_PREFIX_CELLS));
+        let end = end.min(start.saturating_add(self.replay_slot_limit()));
         let first = self
             .raw_copy_aliases
             .partition_point(|&(copy, _)| copy < start);
@@ -201,8 +201,9 @@ impl FieldBuffer {
         let mut cursor = origin;
         let mut extent = origin;
         let mut stepped_left = false;
-        let mut row = [None; MAX_REPLAY_PREFIX_CELLS * 2];
-        let mut covered_by = [None; MAX_REPLAY_PREFIX_CELLS];
+        let slot_limit = self.replay_slot_limit();
+        let mut row = vec![None; slot_limit * 2];
+        let mut covered_by = vec![None; cells.len().min(slot_limit)];
         let aliases = &self.raw_copy_aliases;
         let owner_at = |cell| {
             aliases
@@ -217,7 +218,7 @@ impl FieldBuffer {
             if offset > last_edit && cursor == extent {
                 break;
             }
-            if offset >= MAX_REPLAY_PREFIX_CELLS {
+            if offset >= slot_limit {
                 return None;
             }
             let index = start + offset;
@@ -235,10 +236,7 @@ impl FieldBuffer {
                     for _ in 0..*width {
                         if let Some(previous) = row[cursor].replace(index) {
                             let owner = owner_at(previous).checked_sub(start)?;
-                            if owner >= MAX_REPLAY_PREFIX_CELLS {
-                                return None;
-                            }
-                            covered_by[owner] = Some(index);
+                            *covered_by.get_mut(owner)? = Some(index);
                         }
                         cursor += 1;
                     }
@@ -260,12 +258,9 @@ impl FieldBuffer {
                 }
                 _ => return None,
             }
-            if let Some(previous) = row[cursor].replace(index) {
+            if let Some(previous) = row.get_mut(cursor)?.replace(index) {
                 let owner = owner_at(previous).checked_sub(start)?;
-                if owner >= MAX_REPLAY_PREFIX_CELLS {
-                    return None;
-                }
-                covered_by[owner] = Some(index);
+                *covered_by.get_mut(owner)? = Some(index);
             }
             cursor += 1;
             extent = extent.max(cursor);
@@ -278,16 +273,13 @@ impl FieldBuffer {
             // columns, both are visible in that accepted row.
             let cell = owner_at(cell);
             let owner = cell.checked_sub(start)?;
-            if owner >= MAX_REPLAY_PREFIX_CELLS {
-                return None;
-            }
-            covered_by[owner] = None;
+            *covered_by.get_mut(owner)? = None;
             if self.projected_ink(cell) && (keep_distinct_copies || !ordered.contains(&cell)) {
                 ordered.push(cell);
             }
         }
         let order_groups = changed_paint_groups(start, &ordered);
-        let retreat_targets = self.paint_retreat_targets(start, cells.len());
+        let retreat_targets = self.paint_retreat_targets(start, covered_by.len());
         let proof = DeviceOverprint {
             covered: covered_by
                 .into_iter()
@@ -304,12 +296,12 @@ impl FieldBuffer {
         Some((proof, stepped_left))
     }
 
-    fn paint_retreat_targets(&self, start: usize, cells: usize) -> [bool; MAX_REPLAY_PREFIX_CELLS] {
-        let end = start + cells.min(MAX_REPLAY_PREFIX_CELLS);
+    fn paint_retreat_targets(&self, start: usize, cells: usize) -> Vec<bool> {
+        let end = start + cells;
         let first = self
             .pass_retreats
             .partition_point(|&(_, mark)| mark < start);
-        let mut targets = [false; MAX_REPLAY_PREFIX_CELLS];
+        let mut targets = vec![false; cells];
         for &(target, _) in self.pass_retreats[first..]
             .iter()
             .take_while(|&&(_, mark)| mark < end)
@@ -414,7 +406,8 @@ fn changed_paint_groups(start: usize, ordered: &[usize]) -> Vec<Vec<usize>> {
     // Close an interval when the output has visited every authored owner
     // in that interval, including its last visible copy. Independent
     // edits may be separated by real spaces, which have no paint rank.
-    let mut last = [0; MAX_REPLAY_PREFIX_CELLS];
+    let last_owner = source_order.last().expect("duplicated paint owner");
+    let mut last = vec![0; last_owner - start + 1];
     for (position, &owner) in ordered.iter().enumerate() {
         last[owner - start] = position + 1;
     }

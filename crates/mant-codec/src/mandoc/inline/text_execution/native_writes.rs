@@ -7,6 +7,7 @@ pub(super) struct AppendedFonts {
     fonts: Vec<(std::ops::Range<usize>, super::Font)>,
     armed: bool,
     pending: bool,
+    retain_pending_controls: bool,
 }
 
 impl AppendedFonts {
@@ -39,7 +40,7 @@ impl AppendedFonts {
                     self.armed = true;
                     continue;
                 }
-                FieldWrite::CancelBackafter if !self.pending => {
+                FieldWrite::CancelBackafter if !self.pending || self.retain_pending_controls => {
                     // term.c:662-667: ESCAPE_NOSPACE clears BACKAFTER and
                     // buffers no bytes into tcol->buf.
                     self.armed = false;
@@ -53,9 +54,12 @@ impl AppendedFonts {
                     | FieldCell::BreakMarker,
                 )
                 | FieldWrite::UnprojectedBlank
-                    if !self.pending => {}
+                    if !self.pending || self.retain_pending_controls => {}
                 FieldWrite::MotionPadding { .. } if !self.pending && !self.armed => {}
-                FieldWrite::DeferredBlanks { count, .. } if !self.pending => {
+                FieldWrite::StageBacklineProjection if self.retain_pending_controls => continue,
+                FieldWrite::DeferredBlanks { count, .. }
+                    if !self.pending || self.retain_pending_controls =>
+                {
                     self.cells += *count;
                     continue;
                 }
@@ -100,140 +104,43 @@ impl AppendedFonts {
     }
 }
 
-/// A fresh run-in HEAD can end with a pending decorated glyph and only
-/// buffer writes: LF, `ASCII_BREAK`, and one authored SP. None is `encode1()`
-/// ink or settles BACKBEFORE (term.c:620–660, 903–929, 946–967). Preserve
-/// the existing fallback word/space owners and record just its proved
-/// decoration extent before the BODY's generated NBSP addresses the SP.
-pub(in crate::mandoc::inline) fn retain_single_pending_decorated_head(
+/// Prove a fresh styled HEAD ending with BACKBEFORE still live. Control
+/// writes and ordinary SP do not settle it (term.c:620–660, 903–969).
+/// The next `encode1()` is the generated BODY separator. Its raw cursor
+/// needs the complete HEAD, including any earlier decorated glyphs.
+pub(in crate::mandoc::inline) fn retain_pending_run_in_head(
     events: &[RoffInlineEvent],
     writes: &mut [FieldWrite],
     font: super::Font,
 ) {
-    if !matches!(font, super::Font::Strong | super::Font::Emphasis) {
-        return;
-    }
-    let [
-        RoffInlineEvent::ZeroAdvance,
-        RoffInlineEvent::Text(glyph),
-        RoffInlineEvent::LineBreak,
-        RoffInlineEvent::Breakpoint,
-        RoffInlineEvent::Text(space),
-    ] = events
-    else {
-        return;
-    };
-    if glyph.len() != 1 || space != " " {
-        return;
-    }
-    let [
-        FieldWrite::ArmBackafter,
-        FieldWrite::Cell(FieldCell::Graph { text, width: 1 }),
-        FieldWrite::Cell(FieldCell::BreakMarker),
-        FieldWrite::Cell(FieldCell::Breakpoint),
-        FieldWrite::StageBacklineProjection,
-        FieldWrite::DeferredBlanks { source, count: 1 },
-        proof @ FieldWrite::OpaqueRawSlots {
-            styled_suffix: None,
-            keeps_prior_slots: false,
-        },
-    ] = writes
-    else {
-        return;
-    };
-    if source.font == font && text.is_ascii_graphic() && glyph.starts_with(*text) {
-        // Four source cells; the font run expands the first to three raw
-        // cells. The reading-only stage receipt occupies no raw slot.
-        *proof = FieldWrite::ProveAppendedSlots(AppendedSlotProof {
-            cells: 4,
-            fonts: vec![(0..1, font)],
-            replay_tail: None,
-            pending: true,
-        });
-    }
-}
-
-/// Prove the corresponding diagonal HEAD tape. Its lexical TEXT can
-/// begin with a literal bold word and one ordinary SP. LF, `ASCII_BREAK`,
-/// and any terminal authored SP preserve BACKBEFORE (term.c:620–660,
-/// 903–929). The BODY's two fixed cells then either step over BREAK
-/// with a backline or replace the preceding SP.
-pub(in crate::mandoc::inline) fn retain_pending_decorated_diag_head(
-    events: &[RoffInlineEvent],
-    writes: &mut [FieldWrite],
-    font: super::Font,
-) {
-    if font != super::Font::Strong {
-        return;
-    }
-    let Some((RoffInlineEvent::Text(prefix), rest)) = events.split_first() else {
-        retain_single_pending_decorated_head(events, writes, font);
-        return;
-    };
-    let Some(graphs) = prefix.strip_suffix(' ') else {
-        return;
-    };
-    if graphs.is_empty()
-        || !graphs.bytes().all(|byte| byte.is_ascii_graphic())
-        || graphs.len().saturating_mul(3).saturating_add(7)
-            > super::super::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS
+    if !has_native_decoration(font)
+        || events.iter().any(|event| {
+            matches!(
+                event,
+                RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
+            )
+        })
     {
         return;
     }
-    let prefix_len = prefix.len();
-    let Some((leading, tail)) = writes.split_at_mut_checked(prefix_len) else {
+    let Some((proof @ FieldWrite::OpaqueRawSlots { .. }, emitted)) = writes.split_last_mut() else {
         return;
     };
-    let [ink @ .., FieldWrite::Cell(FieldCell::BreakableBlank)] = leading else {
-        return;
+    let mut append = AppendedFonts {
+        retain_pending_controls: true,
+        ..AppendedFonts::default()
     };
-    if !ink.iter().zip(graphs.chars()).all(|(write, glyph)| {
-        matches!(write, FieldWrite::Cell(FieldCell::Graph { text, width: 1 }) if *text == glyph)
-    }) {
+    if !append.record(emitted, font) || !append.pending {
         return;
     }
-    let [
-        RoffInlineEvent::ZeroAdvance,
-        RoffInlineEvent::Text(glyph),
-        RoffInlineEvent::LineBreak,
-        RoffInlineEvent::Breakpoint,
-        terminal @ ..,
-    ] = rest
-    else {
-        return;
-    };
-    let [
-        FieldWrite::ArmBackafter,
-        FieldWrite::Cell(FieldCell::Graph { text, width: 1 }),
-        FieldWrite::Cell(FieldCell::BreakMarker),
-        FieldWrite::Cell(FieldCell::Breakpoint),
-        FieldWrite::StageBacklineProjection,
-        suffix @ ..,
-    ] = tail
-    else {
-        return;
-    };
-    if glyph.len() != 1 || !text.is_ascii_graphic() || !glyph.starts_with(*text) {
-        return;
-    }
-    let (proof, blanks) = match (terminal, suffix) {
-        ([], [proof]) => (proof, 0),
-        (
-            [RoffInlineEvent::Text(space)],
-            [FieldWrite::DeferredBlanks { source, count: 1 }, proof],
-        ) if space == " " && source.font == font => (proof, 1),
-        _ => return,
-    };
-    if matches!(
-        proof,
-        FieldWrite::OpaqueRawSlots {
-            styled_suffix: None,
-            keeps_prior_slots: false
-        }
-    ) {
+    let decoration: usize = append.fonts.iter().map(|(range, _)| range.len()).sum();
+    let raw_slots = append.cells.saturating_add(decoration.saturating_mul(
+        crate::mandoc::inline::flow::native_slots::decoration_slots(font),
+    ));
+    if raw_slots <= crate::mandoc::inline::flow::field_buffer::MAX_RUN_IN_REPLAY_CELLS {
         *proof = FieldWrite::ProveAppendedSlots(AppendedSlotProof {
-            cells: prefix_len + 3 + blanks,
-            fonts: vec![(0..graphs.len(), font), (prefix_len..prefix_len + 1, font)],
+            cells: append.cells,
+            fonts: append.fonts,
             replay_tail: None,
             pending: true,
         });

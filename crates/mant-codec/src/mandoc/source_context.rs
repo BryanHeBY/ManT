@@ -269,6 +269,9 @@ impl<'a> LoweringContext<'a> {
             (true, 2) => Some(inline::RunInHeadWordProof::Diagonal),
             _ => None,
         };
+        if builder.run_in_head_word_proof.is_some() {
+            builder.begin_run_in_head();
+        }
         inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
         builder.observe_no_fill_source_lines(false);
         // The generated cells execute FIRST (append_run_in_cells routes

@@ -54,6 +54,93 @@ fn assert_rows(body: &str, expected: &[&str]) {
 }
 
 #[test]
+fn inset_head_stays_editable_until_the_native_row_flushes() {
+    // termp_it_post() closes inset input on BODY post. An output owner
+    // change leaves term_word()'s native cursor able to revisit the HEAD
+    // (mdoc_term.c:939–945 and term.c:678–718). An authored .br closes it.
+    assert_rows(".Bl -inset\n.It A\n\\h'|0n'B C\n.El\n", &["B C"]);
+    assert_rows(".Bl -inset\n.It A\nB C\n.El\n", &["A B C"]);
+    assert_rows(
+        ".Bl -inset\n.It No JA\n.No B No \"\\h'|1n'C\"\n.El\n",
+        &["JC B"],
+    );
+    assert_rows(
+        ".Bl -inset\n.It No JA\n.No B\n.br\n.No \"\\h'|1n'C\"\n.El\n",
+        &["JA B", "C"],
+    );
+}
+
+#[test]
+fn run_in_separator_executes_with_the_retained_head_slots_and_active_font() {
+    // The literal diagonal HEAD is bold. Both generated fixed blanks
+    // execute at the native cursor before BODY's first word (mdoc_term.c:
+    // 757–772). The accepted passes preserve A in the prefixed case and
+    // still emit a graph-only row of fixed blanks (term.c:143–217, 389–434).
+    assert_rows(
+        ".Bl -diag\n.It \"J\\zA\\p\\: \"\n.No \"\\h'|0n'B\" No C\n.El\n",
+        &["CA", ""],
+    );
+    assert_rows(
+        ".Bl -diag\n.It \"\\zA\\p\\: \"\n.No \"\\h'|0n'B\" No C\n.El\n",
+        &["C", ""],
+    );
+    // The UTF-8 NBSP writes all four BI decoration slots (term.c:
+    // 903–929), leaving a visible underscore after the BODY edit.
+    // ASCII writes an undecorated blank and shows the same A, B and C.
+    assert_rows(
+        ".ft BI\n.Bl -inset\n.It No \"\\zA\\p\\&\"\n.No \"\\h'|1n'\" No \"\\pB\" No C\n.El\n.ft R\n",
+        &["AB_C"],
+    );
+    // A held glyph before SP and LF still belongs to the shared field.
+    // BODY's BI writes cover the separator's device column (term.c:389–438).
+    assert_rows(
+        ".ft BI\n.Bl -inset\n.It No \"\\zA \\p\"\n.No \"\\h'|2n'\\zB\" No C\n.El\n.ft R\n",
+        &["AC"],
+    );
+}
+
+#[test]
+fn run_in_retreats_keep_the_input_origin_across_later_control_words() {
+    // term_word() handles a HORIZ canceled by BACKAFTER, another motion,
+    // and deferred word-end breaks against the same input origin
+    // (term.c:659–718). Neither the generated separator nor its reading
+    // owner can fence off the earlier raw prefix.
+    assert_rows(
+        concat!(
+            ".Bl -inset\n.It X\n",
+            r#".Em "A" Em "\z\h'-1n'\h'1n'" Em "F\p\h'-1n'G\p\h'-1n'\c" Em "\h'-10n'X""#,
+            "\n.El\n"
+        ),
+        &["X X FG"],
+    );
+    assert_rows(
+        concat!(
+            ".Bl -inset\n.It X\n",
+            r#".Ns No "A" Ns Em "\z\h'-7n'\h'1n' " Ns No "F\h'-2n'\pG\h'-2n'\p\c" No "\h'-4n'X""#,
+            "\n.El\n"
+        ),
+        &["X XA G"],
+    );
+}
+
+#[test]
+fn run_in_retreats_can_overwrite_a_long_decorated_head() {
+    // The repeated HEAD has a three-slot decoration per glyph. The two
+    // landing positions respectively overwrite the origin and split a
+    // decoration, leaving both of its copies visible (term.c:389–438,
+    // 678–718, 903–929).
+    let head = "J".repeat(53);
+    assert_rows(
+        &format!(".Bl -inset\n.It Em \"{head}A\"\n.No \"\\h'|0n'B\" No C\n.El\n"),
+        &[&format!("C{}A", "J".repeat(52))],
+    );
+    assert_rows(
+        &format!(".Bl -diag\n.It \"{head}A\"\n.No \"\\h'|53n'B\" No C\n.El\n"),
+        &[&format!("{}BJC{}A", "J".repeat(17), "J".repeat(35))],
+    );
+}
+
+#[test]
 fn empty_field_vertical_space_has_no_synthetic_line_close() {
     // All 36 exact inputs ran on pristine CVS before these assertions.
     // term_newln() only flushes buffered cells or viscol; term_vspace()

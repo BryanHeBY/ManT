@@ -80,7 +80,7 @@ impl FieldBuffer {
     ) -> Vec<usize> {
         use super::{FieldProjectionOwner, FillBoundary};
         if self.underline_strokes.is_empty()
-            || self.projection_owner != FieldProjectionOwner::Active
+            || self.projection_owner == FieldProjectionOwner::Detached
         {
             return Vec::new();
         }

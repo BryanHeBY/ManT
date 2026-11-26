@@ -180,16 +180,12 @@ fn execute_roff_word_entry(
             policy,
         },
     );
-    if let Some((head, font)) = producer_proof {
-        let retain = match head {
-            super::RunInHeadWordProof::Inset => {
-                super::text_execution::retain_single_pending_decorated_head
-            }
-            super::RunInHeadWordProof::Diagonal => {
-                super::text_execution::retain_pending_decorated_diag_head
-            }
-        };
-        retain(events, &mut execution.native_writes, font);
+    if let Some(font) = producer_proof {
+        super::text_execution::retain_pending_run_in_head(
+            events,
+            &mut execution.native_writes,
+            font,
+        );
     }
     execution
 }
@@ -198,7 +194,7 @@ fn run_in_head_entry_proof(
     builder: &InlineBuilder,
     slot: &super::SlotEntry,
     origin: WordSource<'_>,
-) -> Option<(super::RunInHeadWordProof, super::Font)> {
+) -> Option<super::Font> {
     let head = builder.run_in_head_word_proof?;
     let domain = match head {
         super::RunInHeadWordProof::Inset => ReplayDomain::DefinitionLine,
@@ -213,7 +209,7 @@ fn run_in_head_entry_proof(
         && !builder.zero_advance.is_armed()
         && !builder.zero_advance.has_buffered_glyph()
         && !builder.zero_advance.has_annotation_output_owner())
-    .then_some((head, builder.execution.font.current))
+    .then_some(builder.execution.font.current)
 }
 
 fn receive_word_effects(

@@ -234,6 +234,7 @@ pub(in crate::mandoc::inline) enum ReplayPass {
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.
 pub(in crate::mandoc::inline) struct FieldPrefix {
+    pub(in crate::mandoc::inline) slot_limit: usize,
     pub(in crate::mandoc::inline) deferred_tail: DeferredTail,
     pub(in crate::mandoc::inline) start: usize,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
@@ -261,16 +262,16 @@ impl FieldPrefix {
             })
         });
         self.tail_fonts.iter().fold(base, |count, (range, font)| {
-            let extra = match font {
-                RoffFont::Strong
-                | RoffFont::Emphasis
-                | RoffFont::CodeStrong
-                | RoffFont::CodeEmphasis => 2,
-                RoffFont::StrongEmphasis => 4,
-                RoffFont::Regular | RoffFont::Code => 0,
-            };
-            count.saturating_add(range.len().saturating_mul(extra))
+            count.saturating_add(range.len().saturating_mul(decoration_slots(*font)))
         })
+    }
+}
+
+pub(in crate::mandoc::inline) fn decoration_slots(font: RoffFont) -> usize {
+    match font {
+        RoffFont::Strong | RoffFont::Emphasis | RoffFont::CodeStrong | RoffFont::CodeEmphasis => 2,
+        RoffFont::StrongEmphasis => 4,
+        RoffFont::Regular | RoffFont::Code => 0,
     }
 }
 

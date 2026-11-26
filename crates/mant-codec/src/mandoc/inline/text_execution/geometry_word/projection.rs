@@ -6,10 +6,7 @@ use super::{
     PriorSlotEdit, ReadingCell, ReadingGlyph, ReplayDomain, TextExecutionContext, WordExecution,
 };
 use crate::mandoc::inline::{
-    flow::{
-        field_buffer::{MAX_EDITABLE_APPEND_CELLS, isolated_passes},
-        native_slots::FillSlot,
-    },
+    flow::{field_buffer::isolated_passes, native_slots::FillSlot},
     font::style::styled_link,
 };
 
@@ -56,6 +53,7 @@ impl<'a> PlacedWord<'a> {
             replayed_entry,
             advance_marker,
             editable_pass,
+            slot_limit,
         } = seed;
         let Placement {
             slots,
@@ -72,7 +70,7 @@ impl<'a> PlacedWord<'a> {
         let mut next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
         let mut slots = slots.into_fill_slots();
         let tail_fill_sum = device_tail_raw_sum(next_tail.as_ref(), &slots);
-        let can_edit_tail = retain_suffix && extent <= MAX_EDITABLE_APPEND_CELLS;
+        let can_edit_tail = retain_suffix && extent <= slot_limit;
         if can_edit_tail && (editable_pass || domain == ReplayDomain::Filled) {
             release_unpaired_underlines(&mut slots, &mut reading, domain);
         }
@@ -89,8 +87,7 @@ impl<'a> PlacedWord<'a> {
         );
         let settled = settle_replay_slots(
             &mut slots,
-            (editable_pass || editable_marker || cursor_retreat > 0)
-                && extent <= MAX_EDITABLE_APPEND_CELLS,
+            (editable_pass || editable_marker || cursor_retreat > 0) && extent <= slot_limit,
             cursor_retreat > 0,
         );
         sync_device_tail_cells(&mut next_tail, &slots, tail_fill_sum);
@@ -114,7 +111,7 @@ impl<'a> PlacedWord<'a> {
         let defer_strokes = retain_suffix
             && editable_pass
             && domain == ReplayDomain::DefinitionLine
-            && extent <= MAX_EDITABLE_APPEND_CELLS;
+            && extent <= slot_limit;
         let mut writes = placed_slot_writes(
             &slots,
             &reading,
@@ -1063,6 +1060,7 @@ mod tests {
             prior_pending: None,
             advance_marker: None,
             editable_pass: false,
+            slot_limit: crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS,
         };
         let placed = PlacedWord::prepare(
             seed,

@@ -539,7 +539,11 @@ impl InlineBuilder {
             .has_pending_layout(self.execution.text_alignment)
             || self.execution.definition.as_ref().is_some_and(|state| {
                 !state.field_word_anchors.is_empty()
-                    && (state.field_buffer.has_bounded_decorated_run_in_projection()
+                    && (self.run_in_head_word_proof.is_some()
+                        && (state.field_buffer.has_pending_break_markers()
+                            || has_rendered_formatter_glyph(&self.nodes))
+                        && state.field_buffer.has_bounded_run_in_projection()
+                        || state.field_buffer.has_bounded_decorated_run_in_projection()
                         || inset_styled_separator
                             && state.field_buffer.has_proved_inset_styled_append_entry()
                         || matches!(
