@@ -24,7 +24,6 @@ from .text import (
     labeled_mdoc_links,
     missing_token_candidates,
     normalized_visible_text,
-    omit_mandoc_labeled_link_destinations,
     portable_table_row_pairs,
     strip_reference_chrome,
     table_phrase_is_only_terminal_geometry,
@@ -79,11 +78,12 @@ def self_check() -> None:
     assert not source_bytes_are_context_independent(b".if n .mso fallback.tmac\n")
     assert source_bytes_are_context_independent(b".SH DESCRIPTION\nordinary text\n")
     assert strip_reference_chrome(
-        "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\nfooter\n"
+        "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\n\n  July 3       MM2GV(1)\n"
     ).strip() == "content"
     assert strip_reference_chrome(
         "PROBE(1) Commands PROBE(1)\ncontent\nLinux 6.18\n"
-        "   July 3, 2025                  PROBE(1)\n"
+        "   July 3, 2025                  PROBE(1)\n",
+        '.TH PROBE 1 "July 3, 2025" "Linux 6.18"'
     ).strip() == "content"
     assert normalized_visible_text(
         "read <https://example.test/api/\nversion.3.html> now"
@@ -194,13 +194,6 @@ def self_check() -> None:
         (("https://example.test/continued",), ("continued", "label")),
         (("decode.html", "peer"), ("peer", "status", "word")),
     ]
-    assert omit_mandoc_labeled_link_destinations(
-        [
-            ["Example", "label:", "https://example.test/path"],
-            ["https://example.test/path"],
-        ],
-        '.Lk https://example.test/path "Example label" .',
-    ) == [["Example", "label:"], ["https://example.test/path"]]
     assert broken_phrase_candidates(
         [["one", "two", "three", "four"]],
         ["one", "two", "inserted", "three", "four"],
@@ -327,8 +320,36 @@ T}
     # CVS tbl_term.c emits a U+2502 frame between physical cells. The global
     # token comparison still observes both cells; phrase ordering must not
     # borrow that renderer-owned geometry as a missing-content claim.
-    assert token_lines("│ one two │ three four │") == []
+    assert token_lines("│ one two │ three four │", ".TS\nbox;\n") == [["one", "two"], ["three", "four"]]
+    assert token_lines("one two │ three four", "ordinary │ prose") == [["one", "two", "three", "four"]]
     assert token_lines("one two three four") == [["one", "two", "three", "four"]]
+    # The native tbl cell writer and the Lk target writer are distinct from
+    # frame/chrome output (tbl_term.c, mdoc_term.c). Compare intact rendering
+    # against single-axis mutations, not merely the whole-page status.
+    from scripts.roff.audit.audit_roff_fidelity import compare_rendered
+    src = b'.TH PROBE 1 "Date" "FixtureOS" "Audit Manual"\n'
+    native = ("PROBE(1)      Audit Manual       PROBE(1)\n"
+              "NAME\n PROBE(1) UniqueHeaderPayload PROBE(1)\n"
+              "│ Leftcell │ Uniquecellpayload │\n"
+              "Evidence: https://example.org/standalone\n"
+              "Evidence: https://example.org/standalone\n"
+              "LastBodyWitness\n\nFixtureOS  Date   PROBE(1)\n")
+    product = ("NAME\nPROBE(1) UniqueHeaderPayload PROBE(1)\n"
+               "Leftcell | Uniquecellpayload\n"
+               "Evidence: https://example.org/standalone\n"
+               "Evidence: https://example.org/standalone\nLastBodyWitness\n")
+    assert not compare_rendered("test", src, native, product, "mandoc").finding.missing_tokens
+    for witness in ("UniqueHeaderPayload", "Uniquecellpayload", "LastBodyWitness"):
+        finding = compare_rendered("test", src, native, product.replace(witness, ""), "mandoc").finding
+        assert witness in finding.missing_tokens
+    url = "https://example.org/standalone"
+    finding = compare_rendered("test", src, native, product.replace(url, "", 1), "mandoc").finding
+    assert url in finding.missing_tokens
+    # A lowercase occurrence cannot satisfy a deleted capitalized occurrence.
+    case_native = native.replace("LastBodyWitness", "Result result")
+    case_product = product.replace("LastBodyWitness", "Result result")
+    finding = compare_rendered("test", src, case_native, case_product.replace("Result", "", 1), "mandoc").finding
+    assert "Result" in finding.missing_tokens
     hard, review = fidelity_signatures(r"text \[u2192]")
     assert not hard
     assert review == [

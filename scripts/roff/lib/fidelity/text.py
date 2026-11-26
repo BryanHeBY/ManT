@@ -109,21 +109,50 @@ def strip_terminal_formatting(value: str) -> str:
     return value.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def strip_reference_chrome(value: str) -> str:
+def strip_reference_chrome(value: str, source: str | None = None) -> str:
+    """Remove native edge chrome tied to the page identity, not body rows.
+
+    man_term.c print_man_head emits the same title and section at both
+    ends of the opening row; print_man_foot emits the label at right.
+    """
     lines = strip_terminal_formatting(value).splitlines()
     visible = [index for index, line in enumerate(lines) if line.strip()]
-    if len(visible) >= 3:
-        # CVS termp emits a two-row terminal footer: host or operating-system
-        # text followed by a date/manual label row. The second row identifies
-        # the pair; retaining the preceding host row fabricates a missing
-        # content candidate because ManT has no terminal chrome.
-        if TERMINAL_FOOTER.fullmatch(lines[visible[-1]]):
-            lines[visible[-2]] = ""
-        lines[visible[0]] = ""
-        lines[visible[-1]] = ""
-        for index in visible[:4]:
-            if RUNNING_HEADER.fullmatch(lines[index]):
-                lines[index] = ""
+    if not visible:
+        return "\n".join(lines)
+    first = visible[0]
+    if lines[first].strip() == "delim $$" and len(visible) > 1:
+        lines[first] = ""
+        first = visible[1]
+    header = RUNNING_HEADER.fullmatch(lines[first])
+    if header:
+        label = header.group("label")
+    else:
+        # At narrow widths the right-hand title may be suppressed.
+        # Accept the left edge only if source metadata proves the label.
+        meta = re.search(r"(?im)^[.'](?:TH|Dt)[ \t]+(\S+)[ \t]+(\S+)", source or "")
+        if not meta:
+            return "\n".join(lines)
+        label = f"{meta.group(1).strip(chr(34))}({meta.group(2).strip(chr(34))})"
+        if not re.match(r"(?i)^" + re.escape(label) + r"\s{2,}\S", lines[first]):
+            return "\n".join(lines)
+    lines[first] = ""
+    last = visible[-1]
+    if last != first:
+        footer_label = re.search(r"(?i)(?:^|\s{2,})" + re.escape(label) + r"\s*$", lines[last])
+        separated = last > 0 and not lines[last - 1].strip()
+        if footer_label and (separated or TERMINAL_FOOTER.fullmatch(lines[last])):
+            lines[last] = ""
+            # Native OS can occupy a separate footer row. Suppress it only
+            # when the source explicitly proves its exact identity.
+            if source and len(visible) >= 3:
+                previous = visible[-2]
+                os_match = re.search(
+                    r'''(?m)^[.']TH[ \t]+\S+[ \t]+\S+[ \t]+(?:"[^"]*"|\S+)[ \t]+(?:"([^"]+)"|(\S+))''',
+                    source,
+                    re.IGNORECASE,
+                )
+                if os_match and lines[previous].strip() == (os_match.group(1) or os_match.group(2)):
+                    lines[previous] = ""
     return "\n".join(lines)
 
 
@@ -224,9 +253,18 @@ def token_lines(value: str, source: str | None = None) -> list[list[str]]:
         # The UTF-8 terminal renderer's U+2502 is an emitted table-cell frame,
         # not authored cell text. Do not discard the line from the global
         # token stream; only exclude cross-cell n-gram evidence here.
-        if "\u2502" in line:
-            continue
-        lines.append(TOKEN.findall(unicodedata.normalize("NFC", BORDERS.sub(" ", line))))
+        # Split only where source evidence supports a tbl frame. A literal
+        # U+2502 in authored prose must not suppress phrase order.
+        framed_table = (
+            source is not None
+            and re.search(r"(?m)^[.']TS(?:[ \t]|$)", source) is not None
+            and "\u2502" not in source
+        )
+        segments = line.split("\u2502") if framed_table else [line]
+        for segment in segments:
+            words = TOKEN.findall(unicodedata.normalize("NFC", BORDERS.sub(" ", segment)))
+            if words:
+                lines.append(words)
     return lines
 
 
@@ -474,27 +512,6 @@ def labeled_mdoc_links(source: str) -> list[tuple[tuple[str, ...], tuple[str, ..
         if destination_tokens and label_tokens:
             links.append((destination_tokens, label_tokens))
     return links
-
-
-def omit_mandoc_labeled_link_destinations(
-    lines: Sequence[Sequence[str]], source: str
-) -> list[list[str]]:
-    """Drop mandoc-only URL display tokens beside their authored labels."""
-    labeled_links = labeled_mdoc_links(source)
-    output = []
-    for line in lines:
-        keys = [token_key(value) for value in line]
-        omitted = {
-            destination
-            for destinations, label in labeled_links
-            for destination in destinations
-            if all(value in keys for value in destinations)
-            and all(value in keys for value in label)
-        }
-        output.append(
-            [value for value in line if token_key(value) not in omitted]
-        )
-    return output
 
 
 def token_key(value: str) -> str:

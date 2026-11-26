@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections import Counter
 import sys
 from pathlib import Path
 from typing import Sequence
@@ -42,7 +43,6 @@ from scripts.roff.lib.fidelity.text import (
     labeled_mdoc_links,
     missing_token_candidates,
     normalized_visible_text,
-    omit_mandoc_labeled_link_destinations,
     portable_table_row_pairs,
     strip_reference_chrome,
     table_phrase_is_only_terminal_geometry,
@@ -149,6 +149,17 @@ def audit_page(
         path, roots, mant, source=raw_source,
     )
     if hierarchy_root is not None:
+        # Indexed lookup selects a logical topic, not an exact sampled file.
+        # Refuse ambiguous physical sources rather than compare different pages.
+        name = path.name
+        stem = name[:-3] if name.endswith(".gz") else name[:-4] if name.endswith(".zst") else name
+        siblings = [path.with_name(stem + suffix) for suffix in ("", ".gz", ".zst")]
+        if any(candidate != path and (candidate.is_file() or candidate.is_symlink())
+               for candidate in siblings):
+            return AuditArtifact(
+                Finding(label, "skipped", detail="physical candidate identity ambiguous: multiple compressed spellings"),
+                raw_source, None, None,
+            )
         environment["MANT_MANPATH"] = str(hierarchy_root)
         # GNU man resolves redirect-only `.so` pages through MANPATH even
         # with `-l`. Keep the reference on the same localized hierarchy as
@@ -220,8 +231,15 @@ def audit_page(
                 raw_source, reference_output, mant_output,
             )
 
-    return compare_rendered(label, raw_source, reference_output, mant_output,
-                            reference_kind, ngram, layout_signals)
+    compared_source = (
+        reference_input
+        if reference_kind == "mandoc" and redirect_only_target(raw_source) and reference_input
+        else raw_source
+    )
+    artifact = compare_rendered(label, compared_source, reference_output, mant_output,
+                                reference_kind, ngram, layout_signals)
+    artifact.source = raw_source
+    return artifact
 
 
 def compare_rendered(
@@ -233,15 +251,12 @@ def compare_rendered(
     Callers must establish successful bounded renders and source identity first.
     No ledger policy or interpretation differs from ``audit_page``.
     """
-    reference_output = strip_reference_chrome(reference_output)
     source_text = raw_source.decode("utf-8", errors="replace") if raw_source is not None else None
+    reference_output = strip_reference_chrome(reference_output, source_text)
     reference_lines = token_lines(reference_output, source_text)
-    if reference_kind == "mandoc" and raw_source is not None:
-        reference_lines = omit_mandoc_labeled_link_destinations(
-            reference_lines,
-            raw_source.decode("utf-8", errors="replace"),
-        )
-    reference_tokens = [value for line in reference_lines for value in line]
+    # Missing-content and ordered-phrase axes have different domains. Native
+    # man output also includes a labeled Lk target (mdoc_term.c).
+    reference_tokens = tokens(reference_output, source_text)
     mant_tokens = tokens(mant_output, source_text)
     if not reference_tokens:
         return AuditArtifact(
@@ -272,7 +287,42 @@ def compare_rendered(
             mant_output=mant_output,
         )
 
-    missing = missing_token_candidates(reference_tokens, mant_tokens)
+    missing = [
+        value.rstrip(".:") if value.lower().startswith(("http://", "https://")) else value
+        for value in missing_token_candidates(reference_tokens, mant_tokens)
+    ]
+    # A case-folded match can hide a uniquely capitalized authored word behind
+    # an unrelated lowercase occurrence. Keep case in this secondary axis.
+    exact_mant = {value.rstrip(".:/").replace("-", "") for value in mant_tokens}
+    missing_exact = {value.rstrip(".:/").replace("-", "") for value in missing}
+    folded_mant = {token_key(value) for value in mant_tokens}
+    for value in reference_tokens:
+        exact = value.rstrip(".:/").replace("-", "")
+        if (any(c.isupper() for c in exact) and exact not in exact_mant
+                and exact not in missing_exact
+                and token_key(value) in folded_mant):
+            missing.append(value)
+            missing_exact.add(exact)
+    # A URL is independently observable at each emitted occurrence. The
+    # general token heuristic is intentionally set-based for prose and cannot
+    # witness a deleted duplicate URL by itself.
+    reference_urls = Counter(
+        token_key(token) for token in reference_tokens
+        if token.lower().startswith(("http://", "https://"))
+    )
+    mant_urls = Counter(
+        token_key(token) for token in mant_tokens
+        if token.lower().startswith(("http://", "https://"))
+    )
+    missing_keys = {token_key(token) for token in missing}
+    for token in reference_tokens:
+        key = token_key(token)
+        if (
+            key in reference_urls and reference_urls[key] > mant_urls[key]
+            and key not in missing_keys
+        ):
+            missing.append(token.rstrip(".:"))
+            missing_keys.add(key)
     phrases = broken_phrase_candidates(
         reference_lines,
         mant_tokens,
