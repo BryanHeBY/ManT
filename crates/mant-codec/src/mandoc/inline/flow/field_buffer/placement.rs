@@ -298,6 +298,27 @@ impl FieldBuffer {
             && self.has_pending_break_markers()
     }
 
+    /// An inset BODY with a proved trailing source space takes the
+    /// encode1 BACKBEFORE branch that replaces that SP with its generated
+    /// NBSP, rather than appending a second cell (term.c:903–929).
+    /// A deferred source owner distinguishes this from an automatic
+    /// separator placed by an empty HEAD operand.
+    pub(in crate::mandoc::inline::flow) fn has_proved_inset_separator_entry(&self) -> bool {
+        self.has_bounded_run_in_projection()
+            && self.backbefore_armed
+            && !self.backafter_armed
+            && matches!(self.write_cursor, WriteCursor::End)
+            && self.has_pending_break_markers()
+            && self.deferred_blanks.last().is_some_and(|run| {
+                !run.run_in_overlap
+                    && run.end == self.cells.len()
+                    && run.start < run.end
+                    && self.cells[run.start..run.end]
+                        .iter()
+                        .all(|cell| *cell == FieldCell::BreakableBlank)
+            })
+    }
+
     /// Snapshot the live un-flushed `tcol->buf` suffix and cursor/backtracking
     /// registers (`term.c:573-590, 678-718, 888-930`) for `NativeSlots` replay.
     pub(in crate::mandoc::inline::flow) fn field_prefix(

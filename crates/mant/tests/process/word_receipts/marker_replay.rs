@@ -759,3 +759,42 @@ Done.
         }
     }
 }
+
+#[test]
+fn an_inset_separator_replaces_the_trailing_source_space_before_a_body_rewind() {
+    // The generated fixed blank backs onto the last authored SP before it
+    // writes. BACKBEFORE cannot make an extra blank at the end of this HEAD.
+    // A one-space tail then keeps AB / C as words; a second authored space
+    // and rearm allow the complete ABC word on the original physical row.
+    for (spaces, body, expected, query) in [
+        (" ", r#""\h'-4n'" No B No C"#, "AB C", "AB"),
+        ("  ", r#""\h'-4n'\zB" No C"#, "ABC", "ABC"),
+    ] {
+        let source = format!(
+            r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.Bl -inset
+.It No "\zA\p{spaces}"
+.No {body}
+.El
+.Sh ENDTEST
+Done.
+"#
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        assert_eq!(review_body(&text), expected);
+        assert_eq!(
+            super::search_visible_word_with_format(&source, "roff", query),
+            1
+        );
+        assert_eq!(
+            super::search_visible_word_with_format(&source, "roff", "BC"),
+            0
+        );
+    }
+}

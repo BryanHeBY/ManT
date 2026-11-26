@@ -728,6 +728,7 @@ impl InlineBuilder {
                 return None;
             }
         } else if !(input.has_bounded_decorated_run_in_projection()
+            || native_count == 1 && input.has_proved_inset_separator_entry()
             || native_count == 2 && input.has_proved_diag_separator_entry()
             || input.has_retained_word_cursor()
             || marked_backbefore
