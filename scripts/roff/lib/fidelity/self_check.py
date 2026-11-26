@@ -404,6 +404,12 @@ T}
     )
     assert redirect_only_target(b'.\\" alias\n.so man1/target.1\n') == "man1/target.1"
     assert redirect_only_target(b".so man1/target.1\ntext\n") is None
+    # roff.c roff_parse_comment commits the first quote comment before
+    # inspecting its ignored suffix; a hash before it still joins lines.
+    quote_comment = bytes([92, 34])
+    assert redirect_only_target(b'.so man1/target.1 ' + quote_comment + b' comment ' + bytes([92, 35, 10])) == "man1/target.1"
+    assert redirect_only_target(b'.so man1/target.1 ' + quote_comment + b' comment ' + bytes([92, 10])) == "man1/target.1"
+    assert redirect_only_target(b'.so man1/target.1 ' + bytes([92, 35]) + b' joins\nmore\n') is None
     layout_source = ".EX\nplain first\n  plain second\n.EE\n"
     synopsis_source = (
         ".EX\n.SY #!\\f[I]interpreter\\f[]\n.RI [ optional-arg ]\n.YS\n.EE\n"
@@ -499,6 +505,8 @@ T}
         alias.write_bytes(b".so man1/target.1\n")
         target.write_bytes(b"not actually compressed")
         assert confined_redirect_target(alias, hierarchy, "man1/target.1") == target
+        assert confined_redirect_target(alias, hierarchy, "man1/./target.1") == target
+        assert confined_redirect_target(alias, hierarchy, "./man1/target.1") is None
         assert confined_redirect_target(alias, hierarchy, "../outside.1") is None
         source_ledger = Path(temporary) / "source-ledger.csv"
         source_ledger.write_text(

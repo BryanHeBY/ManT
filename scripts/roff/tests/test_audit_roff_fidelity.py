@@ -93,6 +93,33 @@ class FidelityDriverTests(unittest.TestCase):
             })
             self.assertEqual(render.call_args_list[1].args[3], inputs[target])
 
+    def test_static_alias_comments_and_internal_current_directory_match_product(self):
+        # Fixed CVS roff.c:roff_parse_comment stops interpreting the suffix
+        # after the first quote comment; Rust Path::components normalizes
+        # interior current-directory segments. CVS and the product were also
+        # executed against these three exact fixtures before this assertion.
+        quote_comment = bytes([92, 34])
+        variants = [
+            b".so man1/./target.1\n",
+            b".so man1/target.1 " + quote_comment + b" ignored " + bytes([92, 35, 10]),
+            b".so man1/target.1 " + quote_comment + b" ignored " + bytes([92, 10]),
+        ]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            alias, target = root / "man1/alias.1", root / "man1/target.1"
+            target.parent.mkdir()
+            target.write_bytes(b"Alpha beta gamma delta\n")
+            for source in variants:
+                with self.subTest(source=source):
+                    alias.write_bytes(source)
+                    output = "Alpha beta gamma delta\n"
+                    with patch.object(AUDIT, "reference_environment", return_value={}), \
+                         patch.object(AUDIT, "run_renderer", side_effect=[(0, output, ""), (0, output, "")]) as render:
+                        result = AUDIT.audit_page(alias, "alias.1", [root], Path("mant"), "mandoc", "mandoc", 1, 4, False)
+                    self.assertEqual(result.finding.status, "clean")
+                    self.assertEqual(render.call_args_list[1].args[3], target.read_bytes())
+                    self.assertEqual(result.source, source)
+
     def test_reference_command_remains_replaceable_on_driver_facade(self):
         page = Path("/absent/man1/page.1")
         with patch.object(AUDIT, "read_verified_manual", return_value=(b"opaque source", None)), \

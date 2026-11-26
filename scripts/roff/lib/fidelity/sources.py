@@ -158,9 +158,22 @@ def redirect_only_target(source: bytes) -> str | None:
     meaningful = []
     for raw_line in source.removeprefix(b"\xef\xbb\xbf").split(b"\n"):
         line = raw_line.removesuffix(b"\r")
-        if b"\\#" in line or line.endswith(b"\\"):
-            return None
-        line = line.split(b'\\"', 1)[0].rstrip(b" \t")
+        # Match codec redirect.rs static_line and roff.c roff_parse_comment:
+        # the first active quote comment owns the remainder of the line.
+        # A hash comment or terminal escape before it joins the next line and
+        # cannot prove a static standalone redirect.
+        i = 0
+        while i < len(line):
+            if line[i] != 0x5c:
+                i += 1
+                continue
+            if i + 1 == len(line) or line[i + 1] == ord("#"):
+                return None
+            if line[i + 1] == ord('"'):
+                line = line[:i]
+                break
+            i += 2
+        line = line.rstrip(b" \t")
         if not line or line in (b".", b"'", b"\\."):
             continue
         meaningful.append(line)
@@ -189,7 +202,10 @@ def resolve_redirect_target(path: Path, hierarchy_root: Path, target: str) -> Pa
     if (
         logical.is_absolute()
         or not logical.parts
-        or any(part in {".", ".."} for part in target.split("/"))
+        # Rust Path::components normalizes interior . segments but retains a
+        # leading CurDir. Mirror that without allowing parent traversal.
+        or target.split("/")[0] == "."
+        or ".." in target.split("/")
         or "\\" in target
     ):
         raise ValueError(f"redirect target is not a safe relative path: {target}")
