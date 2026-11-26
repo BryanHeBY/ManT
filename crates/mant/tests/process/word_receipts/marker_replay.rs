@@ -490,7 +490,7 @@ fn source_nbsp_and_each_authored_space_occupy_separate_native_slots() {
     // real slots, so the five-column rewind only removes J in the first.
     for (source, expected) in [
         (
-            r#".Dd November 26, 2026
+            r".Dd November 26, 2026
 .Dt PROBE 1
 .Os
 .Sh NAME
@@ -501,11 +501,11 @@ J \z\[u00A0]\h'1n' \c
 \h'-5n'Q X
 .Sh ENDTEST
 Done.
-"#,
+",
             "Q X",
         ),
         (
-            r#".Dd November 26, 2026
+            r".Dd November 26, 2026
 .Dt PROBE 1
 .Os
 .Sh NAME
@@ -516,7 +516,7 @@ J \z\[u00A0]\h'1n'  \c
 \h'-5n'Q X
 .Sh ENDTEST
 Done.
-"#,
+",
             "JQ X",
         ),
     ] {
