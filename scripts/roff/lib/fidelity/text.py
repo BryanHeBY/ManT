@@ -249,17 +249,17 @@ def token_lines(value: str, source: str | None = None) -> list[list[str]]:
     value = URL_WRAP.sub(r"\1", value)
     value = dehyphenate_terminal_wraps(value, source)
     lines = []
+    framed_table = (
+        source is not None
+        and re.search(r"(?m)^[.']TS(?:[ \t]|$)", source) is not None
+        and "\u2502" not in source
+    )
     for line in value.splitlines():
         # The UTF-8 terminal renderer's U+2502 is an emitted table-cell frame,
         # not authored cell text. Do not discard the line from the global
         # token stream; only exclude cross-cell n-gram evidence here.
         # Split only where source evidence supports a tbl frame. A literal
         # U+2502 in authored prose must not suppress phrase order.
-        framed_table = (
-            source is not None
-            and re.search(r"(?m)^[.']TS(?:[ \t]|$)", source) is not None
-            and "\u2502" not in source
-        )
         segments = line.split("\u2502") if framed_table else [line]
         for segment in segments:
             words = TOKEN.findall(unicodedata.normalize("NFC", BORDERS.sub(" ", segment)))

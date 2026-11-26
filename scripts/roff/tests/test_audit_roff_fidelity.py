@@ -15,9 +15,21 @@ from unittest.mock import call, patch
 
 from scripts.roff.audit import audit_roff_fidelity as AUDIT
 from scripts.roff.lib.fidelity import sources
+from scripts.roff.lib.fidelity import text as fidelity_text
 
 
 class FidelityDriverTests(unittest.TestCase):
+    def test_table_source_scan_is_once_per_page(self):
+        source = '.TH PROBE 1 "November 25, 2026" "Local"\n.SH DESCRIPTION\nAlpha Beta Gamma Delta\n'
+        # The fixed CVS terminal output contains this body row (term.c).
+        reference = '     Alpha Beta Gamma Delta\n' * 64
+        search = fidelity_text.re.search
+        with patch.object(fidelity_text.re, "search", wraps=search) as lookup:
+            self.assertEqual(fidelity_text.token_lines(reference, source),
+                             [["Alpha", "Beta", "Gamma", "Delta"]] * 64)
+        scans = [call for call in lookup.call_args_list if call.args[1] is source]
+        self.assertEqual(len(scans), 1)
+
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires named pipes")
     def test_verified_source_reader_rejects_pipe_symlink_before_reading(self):
         with tempfile.TemporaryDirectory() as temporary:
