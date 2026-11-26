@@ -113,10 +113,7 @@ impl InlineBuilder {
         native: Option<&NativeFieldDevice>,
     ) -> bool {
         let Some(AuthorBreakEffect::Field {
-            body_width_columns,
-            gap_cells,
-            flags,
-            ..
+            gap_cells, flags, ..
         }) = self
             .execution
             .author_execution
@@ -140,10 +137,18 @@ impl InlineBuilder {
         // The captured print already applied max(offset - viscol, minbl).
         // Observing its responsive layout must not replace the native minbl
         // register or execute another field pass (term.c:113-116,233-253).
-        native.is_some_and(|field| {
-            gap_cells == 0
-                && !field.ends_row
-                && field.device_column_units() >= i64::from(body_width_columns) * 24
+        // The HEAD margin is the BODY origin (mdoc_term.c:842-858), in
+        // the same source-relative basic units as the device column. The
+        // author effect's body width is only a distance from the HEAD origin;
+        // comparing it directly with viscol loses the gap in nested lists.
+        // Without the resolved margin there is no proof that the gap vanished.
+        let body_origin = self
+            .execution
+            .definition
+            .as_ref()
+            .and_then(|state| state.native_margin_units);
+        native.zip(body_origin).is_some_and(|(field, body_origin)| {
+            gap_cells == 0 && !field.ends_row && field.device_column_units() >= body_origin
         })
     }
 

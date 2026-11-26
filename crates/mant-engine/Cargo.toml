@@ -23,6 +23,7 @@ include = [
   "/tests/definition_content_contracts.rs", "/tests/definition_content_contracts/**",
   "/tests/native_scope_consumers.rs",
   "/tests/an_hard_blank.rs",
+  "/tests/native_hang_origin.rs",
   "/tests/support/table_scope_witness.rs",
   "/tests/native_payload_consumers.rs", "/tests/native_payload_consumers/**",
   "/tests/query_report_boundary.rs",
