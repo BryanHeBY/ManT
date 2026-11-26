@@ -264,7 +264,11 @@ impl<'a> LoweringContext<'a> {
                 .font
                 .push_scope(super::roff_escape::RoffFont::Strong)
         });
-        builder.inset_head_word_proof = !strong_scope && generated_cells == 1;
+        builder.run_in_head_word_proof = match (strong_scope, generated_cells) {
+            (false, 1) => Some(inline::RunInHeadWordProof::Inset),
+            (true, 2) => Some(inline::RunInHeadWordProof::Diagonal),
+            _ => None,
+        };
         inline::append_inline_nodes(&mut builder, nodes.content, self.default_name);
         builder.observe_no_fill_source_lines(false);
         // The generated cells execute FIRST (append_run_in_cells routes

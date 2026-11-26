@@ -102,6 +102,14 @@ struct DeferredWordSpace {
     count: usize,
 }
 
+/// Native list HEAD styles whose BODY writes a generated fixed space
+/// without first retiring the HEAD's field.
+#[derive(Clone, Copy)]
+pub(in crate::mandoc) enum RunInHeadWordProof {
+    Inset,
+    Diagonal,
+}
+
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
     // Only live annotation scopes have an address. A checkpoint's last
@@ -109,9 +117,9 @@ pub(in crate::mandoc) struct InlineBuilder {
     output_positions: Option<Rc<OutputPositionRegistry>>,
     pub(in crate::mandoc) head_operand_capture:
         Option<std::rc::Rc<std::cell::RefCell<HeadOperandCapture>>>,
-    /// The scoped inset HEAD writes into the same field as its generated
+    /// The scoped run-in HEAD writes into the same field as its generated
     /// BODY separator. Only authored HEAD words may issue its prefix proof.
-    pub(in crate::mandoc) inset_head_word_proof: bool,
+    pub(in crate::mandoc) run_in_head_word_proof: Option<RunInHeadWordProof>,
     // Macro handlers such as pre_alternate() call term_word() directly on
     // operands instead of visiting those TEXT nodes through print_man_node().
     direct_word_operands: Option<crate::mandoc::roff_escape::WordSpace>,

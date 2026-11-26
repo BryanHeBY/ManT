@@ -289,13 +289,44 @@ impl FieldBuffer {
         self.has_bounded_run_in_projection()
             && self.backbefore_armed
             && !self.backafter_armed
-            && matches!(self.write_cursor, WriteCursor::Placed(0))
+            && self.has_pending_break_markers()
+            && (matches!(self.write_cursor, WriteCursor::Placed(0))
+                && matches!(
+                    self.cells.as_slice(),
+                    [.., FieldCell::BreakableBlank, FieldCell::ZeroWidthGraph]
+                )
+                && self.projection_length(self.cells.len() - 1, self.cells.len()) == 0
+                || self.has_proved_diag_breakpoint_tail())
+    }
+
+    fn has_proved_diag_breakpoint_tail(&self) -> bool {
+        // The producer proved the decorated HEAD before LF and BREAK.
+        // At col-1 only an authored SP is replaced by the first NBSP.
+        matches!(self.write_cursor, WriteCursor::End)
+            && !self.raw_tail_fonts.is_empty()
+            && match self.cells.as_slice() {
+                [.., FieldCell::BreakMarker, FieldCell::Breakpoint] => true,
+                [
+                    ..,
+                    FieldCell::BreakMarker,
+                    FieldCell::Breakpoint,
+                    FieldCell::BreakableBlank,
+                ] => self.deferred_blanks.last().is_some_and(|run| {
+                    !run.run_in_overlap && run.end == self.cells.len() && run.start + 1 == run.end
+                }),
+                _ => false,
+            }
+    }
+
+    /// Without a terminal source-space owner, this proved diagonal
+    /// prefix still needs to keep its HEAD anchors through BODY. HEAD
+    /// post does not flush the tape (`mdoc_term.c:939–945`).
+    pub(in crate::mandoc::inline::flow) fn has_pending_diag_head_projection(&self) -> bool {
+        self.has_proved_diag_separator_entry()
             && matches!(
                 self.cells.as_slice(),
-                [.., FieldCell::BreakableBlank, FieldCell::ZeroWidthGraph]
+                [.., FieldCell::BreakMarker, FieldCell::Breakpoint]
             )
-            && self.projection_length(self.cells.len() - 1, self.cells.len()) == 0
-            && self.has_pending_break_markers()
     }
 
     /// An inset BODY with a proved trailing source space takes the

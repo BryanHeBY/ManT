@@ -166,7 +166,7 @@ fn execute_roff_word_entry(
 ) -> super::text_execution::TextExecution {
     let line_width_units = builder.execution.horizontal_line_width_units(source);
     let slot_entry = builder.execution.native_slot_entry_for_word(events);
-    let producer_font = inset_head_entry_font(builder, &slot_entry, origin);
+    let producer_proof = run_in_head_entry_proof(builder, &slot_entry, origin);
     let mut execution = font::parse_roff_text_with_zero_advance(
         source,
         font::TextExecutionContext {
@@ -180,31 +180,40 @@ fn execute_roff_word_entry(
             policy,
         },
     );
-    if let Some(font) = producer_font {
-        super::text_execution::retain_pending_decorated_inset_head(
-            events,
-            &mut execution.native_writes,
-            font,
-        );
+    if let Some((head, font)) = producer_proof {
+        let retain = match head {
+            super::RunInHeadWordProof::Inset => {
+                super::text_execution::retain_single_pending_decorated_head
+            }
+            super::RunInHeadWordProof::Diagonal => {
+                super::text_execution::retain_pending_decorated_diag_head
+            }
+        };
+        retain(events, &mut execution.native_writes, font);
     }
     execution
 }
 
-fn inset_head_entry_font(
+fn run_in_head_entry_proof(
     builder: &InlineBuilder,
     slot: &super::SlotEntry,
     origin: WordSource<'_>,
-) -> Option<super::Font> {
-    (builder.inset_head_word_proof
-        && matches!(origin, WordSource::Text(node) if !node.flags.no_fill && !node.flags.generated)
-        && slot.domain == ReplayDomain::DefinitionLine
+) -> Option<(super::RunInHeadWordProof, super::Font)> {
+    let head = builder.run_in_head_word_proof?;
+    let domain = match head {
+        super::RunInHeadWordProof::Inset => ReplayDomain::DefinitionLine,
+        // Diagnostic HEAD keeps its own native field flags until It post.
+        super::RunInHeadWordProof::Diagonal => ReplayDomain::Scoped,
+    };
+    (matches!(origin, WordSource::Text(node) if !node.flags.no_fill && !node.flags.generated)
+        && slot.domain == domain
         && slot.cursor == EntryCursor::Empty
         && slot.automatic_blanks == 0
         && slot.device_tail.is_none()
         && !builder.zero_advance.is_armed()
         && !builder.zero_advance.has_buffered_glyph()
         && !builder.zero_advance.has_annotation_output_owner())
-    .then_some(builder.execution.font.current)
+    .then_some((head, builder.execution.font.current))
 }
 
 fn receive_word_effects(

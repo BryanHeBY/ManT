@@ -889,3 +889,59 @@ Done.
         }
     }
 }
+
+#[test]
+fn a_diagonal_breakpoint_head_stays_editable_through_the_two_body_spaces() {
+    // A source SP is replaced by the generated NBSP. Without one, the
+    // new backline belongs to a later accepted pass, not the HEAD's ink.
+    // With the absolute edit in the literal "No" cases, C overwrites N and
+    // keeps o, rather than appending a separate letter after "No A".
+    for (head, tail, expected) in [
+        (r#""\zA\p\: ""#, r#""\h'|0n'B" No C"#, "C"),
+        (r#""\zA\p\: ""#, r#""\h'-3n'\pB" No C"#, "A\nBC"),
+        (r#"No "\zA\p\:""#, r#""\h'|0n'B" No C"#, "Co A"),
+        (r#"No "\zA\p\: ""#, r#""\h'|0n'B" No C"#, "Co A"),
+        (r#"No "\zA\p\: ""#, r#""\h'-3n'\pB" No C"#, "No A\nBC"),
+    ] {
+        let source = format!(
+            r".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.Bl -diag
+.It {head}
+.No {tail}
+.El
+.Sh ENDTEST
+Done.
+"
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        let body = review_body(&text);
+        if expected.contains('\n') {
+            // ASCII and UTF-8 disagree only on the second row's internal
+            // gap here, not on the row boundary or its visible letters.
+            assert_eq!(
+                body.replace(' ', ""),
+                expected.replace(' ', ""),
+                "{head}: {tail}"
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", "A"),
+                1
+            );
+        } else {
+            assert_eq!(body, expected, "{head}: {tail}");
+            for query in ["A", "B", "C", "Co", "No"] {
+                assert_eq!(
+                    super::search_visible_word_with_format(&source, "roff", query),
+                    u64::from(expected.split_ascii_whitespace().any(|word| word == query)),
+                    "{head}: {tail}, query={query}"
+                );
+            }
+        }
+    }
+}

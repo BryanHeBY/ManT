@@ -532,7 +532,11 @@ impl InlineBuilder {
             .has_pending_layout(self.execution.text_alignment)
             || self.execution.definition.as_ref().is_some_and(|state| {
                 !state.field_word_anchors.is_empty()
-                    && state.field_buffer.has_bounded_decorated_run_in_projection()
+                    && (state.field_buffer.has_bounded_decorated_run_in_projection()
+                        || matches!(
+                            self.run_in_head_word_proof,
+                            Some(super::super::RunInHeadWordProof::Diagonal)
+                        ) && state.field_buffer.has_pending_diag_head_projection())
                     || state.field_buffer.has_deferred_blanks()
                     || state.field_buffer.has_positioned_slots()
                     || state.field_buffer.has_pass_retreats()
