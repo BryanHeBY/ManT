@@ -1,7 +1,7 @@
 //! Apply the validated slot overlay to the previous word owners.
 
-use super::super::super::super::ProjectedNativeGap;
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
+use super::super::super::super::{ProjectedNativeGap, WordProjectionPolicy};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
 use crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -56,6 +56,8 @@ impl PrefixEdits {
         else {
             return Self::default();
         };
+        let marked_body_tail =
+            marked_body_tail_overlay(buffer, writes, *start, *first_incoming_ink);
         let locations = projection_locations(buffer, earlier, *start, positions, *unpublished);
         let mut edits = Vec::new();
         let mut moved = Vec::new();
@@ -100,7 +102,12 @@ impl PrefixEdits {
                 // The word projector releases it at the accepted slot.
                 continue;
             }
-            let Some(scalar) = rewound_scalar(&buffer.cells()[cell]) else {
+            let Some(scalar) = rewound_scalar(
+                &buffer.cells()[cell],
+                &earlier[owner],
+                cell,
+                marked_body_tail,
+            ) else {
                 continue;
             };
             edits.push(GlyphEdit {
@@ -347,6 +354,48 @@ impl PrefixEdits {
     }
 }
 
+/// A positioned BODY word can overwrite the HEAD's final backline and fixed
+/// glyph with LF and first ink, leaving the generated slot between two BODY
+/// operands (term.c:659, 679–718). An unmarked write or one landing at the
+/// previous marker doesn't prove the same handoff.
+fn marked_body_tail_overlay(
+    buffer: &FieldBuffer,
+    writes: &[FieldWrite],
+    start: usize,
+    first_incoming_ink: Option<usize>,
+) -> Option<usize> {
+    let ink = first_incoming_ink?;
+    let marker = ink.checked_sub(1)?;
+    let offset = marker.checked_sub(start)? + 1; // Skip ReplaceLivePrefix.
+    let FieldWrite::ReplaceLivePrefix { positions, .. } = writes.first()? else {
+        return None;
+    };
+    let blank = ink + 1;
+    if positions.get(marker - start..=blank - start)? != [None, None, Some(blank)]
+        || !matches!(
+            buffer.cells().get(marker..blank)?,
+            [
+                FieldCell::Backline,
+                FieldCell::Graph {
+                    text: '\u{a0}',
+                    width: 1
+                }
+            ]
+        )
+        || !matches!(
+            writes.get(offset..offset + 3)?,
+            [
+                FieldWrite::Placed { cell: FieldCell::BreakMarker, scalars: 0 },
+                FieldWrite::Placed { cell: FieldCell::Graph { text, width: 1 }, scalars: 1 },
+                FieldWrite::Placed { cell: FieldCell::Graph { text: '\u{a0}', width: 1 }, scalars: 1 },
+            ] if !text.is_whitespace()
+        )
+    {
+        return None;
+    }
+    Some(blank)
+}
+
 fn retained_blank(
     buffer: &FieldBuffer,
     cell: usize,
@@ -363,8 +412,22 @@ fn retained_blank(
     })
 }
 
-fn rewound_scalar(cell: &FieldCell) -> Option<char> {
-    match cell {
+fn rewound_scalar(
+    native: &FieldCell,
+    anchor: &NativeWordAnchor,
+    cell: usize,
+    marked_body_tail: Option<usize>,
+) -> Option<char> {
+    match native {
+        // Only this fallback stores native U+A0 while its *exact* owner
+        // published SP. All authored fixed spaces still match their own scalar.
+        FieldCell::Graph { text: '\u{a0}', .. }
+            if anchor.projection == WordProjectionPolicy::GeneratedRunInBlank
+                && anchor.content == cell
+                && marked_body_tail == Some(cell) =>
+        {
+            Some(' ')
+        }
         FieldCell::Graph { text, .. } => Some(*text),
         FieldCell::Hyphen => Some('-'),
         FieldCell::BreakableBlank | FieldCell::NonBreakingBlank => Some(' '),

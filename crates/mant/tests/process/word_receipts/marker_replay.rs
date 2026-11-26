@@ -1072,3 +1072,58 @@ Done.
         }
     }
 }
+
+#[test]
+fn a_retained_generated_inset_space_moves_after_the_body_marker() {
+    // The authored fixed space and the generated inset separator enter
+    // term_word() independently (chars.c:50–52; mdoc_term.c:757–772).
+    // After the rewind, the latter prints *after* B (term.c:389–436).
+    // Italic UTF-8 draws an underscore at the same split; both devices
+    // agree on the word axes, AB / C, not A / BC.
+    for (open, close) in [("", ""), (".ft B\n", ".ft R\n"), (".ft I\n", ".ft R\n")] {
+        for fixed in [r"\~", r"\0"] {
+            // In the neighboring unstyled cases the authored fixed space
+            // itself survives; keep that IR NBSP, not an ordinary SP.
+            let cases: &[(usize, &str, &str)] = if open.is_empty() {
+                &[
+                    (1, r"\pB", "AB C"),
+                    (0, r"\pB", "AB\u{a0}C"),
+                    (1, "B", "AB\u{a0}C"),
+                ]
+            } else {
+                &[(1, r"\pB", "AB C")]
+            };
+            for &(column, body, expected) in cases {
+                let source = format!(
+                    r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+{open}.Bl -inset
+.It No "\zA\p{fixed}"
+.No "\h'|{column}n'" No "{body}" No C
+.El
+{close}.Sh ENDTEST
+Done.
+"#
+                );
+                let text = render(&source, "roff", "text", "never", false);
+                assert_eq!(
+                    review_body(&text).trim(),
+                    expected,
+                    "{open}/{fixed}/{column}/{body}"
+                );
+                for (query, expected) in [("AB", 1), ("C", 1), ("A", 0), ("BC", 0)] {
+                    assert_eq!(
+                        super::search_visible_word_with_format(&source, "roff", query),
+                        expected,
+                        "{open}/{fixed}/{column}/{body}, query={query}"
+                    );
+                }
+            }
+        }
+    }
+}

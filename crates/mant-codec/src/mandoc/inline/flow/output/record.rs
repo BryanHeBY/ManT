@@ -175,6 +175,18 @@ impl WordPassProjection {
     }
 }
 
+fn run_in_projection(
+    projection: WordProjectionPolicy,
+    buffer: &super::super::field_buffer::FieldBuffer,
+    writes: Option<&[super::super::field_buffer::FieldWrite]>,
+) -> WordProjectionPolicy {
+    if buffer.proves_generated_run_in_blank(writes) {
+        WordProjectionPolicy::GeneratedRunInBlank
+    } else {
+        projection
+    }
+}
+
 /// Choose the native start cell (`content`) and `minbl`/padding carry for a
 /// `TERMP_HANG`/`TERMP_NOBREAK` list word (`mdoc_term.c:790-835`,
 /// `term.c:115-116, 236, 250-253, 573-581`).
@@ -285,6 +297,11 @@ impl InlineBuilder {
         let Some(definition) = &mut self.execution.definition else {
             return WordPassProjection::default();
         };
+        let projection = run_in_projection(
+            projection,
+            &definition.field_buffer,
+            native_writes.as_deref(),
+        );
         // term_word() buffers its separator and glyph in the native field.
         // Generated IR padding is excluded from that field.
         let native_word_start = definition.field_buffer.cells().len();

@@ -270,6 +270,35 @@ impl FieldBuffer {
             && self.projection_length(0, self.cells.len()) > 0
     }
 
+    /// A one-cell generated inset fallback appends after a marked fixed
+    /// HEAD slot. The authored graph immediately before it belongs to a
+    /// different word; neither BACK register can move the generated write
+    /// away from the incoming word's first content cell (term.c:903–929).
+    pub(in crate::mandoc::inline::flow) fn proves_generated_run_in_blank(
+        &self,
+        writes: Option<&[FieldWrite]>,
+    ) -> bool {
+        matches!(writes, Some([FieldWrite::OwnedBlank { projected: true }]))
+            && self.projection_owner == super::FieldProjectionOwner::Detached
+            && self.has_bounded_run_in_projection()
+            && self.has_pending_break_markers()
+            && matches!(self.write_cursor, WriteCursor::Placed(0))
+            && !self.backbefore_armed
+            && !self.backafter_armed
+            && matches!(
+                self.cells.as_slice(),
+                [
+                    ..,
+                    FieldCell::Backline,
+                    FieldCell::Graph {
+                        text: '\u{a0}',
+                        width: 1
+                    }
+                ]
+            )
+            && self.projection_length(self.cells.len() - 1, self.cells.len()) == 1
+    }
+
     /// A simple decorated HEAD still has its native copies. Its fixed
     /// BODY separator needs an explicit, relocatable blank owner instead of
     /// an independently projected space. Leave nondecorated HEAD words on

@@ -52,6 +52,8 @@ pub(in crate::mandoc) use output::{
 pub(in crate::mandoc) enum WordProjectionPolicy {
     Printed,
     SourceLiteralWhitespace,
+    /// A generated fixed inset cell reads as SP but remains U+A0 in the device tape.
+    GeneratedRunInBlank,
 }
 
 /// A stable source-word range plus the device cells its IR owner already
