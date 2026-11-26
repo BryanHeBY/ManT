@@ -90,6 +90,8 @@ impl Placeholder {
 
 mod view;
 pub(super) use view::HeadView;
+#[cfg(feature = "roff")]
+pub(super) use view::paired_option_assignment_ranges;
 
 pub(super) struct OptionHead {
     pub(super) names: Vec<RecognizedName>,

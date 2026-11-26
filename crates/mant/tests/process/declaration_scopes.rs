@@ -83,6 +83,60 @@ fn separate_native_values_resolve_only_same_scope_numeric_angles() {
     );
 }
 
+#[test]
+fn bounded_assignment_shields_flags_even_if_a_typed_value_has_no_complete_form() {
+    // Fixed CVS tree/ASCII/UTF-8/HTML: termp_fl_pre emits each flag, but
+    // the literal typed angles keep the inner alternative inside the value.
+    for head in [
+        "Fl a= Ns Ar <root Va x | Fl v Ns Ar > , Fl b",
+        "Fl a= Ns Ar ⟨root Fn test | Fl v Ns Ar ⟩ , Fl b",
+    ] {
+        let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
+        for (query, expected) in [("-a", 1), ("-b", 1), ("-v", 0)] {
+            let flag = format!("--explain={query}");
+            let result = run_text_input(
+                &[
+                    "--input",
+                    "-",
+                    "--input-format",
+                    "roff",
+                    "--format",
+                    "json",
+                    &flag,
+                ],
+                &source,
+            );
+            assert!(result.status.success(), "{head}: {query}");
+            let reply: QueryExplanation = serde_json::from_slice(&result.stdout).unwrap();
+            assert_eq!(reply.counts.direct_entry.total, expected, "{head}: {query}");
+            if let Some(evidence) = reply
+                .evidence
+                .iter()
+                .find(|item| item.class == EvidenceClass::DirectEntry)
+            {
+                assert_eq!(
+                    evidence.entry.as_ref().unwrap().names,
+                    ["-a", "-b"],
+                    "{head}"
+                );
+                assert_eq!(evidence.source.unwrap().line, 9, "{head}");
+            }
+        }
+    }
+
+    check(
+        "Fl a= Ns Ar <user's-file | Fl v Ns Ar > , Fl b",
+        "-a=<user's-file | -v>, -b",
+        &["-a", "-b"],
+    );
+    // A flag outside the assignment remains a legitimate alias.
+    check(
+        "Fl a Ar subject , Fl v , Fl b",
+        "-a subject, -v, -b",
+        &["-a", "-v", "-b"],
+    );
+}
+
 fn check(head: &str, form: &str, names: &[&str]) {
     let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
     for query in ["-a", "-b", "-c", "-v", form] {

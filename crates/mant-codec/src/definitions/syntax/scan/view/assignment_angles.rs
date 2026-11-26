@@ -1,12 +1,55 @@
 //! Pair literal assignment angles within accepted operand and enclosure boundaries.
 
 use super::super::{
-    MAX_NESTING, closing, option_character, parameter_token::parameter_character, quote_closer,
+    MAX_NESTING, closing, internal_apostrophe, option_character,
+    parameter_token::parameter_character, quote_closer,
 };
-use super::{HeadView, NativeOperand, NativeOperandRole};
+use super::{NativeOperand, NativeOperandRole, operand_at};
+use std::ops::Range;
 
-pub(super) fn paired_offsets(view: &HeadView<'_>) -> Vec<usize> {
-    let mut pairs = Vec::new();
+#[derive(Default)]
+pub(super) struct Pairs {
+    pub(super) offsets: Vec<usize>,
+    pub(super) assignments: Vec<Range<usize>>,
+}
+
+#[derive(Clone, Copy)]
+struct AngleView<'a> {
+    text: &'a str,
+    operands: &'a [NativeOperand],
+}
+
+impl<'a> AngleView<'a> {
+    fn operand(self, offset: usize) -> Option<&'a NativeOperand> {
+        operand_at(self.operands, offset)
+    }
+
+    fn native_option_starts(self, offset: usize) -> bool {
+        self.operand(offset).is_some_and(|operand| {
+            operand.role == NativeOperandRole::ExplicitOption
+                && self.text[operand.bytes.start..offset].trim().is_empty()
+        })
+    }
+
+    fn literal_punctuation(self, offset: usize) -> bool {
+        self.operand(offset)
+            .is_some_and(|operand| operand.role == NativeOperandRole::LiteralPunctuation)
+    }
+
+    fn option_assignment_at(self, equals: usize) -> bool {
+        let lhs = self.text[..equals].trim_end();
+        let start = lhs.rfind(|ch: char| !option_character(ch)).map_or(0, |at| {
+            at + lhs[at..].chars().next().expect("scalar").len_utf8()
+        });
+        let key = &lhs[start..];
+        super::super::super::options::option_prefix(key) == Some(key)
+            && self.native_option_starts(start)
+    }
+}
+
+pub(super) fn paired_angles(text: &str, operands: &[NativeOperand]) -> Pairs {
+    let view = AngleView { text, operands };
+    let mut pairs = Pairs::default();
     let mut scopes = vec![AngleScope::default()];
     let mut operands = view.operands.iter().peekable();
     for (offset, ch) in view.text.char_indices() {
@@ -44,12 +87,24 @@ pub(super) fn paired_offsets(view: &HeadView<'_>) -> Vec<usize> {
             }
             _ => {
                 if angle_enclosure(operand).is_none_or(|body| scope.body == Some(body)) {
-                    scope.observe(view, offset, ch, operand, &mut pairs);
+                    scope.observe(&view, offset, ch, operand, &mut pairs);
                 }
             }
         }
     }
-    pairs.sort_unstable();
+    pairs.offsets.sort_unstable();
+    pairs.assignments.sort_unstable_by_key(|range| range.start);
+    // Nested pairs are covered by their outer assignment. Keep disjoint
+    // intervals so each separator lookup can use one binary search.
+    let mut covered = 0;
+    pairs.assignments.retain(|range| {
+        if range.start < covered {
+            debug_assert!(range.end <= covered, "paired angles cannot cross");
+            return false;
+        }
+        covered = range.end;
+        true
+    });
     pairs
 }
 
@@ -66,11 +121,11 @@ struct AngleScope {
 impl AngleScope {
     fn observe(
         &mut self,
-        view: &HeadView<'_>,
+        view: &AngleView<'_>,
         offset: usize,
         ch: char,
         operand: Option<&NativeOperand>,
-        pairs: &mut Vec<usize>,
+        pairs: &mut Pairs,
     ) {
         if std::mem::take(&mut self.escaped) {
             return;
@@ -86,7 +141,10 @@ impl AngleScope {
             }
             return;
         }
-        self.quote = quote_closer(ch);
+        if !internal_apostrophe(view.text, offset) {
+            self.quote = quote_closer(ch);
+        }
+        let previous = self.previous;
         if ch == '\n' {
             self.open.clear();
             self.groups.clear();
@@ -120,11 +178,15 @@ impl AngleScope {
                     closer: closing(ch).expect("angle opener"),
                     leading,
                     numeric_close: None,
+                    assignment: leading
+                        && previous.is_some_and(|(ch, end)| {
+                            ch == '=' && view.option_assignment_at(end - 1)
+                        }),
                     depth: self.groups.len(),
                 });
             }
             '>' | '⟩' => close_assignment_angle(
-                &view.text,
+                view.text,
                 &mut self.open,
                 operand,
                 offset,
@@ -135,7 +197,7 @@ impl AngleScope {
         }
     }
 
-    fn retire_assignment_angles(&mut self, pairs: &mut Vec<usize>, independent: bool) {
+    fn retire_assignment_angles(&mut self, pairs: &mut Pairs, independent: bool) {
         let depth = self.groups.len();
         while self
             .open
@@ -148,14 +210,14 @@ impl AngleScope {
             && let Some(angle) = self.open.last().filter(|angle| angle.depth == depth)
             && let Some(offset) = angle.numeric_close
         {
-            pairs.extend([angle.offset, offset]);
+            pairs.record(angle, offset);
             self.open.pop();
         }
     }
 }
 
 fn assignment_alias_boundary(
-    view: &HeadView<'_>,
+    view: &AngleView<'_>,
     offset: usize,
     previous: Option<(char, usize)>,
 ) -> bool {
@@ -171,7 +233,7 @@ fn close_assignment_angle(
     operand: Option<&NativeOperand>,
     offset: usize,
     depth: usize,
-    pairs: &mut Vec<usize>,
+    pairs: &mut Pairs,
 ) {
     let Some(angle) = open.last_mut().filter(|angle| angle.depth == depth) else {
         return;
@@ -187,17 +249,17 @@ fn close_assignment_angle(
         angle.numeric_close = Some(offset);
     }
     if angle.closes_at(text, offset, operand) {
-        pairs.extend([angle.offset, offset]);
+        pairs.record(angle, offset);
         open.pop();
     }
 }
 
-fn option_starts_assignment(view: &HeadView<'_>, offset: usize) -> bool {
+fn option_starts_assignment(view: &AngleView<'_>, offset: usize) -> bool {
     let tail = view.text[offset..].trim_start_matches(option_character);
     tail.trim_start().starts_with('=')
 }
 
-fn option_starts_native_argument(view: &HeadView<'_>, offset: usize) -> bool {
+fn option_starts_native_argument(view: &AngleView<'_>, offset: usize) -> bool {
     let name = view.text[offset..].trim_start_matches(option_character);
     let value = name.trim_start();
     value.len() < name.len()
@@ -214,7 +276,18 @@ struct OpenAngle {
     closer: char,
     leading: bool,
     numeric_close: Option<usize>,
+    assignment: bool,
     depth: usize,
+}
+
+impl Pairs {
+    fn record(&mut self, angle: &OpenAngle, close: usize) {
+        self.offsets.extend([angle.offset, close]);
+        if angle.assignment {
+            self.assignments
+                .push(angle.offset..close + angle.closer.len_utf8());
+        }
+    }
 }
 
 impl OpenAngle {

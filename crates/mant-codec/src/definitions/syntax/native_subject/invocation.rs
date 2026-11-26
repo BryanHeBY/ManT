@@ -125,6 +125,7 @@ pub(super) struct Syntax<'a> {
     text: &'a str,
     operands: &'a [NativeOperand],
     prefix: Option<Prefix>,
+    paired_assignments: std::cell::OnceCell<Vec<Range<usize>>>,
 }
 
 struct Prefix {
@@ -180,6 +181,7 @@ impl<'a> Syntax<'a> {
             text,
             operands,
             prefix: None,
+            paired_assignments: std::cell::OnceCell::new(),
         }
     }
 
@@ -192,6 +194,17 @@ impl<'a> Syntax<'a> {
     pub(super) fn protects(&mut self, start: usize, at: usize) -> bool {
         let text = self.text;
         let operands = self.operands;
+        // A proved angle pair in an accepted option assignment protects
+        // separators independently of our ability to type every RHS atom.
+        let ranges = self.paired_assignments.get_or_init(|| {
+            crate::definitions::syntax::scan::paired_option_assignment_ranges(text, operands)
+        });
+        if ranges[..ranges.partition_point(|range| range.start <= at)]
+            .last()
+            .is_some_and(|range| range.contains(&at))
+        {
+            return true;
+        }
         let next = following_operand(text, operands, at + 1);
         let begins_owner = next.is_some_and(|next| is_new_owner(next.role));
         let separator = text.as_bytes()[at];

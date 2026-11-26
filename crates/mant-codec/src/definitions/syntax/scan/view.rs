@@ -22,7 +22,7 @@ pub(in crate::definitions::syntax) struct HeadView<'a> {
     operands: &'a [NativeOperand],
     literal_starts: Vec<usize>,
     #[cfg(feature = "roff")]
-    assignment_angles: std::cell::OnceCell<Vec<usize>>,
+    assignment_angles: std::cell::OnceCell<assignment_angles::Pairs>,
 }
 
 impl<'a> HeadView<'a> {
@@ -141,7 +141,8 @@ impl<'a> HeadView<'a> {
     #[cfg(feature = "roff")]
     pub(super) fn paired_assignment_angle(&self, offset: usize) -> bool {
         self.assignment_angles
-            .get_or_init(|| assignment_angles::paired_offsets(self))
+            .get_or_init(|| assignment_angles::paired_angles(&self.text, self.operands))
+            .offsets
             .binary_search(&offset)
             .is_ok()
     }
@@ -262,5 +263,17 @@ impl<'a> HeadView<'a> {
         self.operands[start..]
             .iter()
             .take_while(move |item| item.bytes.start < range.end)
+    }
+}
+
+#[cfg(feature = "roff")]
+pub(in crate::definitions::syntax) fn paired_option_assignment_ranges(
+    text: &str,
+    operands: &[NativeOperand],
+) -> Vec<Range<usize>> {
+    if text.contains(['<', '⟨']) && text.contains('=') {
+        assignment_angles::paired_angles(text, operands).assignments
+    } else {
+        Vec::new()
     }
 }
