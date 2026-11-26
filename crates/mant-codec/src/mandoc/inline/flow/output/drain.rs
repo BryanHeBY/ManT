@@ -526,6 +526,13 @@ impl InlineBuilder {
     ) -> (Vec<Inline>, PreservedInlineState, InlineExecutionState) {
         let _ = self.commit_definition_row_origin();
         self.project_definition_owner_prefix();
+        let inset_styled_separator = matches!(
+            self.run_in_head_word_proof,
+            Some(super::super::RunInHeadWordProof::Inset)
+        ) && matches!(
+            self.execution.font.current,
+            super::super::Font::Strong | super::super::Font::Emphasis
+        );
         let deferred_head = self
             .execution
             .row_presentation
@@ -533,6 +540,8 @@ impl InlineBuilder {
             || self.execution.definition.as_ref().is_some_and(|state| {
                 !state.field_word_anchors.is_empty()
                     && (state.field_buffer.has_bounded_decorated_run_in_projection()
+                        || inset_styled_separator
+                            && state.field_buffer.has_proved_inset_styled_append_entry()
                         || matches!(
                             self.run_in_head_word_proof,
                             Some(super::super::RunInHeadWordProof::Diagonal)

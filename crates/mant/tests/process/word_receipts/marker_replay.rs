@@ -1024,3 +1024,51 @@ Done.
         }
     }
 }
+
+#[test]
+fn an_inherited_inset_separator_appends_its_font_slots_after_zero_width_or_lf() {
+    // Regular HEAD ink is already in the native tape. An inherited B/I
+    // separator appends BS and its three font slots after NBRZW or LF;
+    // a source SP before LF is not the cell at col-1. ASCII and UTF-8
+    // agree on the letters and words. UTF-8 also retains the underline
+    // stroke when C overwrites its BS in the absolute NBRZW example.
+    for (font, head, body, expected) in [
+        ("B", r"\zA\p\&", r#""\h'|1n'" No "\pB" No C"#, "AB C"),
+        ("I", r"\zA\p\&", r#""\h'|1n'" No "\pB" No C"#, "AB_C"),
+        ("B", r"\zA \p", r#""\h'|2n'\zB" No C"#, "AC"),
+        ("I", r"\zA \p", r#""\h'|2n'\zB" No C"#, "AC"),
+        ("R", r"\zA\p\&", r#""\h'|1n'" No "\pB" No C"#, "AB C"),
+        ("B", r"\zA\p", r#""\h'|2n'\zB" No C"#, "ABC"),
+    ] {
+        let source = format!(
+            r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.ft {font}
+.Bl -inset
+.It No "{head}"
+.No {body}
+.El
+.ft R
+.Sh ENDTEST
+Done.
+"#
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        assert_eq!(review_body(&text), expected, "{font}: {head} {body}");
+        if expected == "AC" {
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", "AC"),
+                1
+            );
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", "B"),
+                0
+            );
+        }
+    }
+}

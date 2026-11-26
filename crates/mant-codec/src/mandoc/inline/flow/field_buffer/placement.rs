@@ -360,6 +360,42 @@ impl FieldBuffer {
             && self.projection_length(5, 6) == 0
     }
 
+    /// A complete one-cell plain HEAD has two non-SP tails that keep
+    /// BACKBEFORE pending: LF/NBRZW, or source SP/LF. In both cases
+    /// generated UTF-8 NBSP inspects the last raw cell, appends a backline,
+    /// then emits the copies for the BODY's active font (term.c:903–929).
+    pub(in crate::mandoc::inline::flow) fn has_proved_inset_styled_append_entry(&self) -> bool {
+        self.has_bounded_run_in_projection()
+            && self.raw_edit_fence == 0
+            && self.backbefore_armed
+            && !self.backafter_armed
+            && self.has_pending_break_markers()
+            && self.raw_tail_fonts.is_empty()
+            && self.raw_copy_aliases.is_empty()
+            && matches!(
+                (self.cells.as_slice(), self.write_cursor, self.word_scan),
+                (
+                    [
+                        FieldCell::Graph { width: 1, .. },
+                        FieldCell::BreakMarker,
+                        FieldCell::ZeroWidthGraph
+                    ],
+                    WriteCursor::Placed(0),
+                    super::WordScanPolicy::AwaitFlush,
+                ) | (
+                    [
+                        FieldCell::Graph { width: 1, .. },
+                        FieldCell::BreakableBlank,
+                        FieldCell::BreakMarker
+                    ],
+                    WriteCursor::End,
+                    super::WordScanPolicy::Incremental,
+                )
+            )
+            && self.projection_length(0, 1) == 1
+            && self.projection_length(2, 3) == 0
+    }
+
     /// An inset BODY with a proved trailing source space takes the
     /// encode1 BACKBEFORE branch that replaces that SP with its generated
     /// NBSP, rather than appending a second cell (term.c:903–929).

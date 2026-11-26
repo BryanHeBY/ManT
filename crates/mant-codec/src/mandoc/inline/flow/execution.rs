@@ -677,6 +677,26 @@ impl InlineBuilder {
             .set_native_word_owner(owner_serial, self.head_operand_capture.is_some());
         let mut projected = Vec::new();
         let mut pending_head_ink = Vec::new();
+        if decoration != 0
+            && self
+                .execution
+                .word_input()
+                .0
+                .has_proved_inset_styled_append_entry()
+            && matches!(
+                prefix.cells.as_slice(),
+                [
+                    _,
+                    (FieldCell::BreakableBlank, _),
+                    (FieldCell::BreakMarker, _)
+                ]
+            )
+        {
+            // BACKBEFORE stops at LF, so the earlier pending glyph and
+            // authored SP both survive the separator. Hand them back to
+            // the HEAD owner together before the cloned replay retires it.
+            replay_zero_advance.release_field_owned_ink(&mut pending_head_ink);
+        }
         let Some(writes) = crate::mandoc::inline::text_execution::replay_run_in_word(
             &prefix,
             (count.min(native_count), native_count),
@@ -732,7 +752,11 @@ impl InlineBuilder {
             // BACKBEFORE first replaces the trailing SP or appends BS
             // after another cell. Then encode1 emits the active font's raw
             // copies (term.c:903–929). Keep the full-prefix check below.
-            if !(marked_backbefore || replaces_source_space || replays_inset_zero_width) {
+            if !(marked_backbefore
+                || replaces_source_space
+                || replays_inset_zero_width
+                || native_count == 1 && input.has_proved_inset_styled_append_entry())
+            {
                 return None;
             }
         } else if !(input.has_bounded_decorated_run_in_projection()
