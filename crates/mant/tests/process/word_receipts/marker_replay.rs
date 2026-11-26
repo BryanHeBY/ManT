@@ -679,3 +679,36 @@ done.
         ]
     );
 }
+
+#[test]
+fn an_inset_body_rewind_addresses_the_generated_bold_space_copies() {
+    // "No" sets Roman inside HEAD; the generated U+00A0 then inherits the
+    // restored outer bold font. Its two extra native cells remain writable
+    // until BODY's final pass (mdoc_term.c:760–772; term.c:903–929).
+    let source = r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.ft B
+.Bl -inset
+.It No "\zA\:\p"
+.No "\h'|1n'" No "\pB" No C
+.El
+.ft R
+.Sh ENDTEST
+Done.
+"#;
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(review_body(&text), "AB C");
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "AB"),
+        1
+    );
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "BC"),
+        0
+    );
+}

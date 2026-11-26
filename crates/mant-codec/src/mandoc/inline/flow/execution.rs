@@ -644,48 +644,18 @@ impl InlineBuilder {
     /// HEAD prefix is retreated or positioned with `BACKAFTER` armed
     /// (`mdoc_term.c:757-772, 939-945`, `chars.c:50`, `term.c:620-636, 888-930`).
     fn try_replay_run_in_cells(&mut self, count: usize, native_count: usize) -> bool {
-        let Some(prefix) = (self.execution.font.current == super::Font::Regular
-            && native_count > 0)
-            .then(|| {
-                let (input, anchors) = self.execution.word_input();
-                if !(input.has_bounded_decorated_run_in_projection()
-                    || input.has_retained_word_cursor()
-                    || input.has_marked_backbefore_tail()
-                        && (!self.execution.zero_advance.has_buffered_glyph()
-                            || self.execution.zero_advance.can_project_prior_slot())
-                    || input.has_positioned_slots()
-                        && (input.has_backafter_armed()
-                            || input.has_entry_retreat()
-                                && self.execution.zero_advance.can_project_prior_slot()))
-                {
-                    return None;
-                }
-                let mut prefix = input.field_prefix(0, false, true)?;
-                if prefix.raw_slot_count().saturating_add(native_count + 1)
-                    > super::field_buffer::MAX_EDITABLE_APPEND_CELLS
-                {
-                    return None;
-                }
-                retain_projected_advances(&mut prefix, input, anchors);
-                if prefix.pending_cell.is_none()
-                    && prefix.backbefore
-                    && self.execution.zero_advance.has_buffered_glyph()
-                {
-                    // `detach_projection_owner()` cleared `backbefore_graph` on
-                    // HEAD drain while `TERMP_BACKBEFORE` and the buffered glyph
-                    // stay live (`term.c:903-929`). Identify the pending slot
-                    // before `cursor` so `settle_prior_slot()` proves survival.
-                    let cursor = prefix.cells.len().saturating_sub(prefix.cursor_retreat);
-                    prefix.pending_cell =
-                        prefix.cells[..cursor].iter().rposition(|(cell, scalars)| {
-                            matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
-                                || *scalars > 0 && matches!(cell, FieldCell::ZeroWidthGraph)
-                        });
-                }
-                Some(prefix)
-            })
-            .flatten()
-        else {
+        // In an inset, a single generated U+00A0 can execute after HEAD's
+        // font scope pops back to an outer bold or italic selection.
+        // UTF-8 encode1 writes two extra raw cells for that selection
+        // (mdoc_term.c:760–772; term.c:903–929). Prove the complete marked
+        // BACKBEFORE tape before extending the existing regular replay.
+        let native_font = self.execution.font.current;
+        let decoration = match native_font {
+            super::Font::Regular => 0,
+            super::Font::Strong | super::Font::Emphasis if native_count == 1 => 2,
+            _ => return false,
+        };
+        let Some(prefix) = self.proved_run_in_prefix(native_count, decoration) else {
             return false;
         };
         let domain = if self
@@ -709,7 +679,7 @@ impl InlineBuilder {
             &prefix,
             (count.min(native_count), native_count),
             owner_serial,
-            display_font,
+            (display_font, native_font),
             domain,
             &mut replay_zero_advance,
             (&mut projected, &mut pending_head_ink),
@@ -739,6 +709,59 @@ impl InlineBuilder {
         self.execution.zero_advance = replay_zero_advance;
         self.finish_run_in_word(projected, writes, count.min(native_count));
         true
+    }
+
+    fn proved_run_in_prefix(
+        &self,
+        native_count: usize,
+        decoration: usize,
+    ) -> Option<super::native_slots::FieldPrefix> {
+        if native_count == 0 {
+            return None;
+        }
+        let (input, anchors) = self.execution.word_input();
+        let marked_backbefore = input.has_marked_backbefore_tail()
+            && (!self.execution.zero_advance.has_buffered_glyph()
+                || self.execution.zero_advance.can_project_prior_slot());
+        if decoration != 0 {
+            if !marked_backbefore {
+                return None;
+            }
+        } else if !(input.has_bounded_decorated_run_in_projection()
+            || input.has_retained_word_cursor()
+            || marked_backbefore
+            || input.has_positioned_slots()
+                && (input.has_backafter_armed()
+                    || input.has_entry_retreat()
+                        && self.execution.zero_advance.can_project_prior_slot()))
+        {
+            return None;
+        }
+        let mut prefix = input.field_prefix(0, false, true)?;
+        if prefix
+            .raw_slot_count()
+            .saturating_add(native_count + decoration + 1)
+            > super::field_buffer::MAX_EDITABLE_APPEND_CELLS
+            || decoration != 0 && (prefix.start != 0 || !prefix.backbefore)
+        {
+            return None;
+        }
+        retain_projected_advances(&mut prefix, input, anchors);
+        if prefix.pending_cell.is_none()
+            && prefix.backbefore
+            && self.execution.zero_advance.has_buffered_glyph()
+        {
+            // `detach_projection_owner()` cleared `backbefore_graph` on
+            // HEAD drain while `TERMP_BACKBEFORE` and the buffered glyph
+            // stay live (`term.c:903-929`). Identify the pending slot
+            // before `cursor` so `settle_prior_slot()` proves survival.
+            let cursor = prefix.cells.len().saturating_sub(prefix.cursor_retreat);
+            prefix.pending_cell = prefix.cells[..cursor].iter().rposition(|(cell, scalars)| {
+                matches!(cell, FieldCell::Graph { .. } | FieldCell::Hyphen)
+                    || *scalars > 0 && matches!(cell, FieldCell::ZeroWidthGraph)
+            });
+        }
+        Some(prefix)
     }
 
     fn finish_run_in_word(

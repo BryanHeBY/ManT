@@ -1133,7 +1133,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
     prefix: &crate::mandoc::inline::flow::native_slots::FieldPrefix,
     (count, native_count): (usize, usize),
     owner_serial: u64,
-    display_font: Font,
+    (display_font, native_font): (Font, RoffFont),
     domain: ReplayDomain,
     zero_advance: &mut super::ZeroAdvanceState,
     (projected, pending_head_ink): (&mut Vec<mant_ir::Inline>, &mut Vec<mant_ir::Inline>),
@@ -1176,7 +1176,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
                 text: '\u{a0}',
                 width: 1,
             }),
-            RoffFont::Regular,
+            native_font,
             owner,
         );
         if placement.slots.prior_edit().is_some() {
