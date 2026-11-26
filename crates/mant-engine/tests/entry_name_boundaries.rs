@@ -1,4 +1,6 @@
 //! Original, redistributable regressions for styled names versus parameters.
+#[path = "support/explanation_ranges.rs"]
+mod explanation_ranges;
 #[path = "support/semantic_read.rs"]
 mod semantic_read;
 use std::path::Path;
@@ -23,6 +25,15 @@ fn inline_text(inlines: &[mant_ir::Inline]) -> String {
 }
 
 fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &str) {
+    assert_direct_names_with_description(query, names, form, "PAYLOAD");
+}
+
+fn assert_direct_names_with_description(
+    query: &mant_ir::ResolvedContent,
+    names: &[&str],
+    form: &str,
+    description: &str,
+) {
     use mant_protocol::{EvidenceBasis, EvidenceClass, ExplanationQuery};
     let document = query.document.as_ref().unwrap();
     assert!(
@@ -38,6 +49,7 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
         "{:?}",
         document.diagnostics
     );
+    let mut owner_path = None;
     for name in names {
         let explained = mant_query::explain_query(
             query,
@@ -47,11 +59,18 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
             },
         )
         .unwrap();
+        assert!(explanation_ranges::assert_ranges(&explained, name) > 0);
         let direct = explained
             .evidence
             .iter()
             .find(|e| e.class == EvidenceClass::DirectEntry)
             .unwrap_or_else(|| panic!("{name}: {explained:?}"));
+        let path = direct.outline.path().to_string();
+        if let Some(expected) = &owner_path {
+            assert_eq!(&path, expected, "{name} must retain the same owner");
+        } else {
+            owner_path = Some(path);
+        }
         assert!(
             direct
                 .bases
@@ -73,9 +92,130 @@ fn assert_direct_names(query: &mant_ir::ResolvedContent, names: &[&str], form: &
             &[mant_protocol::ContentSelector::path(direct.outline.path())],
         )
         .unwrap();
-        assert!(mant_render::render_excerpt_text(&excerpt).contains("PAYLOAD"));
+        assert!(mant_render::render_excerpt_text(&excerpt).contains(description));
     }
     mant_ir::visit::Visit::visit_document(&mut Bindings, document);
+}
+
+#[test]
+fn native_alias_boundaries_preserve_parameters_and_original_owners() {
+    use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+
+    // The exact sources below ran through the pinned CVS ASCII, UTF-8 and
+    // HTML reference first. mdoc_term.c::termp_fl_pre supplies Fl dashes;
+    // man_term.c::pre_alternate executes each BI text operand separately.
+    let man = ".TH PROBE 1 \"November 26, 2026\" \"ManT\"\n.SH NAME\nprobe \\- declaration scope\n.SH OPTIONS\n";
+    let mdoc = ".Dd November 26, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd declaration scope\n.Sh OPTIONS\n.Bl -tag -width Ds\n";
+    let body = "The two outside aliases select the documented mode.";
+    let mut cases = Vec::new();
+    for (head, form) in [
+        (r#".B "\-x / \-\-enable""#, "-x / --enable"),
+        (r#".BR "\-x" " / " "\-\-enable""#, "-x / --enable"),
+        (r"\fB\-x\fP / \fB\-\-enable\fP", "-x / --enable"),
+        (r#".IP "\-x / \-\-enable""#, "-x / --enable"),
+    ] {
+        let tag = if head.starts_with(".IP") { "" } else { ".TP\n" };
+        cases.push((format!("{man}{tag}{head}\n{body}\n"), form.to_owned()));
+    }
+    cases.push((
+        format!("{mdoc}.It Fl x No / Fl Fl enable\n{body}\n.El\n"),
+        "-x / --enable".into(),
+    ));
+    for word in ["név", "ne\u{301}v", "né'v", "ne\u{301}'v", "'x'"] {
+        let form = format!("-x {word}, --enable");
+        for head in [
+            format!(r#".BI "\-x " "{word}" ", \-\-enable""#),
+            format!(r"\fB\-x\fP \fI{word}\fP, \fB\-\-enable\fP"),
+        ] {
+            cases.push((format!("{man}.TP\n{head}\n{body}\n"), form.clone()));
+        }
+        cases.push((
+            format!("{mdoc}.It Fl x Ar \"{word}\" , Fl Fl enable\n{body}\n.El\n"),
+            form,
+        ));
+    }
+    for argument in ["/--evil/file", "file , --evil", "[file , --evil]"] {
+        cases.push((
+            format!("{man}.TP\n.BI \"\\-x \" \"{argument}\" \", \\-\\-enable\"\n{body}\n"),
+            format!("-x {argument}, --enable"),
+        ));
+    }
+    for (head, form) in [
+        (
+            r#".BI "\-x " "'file , --evil'" ", \-\-enable""#,
+            "-x 'file , --evil', --enable",
+        ),
+        (
+            r#".BI "\-x " "'file" ", --evil'" "" ", \-\-enable""#,
+            "-x 'file, --evil', --enable",
+        ),
+    ] {
+        cases.push((format!("{man}.TP\n{head}\n{body}\n"), form.into()));
+    }
+    for (head, form) in [
+        (
+            "Fl x Ar \"file , --evil\" , Fl Fl enable",
+            "-x file , --evil, --enable",
+        ),
+        ("Fl x Ns / Ns Ar -NUM , Fl Fl enable", "-x/-NUM, --enable"),
+    ] {
+        cases.push((format!("{mdoc}.It {head}\n{body}\n.El\n"), form.into()));
+    }
+    for (source, form) in cases {
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        // assert_direct_names checks each source/form binding, including scalar
+        // positions after the decomposed word, and reads the same description.
+        assert_direct_names_with_description(&query, &["-x", "--enable"], &form, body);
+        for fake in ["--evil", "-evil", "-NUM"] {
+            let explanation = mant_query::explain_query(
+                &query,
+                &ExplanationQuery {
+                    entry: fake.into(),
+                    options: ExplanationOptions::default(),
+                },
+            )
+            .unwrap();
+            assert!(
+                explanation
+                    .evidence
+                    .iter()
+                    .all(|e| e.class != EvidenceClass::DirectEntry),
+                "{source}: {fake}"
+            );
+        }
+    }
+}
+
+#[test]
+fn spaced_slash_paths_do_not_become_aliases() {
+    use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+
+    let man = ".TH PROBE 1 \"November 26, 2026\" \"ManT\"\n.SH NAME\nprobe \\- declaration scope\n.SH OPTIONS\n";
+    let body = "The two outside aliases select the documented mode.";
+    // These paths were also rendered by the pinned CVS reference; a slash
+    // followed by a path is not evidence for a second option declaration.
+    for (head, form) in [
+        (r#".B "\-x /--evil/file""#, "-x /--evil/file"),
+        (r#".B "\-x / --evil/file""#, "-x / --evil/file"),
+    ] {
+        let source = format!("{man}.TP\n{head}\n{body}\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        assert_direct_names_with_description(&query, &["-x"], form, body);
+        let explanation = mant_query::explain_query(
+            &query,
+            &ExplanationQuery {
+                entry: "--evil".into(),
+                options: ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert!(
+            explanation
+                .evidence
+                .iter()
+                .all(|e| e.class != EvidenceClass::DirectEntry)
+        );
+    }
 }
 
 struct Bindings;

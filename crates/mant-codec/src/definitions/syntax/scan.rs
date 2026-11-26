@@ -322,13 +322,13 @@ impl<'a> Scanner<'a> {
             self.cursor += 2;
             self.skip_whitespace();
         }
-        // Whitespace before a comma or pipe is still part of the same
+        // Whitespace before a separator is still part of the same
         // declaration separator. Do not start an argument until that
         // punctuation has itself been consumed.
-        if self
-            .current()
-            .is_some_and(|c| matches!(c, ',' | '|') && !self.view.literal_punctuation(self.cursor))
-        {
+        if self.current().is_some_and(|c| {
+            (matches!(c, ',' | '|') || c == '/' && self.standalone_slash())
+                && !self.view.literal_punctuation(self.cursor)
+        }) {
             return;
         }
         if self.current().is_some_and(|c| c != '-')
@@ -344,6 +344,22 @@ impl<'a> Scanner<'a> {
         {
             self.begin_argument();
         }
+    }
+
+    fn standalone_slash(&self) -> bool {
+        let tail = &self.view.text[self.cursor + 1..];
+        if !tail.starts_with(char::is_whitespace) {
+            return false;
+        }
+        let tail = tail.trim_start();
+        let Some(name) = super::options::option_prefix(tail) else {
+            return false;
+        };
+        tail[name.len()..].chars().next().is_none_or(|next| {
+            next.is_whitespace()
+                || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
+                || self.wrappers.last().is_some_and(|w| w.closer() == next)
+        })
     }
 
     fn numeric_enumeration(&self) -> bool {
@@ -569,6 +585,8 @@ impl<'a> Scanner<'a> {
                     argument.attached_to_name
                         && self.view.text[argument.bytes.start..].starts_with('=')
                 });
+            let independent_literal_alias =
+                separator && !parameter && self.literal_alias_after_parameter(following);
             let boundary = separator
                 && (self.styled_argument || self.structured_argument || complete_parameter)
                 || independent_assignment_alias
@@ -595,6 +613,7 @@ impl<'a> Scanner<'a> {
                 && !complete_parameter
                 && !self.view.literal_operand_starts(restart)
                 && !independent_assignment_alias
+                && !independent_literal_alias
             {
                 // A literal receipt prevents a false name inside one word;
                 // it cannot make that unfinished parameter prove an owner.
@@ -607,6 +626,7 @@ impl<'a> Scanner<'a> {
                     || self.structured_argument
                     || complete_parameter
                     || independent_assignment_alias
+                    || independent_literal_alias
                     || self.view.literal_operand_starts(restart))
             {
                 let end = if separator || character.is_whitespace() {
@@ -646,6 +666,26 @@ impl<'a> Scanner<'a> {
             parameter,
         );
         self.cursor = next_offset;
+    }
+
+    // A separator at the start of a distinct literal operand can end the
+    // preceding styled parameter even when that parameter is a complex path.
+    // Both the separator and the candidate name must belong to that operand.
+    fn literal_alias_after_parameter(&self, following: usize) -> bool {
+        self.view.literal_operand_starts(self.cursor)
+            && self.view.operand(self.cursor).is_some_and(|operand| {
+                operand.bytes.contains(&following)
+                    && self.argument_start.as_ref().is_some_and(|argument| {
+                        operand.bytes.start > argument.bytes.start
+                            && self.view.text[argument.bytes.start..self.cursor]
+                                .trim_end()
+                                .char_indices()
+                                .next_back()
+                                .is_some_and(|(offset, _)| {
+                                    self.view.is_parameter(argument.bytes.start + offset)
+                                })
+                    })
+            })
     }
 
     fn observe_argument_character(&mut self, character: char) -> bool {
@@ -736,7 +776,8 @@ fn internal_apostrophe(text: &str, offset: usize) -> bool {
     text[offset..].starts_with(['\'', '’'])
         && text[..offset]
             .chars()
-            .next_back()
+            .rev()
+            .find(|c| !unicode_normalization::char::is_combining_mark(*c))
             .is_some_and(char::is_alphanumeric)
         && text[offset..]
             .chars()

@@ -23,6 +23,7 @@ pub(super) struct ParameterToken {
     starts_with_dash: bool,
     capitalization: Capitalization,
     uppercase_metavariable: bool,
+    combining_base: bool,
 }
 
 pub(super) fn parameter_character(character: char) -> bool {
@@ -39,6 +40,9 @@ impl ParameterToken {
     }
 
     pub(super) fn observe(mut self, character: char) -> Self {
+        let combining = unicode_normalization::char::is_combining_mark(character);
+        let attached_mark = combining && self.combining_base;
+        self.combining_base = character.is_alphanumeric() || attached_mark;
         // Uppercase is additional evidence, never an exclusive token state.
         // Keep the existing all-uppercase argument-sequence evidence across
         // whitespace; ordinary/styled completion still requires one word.
@@ -71,7 +75,7 @@ impl ParameterToken {
                 self.starts_with_dash = character == '-';
                 WordState::Word
             }
-            WordState::Word if parameter_character(character) => WordState::Word,
+            WordState::Word if parameter_character(character) || attached_mark => WordState::Word,
             WordState::Word | WordState::TrailingSpace if character.is_whitespace() => {
                 WordState::TrailingSpace
             }
