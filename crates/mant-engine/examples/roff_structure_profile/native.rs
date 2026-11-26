@@ -149,8 +149,10 @@ fn record_no_fill_line(node: &Node, lines: &mut BTreeMap<u32, NoFillSourceLine>)
 
 /// A signed RS offset is not necessarily an indentation to the right.
 /// Native `man_term.c` `pre_RS` adds the signed distance and clamps at page left.
-/// Recognize only bounded, finite character-unit literals here: expressions,
-/// other units and missing arguments retain the conservative legacy obligation.
+/// Recognize only bounded terminal literals in character units and inches.
+/// CVS `term_ascii.c` `ascii_hspan` gives all these units a positive scale, so
+/// changing units cannot turn a nonpositive offset into a positive indent.
+/// Expressions and missing arguments retain the conservative obligation.
 /// This is not a replacement formatter or a cumulative-position oracle.
 fn rs_has_nonpositive_literal_offset(node: &Node) -> bool {
     let Some(argument) = node_part_children(node, NodeKind::Head)
@@ -162,6 +164,7 @@ fn rs_has_nonpositive_literal_offset(node: &Node) -> bool {
     let number = argument
         .strip_suffix('n')
         .or_else(|| argument.strip_suffix('m'))
+        .or_else(|| argument.strip_suffix('i'))
         .unwrap_or(argument);
     if !number
         .chars()

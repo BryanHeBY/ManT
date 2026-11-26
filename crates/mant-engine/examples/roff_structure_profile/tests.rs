@@ -152,7 +152,9 @@ fn section_heading_links_are_counted_and_loss_is_detected() {
 
 #[test]
 fn nonpositive_rs_literals_do_not_require_positive_layout() {
-    for argument in ["-7", "-2n", "-1.5m", "0", "+0n"] {
+    // At 78 columns fixed CVS ASCII and UTF-8 both put the body at
+    // columns 4 and 0 for -0.1i and -1i, versus 5 for the zero baseline.
+    for argument in ["-7", "-2n", "-1.5m", "0", "+0n", "-0.1i", "-1i", "-0i"] {
         let (expected, expected_topology, document) = parsed_structure(&format!(
             ".TH AUDIT 1\n.SH BODY\n.RS {argument}\n.PP\nVisible body.\n.RE\n"
         ));
@@ -200,7 +202,7 @@ fn positive_rs_loss_is_detected_even_below_a_negative_scope() {
 
 #[test]
 fn unsupported_rs_arguments_retain_the_conservative_obligation() {
-    for argument in ["-2q", "-1i", "-999999n", "-2+1", "NaN"] {
+    for argument in ["-2q", "-999999n", "-2+1", "NaN"] {
         let (expected, _, _) = parsed_structure(&format!(
             ".TH AUDIT 1\n.SH BODY\n.RS {argument}\n.PP\nVisible body.\n.RE\n"
         ));
