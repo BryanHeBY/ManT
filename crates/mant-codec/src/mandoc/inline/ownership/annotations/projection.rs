@@ -46,10 +46,11 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
         }
     }
     let mut output: Vec<Inline> = Vec::with_capacity(lifted.len());
-    let mut anchors = Vec::new();
+    let mut between = Vec::new();
     for node in lifted {
-        if matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. }) {
-            anchors.push(node);
+        if matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. }) || is_empty_style(&node)
+        {
+            between.push(node);
             continue;
         }
         match (output.last_mut(), node) {
@@ -65,17 +66,32 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
                     ..
                 },
             ) if is_target(previous) && *previous == uri => {
-                before.append(&mut anchors);
+                before.append(&mut between);
                 before.append(&mut children);
             }
             (_, node) => {
-                output.append(&mut anchors);
+                output.append(&mut between);
                 output.push(node);
             }
         }
     }
-    output.append(&mut anchors);
+    output.append(&mut between);
     *nodes = output;
+}
+
+fn is_empty_style(node: &Inline) -> bool {
+    // A covered glyph can leave a style around empty text. Only that
+    // paint-free shape can join the fragments: a space, anchor, break, or
+    // separately owned link inside a shell still belongs at its position.
+    match node {
+        Inline::Strong { children } | Inline::Emphasis { children } => {
+            children.iter().all(|child| match child {
+                Inline::Text { value } => value.is_empty(),
+                child => is_empty_style(child),
+            })
+        }
+        _ => false,
+    }
 }
 
 fn lift_style(children: Vec<Inline>, strong: bool, output: &mut Vec<Inline>) {
@@ -267,6 +283,35 @@ fn covered_members_leave_a_separate_empty_destination_intact() {
         nodes,
         [rejected, Inline::anchor("witness"), Inline::line_break()]
     );
+}
+
+#[cfg(test)]
+#[test]
+fn a_style_shell_with_an_author_anchor_or_visible_space_keeps_its_boundary() {
+    let fragment = |glyph: &str| Inline::Link {
+        target: LinkTarget::External {
+            uri: super::markers::target_key(0),
+        },
+        title: None,
+        children: vec![Inline::Text {
+            value: glyph.to_owned(),
+        }],
+    };
+    for member in [
+        Inline::anchor("authored"),
+        Inline::Text { value: " ".into() },
+    ] {
+        let mut nodes = vec![
+            fragment("J"),
+            Inline::Emphasis {
+                children: vec![member],
+            },
+            fragment("K"),
+        ];
+        let expected = nodes.clone();
+        coalesce(&mut nodes);
+        assert_eq!(nodes, expected);
+    }
 }
 
 #[cfg(test)]

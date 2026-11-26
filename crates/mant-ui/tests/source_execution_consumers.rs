@@ -130,6 +130,32 @@ fn accepted_label_keeps_precise_activation_and_copy_boundaries() {
 }
 
 #[test]
+fn one_source_link_covers_both_adjacent_surviving_glyphs() {
+    // The pristine terminal overwrites the first slots, leaving LJK on
+    // both devices (term.c:678–718, 903–929). The source opens one URI for
+    // JK and another for L. The empty italic shell owns no paint.
+    let source = format!(
+        "{MDOC}{}\n",
+        r#".Em "\X'tty: link https://a.test/item'JK\X'tty: link'" No "\h'|0n'\X'tty: link https://b.test/item'L\X'tty: link'" No X"#
+    );
+    visit_projections(&source, |content, _| {
+        for width in [28, 40, 78] {
+            let (mut app, terminal) = paint(content, width);
+            let (column, row) = position(terminal.backend().buffer(), "LJK");
+            for (offset, uri) in [
+                (0, "https://b.test/item"),
+                (1, "https://a.test/item"),
+                (2, "https://a.test/item"),
+            ] {
+                click(&mut app, column + offset, row);
+                assert_eq!(opened_targets(&mut app), [uri]);
+            }
+            copy_span(&mut app, (column, row), "LJK");
+        }
+    });
+}
+
+#[test]
 fn empty_group_flush_resets_zero_advance_but_empty_newline_does_not() {
     // CVS roff_term_pre_ce unconditionally calls term_flushln after each
     // group, clearing BACKAFTER even without buffered cells. Ordinary .br
