@@ -355,9 +355,16 @@ impl<'a> Scanner<'a> {
         let Some(name) = super::options::option_prefix(tail) else {
             return false;
         };
+        let name_start = self.view.text.len() - tail.len();
+        let end = name_start + name.len();
         tail[name.len()..].chars().next().is_none_or(|next| {
             next.is_whitespace()
                 || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
+                || next == '/'
+                    && !self.view.is_parameter(end)
+                    && !self.view.literal_punctuation(end)
+                    && self.view.explicit_option(name_start)
+                    && self.view.native_option_starts(end + 1)
                 || self.wrappers.last().is_some_and(|w| w.closer() == next)
         })
     }
@@ -539,7 +546,11 @@ impl<'a> Scanner<'a> {
     }
 
     fn is_argument_separator(&self, character: char, operand: Option<&NativeOperand>) -> bool {
-        matches!(character, ',' | '|')
+        (matches!(character, ',' | '|')
+            || character == '/'
+                && self.view.text[..self.cursor].ends_with(char::is_whitespace)
+                && !self.view.is_parameter(self.cursor)
+                && self.standalone_slash())
             && !self.view.literal_punctuation(self.cursor)
             && !operand.is_some_and(|operand| {
                 // Commas and pipes inside a single Fl assignment belong
