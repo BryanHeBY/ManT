@@ -945,3 +945,38 @@ Done.
         }
     }
 }
+
+#[test]
+fn a_decorated_inset_zero_width_tail_stays_editable_through_the_body_separator() {
+    // LF, SP and NBRZW are already on the live HEAD tape. The generated
+    // NBSP appends BS after NBRZW; the literal SP is no longer at col-1.
+    // The outside absolute edit then reaches raw slot 0. Both native
+    // devices agree that the only visible body row and word are C.
+    for (head, tail) in [("Em", r"\&"), ("Sy", r"\&"), ("Em", "")] {
+        let source = format!(
+            r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.Bl -inset
+.It {head} "\zA\p {tail}"
+.No "\h'|0n'B" No C
+.El
+.Sh ENDTEST
+Done.
+"#
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        assert_eq!(review_body(&text), "C", "{head}: {tail}");
+        for query in ["A", "B", "C", "BC"] {
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", query),
+                u64::from(query == "C"),
+                "{head}: {tail}, query={query}"
+            );
+        }
+    }
+}

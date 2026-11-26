@@ -724,15 +724,18 @@ impl InlineBuilder {
             && (!self.execution.zero_advance.has_buffered_glyph()
                 || self.execution.zero_advance.can_project_prior_slot());
         let replaces_source_space = native_count == 1 && input.has_proved_inset_separator_entry();
+        let replays_inset_zero_width =
+            native_count == 1 && input.has_proved_inset_zero_width_separator_entry();
         if decoration != 0 {
-            // BACKBEFORE first replaces the tracked source SP, then
-            // encode1 adds the active bold or underline cells at that same
-            // position (term.c:903–929). Keep the full-prefix check below.
-            if !(marked_backbefore || replaces_source_space) {
+            // BACKBEFORE first replaces the trailing SP or appends BS
+            // after another cell. Then encode1 emits the active font's raw
+            // copies (term.c:903–929). Keep the full-prefix check below.
+            if !(marked_backbefore || replaces_source_space || replays_inset_zero_width) {
                 return None;
             }
         } else if !(input.has_bounded_decorated_run_in_projection()
             || replaces_source_space
+            || replays_inset_zero_width
             || native_count == 2 && input.has_proved_diag_separator_entry()
             || input.has_retained_word_cursor()
             || marked_backbefore
@@ -749,6 +752,7 @@ impl InlineBuilder {
             .saturating_add(native_count + decoration + 1)
             > super::field_buffer::MAX_EDITABLE_APPEND_CELLS
             || decoration != 0 && (prefix.start != 0 || !prefix.backbefore)
+            || replays_inset_zero_width && prefix.start != 0
         {
             return None;
         }

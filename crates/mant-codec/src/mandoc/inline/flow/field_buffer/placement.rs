@@ -329,6 +329,34 @@ impl FieldBuffer {
             )
     }
 
+    /// After a fully placed decorated inset HEAD ends with LF, source SP
+    /// and a zero-width cell, BACKBEFORE still sees the zero-width cell at
+    /// col-1. The generated BODY NBSP appends a backline, not a replacement
+    /// of that earlier SP (term.c:620–660, 903–929).
+    pub(in crate::mandoc::inline::flow) fn has_proved_inset_zero_width_separator_entry(
+        &self,
+    ) -> bool {
+        self.has_bounded_run_in_projection()
+            && self.raw_edit_fence == 0
+            && matches!(self.word_scan, super::WordScanPolicy::Incremental)
+            && self.backbefore_armed
+            && !self.backafter_armed
+            && self.has_pending_break_markers()
+            && matches!(self.write_cursor, WriteCursor::Placed(0))
+            && matches!(
+                self.cells.as_slice(),
+                [
+                    FieldCell::Graph { text: stroke, width: 1 },
+                    FieldCell::Backline,
+                    FieldCell::Graph { text, width: 1 },
+                    FieldCell::BreakMarker,
+                    FieldCell::BreakableBlank,
+                    FieldCell::ZeroWidthGraph,
+                ] if stroke == text || *stroke == '_'
+            )
+            && self.projection_length(5, 6) == 0
+    }
+
     /// An inset BODY with a proved trailing source space takes the
     /// encode1 BACKBEFORE branch that replaces that SP with its generated
     /// NBSP, rather than appending a second cell (term.c:903–929).
