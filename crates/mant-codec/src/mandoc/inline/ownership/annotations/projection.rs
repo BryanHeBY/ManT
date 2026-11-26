@@ -169,9 +169,50 @@ pub(super) fn collect_nonempty(
     }
 }
 
+/// Find actual accepted paint for each tty link occurrence, across final
+/// inline roots. This comparison is by the private source key, not address,
+/// so independently authored links sharing a destination remain independent.
+pub(super) fn source_glyph_labels(
+    blocks: &[mant_ir::Block],
+    sections: &[mant_ir::Section],
+    is_glyph_link: &impl Fn(&str) -> bool,
+) -> HashSet<String> {
+    use mant_ir::visit::{self, Visit};
+    struct Labels<'a, F> {
+        is_glyph_link: &'a F,
+        keys: HashSet<String>,
+    }
+    impl<'ir, F: Fn(&str) -> bool> Visit<'ir> for Labels<'_, F> {
+        fn visit_inline(&mut self, node: &'ir Inline) {
+            if let Inline::Link {
+                target: LinkTarget::External { uri },
+                children,
+                ..
+            } = node
+                && (self.is_glyph_link)(uri)
+                && has_rendered_formatter_glyph(children)
+            {
+                self.keys.insert(uri.clone());
+            }
+            visit::walk_inline(self, node);
+        }
+    }
+    let mut labels = Labels {
+        is_glyph_link,
+        keys: HashSet::new(),
+    };
+    for block in blocks {
+        labels.visit_block(block);
+    }
+    for section in sections {
+        labels.visit_section(section);
+    }
+    labels.keys
+}
+
 pub(super) fn prune_provisional_identities(
     nodes: &mut Vec<Inline>,
-    nonempty: &HashSet<String>,
+    has_nonempty: &impl Fn(&str) -> bool,
     drop_if_covered: &impl Fn(&str) -> bool,
 ) {
     let mut output = Vec::with_capacity(nodes.len());
@@ -182,7 +223,7 @@ pub(super) fn prune_provisional_identities(
             Inline::Link { children, .. }
             | Inline::Strong { children }
             | Inline::Emphasis { children } => {
-                prune_provisional_identities(children, nonempty, drop_if_covered);
+                prune_provisional_identities(children, has_nonempty, drop_if_covered);
             }
             _ => {}
         }
@@ -191,7 +232,7 @@ pub(super) fn prune_provisional_identities(
             title,
             children,
         } = &mut node
-            && ((nonempty.contains(uri) && !has_scalar(children))
+            && ((has_nonempty(uri) && !has_scalar(children))
                 || covered_without_glyphs(uri, title.as_deref(), children, drop_if_covered))
         {
             output.append(children);
@@ -221,7 +262,7 @@ fn covered_members_leave_a_separate_empty_destination_intact() {
     let mut nonempty = HashSet::new();
     collect_nonempty(&nodes, &mut nonempty, &drop_if_covered);
     assert!(nonempty.is_empty());
-    prune_provisional_identities(&mut nodes, &nonempty, &drop_if_covered);
+    prune_provisional_identities(&mut nodes, &|uri| nonempty.contains(uri), &drop_if_covered);
     assert_eq!(
         nodes,
         [rejected, Inline::anchor("witness"), Inline::line_break()]

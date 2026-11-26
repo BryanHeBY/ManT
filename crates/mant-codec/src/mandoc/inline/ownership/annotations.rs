@@ -62,7 +62,7 @@ mod projection;
 use projection::target_bytes;
 use projection::{
     coalesce, collect_nonempty, compact_styles, has_annotation, has_scalar,
-    prune_provisional_identities,
+    prune_provisional_identities, source_glyph_labels,
 };
 
 #[derive(Clone, Debug, Default)]
@@ -266,7 +266,7 @@ impl AnnotationPool {
         drop(destinations);
         if !deferred {
             self.check_local_equation_carriers(nodes);
-            self.finish_inline_root(nodes, has_source_candidates);
+            self.finish_inline_root(nodes, has_source_candidates, &HashSet::new());
         }
     }
 
@@ -310,9 +310,17 @@ impl AnnotationPool {
         if has_annotations {
             self.check_document_equation_carriers(blocks, sections);
         }
+        // A real list field can settle in more than one IR owner. Do not let
+        // the HEAD's empty fallback publish before the BODY's accepted slot.
+        let glyph_labels = if has_annotations {
+            let destinations = self.0.borrow();
+            source_glyph_labels(blocks, sections, &|uri| destinations.is_glyph_link(uri))
+        } else {
+            HashSet::new()
+        };
         evidence.publish_annotations(blocks, sections, |nodes| {
             let mut publication = if has_annotations {
-                self.finish_inline_root(nodes, has_source_candidates)
+                self.finish_inline_root(nodes, has_source_candidates, &glyph_labels)
             } else {
                 InlinePublication::default()
             };
@@ -327,16 +335,22 @@ impl AnnotationPool {
         &self,
         nodes: &mut Vec<Inline>,
         has_source_candidates: bool,
+        glyph_labels: &HashSet<String>,
     ) -> InlinePublication {
         let mut publication = InlinePublication::default();
-        publication.changed = self.resolve(nodes, has_source_candidates);
+        publication.changed = self.resolve(nodes, has_source_candidates, glyph_labels);
         if has_source_candidates {
             finish_source_candidates(nodes, &mut publication);
         }
         publication
     }
 
-    fn resolve(&self, nodes: &mut Vec<Inline>, has_source_candidates: bool) -> bool {
+    fn resolve(
+        &self,
+        nodes: &mut Vec<Inline>,
+        has_source_candidates: bool,
+        glyph_labels: &HashSet<String>,
+    ) -> bool {
         if !has_annotation(nodes) {
             return false;
         }
@@ -345,19 +359,13 @@ impl AnnotationPool {
         // Another empty fragment can still carry a rejected destination.
         {
             let destinations = self.0.borrow();
-            let drop_if_covered = |uri: &str| {
-                destinations.targets.get(uri).is_some_and(|destination| {
-                    matches!(
-                        destination.payload,
-                        DestinationPayload::Link {
-                            keep_empty: false,
-                            ..
-                        }
-                    )
-                })
-            };
+            let drop_if_covered = |uri: &str| destinations.is_glyph_link(uri);
             collect_nonempty(nodes, &mut nonempty, &drop_if_covered);
-            prune_provisional_identities(nodes, &nonempty, &drop_if_covered);
+            prune_provisional_identities(
+                nodes,
+                &|uri| nonempty.contains(uri) || glyph_labels.contains(uri),
+                &drop_if_covered,
+            );
         }
         coalesce(nodes);
         if has_source_candidates {
@@ -486,6 +494,20 @@ impl AnnotationPool {
     fn is_link_destination(&self, uri: &str) -> bool {
         self.0.borrow().targets.get(uri).is_some_and(|destination| {
             matches!(destination.payload, DestinationPayload::Link { .. })
+        })
+    }
+}
+
+impl Destinations {
+    fn is_glyph_link(&self, uri: &str) -> bool {
+        self.targets.get(uri).is_some_and(|destination| {
+            matches!(
+                destination.payload,
+                DestinationPayload::Link {
+                    keep_empty: false,
+                    ..
+                }
+            )
         })
     }
 }

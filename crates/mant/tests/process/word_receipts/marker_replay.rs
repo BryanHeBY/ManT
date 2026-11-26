@@ -308,3 +308,34 @@ fn inset_body_replays_the_raw_marker_tail_before_retiring_head_ink() {
         }
     }
 }
+
+#[test]
+fn accepted_run_in_link_beats_its_empty_head_identity() {
+    // CVS mdoc_term.c:757–772 and term.c:659–719: HEAD and BODY write
+    // to the same field, so the later word can move surviving HEAD ink
+    // into the BODY's accepted range before either owner publishes.
+    let source = r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.Bl -inset
+.It Em "\z\X'tty: link https://a.test'A\X'tty: link'\p "
+.No "\h'|0n'B" No C
+.El
+.Sh ENDTEST
+Done.
+"#;
+    let links = super::document_links(source, "roff");
+    assert_eq!(
+        links,
+        [(
+            mant_ir::LinkTarget::External {
+                uri: "https://a.test".into(),
+            },
+            "A".into(),
+        )],
+    );
+}
