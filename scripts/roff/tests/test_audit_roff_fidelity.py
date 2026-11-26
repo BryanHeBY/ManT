@@ -30,6 +30,102 @@ class FidelityDriverTests(unittest.TestCase):
         scans = [call for call in lookup.call_args_list if call.args[1] is source]
         self.assertEqual(len(scans), 1)
 
+    def test_footer_preserves_authored_os_and_removes_only_proven_footer(self):
+        # CVS man_term.c and mdoc_term.c flush OS, date and title fields;
+        # the fixed UTF-8 oracle produced these one-line and split footers.
+        for family in ("man", "mdoc"):
+            for os_name, footer in (
+                ("Uniquehost", "Uniquehost  November 25, 2026 ALPROBE(1)"),
+                ("Uniquehost Example Distribution",
+                 "Uniquehost Example Distribution\n            November 25, 2026 ALPROBE(1)"),
+            ):
+                with self.subTest(family=family, os=os_name):
+                    if family == "man":
+                        source = (f'.TH ALPROBE 1 "November 25, 2026" "{os_name}" "Test Manual"\n'
+                                  f'.SH DESCRIPTION\n{os_name}\n')
+                    else:
+                        source = (f'.Dd November 25, 2026\n.Dt ALPROBE 1\n.Os {os_name}\n'
+                                  f'.Sh DESCRIPTION\n{os_name}\n')
+                    reference = ("ALPROBE(1)     Test Manual    ALPROBE(1)\n\n"
+                                 f"DESCRIPTION\n     {os_name}\n\n{footer}\n")
+                    cleaned = fidelity_text.strip_reference_chrome(reference, source)
+                    self.assertEqual(cleaned.count(os_name), 1)
+                    self.assertNotIn("November", cleaned)
+                    finding = lambda output: AUDIT.compare_rendered(
+                        "probe", source.encode(), reference, output, "mandoc"
+                    ).finding
+                    self.assertNotIn("Uniquehost", finding(os_name).missing_tokens)
+                    self.assertIn("Uniquehost", finding("Unrelated author text").missing_tokens)
+
+    def test_table_frame_is_local_to_its_proven_region(self):
+        source = ('.TH PROBE 1 "November 25, 2026" "Uniquehost"\n.SH DESCRIPTION\n'
+                  '.TS\nallbox;\nl l.\nAlpha Beta\tGamma Delta\n.TE\n'
+                  'Alpha Beta \\(br Gamma Delta\n')
+        # tbl_term.c draws the allbox frame; ordinary term_word emits the
+        # escaped prose glyph. Both exact forms were run on the fixed oracle.
+        reference = ('     ┌────────────┬─────────────┐\n'
+                     '     │ Alpha Beta │ Gamma Delta │\n'
+                     '     └────────────┴─────────────┘\n'
+                     '     Alpha Beta │ Gamma Delta\n')
+        rows = fidelity_text.token_lines(reference, source)
+        self.assertIn(["Alpha", "Beta"], rows)
+        self.assertIn(["Gamma", "Delta"], rows)
+        self.assertIn(["Alpha", "Beta", "Gamma", "Delta"], rows)
+        self.assertNotIn("Alpha Beta Gamma Delta", fidelity_text.broken_phrase_candidates(
+            rows[-1:], ["Alpha", "Beta", "Gamma", "Delta"], 4))
+        self.assertIn("Alpha Beta Gamma Delta", fidelity_text.broken_phrase_candidates(
+            rows[-1:], ["Gamma", "Delta", "Alpha", "Beta"], 4))
+        self.assertNotIn("Alpha Beta Gamma Delta", fidelity_text.broken_phrase_candidates(
+            rows[:-1], ["Gamma", "Delta", "Alpha", "Beta"], 4))
+
+        cell_source = ('.TH PROBE 1 "November 25, 2026" "Uniquehost"\n.SH DESCRIPTION\n'
+                       '.TS\nallbox;\nl l.\nAlpha Beta Gamma Delta\tOtherword\n.TE\n')
+        cell_reference = ('     ┌────────────────────────┬───────────┐\n'
+                          '     │ Alpha Beta Gamma Delta │ Otherword │\n'
+                          '     └────────────────────────┴───────────┘\n')
+        cell_rows = fidelity_text.token_lines(cell_reference, cell_source)
+        self.assertNotIn("Alpha Beta Gamma Delta", fidelity_text.broken_phrase_candidates(
+            cell_rows, ["Alpha", "Beta", "Gamma", "Delta", "Otherword"], 4))
+        self.assertIn("Alpha Beta Gamma Delta", fidelity_text.broken_phrase_candidates(
+            cell_rows, ["Gamma", "Delta", "Alpha", "Beta", "Otherword"], 4))
+
+        double_source = ('.TH PROBE 1 "November 25, 2026" "Uniquehost"\n.SH DESCRIPTION\n'
+                         '.TS\ndoublebox;\nl | l.\nAlpha Beta\tGamma Delta\n.TE\n')
+        double_reference = ('     ┏━━━━━━━━━━━━┯━━━━━━━━━━━━━┓\n'
+                            '     ┃ Alpha Beta │ Gamma Delta ┃\n'
+                            '     ┗━━━━━━━━━━━━┷━━━━━━━━━━━━━┛\n')
+        self.assertEqual(fidelity_text.token_lines(double_reference, double_source),
+                         [["Alpha", "Beta"], ["Gamma", "Delta"]])
+
+    def test_source_proven_url_spelling_and_occurrences(self):
+        url = "https://example.org/path?route=abc"
+        source = ('.TH PROBE 1 "November 25, 2026" "Uniquehost"\n.SH DESCRIPTION\n'
+                  f'.UR {url}\nEvidence\n.UE\n.PP\n.UR {url}\nEvidence\n.UE\n')
+        # man_term.c post_UR encloses each target in angles; both occurrences
+        # and their query punctuation were observed with the fixed oracle.
+        reference = f'Evidence <{url}>\nEvidence <{url}>\n'
+        compare = lambda output: AUDIT.compare_rendered(
+            "probe", source.encode(), reference, output, "mandoc"
+        ).finding
+        self.assertNotIn(url, compare(reference).missing_tokens)
+        for changed in (url.replace("route", "Route"), url.replace("=", "-"),
+                        url.replace("?route=abc", ""), ""):
+            with self.subTest(changed=changed):
+                self.assertIn(url, compare(reference.replace(url, changed, 1)).missing_tokens)
+        bracketed = "https://example.org/a(b)"
+        explicit = f'.UR {bracketed}\nEvidence\n.UE\n'
+        self.assertEqual(fidelity_text.missing_visible_source_urls(
+            explicit, f'<{bracketed}>', 'https://example.org/a(b'), [bracketed])
+        wrapped_url = "https://example.org/alpha-beta-gamma-delta-epsilon"
+        wrapped_source = ('.TH PROBE 1 "November 25, 2026" "Uniquehost"\n'
+                          f'.SH DESCRIPTION\n{wrapped_url}\n')
+        wrapped_reference = '     https://example.org/alpha-beta-\n     gamma-delta-epsilon\n'
+        self.assertEqual(fidelity_text.missing_visible_source_urls(
+            wrapped_source, wrapped_reference, wrapped_url), [])
+        self.assertEqual(fidelity_text.missing_visible_source_urls(
+            wrapped_source, wrapped_reference, wrapped_url.replace("beta-", "beta", 1)),
+            [wrapped_url])
+
     @unittest.skipUnless(hasattr(os, "mkfifo"), "requires named pipes")
     def test_verified_source_reader_rejects_pipe_symlink_before_reading(self):
         with tempfile.TemporaryDirectory() as temporary:

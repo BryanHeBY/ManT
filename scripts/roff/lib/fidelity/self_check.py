@@ -80,10 +80,13 @@ def self_check() -> None:
     assert strip_reference_chrome(
         "delim $$\nMM2GV(1) General Commands Manual MM2GV(1)\ncontent\n\n  July 3       MM2GV(1)\n"
     ).strip() == "content"
+    # The fixed CVS man_term.c footer can put the OS on its own row after
+    # term_vspace. This input is the 40-column output of the source below.
     assert strip_reference_chrome(
-        "PROBE(1) Commands PROBE(1)\ncontent\nLinux 6.18\n"
-        "   July 3, 2025                  PROBE(1)\n",
-        '.TH PROBE 1 "July 3, 2025" "Linux 6.18"'
+        "PROBE(1)         General Commands Manual\n\ncontent\n\n"
+        "Linux 6.18 Example Distribution\n"
+        "              July 3, 2025      PROBE(1)\n",
+        '.TH PROBE 1 "July 3, 2025" "Linux 6.18 Example Distribution"\ncontent\n'
     ).strip() == "content"
     assert normalized_visible_text(
         "read <https://example.test/api/\nversion.3.html> now"
@@ -320,7 +323,10 @@ T}
     # CVS tbl_term.c emits a U+2502 frame between physical cells. The global
     # token comparison still observes both cells; phrase ordering must not
     # borrow that renderer-owned geometry as a missing-content claim.
-    assert token_lines("│ one two │ three four │", ".TS\nbox;\n") == [["one", "two"], ["three", "four"]]
+    assert token_lines(
+        "┌─────────┬────────────┐\n│ one two │ three four │\n└─────────┴────────────┘",
+        ".TS\nallbox;\nl l.\none two\tthree four\n.TE\n",
+    ) == [["one", "two"], ["three", "four"]]
     assert token_lines("one two │ three four", "ordinary │ prose") == [["one", "two", "three", "four"]]
     assert token_lines("one two three four") == [["one", "two", "three", "four"]]
     # The native tbl cell writer and the Lk target writer are distinct from

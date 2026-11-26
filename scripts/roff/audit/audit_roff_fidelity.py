@@ -42,6 +42,7 @@ from scripts.roff.lib.fidelity.text import (
     fidelity_signatures,
     labeled_mdoc_links,
     missing_token_candidates,
+    missing_visible_source_urls,
     normalized_visible_text,
     portable_table_row_pairs,
     strip_reference_chrome,
@@ -323,6 +324,9 @@ def compare_rendered(
         ):
             missing.append(token.rstrip(".:"))
             missing_keys.add(key)
+    for url in missing_visible_source_urls(source_text, reference_output, mant_output):
+        if url not in missing:
+            missing.append(url)
     phrases = broken_phrase_candidates(
         reference_lines,
         mant_tokens,

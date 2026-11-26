@@ -138,20 +138,43 @@ def strip_reference_chrome(value: str, source: str | None = None) -> str:
     lines[first] = ""
     last = visible[-1]
     if last != first:
-        footer_label = re.search(r"(?i)(?:^|\s{2,})" + re.escape(label) + r"\s*$", lines[last])
+        # The date and OS are independent fields flushed by print_man_foot /
+        # print_mdoc_foot; they can fit together or occupy separate rows.
+        man_meta = re.search(
+            r'''(?im)^[.']TH[ \t]+\S+[ \t]+\S+[ \t]+"([^"\\]+)"[ \t]+"([^"\\]+)"''',
+            source or "",
+        )
+        mdoc_date = re.search(r"(?m)^[.']Dd[ \t]+([^\n\\]+)$", source or "")
+        mdoc_os = re.search(r"(?m)^[.']Os[ \t]+([^\n\\]+)$", source or "")
+        date = man_meta.group(1) if man_meta else mdoc_date.group(1).strip() if mdoc_date else None
+        os_name = man_meta.group(2) if man_meta else mdoc_os.group(1).strip() if mdoc_os else None
+        footer_fields = None
+        if date and os_name:
+            footer_fields = re.fullmatch(
+                r"\s*(?:" + re.escape(os_name) + r"\s+)?"
+                + re.escape(date) + r"\s+" + re.escape(label) + r"\s*",
+                lines[last], re.IGNORECASE,
+            )
+        spacing = r"\s+" if footer_fields else r"\s{2,}"
+        footer_label = re.search(r"(?i)(?:^|" + spacing + r")" + re.escape(label) + r"\s*$", lines[last])
         separated = last > 0 and not lines[last - 1].strip()
-        if footer_label and (separated or TERMINAL_FOOTER.fullmatch(lines[last])):
+        split_os = bool(
+            footer_fields and os_name and last >= 2
+            and lines[last - 1] == os_name and not lines[last - 2].strip()
+        )
+        has_footer = (bool(footer_fields) and (separated or split_os)) if date and os_name else (
+            bool(footer_label) and (separated or bool(TERMINAL_FOOTER.fullmatch(lines[last])))
+        )
+        if footer_label and has_footer:
+            footer = lines[last]
             lines[last] = ""
-            # Native OS can occupy a separate footer row. Suppress it only
-            # when the source explicitly proves its exact identity.
-            if source and len(visible) >= 3:
+            # A separate OS field must itself start the footer block after a
+            # blank row, and the date/title row must not already contain it.
+            if os_name and footer_fields and len(visible) >= 3 and os_name not in footer:
                 previous = visible[-2]
-                os_match = re.search(
-                    r'''(?m)^[.']TH[ \t]+\S+[ \t]+\S+[ \t]+(?:"[^"]*"|\S+)[ \t]+(?:"([^"]+)"|(\S+))''',
-                    source,
-                    re.IGNORECASE,
-                )
-                if os_match and lines[previous].strip() == (os_match.group(1) or os_match.group(2)):
+                if (previous == last - 1 and previous > 0
+                        and not lines[previous - 1].strip()
+                        and lines[previous] == os_name):
                     lines[previous] = ""
     return "\n".join(lines)
 
@@ -252,15 +275,37 @@ def token_lines(value: str, source: str | None = None) -> list[list[str]]:
     framed_table = (
         source is not None
         and re.search(r"(?m)^[.']TS(?:[ \t]|$)", source) is not None
-        and "\u2502" not in source
     )
-    for line in value.splitlines():
+    rows = value.splitlines()
+    table_rows: set[int] = set()
+    if framed_table:
+        # A frame is local evidence only when matching top and bottom borders
+        # enclose rows with the same left and right edges (tbl_term.c).
+        start = None
+        for index, line in enumerate(rows):
+            top = re.fullmatch(r"( *)(┌[─┬]+┐|┏[━┯]+┓) *", line)
+            if top:
+                border = top.group(2)
+                start = (index, len(top.group(1)), border)
+            elif start is not None:
+                begin, indent, border = start
+                width = len(border)
+                bottom = " " * indent + border.translate(str.maketrans("┌┬┐┏┯┓", "└┴┘┗┷┛"))
+                if line.rstrip() == bottom:
+                    for row in range(begin + 1, index):
+                        candidate = rows[row]
+                        edge = "│" if border.startswith("┌") else "┃"
+                        if (candidate[indent:indent + 1] == edge
+                                and candidate[indent + width - 1:indent + width] == edge):
+                            table_rows.add(row)
+                    start = None
+    for index, line in enumerate(rows):
         # The UTF-8 terminal renderer's U+2502 is an emitted table-cell frame,
         # not authored cell text. Do not discard the line from the global
         # token stream; only exclude cross-cell n-gram evidence here.
-        # Split only where source evidence supports a tbl frame. A literal
-        # U+2502 in authored prose must not suppress phrase order.
-        segments = line.split("\u2502") if framed_table else [line]
+        # Split only inside a locally proven tbl frame; an authored U+2502
+        # in prose must not suppress phrase order.
+        segments = line.split("\u2502") if index in table_rows else [line]
         for segment in segments:
             words = TOKEN.findall(unicodedata.normalize("NFC", BORDERS.sub(" ", segment)))
             if words:
@@ -520,6 +565,48 @@ def token_key(value: str) -> str:
     # dots, slashes, and colons inside a token so qualified names and URLs stay
     # useful discovery probes.
     return value.casefold().rstrip(".:/").replace("-", "")
+
+
+def missing_visible_source_urls(source: str | None, reference: str, mine: str) -> list[str]:
+    """Compare exact, source-spelled URLs only when the reference displays them.
+
+    Direct source spelling proves the URI's punctuation, including a trailing
+    slash or query. Formatting delimiters and proven line wraps are presentation;
+    case, punctuation and occurrence counts within the URI are not.
+    """
+    if source is None:
+        return []
+    candidates = set()
+    for line in source.splitlines():
+        direct = re.match(r'''^[.'](?:UR|Lk)[ \t]+"?(https?://[^\s"\\]+)''', line)
+        if direct:
+            candidates.add(direct.group(1))
+            continue
+        for match in re.finditer(r"https?://[^\s<>\"'\\]+", line):
+            # Only the prefix before ambiguous sentence punctuation is proven
+            # in undelimited prose. Explicit macro operands retain it all.
+            url = match.group().rstrip(".,;:!)]}")
+            if url:
+                candidates.add(url)
+
+    def prepare(value: str) -> str:
+        value = strip_terminal_formatting(value)
+        return unwrap_angle_links(value)
+
+    reference, mine = prepare(reference), prepare(mine)
+    missing = []
+    for url in sorted(candidates):
+        # Do not count the prefix of a different longer address. Sentence
+        # punctuation following a complete URL remains presentation.
+        # A physical break can occur after a source hyphen, which must not be
+        # removed as a generic soft hyphen. Match that break between the exact
+        # source characters instead of normalizing the URI's spelling.
+        wrapped = r"(?:[ \t]*\n[ \t]*)?".join(map(re.escape, url))
+        pattern = re.compile(wrapped + r"(?![\w/~%+?&=#-]|\.(?=\w))")
+        count = len(pattern.findall(reference))
+        if count and len(pattern.findall(mine)) < count:
+            missing.append(url)
+    return missing
 
 
 def reference_font_escape_key(value: str) -> str | None:
