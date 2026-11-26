@@ -339,3 +339,25 @@ fn strong_text(value: &str) -> Inline {
 fn emphasis_text(value: &str) -> Inline {
     emphasis(vec![text(value)])
 }
+
+#[test]
+fn internal_apostrophes_do_not_mask_a_following_proven_alias() {
+    // Exact BI and inline-font TP inputs ran under fixed CVS man_term.c
+    // pre_alternate/pre_TP on ASCII, UTF-8 and HTML before this regression.
+    for word in ["O'Brien", "O’Brien", "OBrien", "l'été"] {
+        let nodes = [
+            strong(vec![text("-V ")]),
+            emphasis(vec![text(word)]),
+            text(", "),
+            strong(vec![text("--version")]),
+        ];
+        assert_names(&nodes, &[], &["-V", "--version"]);
+    }
+    let quoted = [
+        strong(vec![text("-V ")]),
+        text("'--fake'"),
+        text(", "),
+        strong(vec![text("--version")]),
+    ];
+    assert_names(&quoted, &[], &["-V", "--version"]);
+}

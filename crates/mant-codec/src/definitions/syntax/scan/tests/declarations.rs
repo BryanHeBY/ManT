@@ -61,3 +61,17 @@ fn alias_separators_consume_whole_or_tokens_and_complete_punctuation_flags() {
         assert!(!option_head(&[text(value)], &[]).inferred_complete);
     }
 }
+
+#[test]
+fn spaces_before_top_level_alias_punctuation_are_not_arguments() {
+    // Exact one-bold, alternating and font-escaped TP inputs ran under the
+    // fixed CVS man_term.c pre_B/pre_alternate and pre_TP on ASCII/UTF-8/HTML.
+    for sep in [",", ", ", " ,", " , ", "|", "| ", " |", " | "] {
+        let value = format!("-V{sep}--version");
+        assert_names(&[strong(vec![text(&value)])], &[], &["-V", "--version"]);
+        assert!(
+            option_head(&[strong(vec![text(&value)])], &[]).inferred_complete,
+            "{value}"
+        );
+    }
+}

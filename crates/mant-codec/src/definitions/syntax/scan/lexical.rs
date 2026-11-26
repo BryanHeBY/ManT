@@ -17,6 +17,10 @@ impl LexicalState {
         !self.escaped && !self.within_group() && !self.uncertain
     }
 
+    pub(super) fn in_quote(&self) -> bool {
+        self.quote.is_some()
+    }
+
     pub(super) fn within_group(&self) -> bool {
         self.group_depth() != 0
     }

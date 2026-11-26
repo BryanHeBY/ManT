@@ -1,7 +1,7 @@
 //! Validate the ordered parameter syntax without inventing word boundaries.
 
 use super::parameter_token::{ParameterToken, parameter_character};
-use super::{Argument, HeadView, LexicalState, closing, quote_closer};
+use super::{Argument, HeadView, LexicalState, closing, internal_apostrophe, quote_closer};
 
 #[cfg(feature = "roff")]
 mod native_assignment;
@@ -24,6 +24,11 @@ pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool 
         };
         #[cfg(not(feature = "roff"))]
         let lexical_character = character;
+        let lexical_character = if !lexical.in_quote() && internal_apostrophe(&view.text, offset) {
+            'x'
+        } else {
+            lexical_character
+        };
         let nested = lexical.within_group();
         let opening = lexical.is_top_level()
             && (closing(lexical_character).is_some() || quote_closer(lexical_character).is_some());

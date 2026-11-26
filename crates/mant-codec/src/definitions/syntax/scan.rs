@@ -320,6 +320,15 @@ impl<'a> Scanner<'a> {
             self.cursor += 2;
             self.skip_whitespace();
         }
+        // Whitespace before a comma or pipe is still part of the same
+        // declaration separator. Do not start an argument until that
+        // punctuation has itself been consumed.
+        if self
+            .current()
+            .is_some_and(|c| matches!(c, ',' | '|') && !self.view.literal_punctuation(self.cursor))
+        {
+            return;
+        }
         if self.current().is_some_and(|c| c != '-')
             && self
                 .current()
@@ -626,7 +635,14 @@ impl<'a> Scanner<'a> {
         } else if top_level && !character.is_whitespace() {
             self.structured_argument = false;
         }
-        self.placeholder = self.placeholder.observe(character, parameter);
+        self.placeholder = self.placeholder.observe(
+            if internal_apostrophe(&self.view.text, self.cursor) {
+                'x'
+            } else {
+                character
+            },
+            parameter,
+        );
         self.cursor = next_offset;
     }
 
@@ -660,8 +676,15 @@ impl<'a> Scanner<'a> {
         });
         #[cfg(not(feature = "roff"))]
         let literal_angle = false;
-        self.lexical
-            .observe(if literal_angle { 'x' } else { character })
+        self.lexical.observe(
+            if literal_angle
+                || !self.lexical.in_quote() && internal_apostrophe(&self.view.text, self.cursor)
+            {
+                'x'
+            } else {
+                character
+            },
+        )
     }
 
     fn complete_bare_parameter(&self, following: usize) -> bool {
@@ -703,6 +726,20 @@ impl<'a> Scanner<'a> {
                     .is_some_and(|wrapper| wrapper.closer() == next)
         })
     }
+}
+
+// A word-internal apostrophe is not an opening quote. An apostrophe at a
+// boundary remains a quote, so enclosed dash-looking values stay opaque.
+fn internal_apostrophe(text: &str, offset: usize) -> bool {
+    text[offset..].starts_with(['\'', '’'])
+        && text[..offset]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+        && text[offset..]
+            .chars()
+            .nth(1)
+            .is_some_and(char::is_alphanumeric)
 }
 
 fn option_character(character: char) -> bool {
