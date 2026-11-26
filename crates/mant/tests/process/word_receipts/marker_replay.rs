@@ -339,3 +339,194 @@ Done.
         )],
     );
 }
+
+fn review_body(text: &str) -> &str {
+    description(text).split_once("\n\n").unwrap().0.trim()
+}
+
+#[test]
+fn raw_slot_retreat_preserves_the_native_source_line_boundary() {
+    // man_term.c:915–923 and term.c:659–719: a no-fill input line
+    // bypasses the automatic flush only after the preceding terminal
+    // continuation. An ordinary filled source line adds TABREF instead.
+    for (source, expected) in [
+        (
+            r#".TH PROBE 1 "November 26, 2026" "test"
+.SH NAME
+probe \- test the manual
+.SH DESCRIPTION
+.nf
+\zJ\h'1n'\c
+\h'-1n'Q X
+.fi
+.SH ENDTEST
+Done.
+"#,
+            "Q X",
+        ),
+        (
+            r#".TH PROBE 1 "November 26, 2026" "test"
+.SH NAME
+probe \- test the manual
+.SH DESCRIPTION
+\zJ\h'1n'\c
+\h'-1n'Q X
+.SH ENDTEST
+Done.
+"#,
+            "JQ X",
+        ),
+        (
+            r#".TH PROBE 1 "November 26, 2026" "test"
+.SH NAME
+probe \- test the manual
+.SH DESCRIPTION
+.nf
+\zJ\h'1n'
+.br
+\h'-1n'Q X
+.fi
+.SH ENDTEST
+Done.
+"#,
+            "J\nQ X",
+        ),
+    ] {
+        let text = render(source, "roff", "text", "never", false);
+        assert_eq!(review_body(&text), expected);
+    }
+}
+
+#[test]
+fn a_column_body_continuation_overwrites_the_linked_glyph_at_its_native_slot() {
+    // mdoc_term.c:939–950: the column BODY post, not its source word,
+    // flushes the native field; it can replace earlier cells in that column.
+    let source = r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+.Bl -column "xxxxxx" "xxxxxxxxxx"
+.It label Ta Xo
+\z\X'tty: link https://j.test'J\X'tty: link'\p\:\c
+\h'|0n'\X'tty: link https://q.test'Q\X'tty: link' X
+.Xc
+.El
+.Sh ENDTEST
+Done.
+"#;
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(
+        review_body(&text).split_whitespace().collect::<Vec<_>>(),
+        ["label", "QX"]
+    );
+    let linked: Vec<_> = super::document_links(source, "roff")
+        .into_iter()
+        .filter(|(_, label)| !label.is_empty())
+        .collect();
+    assert_eq!(
+        linked,
+        [(
+            mant_ir::LinkTarget::External {
+                uri: "https://q.test".into()
+            },
+            "Q".into()
+        )],
+    );
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "QX"),
+        1
+    );
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "JQ"),
+        0
+    );
+}
+
+#[test]
+fn an_absolute_cursor_edit_orders_equal_labels_by_their_accepted_slots() {
+    // term.c:659–719: the marker remains editable through the absolute
+    // cursor move. The pinned terminal replay with distinct J/K/L glyphs
+    // paints KJL, witnessing the link origins even when the glyphs match.
+    let source = r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm test
+.Nd glyph attribution
+.Sh DESCRIPTION
+.Em "\X'tty: link https://a.test/item'X\X'tty: link'\p" No "\h'|0n'\X'tty: link https://b.test/item'X\X'tty: link'" No "\X'tty: link https://c.test/item'X\X'tty: link'"
+.Sh ENDTEST
+done.
+"#;
+    for anchors in [false, true] {
+        let mut input = source.to_owned();
+        let mut format = "roff";
+        for _ in 0..=2 {
+            let text = render(&input, format, "text", "never", false);
+            assert_eq!(review_body(&text), "XXX");
+            let rendered = super::document_links(&input, format);
+            assert_eq!(
+                rendered,
+                ["b", "a", "c"].map(|host| (
+                    mant_ir::LinkTarget::External {
+                        uri: format!("https://{host}.test/item")
+                    },
+                    "X".into(),
+                ))
+            );
+            input = render(&input, format, "markdown", "never", anchors);
+            format = "markdown";
+        }
+    }
+}
+
+#[test]
+fn source_nbsp_and_each_authored_space_occupy_separate_native_slots() {
+    // term.c:678–699 and 903–929: one EN of positive motion resolves
+    // BACKBEFORE without writing. The differing later space counts are
+    // real slots, so the five-column rewind only removes J in the first.
+    for (source, expected) in [
+        (
+            r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+J \z\[u00A0]\h'1n' \c
+\h'-5n'Q X
+.Sh ENDTEST
+Done.
+"#,
+            "Q X",
+        ),
+        (
+            r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+J \z\[u00A0]\h'1n'  \c
+\h'-5n'Q X
+.Sh ENDTEST
+Done.
+"#,
+            "JQ X",
+        ),
+    ] {
+        let text = render(source, "roff", "text", "never", false);
+        assert_eq!(
+            review_body(&text)
+                .split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" "),
+            expected
+        );
+    }
+}

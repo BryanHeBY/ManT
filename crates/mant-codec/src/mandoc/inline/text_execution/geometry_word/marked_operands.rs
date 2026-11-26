@@ -90,6 +90,58 @@ fn bounded_append_with_leading_columns(events: &[RoffInlineEvent], initial: usiz
     has_space && ink_after_marker
 }
 
+/// A decorated label followed by a terminal LF still occupies known
+/// native slots at the next operand. ESCAPE_BREAK writes LF, and the two
+/// tty link delimiters each write NBRZW; none flushes the field
+/// (term.c:620–638, 659–660). Keep the bounded decorated prefix so a
+/// later absolute motion can edit the label, not append after it.
+pub(super) fn bounded_linked_marker_tail(events: &[RoffInlineEvent]) -> bool {
+    let Some(marker) = events
+        .iter()
+        .rposition(|event| matches!(event, RoffInlineEvent::LineBreak))
+    else {
+        return false;
+    };
+    // \p can be followed by nonprinting delimiters without a flush.
+    if !events[marker + 1..].iter().all(|event| {
+        matches!(
+            event,
+            RoffInlineEvent::ZeroWidthGlyph
+                | RoffInlineEvent::Font(_)
+                | RoffInlineEvent::PreviousFont
+        )
+    }) {
+        return false;
+    }
+    let mut ink = false;
+    let mut link = false;
+    let Some(mut remaining) = MAX_EDITABLE_APPEND_CELLS.checked_sub(events.len() - marker) else {
+        return false;
+    };
+    for event in &events[..marker] {
+        let count = match event {
+            RoffInlineEvent::Text(text) if text.bytes().all(|byte| byte.is_ascii_graphic()) => {
+                ink |= !text.is_empty();
+                text.len().saturating_mul(5)
+            }
+            RoffInlineEvent::Link(Some(_)) => {
+                link = true;
+                0
+            }
+            RoffInlineEvent::Link(None)
+            | RoffInlineEvent::Font(_)
+            | RoffInlineEvent::PreviousFont => 0,
+            RoffInlineEvent::ZeroWidthGlyph => 1,
+            _ => return false,
+        };
+        let Some(left) = remaining.checked_sub(count) else {
+            return false;
+        };
+        remaining = left;
+    }
+    ink && link
+}
+
 fn starts_with_graphless_break(events: &[RoffInlineEvent]) -> bool {
     // A graphless NBRZW / LF / ASCII_BREAK prefix contributes no ink to
     // the prior row. With no native edit, let the established pass

@@ -157,8 +157,14 @@ fn awaits_bounded_marker_flush(
                     ReplayDomain::Filled => {
                         marked_operands::bounded_append(events)
                             || marked_operands::bounded_filled_marked_append(events, 0)
+                            || (decorated_word(events, context.font.current)
+                                && marked_operands::bounded_linked_marker_tail(events))
                     }
-                    ReplayDomain::Scoped => marked_operands::bounded_append(events),
+                    ReplayDomain::Scoped => {
+                        marked_operands::bounded_append(events)
+                            || (matches!(events.last(), Some(RoffInlineEvent::NoSpace))
+                                && marked_operands::bounded_filled_marked_append(events, 0))
+                    }
                     ReplayDomain::DefinitionLine => {
                         marked_operands::bounded_field_append(events)
                             || marked_operands::bounded_append(events)

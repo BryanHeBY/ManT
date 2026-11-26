@@ -351,6 +351,12 @@ fn local_overwrite(
     let fresh_filled_motion = (fresh_word || bounded_filled_prefix)
         && is_filled_line_domain(context.slot_entry.domain)
         && (!has_marker_event || bounded_filled_prefix);
+    // One EN after BACKBEFORE consumes the register without an advance
+    // slot. A continued no-fill or column word keeps that proved local
+    // graph writable, without adopting filled source-line behavior.
+    let continued_scoped_motion = fresh_word
+        && context.slot_entry.domain == ReplayDomain::Scoped
+        && matches!(events.last(), Some(RoffInlineEvent::NoSpace));
     let mut wrote_ink = false;
     let mut armed = false;
     let mut backbefore = false;
@@ -397,18 +403,21 @@ fn local_overwrite(
                 ..
             } if (append_motion || fresh_filled_motion && (!wrote_ink || backbefore))
                 && motion_columns(value)
-                    .is_some_and(|(absolute, units)| !absolute && units > 0) =>
+                    .is_some_and(|(absolute, units)| !absolute && units > 0)
+                || continued_scoped_motion
+                    && (armed || backbefore)
+                    && motion_columns(value) == Some((false, 24)) =>
             {
                 // term_word() clears BACKAFTER without moving, or uses
                 // the first positive HORIZ unit to clear BACKBEFORE
                 // (term.c:678-699).
                 if !std::mem::take(&mut armed)
                     && std::mem::take(&mut backbefore)
-                    && fresh_filled_motion
+                    && (fresh_filled_motion || continued_scoped_motion)
                 {
                     resolved_motion_retreat = true;
                 }
-                if !fresh_filled_motion {
+                if !fresh_filled_motion && !continued_scoped_motion {
                     projected_padding = true;
                 }
             }

@@ -53,6 +53,7 @@ pub(super) fn can_place_relative_advance(
 ) -> bool {
     can_publish_inner_advances(events, context)
         || appends_held_nbsp_before_authored_blank(events, context)
+        || places_settled_nbsp_before_a_source_blank(events, context)
         || can_defer_retreated_advances(events, context)
         || can_defer_trailing_advance(events, context)
         || can_defer_live_advances(events, context)
@@ -79,6 +80,79 @@ fn appends_held_nbsp_before_authored_blank(
         ] if text == "\u{a0}"
             && motion_columns(value).is_some_and(|(absolute, units)| !absolute && units > 0 && units <= 3 * 24)
             && (1..=4).contains(&tail.len()) && tail.bytes().all(|b| b == b' '))
+}
+
+fn places_settled_nbsp_before_a_source_blank(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    use crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+
+    // As UTF-8, term_word() hands the explicit NBSP scalar to encode1().
+    // \z arms BACKAFTER, the NBSP arms BACKBEFORE, and one EN of positive
+    // HORIZ clears it without writing a cell (term.c:678–699, 903–929).
+    // Authored SPs then advance separately through encode(), and an
+    // optional \c retains all these slots on the next source line.
+    if context.zero_advance.is_armed()
+        || context.zero_advance.has_buffered_glyph()
+        || context.zero_advance.has_annotation_output_owner()
+        || context.slot_entry.cursor == EntryCursor::NeedsReplay
+    {
+        return false;
+    }
+    let events = match events.split_last() {
+        Some((RoffInlineEvent::NoSpace, head)) => head,
+        _ => events,
+    };
+    let [
+        prefix @ ..,
+        RoffInlineEvent::ZeroAdvance,
+        nb,
+        RoffInlineEvent::HorizontalMotion {
+            argument: Some(motion),
+            ..
+        },
+        RoffInlineEvent::Text(spaces),
+    ] = events
+    else {
+        return false;
+    };
+    if !matches!(nb, RoffInlineEvent::Glyph(value, _) | RoffInlineEvent::Text(value) if value == "\u{a0}")
+        || motion_columns(motion) != Some((false, 24))
+        || spaces.is_empty()
+        || !spaces.bytes().all(|byte| byte == b' ')
+    {
+        return false;
+    }
+    let used = context.slot_entry.prefix.as_ref().map_or(
+        0,
+        crate::mandoc::inline::flow::native_slots::FieldPrefix::raw_slot_count,
+    );
+    let Some(budget) =
+        MAX_EDITABLE_APPEND_CELLS.checked_sub(used.saturating_add(spaces.len()).saturating_add(5))
+    else {
+        return false;
+    };
+    prefix
+        .iter()
+        .try_fold(budget, |remaining, event| {
+            let count = match event {
+                RoffInlineEvent::Text(text)
+                    if text
+                        .bytes()
+                        .all(|byte| byte.is_ascii_graphic() || byte == b' ') =>
+                {
+                    text.len().saturating_mul(5)
+                }
+                RoffInlineEvent::Link(_)
+                | RoffInlineEvent::Font(_)
+                | RoffInlineEvent::PreviousFont => 0,
+                RoffInlineEvent::ZeroWidthGlyph => 1,
+                _ => return None,
+            };
+            remaining.checked_sub(count)
+        })
+        .is_some()
 }
 
 fn can_publish_inner_advances(
