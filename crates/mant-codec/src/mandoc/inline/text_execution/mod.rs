@@ -17,7 +17,9 @@ use super::flow::{
 };
 use event_state::append_text_event;
 pub(in crate::mandoc::inline) use geometry_word::replay_run_in_word;
-pub(in crate::mandoc::inline) use native_writes::record_native_event;
+pub(in crate::mandoc::inline) use native_writes::{
+    record_native_event, retain_pending_decorated_inset_head,
+};
 use references::append_empty_destination;
 
 use super::flow::TrailingOutput;

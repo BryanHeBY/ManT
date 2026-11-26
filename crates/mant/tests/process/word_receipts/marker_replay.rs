@@ -838,3 +838,54 @@ Done.
         }
     }
 }
+
+#[test]
+fn a_decorated_inset_head_keeps_its_raw_font_slots_before_the_breakpoint() {
+    // In the frozen oracle Em writes underline/BS/A, Sy A/BS/A. LF,
+    // ASCII_BREAK and SP leave BACKBEFORE pending. The following generated
+    // NBSP replaces SP before adding its own outer B/I decoration.
+    for font in ["B", "I"] {
+        for (head, breakpoint, tail, expected) in [
+            ("Em", r"\:", r#""\h'|0n'B" No C"#, "C"),
+            ("Sy", r"\:", r#""\h'|0n'B" No C"#, "C"),
+            ("No", r"\:", r#""\h'|0n'B" No C"#, "BC"),
+            ("Em", "", r#""\h'|0n'B" No C"#, "C"),
+            ("Em", r"\:", r#""\h'-2n'" No "\pB" No C"#, "A\nB\nC"),
+        ] {
+            let source = format!(
+                r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.ft {font}
+.Bl -inset
+.It {head} "\zA\p{breakpoint} "
+.No {tail}
+.El
+.ft R
+.Sh ENDTEST
+Done.
+"#
+            );
+            let text = render(&source, "roff", "text", "never", false);
+            assert_eq!(
+                review_body(&text)
+                    .lines()
+                    .map(str::trim)
+                    .collect::<Vec<_>>(),
+                expected.lines().collect::<Vec<_>>(),
+                "{font}: {head} {breakpoint} {tail}"
+            );
+            for query in ["A", "B", "C", "BC"] {
+                assert_eq!(
+                    super::search_visible_word_with_format(&source, "roff", query),
+                    u64::from(expected.lines().any(|word| word == query)),
+                    "{font}: {head} {breakpoint} {tail}, query={query}"
+                );
+            }
+        }
+    }
+}

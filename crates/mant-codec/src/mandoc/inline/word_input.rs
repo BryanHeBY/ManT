@@ -1,5 +1,5 @@
 //! Execution and projection of an input formatter word.
-use super::flow::native_slots::PrefixExtension;
+use super::flow::native_slots::{EntryCursor, PrefixExtension, ReplayDomain};
 use libmandoc_rs::Node;
 use mant_ir::Inline;
 
@@ -97,25 +97,18 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         WordSource::NormalizedOperand => !builder.execution.no_fill_word_active,
         WordSource::EquationOperand => false,
     };
-    let line_width_units = builder.execution.horizontal_line_width_units(source);
-    let slot_entry = builder.execution.native_slot_entry_for_word(events);
-    let execution = font::parse_roff_text_with_zero_advance(
+    let execution = execute_roff_word_entry(
+        builder,
         source,
-        font::TextExecutionContext {
-            font: &mut builder.execution.font,
-            zero_advance: &mut builder.execution.zero_advance,
-            defer_leading_blanks,
-            line_width_units,
-            slot_entry,
-            table_field_units: None,
-            table_leading_blanks: 0,
-            policy: font::TextExecutionPolicy {
-                recognize_generated_references,
-                record_native_cells: true,
-                field_authoritative,
-                word_space,
-            },
+        events,
+        origin,
+        font::TextExecutionPolicy {
+            recognize_generated_references,
+            record_native_cells: true,
+            field_authoritative,
+            word_space,
         },
+        defer_leading_blanks,
     );
     receive_word_effects(builder, &execution);
     builder.native_word_writes = Some(execution.native_writes);
@@ -161,6 +154,57 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
     }
     builder.continue_source_line(continues_line);
     !execution.definitive_reject && !builder.execution.wipe_remainder
+}
+
+fn execute_roff_word_entry(
+    builder: &mut InlineBuilder,
+    source: &str,
+    events: &[RoffInlineEvent],
+    origin: WordSource<'_>,
+    policy: font::TextExecutionPolicy,
+    defer_leading_blanks: bool,
+) -> super::text_execution::TextExecution {
+    let line_width_units = builder.execution.horizontal_line_width_units(source);
+    let slot_entry = builder.execution.native_slot_entry_for_word(events);
+    let producer_font = inset_head_entry_font(builder, &slot_entry, origin);
+    let mut execution = font::parse_roff_text_with_zero_advance(
+        source,
+        font::TextExecutionContext {
+            font: &mut builder.execution.font,
+            zero_advance: &mut builder.execution.zero_advance,
+            defer_leading_blanks,
+            line_width_units,
+            slot_entry,
+            table_field_units: None,
+            table_leading_blanks: 0,
+            policy,
+        },
+    );
+    if let Some(font) = producer_font {
+        super::text_execution::retain_pending_decorated_inset_head(
+            events,
+            &mut execution.native_writes,
+            font,
+        );
+    }
+    execution
+}
+
+fn inset_head_entry_font(
+    builder: &InlineBuilder,
+    slot: &super::SlotEntry,
+    origin: WordSource<'_>,
+) -> Option<super::Font> {
+    (builder.inset_head_word_proof
+        && matches!(origin, WordSource::Text(node) if !node.flags.no_fill && !node.flags.generated)
+        && slot.domain == ReplayDomain::DefinitionLine
+        && slot.cursor == EntryCursor::Empty
+        && slot.automatic_blanks == 0
+        && slot.device_tail.is_none()
+        && !builder.zero_advance.is_armed()
+        && !builder.zero_advance.has_buffered_glyph()
+        && !builder.zero_advance.has_annotation_output_owner())
+    .then_some(builder.execution.font.current)
 }
 
 fn receive_word_effects(

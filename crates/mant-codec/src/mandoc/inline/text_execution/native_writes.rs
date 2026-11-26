@@ -100,6 +100,59 @@ impl AppendedFonts {
     }
 }
 
+/// A fresh inset HEAD can end with a pending decorated glyph and only
+/// buffer writes: LF, `ASCII_BREAK`, and one authored SP. None is `encode1()`
+/// ink or settles BACKBEFORE (term.c:620–660, 903–929, 946–967). Preserve
+/// the existing fallback word/space owners and record just its proved
+/// decoration extent before the BODY's generated NBSP addresses the SP.
+pub(in crate::mandoc::inline) fn retain_pending_decorated_inset_head(
+    events: &[RoffInlineEvent],
+    writes: &mut [FieldWrite],
+    font: super::Font,
+) {
+    if !matches!(font, super::Font::Strong | super::Font::Emphasis) {
+        return;
+    }
+    let [
+        RoffInlineEvent::ZeroAdvance,
+        RoffInlineEvent::Text(glyph),
+        RoffInlineEvent::LineBreak,
+        RoffInlineEvent::Breakpoint,
+        RoffInlineEvent::Text(space),
+    ] = events
+    else {
+        return;
+    };
+    if glyph.len() != 1 || space != " " {
+        return;
+    }
+    let [
+        FieldWrite::ArmBackafter,
+        FieldWrite::Cell(FieldCell::Graph { text, width: 1 }),
+        FieldWrite::Cell(FieldCell::BreakMarker),
+        FieldWrite::Cell(FieldCell::Breakpoint),
+        FieldWrite::StageBacklineProjection,
+        FieldWrite::DeferredBlanks { source, count: 1 },
+        proof @ FieldWrite::OpaqueRawSlots {
+            styled_suffix: None,
+            keeps_prior_slots: false,
+        },
+    ] = writes
+    else {
+        return;
+    };
+    if source.font == font && text.is_ascii_graphic() && glyph.starts_with(*text) {
+        // Four source cells; the font run expands the first to three raw
+        // cells. The reading-only stage receipt occupies no raw slot.
+        *proof = FieldWrite::ProveAppendedSlots(AppendedSlotProof {
+            cells: 4,
+            fonts: vec![(0..1, font)],
+            replay_tail: None,
+            pending: true,
+        });
+    }
+}
+
 /// Prove a final single-column decorated run (`encode1()`, `term.c:900-925`).
 /// Buffered `ESCAPE_SKIPCHAR` / `ESCAPE_NOSPACE` / zero-width `ESCAPE_HORIZ`
 /// (`term.c:662-682, 773-775`) and font/break controls (`term.c:640-661, 800`)
