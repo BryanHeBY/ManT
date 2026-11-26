@@ -723,12 +723,16 @@ impl InlineBuilder {
         let marked_backbefore = input.has_marked_backbefore_tail()
             && (!self.execution.zero_advance.has_buffered_glyph()
                 || self.execution.zero_advance.can_project_prior_slot());
+        let replaces_source_space = native_count == 1 && input.has_proved_inset_separator_entry();
         if decoration != 0 {
-            if !marked_backbefore {
+            // BACKBEFORE first replaces the tracked source SP, then
+            // encode1 adds the active bold or underline cells at that same
+            // position (term.c:903–929). Keep the full-prefix check below.
+            if !(marked_backbefore || replaces_source_space) {
                 return None;
             }
         } else if !(input.has_bounded_decorated_run_in_projection()
-            || native_count == 1 && input.has_proved_inset_separator_entry()
+            || replaces_source_space
             || native_count == 2 && input.has_proved_diag_separator_entry()
             || input.has_retained_word_cursor()
             || marked_backbefore

@@ -798,3 +798,43 @@ Done.
         );
     }
 }
+
+#[test]
+fn an_inset_separator_styles_the_native_copy_after_replacing_an_authored_space() {
+    // Both terminal devices agree on the visible words and nonblank
+    // rows. UTF-8's bold duplicate or underline stroke is written at
+    // the source SP, not at the end of the buffer (term.c:903–929).
+    for font in ["B", "I"] {
+        for (spaces, body, expected, query) in [
+            (" ", r#""\h'|1n'" No "\pB" No C"#, "AB C", "AB"),
+            ("  ", r#""\h'|2n'\zB" No C"#, "ABC", "ABC"),
+            ("  ", r#""\h'|0n'B" No C"#, "BC", "BC"),
+        ] {
+            let source = format!(
+                r#".Dd November 22, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual renderer
+.Sh DESCRIPTION
+.ft {font}
+.Bl -inset
+.It No "\zA\p{spaces}"
+.No {body}
+.El
+.ft R
+.Sh ENDTEST
+Done.
+"#
+            );
+            let text = render(&source, "roff", "text", "never", false);
+            assert_eq!(review_body(&text), expected, "{font}: {body}");
+            assert_eq!(
+                super::search_visible_word_with_format(&source, "roff", query),
+                1,
+                "{font}: {body}"
+            );
+        }
+    }
+}
