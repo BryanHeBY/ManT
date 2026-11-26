@@ -494,7 +494,23 @@ fn definition_handoff<'a>(
             },
         )
     } else {
-        Some(DefinitionBoundary::Body(following))
+        // term_flushln() skips the automatic SP, then term_field() paints
+        // the generated run-in NBSP on the new row before the BODY word
+        // (term.c:205-220, 389-428). That blank may have no scalar until
+        // deferred projection. Put the break before its BODY owner so a
+        // target on the following word cannot leave the blank on HEAD.
+        let restart = buffer
+            .first_deferred_run_in_blank(next.start, first)
+            .and_then(|cell| {
+                anchors
+                    .partition_point(|anchor| anchor.content <= cell)
+                    .checked_sub(1)
+            })
+            .filter(|&index| {
+                anchors[index].content >= next.start && !head.owns_word(&anchors[index].owner)
+            })
+            .unwrap_or(following);
+        Some(DefinitionBoundary::Body(restart))
     }
 }
 

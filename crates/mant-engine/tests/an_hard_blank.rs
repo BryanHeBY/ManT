@@ -71,3 +71,28 @@ fn public_json_keeps_the_hard_row_in_the_item_description() {
         assert!(line < body, "{children:?}");
     }
 }
+
+#[test]
+fn public_json_places_the_generated_inset_blank_after_the_body_break() {
+    use mant_ir::{Block, Inline, ResolvedContent, inline_plain_text};
+
+    // The empty No operand writes an automatic SP (mdoc_term.c:354-378,
+    // term.c:573-590). BODY's flush skips that SP and prints the generated
+    // NBSP on the next row (term.c:205-220, 389-428).
+    let source =
+        format!("{HEADER}.Bl -inset\n.It Xo\n.No alpha\\p\n.No \"\"\n.Xc\n.No tail text\n.El\n");
+    let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+    let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+    let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+    let document = ResolvedContent::from(decoded).document.unwrap();
+    let Block::DefinitionList { items, .. } = &document.sections[1].blocks[0] else {
+        panic!("{source}");
+    };
+    let item = &items[0];
+    assert!(item.inline_term());
+    let [Block::Paragraph { children, .. }] = &item.description[..] else {
+        panic!("{item:#?}");
+    };
+    assert!(matches!(children.first(), Some(Inline::LineBreak {})));
+    assert_eq!(inline_plain_text(children), "\n tail text");
+}

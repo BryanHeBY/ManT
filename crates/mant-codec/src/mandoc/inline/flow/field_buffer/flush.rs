@@ -128,6 +128,19 @@ impl FieldBuffer {
         self.printed_deferred_blanks_at_handoff(passes, |_| false)
     }
 
+    pub(in crate::mandoc::inline::flow) fn first_deferred_run_in_blank(
+        &self,
+        start: usize,
+        end: usize,
+    ) -> Option<usize> {
+        let first = self.deferred_blanks.partition_point(|run| run.end <= start);
+        self.deferred_blanks[first..]
+            .iter()
+            .take_while(|run| run.start.max(start) < end)
+            .find(|run| run.source.generated_run_in && !run.run_in_overlap)
+            .map(|run| run.start.max(start))
+    }
+
     pub(in crate::mandoc::inline::flow) fn printed_deferred_blanks_at_handoff(
         &self,
         passes: &[FillPass],
