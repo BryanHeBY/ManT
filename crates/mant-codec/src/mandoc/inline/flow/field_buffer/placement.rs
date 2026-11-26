@@ -258,13 +258,27 @@ impl FieldBuffer {
     /// The first ordinary BODY word need not mention a move; a later
     /// `term_word()` can still return to this origin before `termp_it_post()`
     /// calls `term_newln()` (`mdoc_term.c:939–945`; `term.c:678–718`).
-    pub(in crate::mandoc::inline::flow) fn has_bounded_run_in_projection(&self) -> bool {
+    fn has_bounded_run_in_projection(&self) -> bool {
         self.resume == 0
             && self.raw_slot_fence == 0
             && self.projected_pass_ends.is_empty()
             && !matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
             && self.cells.len() <= MAX_REPLAY_PREFIX_CELLS
             && self.projection_length(0, self.cells.len()) > 0
+    }
+
+    /// A simple decorated HEAD still has its native copies. Its fixed
+    /// BODY separator needs an explicit, relocatable blank owner instead of
+    /// an independently projected space. Leave nondecorated HEAD words on
+    /// the ordinary append path; it already preserves their relative motions.
+    pub(in crate::mandoc::inline::flow) fn has_bounded_decorated_run_in_projection(&self) -> bool {
+        self.has_bounded_run_in_projection()
+            && !self.backafter_armed
+            && !self.backbefore_armed
+            && self.write_cursor.retreat() == 0
+            && (!self.raw_tail_fonts.is_empty()
+                || !self.raw_copy_aliases.is_empty()
+                || !self.underline_strokes.is_empty())
     }
 
     /// Snapshot the live un-flushed `tcol->buf` suffix and cursor/backtracking

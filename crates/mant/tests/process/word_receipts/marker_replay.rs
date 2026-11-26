@@ -561,3 +561,121 @@ Done.
         0
     );
 }
+
+#[test]
+fn alternating_no_fill_operands_edit_the_same_native_tape() {
+    // man_term.c:303–310 switches fonts around term_word(), not buffers.
+    // Both movements replace J in the shared no-fill row.
+    for operands in [
+        r#""\zJ\p\:" "\h'|0n'Q" "X""#,
+        r#""\zJ\h'1n'" "\h'-1n'Q" "X""#,
+    ] {
+        let source = format!(
+            ".TH PROBE 1 \"November 26, 2026\" \"test\"\n.SH NAME\nprobe \\- test the manual\n\
+             .SH DESCRIPTION\n.nf\n.BR {operands}\n.fi\n.SH ENDTEST\nDone.\n"
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        assert_eq!(review_body(&text), "QX", "{operands}");
+    }
+}
+
+#[test]
+fn the_continued_tag_body_retires_the_replaced_link_owner() {
+    // A physical continuation in mdoc's tag BODY shares its raw tape.
+    // Read both the final ink and the surviving link rather than its URI alone.
+    let source = r".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+.Bl -tag -width 6n
+.It Sy label
+\z\X'tty: link https://j.test'J\X'tty: link'\p\:\c
+\h'|0n'\X'tty: link https://q.test'Q\X'tty: link' X
+.El
+.Sh ENDTEST
+Done.
+";
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(
+        review_body(&text).split_whitespace().collect::<Vec<_>>(),
+        ["label", "QX"]
+    );
+    assert_eq!(
+        super::document_links(source, "roff"),
+        [(
+            mant_ir::LinkTarget::External {
+                uri: "https://q.test".into(),
+            },
+            "Q".into(),
+        )]
+    );
+}
+
+#[test]
+fn an_inset_body_keeps_the_generated_fixed_blank_through_a_marked_edit() {
+    // CVS ASCII and UTF-8 both finish the retained bold tape as Xabel,
+    // fixed blank, J. Only the NBSP spelling differs between devices.
+    let source = r".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm probe
+.Nd test the manual
+.Sh DESCRIPTION
+.Bl -inset
+.It Sy label
+\fB\zJ\p\fR
+\h'|0n'Q X
+.El
+.Sh ENDTEST
+Done.
+";
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(review_body(&text), "Xabel J");
+    assert_eq!(
+        super::search_visible_word_with_format(source, "roff", "J"),
+        1
+    );
+}
+
+#[test]
+fn a_run_in_marker_does_not_rebind_retained_or_covered_glyphs() {
+    // The two fixed terminal devices paint J and L at different columns;
+    // K's later overwritten column cannot take the accepted L link.
+    let source = r#".Dd November 26, 2026
+.Dt PROBE 1
+.Os
+.Sh NAME
+.Nm test
+.Nd glyph attribution
+.Sh DESCRIPTION
+.Bl -inset
+.It No "\z\X'tty: link https://a.test/item'J\X'tty: link'\p\~"
+.No "\h'-4n'" Ns Em "\z\X'tty: link https://b.test/item'K\X'tty: link'" Ns No "\X'tty: link https://c.test/item'L\X'tty: link'"
+.El
+.Sh ENDTEST
+done.
+"#;
+    let text = render(source, "roff", "text", "never", false);
+    assert_eq!(review_body(&text), "JL");
+    assert_eq!(
+        super::document_links(source, "roff"),
+        [
+            (
+                mant_ir::LinkTarget::External {
+                    uri: "https://a.test/item".into(),
+                },
+                "J".into(),
+            ),
+            (
+                mant_ir::LinkTarget::External {
+                    uri: "https://c.test/item".into(),
+                },
+                "L".into(),
+            ),
+        ]
+    );
+}

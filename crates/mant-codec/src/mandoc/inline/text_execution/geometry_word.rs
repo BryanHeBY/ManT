@@ -334,14 +334,6 @@ fn has_word_end_marker(events: &[RoffInlineEvent]) -> bool {
         .any(|event| matches!(event, RoffInlineEvent::LineBreak))
 }
 
-fn is_continued_scoped_word(
-    context: &TextExecutionContext<'_>,
-    events: &[RoffInlineEvent],
-) -> bool {
-    context.slot_entry.domain == ReplayDomain::Scoped
-        && matches!(events.last(), Some(RoffInlineEvent::NoSpace))
-}
-
 fn local_overwrite(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -359,7 +351,7 @@ fn local_overwrite(
     let fresh_filled_motion = (fresh_word || bounded_filled_prefix)
         && is_filled_line_domain(context.slot_entry.domain)
         && (!has_marker_event || bounded_filled_prefix);
-    let continued_scoped_motion = fresh_word && is_continued_scoped_word(context, events);
+    let fresh_scoped_motion = fresh_word && context.slot_entry.domain == ReplayDomain::Scoped;
     let mut wrote_ink = false;
     let mut armed = false;
     let mut backbefore = false;
@@ -407,14 +399,14 @@ fn local_overwrite(
             } if (append_motion || fresh_filled_motion && (!wrote_ink || backbefore))
                 && motion_columns(value)
                     .is_some_and(|(absolute, units)| !absolute && units > 0)
-                || continued_scoped_motion
+                || fresh_scoped_motion
                     && (armed || backbefore)
                     && motion_columns(value) == Some((false, 24)) =>
             {
                 // term_word() clears BACKAFTER without moving, or uses
                 // the first positive HORIZ unit to clear BACKBEFORE
                 // (term.c:678-699).
-                let settles_motion = fresh_filled_motion || continued_scoped_motion;
+                let settles_motion = fresh_filled_motion || fresh_scoped_motion;
                 resolved_motion_retreat |= !std::mem::take(&mut armed)
                     && std::mem::take(&mut backbefore)
                     && settles_motion;
@@ -1156,6 +1148,14 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
         placement.mark(ReadingGlyph::Earlier(*scalars), Font::Regular);
     }
     let projected_start = native_count.saturating_sub(count);
+    // A fixed blank following a proved decorated origin can remain editable
+    // with both native copies of its HEAD. Do not fence the first BODY word
+    // at the generated blank when no register or previous pass intervened.
+    let replayable_tail = prefix.start == 0
+        && !prefix.backbefore
+        && !prefix.backafter
+        && prefix.cursor_retreat == 0
+        && (!prefix.tail_fonts.is_empty() || !prefix.duplicates.is_empty());
     for index in 0..native_count {
         let owner = (index >= projected_start).then(|| {
             placement.mark(
@@ -1164,7 +1164,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
                         owner: owner_serial,
                         write: index,
                         font: display_font,
-                        replayable_tail: false,
+                        replayable_tail,
                     },
                     imported_cell: None,
                 },

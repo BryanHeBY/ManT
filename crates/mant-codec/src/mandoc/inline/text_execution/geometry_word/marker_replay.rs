@@ -150,6 +150,7 @@ fn awaits_bounded_marker_flush(
         || appends_marked_ink_to_scoped_tab_field(events, context)
         || retreats_within_marked_append(events, context)
         || marked_operands::bounded_literal_control_append(events, context)
+        || retains_structured_pending_marker(events, context, fresh)
         || inherits_bounded_marked_backafter(events, context)
         || !context.zero_advance.is_armed()
             && if fresh {
@@ -160,11 +161,7 @@ fn awaits_bounded_marker_flush(
                             || (decorated_word(events, context.font.current)
                                 && marked_operands::bounded_linked_marker_tail(events))
                     }
-                    ReplayDomain::Scoped => {
-                        marked_operands::bounded_append(events)
-                            || (matches!(events.last(), Some(RoffInlineEvent::NoSpace))
-                                && marked_operands::bounded_filled_marked_append(events, 0))
-                    }
+                    ReplayDomain::Scoped => marked_operands::bounded_append(events),
                     ReplayDomain::DefinitionLine => {
                         marked_operands::bounded_field_append(events)
                             || marked_operands::bounded_append(events)
@@ -183,6 +180,53 @@ fn awaits_bounded_marker_flush(
                         )
                     })
             }
+}
+
+fn retains_structured_pending_marker(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+    fresh: bool,
+) -> bool {
+    // LF, ASCII_BREAK and encode1(NBSP) are written before the physical
+    // field closes (term.c:620–660, 903–929). Hold the still-editable
+    // slots for no-fill macro operands, physically continued BODY words
+    // and a covered label temporarily hidden by a fixed blank.
+    // Opening the arm before the first graph keeps the entire word inside
+    // this pending cluster. Earlier accepted ink and blank owners use the
+    // established word-boundary executor.
+    let mut controls = events.iter().filter(|event| {
+        !matches!(
+            event,
+            RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont | RoffInlineEvent::Link(_)
+        )
+    });
+    if !matches!(controls.next(), Some(RoffInlineEvent::ZeroAdvance))
+        || !matches!(
+            context.slot_entry.domain,
+            ReplayDomain::Scoped | ReplayDomain::DefinitionLine
+        )
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_annotation_output_owner()
+        || !controls.next_back().is_some_and(|event| match event {
+            RoffInlineEvent::NoSpace | RoffInlineEvent::Breakpoint | RoffInlineEvent::LineBreak => {
+                true
+            }
+            RoffInlineEvent::Glyph(text, _) => text == "\u{a0}",
+            _ => false,
+        })
+    {
+        return false;
+    }
+    if fresh {
+        return marked_operands::bounded_filled_marked_append(events, 0);
+    }
+    context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+        prefix.start == 0
+            && !prefix.backafter
+            && !prefix.backbefore
+            && prefix.cursor_retreat == 0
+            && marked_operands::bounded_filled_marked_append(events, prefix.raw_slot_count())
+    })
 }
 
 fn starts_definition_with_graphless_marker(events: &[RoffInlineEvent]) -> bool {
