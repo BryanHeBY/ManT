@@ -142,6 +142,7 @@ pub(in crate::mandoc::inline::flow) fn take_rewound_glyph(
 
 pub(super) struct RewoundGlyphEdit {
     pub(super) projection: Option<Inline>,
+    pub(super) starts_word: bool,
 }
 
 pub(super) fn edit_rewound_glyph(
@@ -218,6 +219,7 @@ fn rewound_glyph(
         }
         return Some(RewoundGlyphEdit {
             projection: cursor.projection,
+            starts_word: cursor.remaining == cursor.group - 1,
         });
     }
     None

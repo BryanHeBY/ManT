@@ -71,6 +71,57 @@ fn inset_head_stays_editable_until_the_native_row_flushes() {
 }
 
 #[test]
+fn addressable_readback_keeps_the_relocated_body_targets_with_their_words() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+    use mant_protocol::{SearchCase, SearchQuery, SearchScope, SearchSyntax};
+
+    // Pinned CVS mdoc_term.c::termp_it_pre and term.c::term_word place C
+    // before the first BODY operand on the still-open inset row. The HTML
+    // mdoc_no_pre handler assigns the target to that operand's own span.
+    for (body, target, word) in [
+        (".No B No \"\\h'|1n'C\"\n", "<a id=\"b\"></a>", "B"),
+        (
+            ".Tg Body.Target\n.No BC No \"\\h'|1n'C\"\n",
+            "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>",
+            "BC",
+        ),
+    ] {
+        let source = format!("{HEADER}.Bl -inset\n.It No JA\n{body}.El\n");
+        let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut content = super::json_roundtrip::json_string_roundtrip(&original);
+        for cycle in 0..2 {
+            let markdown = render_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
+            let expected = format!("JC {target}{word}");
+            if cycle == 0 {
+                assert!(markdown.contains(&expected), "{markdown}");
+            }
+            content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            assert!(
+                mant_render::render_query_text(&content).contains(&expected),
+                "{markdown}"
+            );
+            for (pattern, total) in [("JC", 1), ("C", 0), (word, 1)] {
+                let result = mant_query::search_query(
+                    &content,
+                    &SearchQuery {
+                        pattern: pattern.into(),
+                        syntax: SearchSyntax::Literal,
+                        case: SearchCase::Sensitive,
+                        scope: SearchScope::Visible,
+                        word: true,
+                        context_lines: 0,
+                        limit: 100,
+                        offset: 0,
+                    },
+                )
+                .unwrap();
+                assert_eq!(result.total, total, "{pattern}: {markdown}");
+            }
+        }
+    }
+}
+
+#[test]
 fn run_in_separator_executes_with_the_retained_head_slots_and_active_font() {
     // The literal diagonal HEAD is bold. Both generated fixed blanks
     // execute at the native cursor before BODY's first word (mdoc_term.c:

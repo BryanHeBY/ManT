@@ -35,7 +35,16 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         return;
     }
     if let Some(anchor) = navigation_anchor(node) {
-        builder.append(vec![anchor]);
+        if node.kind == NodeKind::Element
+            && node
+                .children
+                .first()
+                .is_some_and(|child| child.kind == NodeKind::Text && !child.flags.no_print)
+        {
+            builder.append_inline_word_target(anchor);
+        } else {
+            builder.append(vec![anchor]);
+        }
     }
     let posts = builder.scope_posts.clone();
     let mut sink = InlineContainerSink {

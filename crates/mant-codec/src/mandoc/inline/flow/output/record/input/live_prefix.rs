@@ -4,6 +4,7 @@ use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::super::super::super::{ProjectedNativeGap, WordProjectionPolicy};
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
 use crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection;
+use crate::mandoc::inline::flow::output::{INTERNAL_FIELD_WORD, NAVIGATION_WORD};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Default)]
@@ -33,6 +34,12 @@ struct GlyphEdit {
     glyph: RewoundGlyph,
     relocation: Option<Relocation>,
     unprinted_tail: usize,
+}
+
+struct RelocatedGlyph {
+    owner: String,
+    glyph: Inline,
+    starts_word: bool,
 }
 
 impl PrefixEdits {
@@ -229,6 +236,8 @@ impl PrefixEdits {
                 slot.is_some() || detached.is_some(),
             );
             let edited_live_owner = edit.is_some();
+            let starts_word =
+                edit.as_ref().is_some_and(|edit| edit.starts_word) && !glyph.scalar.is_whitespace();
             if edited_live_owner {
                 // Successful removals without retained style still shorten
                 // this owner's scalar suffix for the next blank check.
@@ -250,7 +259,14 @@ impl PrefixEdits {
                 }
             }
             if let (Some(slot), Some(projection)) = (slot, projection) {
-                relocated.insert(slot.marker, (projection_owner, projection));
+                relocated.insert(
+                    slot.marker,
+                    RelocatedGlyph {
+                        owner: projection_owner,
+                        glyph: projection,
+                        starts_word,
+                    },
+                );
             }
         }
         let mut removed_gaps = BTreeMap::new();
@@ -308,7 +324,7 @@ impl PrefixEdits {
         incoming: &mut Vec<Inline>,
         incoming_owner: &str,
         mut removed_gaps: BTreeMap<&str, String>,
-        mut relocated: BTreeMap<usize, (String, Inline)>,
+        mut relocated: BTreeMap<usize, RelocatedGlyph>,
     ) {
         let payload = std::mem::take(incoming);
         for node in payload {
@@ -345,13 +361,58 @@ impl PrefixEdits {
                 // The source marker remains zero-width until
                 // term_field's accepted pass actually prints it.
                 incoming.push(blank);
-            } else if let Some((owner, glyph)) = relocated.remove(&slot) {
+            } else if let Some(RelocatedGlyph {
+                owner,
+                glyph,
+                starts_word,
+            }) = relocated.remove(&slot)
+            {
+                // HORIZ can place another macro's ink before this word
+                // (term.c:678–718). Move its validated target with the
+                // first source scalar, along with the original styling.
+                if starts_word && let Some(target) = take_word_target(nodes, &owner) {
+                    incoming.extend(target);
+                }
                 incoming.push(Inline::anchor(owner));
                 incoming.push(glyph);
                 incoming.push(Inline::anchor(incoming_owner));
             }
         }
     }
+}
+
+fn take_word_target(nodes: &mut [Inline], owner: &str) -> Option<[Inline; 2]> {
+    let serial = owner.strip_prefix(INTERNAL_FIELD_WORD)?;
+    let marker = format!("{NAVIGATION_WORD}{serial}");
+    take_target(nodes, &marker)
+}
+
+fn take_target(nodes: &mut [Inline], marker: &str) -> Option<[Inline; 2]> {
+    let mut remaining = nodes;
+    while let Some((node, preceding)) = remaining.split_last_mut() {
+        remaining = preceding;
+        match node {
+            Inline::Anchor { id, .. }
+                if !id.as_str().starts_with('\0')
+                    && matches!(remaining.last(), Some(Inline::Anchor { id, .. }) if id.as_str() == marker) =>
+            {
+                let retired = || Inline::anchor(NAVIGATION_WORD);
+                return Some([
+                    std::mem::replace(remaining.last_mut()?, retired()),
+                    std::mem::replace(node, retired()),
+                ]);
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                if let Some(target) = take_target(children, marker) {
+                    return Some(target);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// A positioned BODY word can overwrite the HEAD's final backline and fixed

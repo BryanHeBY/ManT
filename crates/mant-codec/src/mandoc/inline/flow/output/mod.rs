@@ -52,6 +52,7 @@ pub(super) fn is_term_alternative(node: &Inline) -> bool {
 
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
+pub(super) const NAVIGATION_WORD: &str = "\0mant:output-scope:navigation-word:";
 pub(in crate::mandoc::inline::flow) const DEFERRED_SOURCE_BLANK: &str =
     "\0mant:output-scope:deferred-blank:";
 

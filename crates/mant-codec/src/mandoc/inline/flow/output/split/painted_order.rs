@@ -295,6 +295,7 @@ fn rebuild_partitions(
 fn is_word_metadata(node: &Inline) -> bool {
     matches!(node, Inline::Anchor { id, .. } if id.as_str().starts_with(INTERNAL_FIELD_WORD)
         || id.as_str().starts_with(INTERNAL_FIELD_PREFIX)
+        || id.as_str().starts_with(super::super::NAVIGATION_WORD)
         || is_shared_mark(node)
         // Unprinted deferred-blank anchors and retired placeholders emit zero
         // columns and stay on the same physical row (`term.c:389-436`).
