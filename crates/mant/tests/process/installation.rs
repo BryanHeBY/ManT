@@ -124,6 +124,8 @@ mod unix_upgrade {
         }
 
         fn run(&self, options: &[&str]) -> std::process::Output {
+            let temporary = self.root.path().join("installer-tmp");
+            fs::create_dir_all(&temporary).unwrap();
             let mut path = vec![self.root.path().join("tools")];
             path.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap()));
             Command::new("sh")
@@ -133,6 +135,8 @@ mod unix_upgrade {
                 .env_clear()
                 .env("PATH", std::env::join_paths(path).unwrap())
                 .env("HOME", self.root.path())
+                // env_clear() must not send archive extraction outside the fixture.
+                .env("TMPDIR", temporary)
                 .env("MANT_TEST_ASSETS", self.root.path())
                 .env("MANT_DATA_HOME", self.root.path().join("current-data"))
                 .output()
