@@ -653,3 +653,105 @@ fn native_break_controls_keep_only_complete_owned_field_operators() {
         cases.reverse();
     }
 }
+
+#[test]
+fn ignored_motion_preserves_literal_alias_ownership_and_complete_fields() {
+    // CVS roff_escape.c maps H/L/S/v/x to ESCAPE_IGNORE. term_word stores
+    // an ASCII_NBRZW cell, but term_field emits no ink or blank for it.
+    for motion in [
+        r"\v'0n'",
+        r"\v'2n'",
+        r"\v'1n'\v'-1n'",
+        r"\S'0'",
+        r"\H'0'",
+        r"\L'0n'",
+        r"\x'0n'",
+    ] {
+        let mut aliases = [
+            (
+                "independent",
+                format!(r#"Fl a Ar file No "/{motion}" Fl Fl fake"#),
+                true,
+            ),
+            (
+                "inside",
+                format!(r#"Fl a Ar file No "/{motion} --fake""#),
+                false,
+            ),
+        ];
+        for _ in 0..2 {
+            let input = controlled_fixture(
+                aliases
+                    .iter()
+                    .map(|(label, head, _)| (*label, head.as_str())),
+            );
+            let rows = aliases
+                .each_ref()
+                .map(|(label, _, direct)| (*direct, *label, "-a file / --fake"));
+            assert_controlled_owners(&load(&input), "--fake", &rows, true);
+            aliases.reverse();
+        }
+        for operator in ['@', '='] {
+            let whole = format!("-a user{operator}host / -v");
+            let mut fields = [
+                (
+                    "motion",
+                    format!(r#"Fl a Ar user Ns No "{motion}{operator}" Ns Pa host No / Fl v"#),
+                ),
+                (
+                    "plain",
+                    format!(r#"Fl a Ar user Ns No "{operator}" Ns Pa host No / Fl v"#),
+                ),
+            ];
+            for _ in 0..2 {
+                let input =
+                    controlled_fixture(fields.iter().map(|(label, head)| (*label, head.as_str())));
+                let rows = fields
+                    .each_ref()
+                    .map(|(label, _)| (true, *label, whole.as_str()));
+                assert_controlled_owners(&load(&input), &whole, &rows, false);
+                fields.reverse();
+            }
+        }
+    }
+}
+
+#[test]
+fn ignored_motion_does_not_prove_foreign_or_drawn_field_operators() {
+    // term_word still writes its invisible cell at the actual cursor. A
+    // visually matching rewind cannot prove the displaced Q's owner, and
+    // lowercase \l writes real ink rather than an ignored motion cell.
+    // The current reader does not model that drawn dot; its matching text
+    // still must not certify a complete field operator.
+    let whole = "-a user@host / -v";
+    let mut rows = [
+        (
+            "motion",
+            r#"Fl a Ar user Ns No "\v'0n'@" Ns Pa host No / Fl v"#,
+            true,
+            whole,
+        ),
+        (
+            "clipped",
+            r#"Fl a Ar user Ns No Q Ns No "\h'-1n'\v'0n'@" Ns Pa host No / Fl v"#,
+            false,
+            whole,
+        ),
+        (
+            "line",
+            r#"Fl a Ar user Ns No "\l'1n.'@" Ns Pa host No / Fl v"#,
+            false,
+            whole,
+        ),
+    ];
+    for _ in 0..2 {
+        let input = controlled_fixture(rows.map(|(label, head, _, _)| (label, head)));
+        assert_controlled_owners(
+            &load(&input),
+            whole,
+            &rows.map(|(label, _, direct, visible)| (direct, label, visible)),
+            false,
+        );
+        rows.reverse();
+    }
+}

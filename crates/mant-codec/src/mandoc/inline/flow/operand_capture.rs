@@ -501,7 +501,11 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
     // operand's authored punctuation adjacent to any actual authored blank.
     // This only identifies candidates: execution retains the controls, and
     // accepted word receipts still determine spelling and invalidate covered ink.
-    decoded.events.iter().flat_map(|event| match event {
+    // The decoded Motion family (H/L/S/v/x, not h/l) also emits an
+    // ASCII_NBRZW cell. It contributes no spelling in a linear operand,
+    // but in a rewinding word it can replace a live slot.
+    let mut can_rewind = None;
+    decoded.events.iter().flat_map(move |event| match event {
         RoffInlineEvent::Font(_)
         | RoffInlineEvent::PreviousFont
         | RoffInlineEvent::ZeroWidthGlyph
@@ -513,6 +517,14 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
             kind: PresentationKind::Color | PresentationKind::PointSize,
             ..
         } => "".chars(),
+        RoffInlineEvent::Presentation {
+            kind: PresentationKind::Motion,
+            argument: Some(_),
+        } if decoded.proves_native_glyphs()
+            && !*can_rewind.get_or_insert_with(|| may_rewind_typed_ink(&decoded.events)) =>
+        {
+            "".chars()
+        }
         RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word, _) => word.chars(),
         RoffInlineEvent::NonBreakingWordBlank => " ".chars(),
         _ => "\0".chars(),
