@@ -206,7 +206,9 @@ impl<'a> HeadView<'a> {
                 #[cfg(feature = "roff")]
                 NativeOperandRole::LiteralPunctuation | NativeOperandRole::ClippedValue => true,
                 #[cfg(feature = "roff")]
-                NativeOperandRole::LiteralValue | NativeOperandRole::SymbolicText => {
+                NativeOperandRole::LiteralValue
+                | NativeOperandRole::SymbolicText
+                | NativeOperandRole::PathOperand(_) => {
                     // A whole punctuation operand can separate declarations;
                     // punctuation within a value remains part of that value.
                     !matches!(self.text[operand.bytes.clone()].trim(), "," | "|" | "/")

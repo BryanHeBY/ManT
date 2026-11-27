@@ -257,6 +257,79 @@ fn independent_separators_and_attached_paths_keep_both_names_and_forms() {
 }
 
 #[test]
+fn attached_path_proves_only_its_complete_native_atom() {
+    // CVS mdoc_term.c uses termp_under_pre for Pa and termp_ns_pre joins
+    // adjacent output. In native text an intact pathname is visually equal
+    // to separately executed pieces, but does not share their source owner.
+    for (intact, split, atom, trailing) in [
+        ("Pa foobar", "Pa foo Ns No bar", "foobar", ""),
+        ("Pa foo.bar", "Pa foo Ns No .bar", "foo.bar", ""),
+        ("Pa foo,bar", "Pa foo Ns No , Ns No bar", "foo,bar", ""),
+        ("Pa foobar", "Pa foo Ns Ar bar", "foobar", ""),
+        ("Pa foobar", "Pa foo Ns Pa bar", "foobar", ""),
+        ("Pa data", r#"Pa "data\h'-1n'a""#, "data", ""),
+        ("Pa foobar", "Pa foo Ns No bar", "foobar", " Ar profile"),
+    ] {
+        let suffix = if trailing.is_empty() { "" } else { " profile" };
+        let value = format!("-x{atom}{suffix}");
+        for (before, after, form, names) in [
+            (
+                "",
+                " No / Fl y Ar mode",
+                format!("{value} / -y mode"),
+                ["-x", "-y"],
+            ),
+            (
+                "Fl y Ar mode No / ",
+                "",
+                format!("-y mode / {value}"),
+                ["-y", "-x"],
+            ),
+        ] {
+            let intact = format!("{before}Fl x Ns {intact}{trailing}{after}");
+            let split = format!("{before}Fl x Ns {split}{trailing}{after}");
+            check_declaration(&intact, &form, &names, &[&format!("-x{atom}")]);
+            assert_attached_display(&split, &form);
+            assert_eq!(
+                explain_attached_tail(&split, "-x")
+                    .counts
+                    .direct_entry
+                    .total,
+                1
+            );
+            assert_eq!(
+                explain_attached_tail(&split, &form)
+                    .counts
+                    .direct_entry
+                    .total,
+                0
+            );
+        }
+    }
+    assert_eq!(
+        explain_attached_tail("Fl x Ns Pa foo.bar", "-xfoo.bar")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    assert_eq!(
+        explain_attached_tail("Fl x Ns Pa foo Ns No , Ns No bar", "-xfoo,bar")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    assert_eq!(
+        explain_attached_tail("Fl xfoobar", "-xfoobar")
+            .counts
+            .direct_entry
+            .total,
+        1
+    );
+}
+
+#[test]
 fn attached_path_needs_a_distinct_form_to_allow_exact_lookup() {
     // CVS mdoc_macro.c::in_line closes Fl before Pa; termp_ns_pre only
     // suppresses the intervening space. Neither Pa spelling extends Fl;

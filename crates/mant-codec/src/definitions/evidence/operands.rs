@@ -222,7 +222,11 @@ impl NativeOperandRole {
     pub(crate) fn is_attached_composite_value(self) -> bool {
         matches!(
             self,
-            Self::LiteralValue | Self::Command | Self::SymbolicText | Self::Environment { .. }
+            Self::LiteralValue
+                | Self::Command
+                | Self::SymbolicText
+                | Self::Environment { .. }
+                | Self::PathOperand(_)
         )
     }
 

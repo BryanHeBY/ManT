@@ -679,6 +679,7 @@ fn recognize_lexical_group(
         scoped_operands(source.operands, range.clone()),
         source.argument_separators(&range),
         range.start,
+        &source.text[range.clone()],
     ))];
     let found = infer_lexical_terms(
         std::slice::from_ref(narrowed.as_ref().unwrap_or(term)),

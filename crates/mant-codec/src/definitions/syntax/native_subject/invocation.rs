@@ -423,6 +423,7 @@ pub(super) fn protect_arguments(
     operands: Vec<NativeOperand>,
     separators: &[usize],
     start: usize,
+    text: &str,
 ) -> Vec<NativeOperand> {
     if separators.is_empty() {
         return operands;
@@ -433,7 +434,22 @@ pub(super) fn protect_arguments(
     };
     let mut separators = separators.iter().map(|at| at - start).peekable();
     let mut result = Vec::with_capacity(operands.len());
+    let mut previous_native_option_end = None;
     for mut word in operands {
+        let attached_path = matches!(word.role, NativeOperandRole::PathOperand(_))
+            && previous_native_option_end == Some(word.bytes.start)
+            && text.get(word.bytes.clone()).is_some_and(|value| {
+                !value.starts_with(char::is_whitespace) && !value.starts_with('=')
+            });
+        previous_native_option_end =
+            (word.role == NativeOperandRole::ExplicitOption).then_some(word.bytes.end);
+        if attached_path {
+            // Keep one complete source receipt for a joined Pa. The scanner
+            // already treats punctuation inside this receipt as literal.
+            while separators.next_if(|at| *at < word.bytes.end).is_some() {}
+            result.push(word);
+            continue;
+        }
         while let Some(at) = separators.next_if(|at| *at < word.bytes.end) {
             if at > word.bytes.start {
                 result.push(NativeOperand {
