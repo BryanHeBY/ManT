@@ -439,6 +439,7 @@ mod row_origin_tests {
             start: 7,
             owner: "native-word".into(),
             content: 9,
+            may_relocate_navigation_target: false,
             projected_device_padding: 2,
             projected_field_prefix: false,
             projected_gap: crate::mandoc::inline::flow::ProjectedNativeGap::default(),

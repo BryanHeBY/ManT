@@ -14,6 +14,7 @@ mod live_prefix;
 
 pub(super) struct ExecutedWordEntry {
     pub(super) receipt: WordWriteReceipt,
+    pub(super) may_relocate_navigation_target: bool,
     rewind: EntryRewind,
     prefix: live_prefix::PrefixEdits,
     placed_entry_blanks: Option<usize>,
@@ -25,8 +26,7 @@ impl ExecutedWordEntry {
     pub(super) fn execute(
         buffer: &mut FieldBuffer,
         mut writes: Vec<FieldWrite>,
-        start: usize,
-        separator: usize,
+        (start, separator, may_relocate_navigation_target): (usize, usize, bool),
         earlier: &mut [NativeWordAnchor],
     ) -> Self {
         let prefix = live_prefix::PrefixEdits::prepare(buffer, &writes, earlier);
@@ -86,6 +86,7 @@ impl ExecutedWordEntry {
         }
         Self {
             receipt,
+            may_relocate_navigation_target,
             rewind,
             prefix,
             placed_entry_blanks,
@@ -238,6 +239,7 @@ pub(super) struct RecordedWordInput {
     pub(super) native_boundary: PendingBoundary,
     pub(super) sentence: bool,
     pub(super) projected_keep: bool,
+    pub(super) may_relocate_navigation_target: bool,
     pub(super) projection: WordProjectionPolicy,
 }
 
@@ -253,9 +255,15 @@ impl RecordedWordInput {
             native_writes.as_deref().unwrap_or_default(),
             !native_boundary.is_native_tight(),
         );
+        let may_relocate_navigation_target =
+            execution.navigation_target_word == Some(execution.native_owner_serial);
+        if may_relocate_navigation_target {
+            execution.navigation_target_word = None;
+        }
         Self {
             native_writes,
             native_boundary,
+            may_relocate_navigation_target,
             sentence: std::mem::take(&mut execution.native_word_sentence),
             projected_keep: std::mem::take(&mut execution.projected_keep_separator),
             projection,

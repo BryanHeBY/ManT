@@ -517,6 +517,7 @@ mod buffer_handoff_tests {
                 start: 0,
                 content: 0,
                 owner: "source-owner".into(),
+                may_relocate_navigation_target: false,
                 projected_device_padding: 0,
                 projected_field_prefix: false,
                 projected_gap: crate::mandoc::inline::flow::ProjectedNativeGap::default(),

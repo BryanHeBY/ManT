@@ -242,6 +242,7 @@ fn hang_word_anchor(
     super::super::NativeWordAnchor {
         start: native_word_start,
         owner: anchor_ir_start,
+        may_relocate_navigation_target: entry.may_relocate_navigation_target,
         content,
         projected_device_padding: if receipt.prints_padding {
             pending_field_spaces
@@ -277,6 +278,7 @@ fn plain_unit_word_anchor(
     super::super::NativeWordAnchor {
         start: native_word_start,
         owner: anchor_ir_start,
+        may_relocate_navigation_target: entry.may_relocate_navigation_target,
         content,
         projected_device_padding: 0,
         projected_field_prefix: false,
@@ -304,6 +306,7 @@ impl InlineBuilder {
             native_boundary,
             sentence,
             projected_keep,
+            may_relocate_navigation_target,
             projection,
         } = input;
         let materialized_field_padding = self.projected_native_field_padding();
@@ -344,8 +347,7 @@ impl InlineBuilder {
         let mut entry = ExecutedWordEntry::execute(
             &mut definition.field_buffer,
             native_writes.expect("formatter word native writes"),
-            native_word_start,
-            separator,
+            (native_word_start, separator, may_relocate_navigation_target),
             &mut definition.field_word_anchors,
         );
         entry.project_rewind(
@@ -443,6 +445,7 @@ impl InlineBuilder {
             native_boundary,
             sentence,
             projected_keep,
+            may_relocate_navigation_target,
             projection,
         } = input;
         // term_flushln() retired the old native unit before this word.
@@ -464,8 +467,7 @@ impl InlineBuilder {
         let mut entry = ExecutedWordEntry::execute(
             &mut self.execution.plain_input.buffer,
             native_writes.unwrap_or_default(),
-            native_word_start,
-            separator,
+            (native_word_start, separator, may_relocate_navigation_target),
             &mut self.execution.plain_input.anchors,
         );
         entry.project_rewind(

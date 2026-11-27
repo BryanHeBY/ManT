@@ -25,6 +25,7 @@ impl InlineBuilder {
     }
 
     fn record_inline_word_target(&mut self, serial: u64, target: Inline) {
+        self.execution.navigation_target_word = Some(serial);
         self.nodes.push(Inline::anchor(format!(
             "{}{serial}",
             super::NAVIGATION_WORD
@@ -67,6 +68,7 @@ impl InlineBuilder {
         let serial = self.execution.native_owner_serial;
         for (scope, target) in &mut self.pending_navigation_targets {
             let prefix = if target.is_some() {
+                self.execution.navigation_target_word = Some(serial);
                 super::NAVIGATION_WORD
             } else {
                 super::NAVIGATION_FOLLOWUP

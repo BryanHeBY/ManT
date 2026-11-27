@@ -66,6 +66,7 @@ impl InlineExecutionState {
             settled_boundary_glyph: false,
             native_word_owner: None,
             native_owner_serial: 0,
+            navigation_target_word: None,
             plain_input: super::plain_input::PlainInputUnit::default(),
             concat_next_word: false,
             concat_flush_source: false,

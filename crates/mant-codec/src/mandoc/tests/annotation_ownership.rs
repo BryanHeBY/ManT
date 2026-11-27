@@ -524,3 +524,105 @@ fn check_accepted_cell_styles(case: &serde_json::Value, body: &[Inline], body_te
         }
     }
 }
+
+const LIVE_TARGET_HEAD: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n";
+const LIVE_TARGET_END: &str = ".Sh ENDTEST\nDone.\n";
+
+fn target_probe_witness(
+    source: &str,
+) -> (
+    super::super::inline::ownership::metrics::Counts,
+    super::super::inline::ownership::metrics::Counts,
+) {
+    use super::super::inline::ownership::metrics;
+    let parse =
+        || parse_manual_bytes(std::path::Path::new("live-target.1"), source.as_bytes()).unwrap();
+    metrics::take();
+    let gated = parse();
+    let gated_counts = metrics::take();
+    let eager = metrics::with_eager_navigation_probes(parse);
+    let eager_counts = metrics::take();
+    assert_eq!(
+        serde_json::to_value(&gated).unwrap(),
+        serde_json::to_value(&eager).unwrap(),
+        "{source}"
+    );
+    assert_eq!(
+        gated_counts.navigation_relocated_word_starts,
+        eager_counts.navigation_relocated_word_starts
+    );
+    (gated_counts, eager_counts)
+}
+
+#[test]
+fn absolute_link_rewrites_without_targets_do_not_search_the_output() {
+    // AT repeated-16.1 and plain/inset scales ran pinned ASCII/UTF-8/HTML.
+    // CVS termp_lk_pre calls term_word for the colon; term.c's HORIZ reuses
+    // earlier physical slots. This gate retains that native work and removes
+    // only unsuccessful navigation traversal; it does not time the parser.
+    const UNIT: &str = ".Lk https://a.test Y\n.No \"\\h'|0n'X\"\n";
+    for n in [4, 8, 16, 32] {
+        for (start, end) in [
+            ("", ""),
+            (".ft B\n.Bl -inset\n.It No Q\\z Ap No A\n", ".El\n"),
+        ] {
+            let source = format!(
+                "{LIVE_TARGET_HEAD}{start}{}.No END\n{end}{LIVE_TARGET_END}",
+                UNIT.repeat(n)
+            );
+            let (fast, eager) = target_probe_witness(&source);
+            assert!(fast.navigation_relocated_word_starts >= n, "{n}: {fast:?}");
+            assert_eq!(fast.navigation_target_probe_visits, 0, "{n}: {fast:?}");
+            assert!(eager.navigation_target_probe_visits > n, "{n}: {eager:?}");
+            eprintln!(
+                "live target {n} inset={} starts={} visits {}→{}",
+                !start.is_empty(),
+                fast.navigation_relocated_word_starts,
+                eager.navigation_target_probe_visits,
+                fast.navigation_target_probe_visits
+            );
+        }
+    }
+}
+
+#[test]
+fn active_targets_and_true_row_retirement_preserve_navigation_projection() {
+    // Pinned mdoc_validate.c::post_tg tags a single source owner. Native
+    // term_word and the actual .br boundaries independently distinguish
+    // surviving, covered, duplicated and flushed owners; navigation's
+    // exact canonical IDs/source spans must stay as in the eager path.
+    let source = |body: &str| format!("{LIVE_TARGET_HEAD}{body}{LIVE_TARGET_END}");
+    let head = ".No HEAD\n";
+    let rewind = ".No \"\\h'|0n'R\"\n.Lk https://z.test Z\nEND\n";
+    let mut active = 0;
+    for before in [
+        ".Tg Keep.Target\n.Sy Y\n",
+        ".Tg Keep.Target\n.Em Y\n",
+        ".Tg Earlier\n.Sy HEAD2\n.Sy Y\n",
+        ".Tg Previous\n.Sy Y\n.br\n.No HEAD\nY\n",
+        "Y\n",
+    ] {
+        let body = if before == "Y\n" {
+            format!("{head}{before}.No R\n.Lk https://z.test Z\nEND\n")
+        } else {
+            format!("{head}{before}{rewind}")
+        };
+        let (fast, eager) = target_probe_witness(&source(&body));
+        assert!(fast.navigation_target_probe_visits <= eager.navigation_target_probe_visits);
+        active += fast.navigation_target_probe_visits;
+        if before.contains("Previous") || before == "Y\n" {
+            assert_eq!(fast.navigation_target_probe_visits, 0, "{body}");
+        }
+    }
+    let duplicate = format!(
+        "{head}.Tg Keep.Target\n.Sy Y\n{}\
+        .br\n.Tg Keep.Target\n.Sy B\nEND\n",
+        rewind.trim_end_matches("END\n")
+    );
+    let (fast, eager) = target_probe_witness(&source(&duplicate));
+    assert!(fast.navigation_target_probe_visits <= eager.navigation_target_probe_visits);
+    assert!(
+        active + fast.navigation_target_probe_visits > 0,
+        "must exercise registered moves"
+    );
+}

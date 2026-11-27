@@ -62,6 +62,9 @@ pub(in crate::mandoc) enum WordProjectionPolicy {
 pub(in crate::mandoc::inline) struct NativeWordAnchor {
     start: usize,
     owner: String,
+    /// A private word-target receipt was published for this source word.
+    /// A cut may remove that marker, but an unmarked owner cannot move it.
+    may_relocate_navigation_target: bool,
     content: usize,
     projected_device_padding: usize,
     /// The word's generated field prefix was written before its content
@@ -283,6 +286,8 @@ pub(in crate::mandoc) struct InlineExecutionState {
     pub(in crate::mandoc::inline) settled_boundary_glyph: bool,
     pub(in crate::mandoc) native_word_owner: Option<String>,
     native_owner_serial: u64,
+    /// The next native word receipt consumes this exact publication serial.
+    navigation_target_word: Option<u64>,
     pub(in crate::mandoc) concat_next_word: bool,
     /// A `\p` marker met a surviving breakable blank before this flush
     /// unit recorded any graph (term.c:143-146 with 233-237): the whole

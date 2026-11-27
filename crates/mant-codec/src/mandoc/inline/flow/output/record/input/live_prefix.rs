@@ -41,6 +41,7 @@ struct RelocatedGlyph {
     owner: String,
     glyph: Inline,
     starts_word: bool,
+    may_relocate_navigation_target: bool,
 }
 
 impl PrefixEdits {
@@ -279,6 +280,8 @@ impl PrefixEdits {
                         owner: projection_owner,
                         glyph: projection,
                         starts_word,
+                        may_relocate_navigation_target: earlier[*owner_index]
+                            .may_relocate_navigation_target,
                     },
                 );
             }
@@ -379,12 +382,25 @@ impl PrefixEdits {
                 owner,
                 glyph,
                 starts_word,
+                may_relocate_navigation_target,
             }) = relocated.remove(&slot)
             {
                 // HORIZ can place another macro's ink before this word
                 // (term.c:678–718). Move its validated target with the
                 // first ink past its leading blanks, along with its styling.
-                if starts_word && let Some(target) = take_word_target(nodes, &owner) {
+                #[cfg(test)]
+                if starts_word {
+                    crate::mandoc::inline::ownership::metrics::note(|counts| {
+                        counts.navigation_relocated_word_starts += 1;
+                    });
+                }
+                #[cfg(test)]
+                let may_relocate_navigation_target = may_relocate_navigation_target
+                    || crate::mandoc::inline::ownership::metrics::eager_navigation_probes();
+                if starts_word
+                    && may_relocate_navigation_target
+                    && let Some(target) = take_word_target(nodes, &owner)
+                {
                     incoming.extend(target);
                 }
                 incoming.push(Inline::anchor(owner));
@@ -405,6 +421,10 @@ fn take_target(nodes: &mut [Inline], marker: &str) -> Option<[Inline; 2]> {
     let mut remaining = nodes;
     while let Some((node, preceding)) = remaining.split_last_mut() {
         remaining = preceding;
+        #[cfg(test)]
+        crate::mandoc::inline::ownership::metrics::note(|counts| {
+            counts.navigation_target_probe_visits += 1;
+        });
         match node {
             Inline::Anchor { id, .. }
                 if !id.as_str().starts_with('\0')
