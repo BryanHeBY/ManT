@@ -159,6 +159,8 @@ struct Scanner<'a> {
     names: Vec<RecognizedName>,
     argument_start: Option<Argument>,
     arguments: Vec<Argument>,
+    #[cfg(feature = "roff")]
+    slash_arms: Vec<usize>,
     styled_argument: bool,
     structured_argument: bool,
     lexical: LexicalState,
@@ -200,6 +202,8 @@ impl FormEvidence {
 
 struct Argument {
     bytes: Range<usize>,
+    #[cfg(feature = "roff")]
+    option_index: Option<usize>,
     /// Recorded when the argument begins at the previous name's exact end,
     /// before any parameter token projection can alter its punctuation.
     attached_to_name: bool,
@@ -213,6 +217,8 @@ impl<'a> Scanner<'a> {
             names: Vec::new(),
             argument_start: None,
             arguments: Vec::new(),
+            #[cfg(feature = "roff")]
+            slash_arms: Vec::new(),
             styled_argument: false,
             structured_argument: false,
             lexical: LexicalState::default(),
@@ -237,6 +243,12 @@ impl<'a> Scanner<'a> {
                 self.consume_argument(character);
                 continue;
             }
+            if character == '/'
+                && self.standalone_slash()
+                && self.finish_at_owned_slash(self.view.skip_space(self.cursor + 1))
+            {
+                continue;
+            }
             if character.is_whitespace()
                 || matches!(character, ',' | '|' | '/')
                     && !self.view.literal_punctuation(self.cursor)
@@ -257,6 +269,8 @@ impl<'a> Scanner<'a> {
         if self.names.len() > MAX_NAMES {
             return OptionHead::name_limit();
         }
+        #[cfg(feature = "roff")]
+        self.form_evidence.reject_if(!self.proves_slash_arms());
         // A quoted value with no closing quote cannot prove that its dash
         // spelling is an entire declaration. Native incomplete bracket tags
         // retain their existing partial-name contract, but never infer owners.
@@ -522,6 +536,15 @@ impl<'a> Scanner<'a> {
         self.names
             .push(RecognizedName::contiguous(name, self.cursor));
         self.cursor += name.len();
+        // A whole authored slash leading to another Fl belongs between
+        // arms, not to the first Fl as an empty joined Li argument.
+        if native
+            && self.current() == Some('/')
+            && self.view.independent_slash(self.cursor)
+            && self.standalone_slash()
+        {
+            return;
+        }
         let foreign_tail = native
             && self.current().is_some_and(|ch| !ch.is_whitespace())
             && self.view.independent_option_suffix(self.cursor);
@@ -582,6 +605,8 @@ impl<'a> Scanner<'a> {
     fn begin_argument(&mut self) {
         self.argument_start.get_or_insert_with(|| Argument {
             bytes: self.cursor..self.cursor,
+            #[cfg(feature = "roff")]
+            option_index: self.names.len().checked_sub(1),
             attached_to_name: self.names.last().is_some_and(|name| {
                 name.parts
                     .last()
@@ -801,33 +826,50 @@ impl<'a> Scanner<'a> {
             return false;
         }
 
-        // Boundary recognition preserves independently authored short
-        // names even if a left operand was repainted or split across owners.
-        // Only complete source receipts can certify the exact composite.
+        // The next Fl has not been consumed yet. Its argument belongs
+        // to this edge just as much as the preceding Fl's argument does.
         #[cfg(feature = "roff")]
-        if let Some(argument) = &self.argument_start {
-            self.form_evidence.reject_if(
-                self.view
-                    .operands_in(argument.bytes.start..self.cursor)
-                    .any(|operand| {
-                        matches!(
-                            operand.role,
-                            NativeOperandRole::IncompletePlaceholder
-                                | NativeOperandRole::ClippedValue
-                                | NativeOperandRole::ReferenceText(_)
-                        )
-                    })
-                    || argument.attached_to_name
-                        && self.view.native_argument_starts(argument.bytes.start)
-                        && !name
-                            .parts
-                            .iter()
-                            .all(|part| self.view.permits_option_spelling(part.clone(), false)),
-            );
+        {
+            let left = self.names.len() - 1;
+            if self.slash_arms.last().copied() != Some(left) {
+                self.slash_arms.push(left);
+            }
+            self.slash_arms.push(left + 1);
         }
         self.finish_argument();
         self.cursor = following;
         true
+    }
+
+    #[cfg(feature = "roff")]
+    fn proves_slash_arms(&self) -> bool {
+        // Name recognition keeps independently established names even if
+        // an argument of an arm lost ink or borrowed part of its spelling.
+        self.arguments.iter().all(|argument| {
+            let Some(index) = argument.option_index else {
+                return true;
+            };
+            if self.slash_arms.binary_search(&index).is_err() {
+                return true;
+            }
+            !self
+                .view
+                .operands_in(argument.bytes.clone())
+                .any(|operand| {
+                    matches!(
+                        operand.role,
+                        NativeOperandRole::IncompletePlaceholder
+                            | NativeOperandRole::ClippedValue
+                            | NativeOperandRole::ReferenceText(_)
+                    )
+                })
+                && (!argument.attached_to_name
+                    || !self.view.native_argument_starts(argument.bytes.start)
+                    || self.names[index]
+                        .parts
+                        .iter()
+                        .all(|part| self.view.permits_option_spelling(part.clone(), false)))
+        })
     }
 
     // A separator at the start of a distinct literal operand can end the

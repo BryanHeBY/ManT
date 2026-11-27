@@ -47,6 +47,8 @@ fn one_long_argument_whitespace_run_is_consumed_without_suffix_restarts() {
     let mut scanner = Scanner::new(&view);
     scanner.cursor = "--opt VALUE".len();
     scanner.argument_start = Some(Argument {
+        #[cfg(feature = "roff")]
+        option_index: None,
         bytes: "--opt ".len().."--opt ".len(),
         attached_to_name: false,
     });

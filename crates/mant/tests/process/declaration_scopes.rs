@@ -1152,3 +1152,55 @@ fn authored_slash_bounds_the_complete_preceding_argument_list() {
         }
     }
 }
+
+#[test]
+fn authored_slash_requires_complete_receipts_on_both_arms() {
+    // CVS gives Li / its own term_word() operation. In the overwrite
+    // controls the right Ar loses ink even though it ends the entire head.
+    for (head, form) in [
+        ("Fl a Ns Li / Ns Fl v Ar mode", "-a/-v mode"),
+        ("Fl a Ns No / Ns Fl v Ar mode", "-a/-v mode"),
+        ("Fl a Ns Li x Ns Li / Ns Fl v Ar seeX", "-ax/-v seeX"),
+        ("Fl a Ns Li x Ns Li / Ns Fl v Ar seed", "-ax/-v seed"),
+        ("Fl a Ns Li x Ns Li / Ns Fl v Ns Pa a/b", "-ax/-va/b"),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &["-a", "-v"], &[]);
+    }
+    for (head, form, right_name) in [
+        (
+            r#"Fl a Ns Li x Ns Li / Ns Fl v Ar seed Ns No "\h'-1n'X""#,
+            "-ax/-v seeX",
+            "-v",
+        ),
+        (
+            r#"Fl a Ns Li x Ns Li / Ns Fl v Ar seed Ns No "\h'-1n'd""#,
+            "-ax/-v seed",
+            "-v",
+        ),
+        (
+            "Fl a Ns Li x Ns Li / Ns Fl v Ns No a Ns Pa /b",
+            "-ax/-va/b",
+            "-va",
+        ),
+        (
+            "Fl a Ns Li x Ns Li / Ns Fl v Ns Pa a Ns Pa /b",
+            "-ax/-va/b",
+            "-v",
+        ),
+    ] {
+        assert_attached_display(head, form);
+        assert_eq!(
+            explain_attached_tail(head, form).counts.direct_entry.total,
+            0,
+            "{head}"
+        );
+        for name in ["-a", right_name] {
+            assert_eq!(
+                explain_attached_tail(head, name).counts.direct_entry.total,
+                1,
+                "{head}: {name}"
+            );
+        }
+    }
+}
