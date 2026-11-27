@@ -317,6 +317,12 @@ impl super::InlineBuilder {
                     Some(role)
                 })
                 .or_else(|| {
+                    (capture.has_option
+                        && capture.operand_role.is_none()
+                        && standalone_field_operator(text?.1))
+                    .then_some(NativeOperandRole::LiteralContinuation(None))
+                })
+                .or_else(|| {
                     captured_bare_delimiter(
                         text.and_then(|(node, _)| node.decoder_text()),
                         enclosure(),
@@ -470,6 +476,11 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
     })
 }
 
+fn standalone_field_operator(decoded: &DecodedText) -> bool {
+    let mut chars = literal_declaration_chars(decoded).skip_while(|glyph| glyph.is_whitespace());
+    matches!(chars.next(), Some('=' | ':')) && chars.all(char::is_whitespace)
+}
+
 fn declaration_separator(decoded: &DecodedText) -> bool {
     let mut chars = literal_declaration_chars(decoded).skip_while(|glyph| glyph.is_whitespace());
     let separator = match chars.next() {
@@ -498,7 +509,7 @@ fn captured_bare_delimiter(
 }
 
 fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> {
-    if declaration_separator(decoded) {
+    if declaration_separator(decoded) || standalone_field_operator(decoded) {
         return Some(NativeOperandRole::LiteralContinuation(None));
     }
     // Keep only separator-like slashes opaque. A tight path such as

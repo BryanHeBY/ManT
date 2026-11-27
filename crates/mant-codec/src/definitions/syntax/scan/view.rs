@@ -234,7 +234,9 @@ impl<'a> HeadView<'a> {
             // Both must still own the entire surviving slash spelling.
             matches!(
                 operand.role,
-                NativeOperandRole::LiteralContinuation(_) | NativeOperandRole::LiteralValue
+                NativeOperandRole::LiteralContinuation(_)
+                    | NativeOperandRole::LiteralValue
+                    | NativeOperandRole::SymbolicText
             ) && self.text[operand.bytes.clone()].trim() == "/"
         });
         #[cfg(not(feature = "roff"))]

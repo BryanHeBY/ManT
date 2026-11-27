@@ -2,6 +2,8 @@
 
 use super::parameter_token::{ParameterToken, parameter_character};
 use super::{Argument, HeadView, LexicalState, closing, internal_apostrophe, quote_closer};
+#[cfg(feature = "roff")]
+use std::ops::Range;
 
 #[cfg(feature = "roff")]
 mod native_assignment;
@@ -31,23 +33,52 @@ pub(super) fn proves_slash_arm(view: &HeadView<'_>, argument: &Argument) -> bool
                 }
                 let before = view.text[range.start..first].char_indices().next_back();
                 let after = view.text[last..range.end].chars().next();
-                before.is_none_or(|(offset, ch)| slash_arm_boundary(view, range.start + offset, ch))
-                    && after.is_none_or(|ch| slash_arm_boundary(view, last, ch))
+                before.is_none_or(|(offset, ch)| {
+                    slash_arm_boundary(view, range, range.start + offset, ch)
+                }) && after.is_none_or(|ch| slash_arm_boundary(view, range, last, ch))
             }
             _ => true,
         })
 }
 
 #[cfg(feature = "roff")]
-fn slash_arm_boundary(view: &HeadView<'_>, offset: usize, ch: char) -> bool {
+fn slash_arm_boundary(view: &HeadView<'_>, range: &Range<usize>, offset: usize, ch: char) -> bool {
     use crate::definitions::NativeOperandRole as Role;
     ch.is_whitespace()
         || view.operand(offset).is_some_and(|operand| {
             matches!(
                 operand.role,
                 Role::EnclosureStart { .. } | Role::EnclosureEnd(_)
+            ) || matches!(ch, '=' | ':')
+                && matches!(
+                    operand.role,
+                    Role::LiteralContinuation(_) | Role::LiteralValue | Role::SymbolicText
+                )
+                && view.text[operand.bytes.clone()].trim() == &view.text[offset..offset + 1]
+                && typed_fields_flank(view, range, offset)
+        })
+}
+
+#[cfg(feature = "roff")]
+fn typed_fields_flank(view: &HeadView<'_>, range: &Range<usize>, operator: usize) -> bool {
+    use crate::definitions::NativeOperandRole as Role;
+    let Some((left, _)) = view.text[range.start..operator]
+        .trim_end()
+        .char_indices()
+        .next_back()
+    else {
+        return false;
+    };
+    let right = view.skip_space(operator + 1);
+    let typed = |at| {
+        view.operand(at).is_some_and(|operand| {
+            matches!(
+                operand.role,
+                Role::Placeholder { .. } | Role::PathOperand(_)
             )
         })
+    };
+    right < range.end && typed(range.start + left) && typed(right)
 }
 
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {

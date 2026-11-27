@@ -1275,3 +1275,48 @@ fn intact_slash_arm_is_the_only_exact_owner_of_a_split_lookalike() {
         assert_eq!(evidence.entry.as_ref().unwrap().names, ["-a", "-v"]);
     }
 }
+
+#[test]
+fn complete_slash_arms_keep_independently_authored_field_operators() {
+    // in_line() leaves two distinct native fields. One executed literal
+    // operator can join them without claiming either field has extra ink.
+    for (fields, arm) in [
+        ("Ar key Ns = Ns Ar value", "-a key=value"),
+        (r"Ar key Ns No \&= Ns Ar value", "-a key=value"),
+        (r"Ar key Ns Li \&= Ns Ar value", "-a key=value"),
+        (r"Ar key Ns Sy \&= Ns Ar value", "-a key=value"),
+        (r"Ar host Ns No \&: Ns Ar port", "-a host:port"),
+        (r"Ar host Ns Li \&: Ns Ar port", "-a host:port"),
+        (r"Ar host Ns Sy \&: Ns Ar port", "-a host:port"),
+    ] {
+        for divider in ["No /", "Li /", "Sy /"] {
+            for (head, form, names) in [
+                (
+                    format!("Fl a {fields} {divider} Fl v"),
+                    format!("{arm} / -v"),
+                    ["-a", "-v"],
+                ),
+                (
+                    format!("Fl v {divider} Fl a {fields}"),
+                    format!("-v / {arm}"),
+                    ["-v", "-a"],
+                ),
+            ] {
+                check_declaration(&head, &form, &names, &[]);
+            }
+        }
+    }
+    check_declaration(
+        "Fl a Ns Sy / Ns Fl v Ar file",
+        "-a/-v file",
+        &["-a", "-v"],
+        &[],
+    );
+    let split = "Fl a Sy / Fl v Ar a Ns Pa /b";
+    let form = "-a / -v a/b";
+    assert_attached_display(split, form);
+    assert_eq!(
+        explain_attached_tail(split, form).counts.direct_entry.total,
+        0
+    );
+}
