@@ -270,7 +270,12 @@ impl<'a> Scanner<'a> {
             return OptionHead::name_limit();
         }
         #[cfg(feature = "roff")]
-        self.form_evidence.reject_if(!self.proves_slash_arms());
+        self.form_evidence.reject_if(
+            self.view
+                .operands_in(0..self.view.text.len())
+                .any(|operand| operand.replaces_native_ink)
+                || !self.proves_slash_arms(),
+        );
         // A quoted value with no closing quote cannot prove that its dash
         // spelling is an entire declaration. Native incomplete bracket tags
         // retain their existing partial-name contract, but never infer owners.

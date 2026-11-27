@@ -9,10 +9,15 @@ fn uppercase_metavariables_require_their_own_explicit_option_receipt() {
             &nodes,
             &[
                 NativeOperand {
+                    replaces_native_ink: false,
                     bytes: 0..2,
                     role: NativeOperandRole::ExplicitOption,
                 },
-                NativeOperand { bytes: 3..7, role },
+                NativeOperand {
+                    replaces_native_ink: false,
+                    bytes: 3..7,
+                    role,
+                },
             ],
             &["-n"],
         );
@@ -23,18 +28,22 @@ fn uppercase_metavariables_require_their_own_explicit_option_receipt() {
         &nodes,
         &[
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..1,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 1..2,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 3..4,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 4..7,
                 role: NativeOperandRole::ExplicitOption,
             },
@@ -51,12 +60,21 @@ fn explicit_option_receipts_survive_an_inner_italic_font() {
         (NativeOperandRole::Argument, &["-n"][..]),
         (NativeOperandRole::Literal, &["-n"][..]),
     ] {
-        assert_names(&nodes, &[NativeOperand { bytes: 3..7, role }], expected);
+        assert_names(
+            &nodes,
+            &[NativeOperand {
+                replaces_native_ink: false,
+                bytes: 3..7,
+                role,
+            }],
+            expected,
+        );
     }
     let single = [strong(vec![text("-")]), emphasis(vec![text("NUM")])];
     assert_names(
         &single,
         &[NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..4,
             role: NativeOperandRole::ExplicitOption,
         }],
@@ -70,10 +88,12 @@ fn argument_receipts_survive_an_inner_bold_font() {
         let nodes = [strong(vec![text(value)])];
         let operands = [
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..2,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 3..value.len(),
                 role: NativeOperandRole::Argument,
             },
@@ -97,18 +117,22 @@ fn complete_native_operands_allow_a_following_declaration_not_an_inner_font_run(
     let boundary = "-Lfirst, --fake,last,".len();
     let operands = [
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..2,
             role: NativeOperandRole::Literal,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 2..boundary,
             role: NativeOperandRole::Argument,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: boundary..boundary + 6,
             role: NativeOperandRole::Literal,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: boundary + 6..boundary + 10,
             role: NativeOperandRole::Argument,
         },
@@ -124,18 +148,22 @@ fn leading_authored_whitespace_does_not_hide_a_proved_literal_operand() {
         let argument_end = "-Ldir, ".len();
         let operands = [
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..2,
                 role: NativeOperandRole::Literal,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 2..argument_end,
                 role: NativeOperandRole::Argument,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: argument_end..value.len() - 4,
                 role: NativeOperandRole::Literal,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: value.len() - 4..value.len(),
                 role: NativeOperandRole::Argument,
             },
@@ -149,14 +177,17 @@ fn whitespace_only_literal_operand_cannot_prove_the_following_unowned_name() {
     let nodes = [text("-Larg, --other")];
     let operands = [
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..2,
             role: NativeOperandRole::Literal,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 2..6,
             role: NativeOperandRole::Argument,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 6..7,
             role: NativeOperandRole::Literal,
         },
@@ -177,6 +208,7 @@ fn alias_or_cannot_skip_a_real_parameter_operand() {
     assert_names(&nodes, &[], &["-a"]);
     let value = "-a or --ascii";
     let operands = [NativeOperand {
+        replaces_native_ink: false,
         bytes: 3..5,
         role: NativeOperandRole::Argument,
     }];
@@ -191,6 +223,7 @@ fn alias_or_cannot_skip_a_real_parameter_operand() {
     ];
     assert_names(&nodes, &[], &["-a"]);
     let operands = [NativeOperand {
+        replaces_native_ink: false,
         bytes: 4..5,
         role: NativeOperandRole::Argument,
     }];

@@ -517,6 +517,7 @@ fn accepted_native_name_limit_survives_the_h_owner_change_without_partial_names(
                 .split(", ")
                 .map(|name| {
                     let operand = crate::definitions::NativeOperand {
+                        replaces_native_ink: false,
                         bytes: start..start + name.len(),
                         role: crate::definitions::NativeOperandRole::ExplicitOption,
                     };

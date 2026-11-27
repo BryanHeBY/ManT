@@ -142,6 +142,7 @@ impl Projection {
             .push((offset..self.bytes, segment.bytes.start));
         self.operands
             .extend(segment.operands.iter().map(|operand| NativeOperand {
+                replaces_native_ink: operand.replaces_native_ink,
                 bytes: offset + operand.bytes.start.max(segment.bytes.start) - segment.bytes.start
                     ..offset + operand.bytes.end.min(segment.bytes.end) - segment.bytes.start,
                 role: operand.role,

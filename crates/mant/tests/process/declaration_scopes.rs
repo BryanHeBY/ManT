@@ -1320,3 +1320,138 @@ fn complete_slash_arms_keep_independently_authored_field_operators() {
         0
     );
 }
+
+#[test]
+fn borrowed_ink_rejects_exact_slash_forms_without_hiding_short_options() {
+    // term_word() changes cursor without itself changing authored ink.
+    // bufferc() replaces the old glyph only when the later word writes.
+    for (head, intact, form, names) in [
+        (
+            r#"Fl a Ns Li / Fl v Li q Ns No "\h'-1n'X""#,
+            "Fl a Ns Li / Fl v Li X",
+            "-a/ -v X",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Li q Ns No "\h'-1n'q""#,
+            "Fl a Ns Li / Fl v Li q",
+            "-a/ -v q",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Li q Ns Cm "\h'-1n'X""#,
+            "Fl a Ns Li / Fl v Li X",
+            "-a/ -v X",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Ev mode Ns No "\h'-1n'e""#,
+            "Fl a Ns Li / Fl v Ev mode",
+            "-a/ -v mode",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Cm mode Ns No "\h'-1n'X""#,
+            "Fl a Ns Li / Fl v Cm modX",
+            "-a/ -v modX",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl v Li q Ns No "\h'-1n'X" No / Fl a"#,
+            "Fl v Li X No / Fl a",
+            "-v X / -a",
+            ["-v", "-a"],
+        ),
+        (
+            r#"Fl a Ar q Ns No "\h'-1n'/" Fl v"#,
+            "Fl a No / Fl v",
+            "-a / -v",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ar q Ns Li "\h'-1n'/" Fl v"#,
+            "Fl a No / Fl v",
+            "-a / -v",
+            ["-a", "-v"],
+        ),
+    ] {
+        check_declaration(intact, form, &names, &[]);
+        assert_attached_display(head, form);
+        assert_eq!(
+            explain_attached_tail(head, form).counts.direct_entry.total,
+            0,
+            "{head}"
+        );
+        for name in names {
+            assert_eq!(
+                explain_attached_tail(head, name).counts.direct_entry.total,
+                1,
+                "{head}"
+            );
+        }
+    }
+
+    check_declaration(
+        r#"Fl a Ns Li / Fl v Ar "\h'-1n'X""#,
+        "-a/ -vX",
+        &["-a", "-v"],
+        &[],
+    );
+    check_declaration(
+        r#"Fl a Ns Li / Fl v Li mode Ns No "\h'-1u'""#,
+        "-a/ -v mode",
+        &["-a", "-v"],
+        &[],
+    );
+}
+
+#[test]
+fn only_wholly_authored_ink_can_own_a_same_display_slash_form() {
+    for (altered, intact, form) in [
+        (
+            r#"Fl a Ns Li / Fl v Li q Ns No "\h'-1n'X""#,
+            "Fl a Ns Li / Fl v Li X",
+            "-a/ -v X",
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Ev mode Ns No "\h'-1n'e""#,
+            "Fl a Ns Li / Fl v Ev mode",
+            "-a/ -v mode",
+        ),
+        (
+            r#"Fl a Ns Li / Fl v Cm mode Ns No "\h'-1n'X""#,
+            "Fl a Ns Li / Fl v Cm modX",
+            "-a/ -v modX",
+        ),
+    ] {
+        for (first, second, owner) in [(altered, intact, "2/e2"), (intact, altered, "2/e1")] {
+            let source = format!(
+                "{HEADER}.It {first}\n.Tg first\nFirst body.\n.It {second}\n.Tg second\nSecond body.\n.El\n"
+            );
+            let query = format!("--explain={form}");
+            let output = run_text_input(
+                &[
+                    "--input",
+                    "-",
+                    "--input-format",
+                    "roff",
+                    "--format",
+                    "json",
+                    "--compact",
+                    &query,
+                ],
+                &source,
+            );
+            assert!(output.status.success());
+            let reply: QueryExplanation = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(reply.counts.direct_entry.total, 1, "{first}: {form}");
+            let evidence = reply
+                .evidence
+                .iter()
+                .find(|e| e.class == EvidenceClass::DirectEntry)
+                .unwrap();
+            assert_eq!(evidence.outline.path().to_string(), owner);
+            assert_eq!(evidence.entry.as_ref().unwrap().names, ["-a", "-v"]);
+        }
+    }
+}

@@ -161,14 +161,17 @@ fn matching_literal_transform_rebases_operands_without_changing_body_identity() 
             text: "\n--one α".into(),
             operands: vec![
                 NativeOperand {
+                    replaces_native_ink: false,
                     bytes: 0..1,
                     role: NativeOperandRole::Literal,
                 },
                 NativeOperand {
+                    replaces_native_ink: false,
                     bytes: 1..6,
                     role: NativeOperandRole::ExplicitOption,
                 },
                 NativeOperand {
+                    replaces_native_ink: false,
                     bytes: 7..9,
                     role: NativeOperandRole::Argument,
                 },
@@ -185,10 +188,12 @@ fn matching_literal_transform_rebases_operands_without_changing_body_identity() 
         proof.operands(&head),
         [
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..5,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 6..8,
                 role: NativeOperandRole::Argument,
             },

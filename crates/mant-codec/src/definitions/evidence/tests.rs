@@ -134,6 +134,7 @@ fn recorded_owner() -> (DefinitionItem, NativeHeadEvidence) {
         CapturedHeadOperands {
             text: "PATH".into(),
             operands: vec![NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..4,
                 role: NativeOperandRole::Literal,
             }],
@@ -220,6 +221,7 @@ fn continuation_retains_independent_operand_states() {
         CapturedHeadOperands {
             text: "PATH".into(),
             operands: vec![NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..4,
                 role: NativeOperandRole::Argument,
             }],
@@ -305,6 +307,7 @@ fn publication_rebinds_only_the_proved_owner_once() {
         CapturedHeadOperands {
             text: "PATH proof".into(),
             operands: vec![NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..4,
                 role: NativeOperandRole::Literal,
             }],
@@ -395,14 +398,17 @@ fn publication_projects_exact_bytes_once_without_guessing_at_duplicate_names() {
     }];
     let mut operands = vec![
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..6,
             role: NativeOperandRole::ExplicitOption,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 7..25,
             role: NativeOperandRole::Argument,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 26..32,
             role: NativeOperandRole::ExplicitOption,
         },
@@ -449,10 +455,12 @@ fn publication_never_requalifies_a_clipped_name_as_a_smaller_selector() {
     }];
     let mut operands = vec![
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..8,
             role: NativeOperandRole::ExplicitOption,
         },
         NativeOperand {
+            replaces_native_ink: false,
             bytes: 9..15,
             role: NativeOperandRole::ExplicitOption,
         },

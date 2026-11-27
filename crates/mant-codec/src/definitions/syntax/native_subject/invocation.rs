@@ -429,6 +429,7 @@ pub(super) fn protect_arguments(
         return operands;
     }
     let delimiter = |at| NativeOperand {
+        replaces_native_ink: false,
         bytes: at..at + 1,
         role: NativeOperandRole::Argument,
     };
@@ -453,11 +454,15 @@ pub(super) fn protect_arguments(
         while let Some(at) = separators.next_if(|at| *at < word.bytes.end) {
             if at > word.bytes.start {
                 result.push(NativeOperand {
+                    replaces_native_ink: word.replaces_native_ink,
                     bytes: word.bytes.start..at,
                     role: word.role,
                 });
             }
-            result.push(delimiter(at));
+            result.push(NativeOperand {
+                replaces_native_ink: word.replaces_native_ink,
+                ..delimiter(at)
+            });
             word.bytes.start = word.bytes.start.max(at + 1);
         }
         if !word.bytes.is_empty() {

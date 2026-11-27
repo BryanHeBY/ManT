@@ -335,6 +335,9 @@ impl NativeOperandRole {
 pub(crate) struct NativeOperand {
     pub(crate) bytes: Range<usize>,
     pub(crate) role: NativeOperandRole,
+    /// A different authored word occupied ink which this receipt overwrote.
+    /// Keep the visible role for names separately from exact-form proof.
+    pub(crate) replaces_native_ink: bool,
 }
 
 #[derive(Clone, Default)]
@@ -481,6 +484,7 @@ impl CapturedHeadOperands {
                         && self.text[operand.bytes.clone()].trim_start() == "-"
                     {
                         operand.bytes.end = word.bytes.end;
+                        operand.replaces_native_ink |= word.replaces_native_ink;
                         operand.role = NativeOperandRole::ExplicitOption;
                         raw.next();
                         self.operands.push(operand);

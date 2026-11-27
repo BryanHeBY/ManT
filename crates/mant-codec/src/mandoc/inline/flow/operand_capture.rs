@@ -7,7 +7,7 @@
 //! Existing private word owners already follow field clipping and delayed
 //! glyph retirement; this HEAD-only sidecar reads those accepted owners.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
 use crate::mandoc::declaration_groups::search::SearchHead;
@@ -21,6 +21,7 @@ mod body_spans;
 pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
+    replaces_native_ink: HashSet<u64>,
     spelling_receipts: Vec<(usize, u64)>,
     unsplit_receipts: HashMap<u64, usize>,
     fl_spellings: HashMap<u64, FlSpelling>,
@@ -56,6 +57,18 @@ impl HeadOperandCapture {
 
     fn mark_clipped_operands(&mut self, owners: impl Iterator<Item = u64>, writer: Option<u64>) {
         for owner in owners {
+            // Track the accepted writer even when the old word has no
+            // surviving bytes. A subsequent overwrite inherits the fact.
+            if let Some(writer) = writer.filter(|&writer| writer != owner)
+                && (self.replaces_native_ink.contains(&owner)
+                    || self
+                        .roles
+                        .get(&owner)
+                        .copied()
+                        .is_some_and(proves_authored_ink))
+            {
+                self.replaces_native_ink.insert(writer);
+            }
             if let Some(role) = self.roles.get_mut(&owner) {
                 *role = match *role {
                     NativeOperandRole::Placeholder { .. } => {
@@ -179,8 +192,16 @@ impl HeadOperandCapture {
     fn append(&mut self, text: &str, owner: Option<u64>) {
         let start = self.captured.text.len();
         self.captured.text.push_str(text);
-        let Some((serial, mut role)) =
-            owner.and_then(|serial| self.roles.get(&serial).map(|&role| (serial, role)))
+        let Some(serial) = owner else {
+            self.last_owner = owner;
+            return;
+        };
+        let replaces_native_ink = self.replaces_native_ink.contains(&serial);
+        let Some(mut role) = self
+            .roles
+            .get(&serial)
+            .copied()
+            .or(replaces_native_ink.then_some(NativeOperandRole::Argument))
         else {
             self.last_owner = owner;
             return;
@@ -196,6 +217,7 @@ impl HeadOperandCapture {
             && self.last_owner == owner
         {
             previous.bytes.end = end;
+            previous.replaces_native_ink |= replaces_native_ink;
         } else {
             if matches!(
                 role,
@@ -239,6 +261,7 @@ impl HeadOperandCapture {
                 self.roles.insert(serial, role);
             }
             self.captured.operands.push(NativeOperand {
+                replaces_native_ink,
                 bytes: start..end,
                 role,
             });
@@ -442,6 +465,25 @@ impl super::InlineBuilder {
     }
 }
 
+fn proves_authored_ink(role: NativeOperandRole) -> bool {
+    use NativeOperandRole as Role;
+    role.is_attached_composite_value()
+        || matches!(
+            role,
+            Role::Placeholder { .. }
+                | Role::IncompletePlaceholder
+                | Role::ClippedValue
+                | Role::ClippedEnvironment { .. }
+                | Role::ClippedInvocation
+                | Role::Subject(..)
+                | Role::ClippedSubject(..)
+                | Role::ProgramName(_)
+                | Role::FlDash(_)
+                | Role::FlWord(_)
+                | Role::ClippedOption
+        )
+}
+
 fn literal_delimiter(node: &Node) -> Option<char> {
     // mdoc_macro.c::dword sets NODE_DELIMO/C for bare delimiters.
     // A glyph within a styled word is not such a native boundary.
@@ -535,6 +577,7 @@ fn native_spelling_role(
         !decoded.proves_native_glyphs()
             || follows_option
                 && role.is_attached_composite_value()
+                && !sole_authored_slash(role, decoded)
                 && loses_typed_ink(&decoded.events, font)
     }) {
         return role;
@@ -546,6 +589,20 @@ fn native_spelling_role(
         }
         _ => role.without_complete_spelling(),
     }
+}
+
+fn sole_authored_slash(role: NativeOperandRole, decoded: &DecodedText) -> bool {
+    if !matches!(
+        role,
+        NativeOperandRole::LiteralValue | NativeOperandRole::SymbolicText
+    ) {
+        return false;
+    }
+    // Geometry preceding the sole slash cannot consume ink of this
+    // source word. The independent receipt can still separate names;
+    // the accepted cross-word write marks any exact form as unproved.
+    let mut glyphs = literal_declaration_chars(decoded).filter(|glyph| !glyph.is_whitespace());
+    glyphs.next() == Some('/') && glyphs.next().is_none()
 }
 
 /// Recover same-word clipping in the bounded, relative terminal input

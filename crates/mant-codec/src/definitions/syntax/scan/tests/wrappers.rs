@@ -24,6 +24,7 @@ fn quote_bracket_and_plain_argument_state_survives_font_changes() {
     // Without a native new-operand proof, a temporary literal font change
     // inside the already entered argument cannot restart the declaration.
     let argument = NativeOperand {
+        replaces_native_ink: false,
         bytes: 2.."-Lfirst, --fake,last".len(),
         role: NativeOperandRole::Argument,
     };
@@ -31,6 +32,7 @@ fn quote_bracket_and_plain_argument_state_survives_font_changes() {
         &nodes,
         &[
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..2,
                 role: NativeOperandRole::Literal,
             },
@@ -71,14 +73,17 @@ fn lexical_escape_parity_is_shared_by_restart_and_complete_argument_validation()
         let boundary = value.find("--other").unwrap();
         let operands = [
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..start,
                 role: NativeOperandRole::Literal,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: start..boundary,
                 role: NativeOperandRole::Argument,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: boundary..value.len(),
                 role: NativeOperandRole::Literal,
             },
@@ -121,6 +126,7 @@ fn paired_outer_wrappers_are_declarations_but_parameter_quotes_stay_opaque() {
     assert_names(
         &[strong(vec![text(value)])],
         &[NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..value.len(),
             role: NativeOperandRole::Argument,
         }],
@@ -143,18 +149,22 @@ fn inherited_wrapper_fonts_require_explicit_inner_options() {
         let end = open.len() + "-foo".len();
         let mut operands = [
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..open.len(),
                 role: NativeOperandRole::Literal,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: open.len()..open.len() + 1,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: open.len() + 1..end,
                 role: NativeOperandRole::ExplicitOption,
             },
             NativeOperand {
+                replaces_native_ink: false,
                 bytes: end..end + close.len(),
                 role: NativeOperandRole::Literal,
             },

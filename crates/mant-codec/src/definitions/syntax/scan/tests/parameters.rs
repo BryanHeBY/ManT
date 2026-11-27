@@ -124,6 +124,7 @@ fn literal_delimiters_complete_a_single_styled_parameter_token() {
         for operands in [
             Vec::new(),
             vec![NativeOperand {
+                replaces_native_ink: false,
                 bytes: 0..value.len(),
                 role: NativeOperandRole::Literal,
             }],
@@ -147,6 +148,7 @@ fn literal_delimiters_complete_a_single_styled_parameter_token() {
         text(" --fake"),
     ];
     let operand = NativeOperand {
+        replaces_native_ink: false,
         bytes: 3..8,
         role: NativeOperandRole::Argument,
     };
@@ -166,6 +168,7 @@ fn a_temporary_parameter_font_requires_both_token_boundaries() {
         ];
         let value = mant_ir::inline_plain_text(&nodes);
         let operand = NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..value.len(),
             role: NativeOperandRole::Literal,
         };
@@ -184,6 +187,7 @@ fn a_temporary_parameter_font_requires_both_token_boundaries() {
         ];
         let value = mant_ir::inline_plain_text(&nodes);
         let operand = NativeOperand {
+            replaces_native_ink: false,
             bytes: 0..value.len(),
             role: NativeOperandRole::Literal,
         };
@@ -230,6 +234,7 @@ fn parameter_owned_openers_do_not_wrap_new_declarations() {
     assert_names(&nodes, &[], &[]);
     let value = "“ --fake ”";
     let operands = [NativeOperand {
+        replaces_native_ink: false,
         bytes: 0.."“".len(),
         role: NativeOperandRole::Argument,
     }];
@@ -326,6 +331,7 @@ fn bare_parameter_completion_requires_a_top_level_delimiter_and_independent_name
         emphasis(vec![text("first, --fake")]),
     ];
     let operand = NativeOperand {
+        replaces_native_ink: false,
         bytes: 3..16,
         role: NativeOperandRole::Argument,
     };

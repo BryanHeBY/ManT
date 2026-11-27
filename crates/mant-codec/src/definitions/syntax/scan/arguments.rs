@@ -17,7 +17,14 @@ pub(super) fn proves_slash_arm(view: &HeadView<'_>, argument: &Argument) -> bool
     let assignment = argument.attached_to_name && view.text[range.clone()].starts_with('=');
     view.operands_in(range.clone())
         .all(|operand| match operand.role {
-            Role::IncompletePlaceholder | Role::ClippedValue | Role::ReferenceText(_) => false,
+            Role::IncompletePlaceholder
+            | Role::ClippedValue
+            | Role::ClippedEnvironment { .. }
+            | Role::ClippedInvocation
+            | Role::ClippedSubject(..)
+            | Role::ClippedEnclosure
+            | Role::ClippedOption
+            | Role::ReferenceText(_) => false,
             Role::Placeholder { .. } | Role::PathOperand(_) if !assignment => {
                 // CVS can style adjacent Ar and Pa alike, with Ns removing
                 // intervening spacing. The visual parameter run cannot give
@@ -54,7 +61,7 @@ fn slash_arm_boundary(view: &HeadView<'_>, range: &Range<usize>, offset: usize, 
                     operand.role,
                     Role::LiteralContinuation(_) | Role::LiteralValue | Role::SymbolicText
                 )
-                && view.text[operand.bytes.clone()].trim() == &view.text[offset..offset + 1]
+                && view.text[operand.bytes.clone()].trim() == &view.text[offset..=offset]
                 && typed_fields_flank(view, range, offset)
         })
 }

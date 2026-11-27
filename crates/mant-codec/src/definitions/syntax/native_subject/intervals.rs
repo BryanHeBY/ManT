@@ -21,6 +21,7 @@ pub(super) fn scoped_operands(
 ) -> Vec<NativeOperand> {
     intersecting_operands(operands, bytes.clone())
         .map(|operand| NativeOperand {
+            replaces_native_ink: operand.replaces_native_ink,
             bytes: operand.bytes.start.max(bytes.start) - bytes.start
                 ..operand.bytes.end.min(bytes.end) - bytes.start,
             role: operand.role,
