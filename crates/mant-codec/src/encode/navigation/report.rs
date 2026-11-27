@@ -1,5 +1,5 @@
 //! Accepted local destinations in a composed Markdown report.
-use crate::encode::anchors::markers_in_html;
+use crate::encode::anchors::HtmlAnchorScanner;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::{collections::HashSet, ops::Range};
 
@@ -43,6 +43,7 @@ impl PageNavigation {
         let mut anchors = HashSet::new();
         let mut duplicates = Vec::new();
         let mut links = HashSet::new();
+        let mut scanner = HtmlAnchorScanner::default();
         for (event, range) in Parser::new_ext(markdown, Options::ENABLE_MATH).into_offset_iter() {
             match event {
                 Event::Start(Tag::Link { dest_url, .. }) => {
@@ -51,11 +52,11 @@ impl PageNavigation {
                     }
                 }
                 Event::Html(_) | Event::InlineHtml(_) => {
-                    for anchor in markers_in_html(markdown, range) {
+                    scanner.scan(markdown, range, false, |anchor| {
                         if !anchors.insert(anchor.id.to_owned()) {
                             duplicates.push(anchor.range);
                         }
-                    }
+                    });
                 }
                 _ => {}
             }
@@ -109,5 +110,31 @@ mod tests {
             1
         );
         assert!(markdown.contains(&format!("> ```\n> {marker}\n> ```")));
+    }
+
+    #[test]
+    fn hidden_markup_cannot_keep_a_scoped_link_or_remove_its_visible_target() {
+        let marker = r#"<span id="mant-report-0-61"></span>"#;
+        let hidden = format!("before <!-- {marker} --> <i title='{marker}'>copy</i>");
+        let missing = render_scoped_report_page(|anchors| {
+            let label = if let Some(anchors) = anchors {
+                assert!(!anchors.contains("mant-report-0-61"));
+                "jump"
+            } else {
+                "[jump](#mant-report-0-61)"
+            };
+            format!("{hidden} {label}")
+        });
+        assert_eq!(missing, format!("{hidden} jump"));
+        let visible =
+            format!("{hidden}\n\n> <br />\n> {marker}{marker}\n\n[jump](#mant-report-0-61)");
+        let retained = render_scoped_report_page(|anchors| {
+            assert!(anchors.is_none());
+            visible.clone()
+        });
+        assert_eq!(
+            retained,
+            format!("{hidden}\n\n> <br />\n> {marker}<span></span>\n\n[jump](#mant-report-0-61)")
+        );
     }
 }

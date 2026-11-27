@@ -1,4 +1,4 @@
-//! Source-map markers are HTML events, never lookalike code or escaped text.
+//! Source-map markers are HTML elements, never lookalike code or escaped text.
 use pulldown_cmark::{Event, Parser};
 use std::ops::Range;
 
@@ -7,62 +7,182 @@ pub(crate) struct AnchorMarker<'a> {
     pub(crate) range: Range<usize>,
 }
 
-/// Index only complete zero-width anchors in the emitted `CommonMark` syntax.
 /// These ranges hide zero-width presentation only; semantic owner ranges are
 /// composed independently by the renderer. Code fences/spans are not markers.
 pub(crate) fn anchor_markers(markdown: &str) -> Vec<AnchorMarker<'_>> {
     let mut markers = Vec::new();
+    let mut scanner = HtmlAnchorScanner::default();
     for (event, range) in
         Parser::new_ext(markdown, pulldown_cmark::Options::ENABLE_MATH).into_offset_iter()
     {
-        match event {
-            Event::Html(_) | Event::InlineHtml(_) => {
-                markers.extend(markers_in_html(markdown, range.clone()));
-                markers.extend(find_markers_in_html(markdown, range, "<a id=\"", "\"></a>"));
-            }
-            _ => {}
+        if matches!(event, Event::Html(_) | Event::InlineHtml(_)) {
+            scanner.scan(markdown, range, true, |marker| markers.push(marker));
         }
     }
-    // Events are in source order; an HTML block can interleave current and
-    // legacy empty destinations. Project both as one ordered set of ranges.
-    markers.sort_unstable_by_key(|marker| marker.range.start);
     markers
 }
 
-/// Find complete zero-width markers whose opening tags are in an accepted
-/// HTML event. The close may be a separate inline event.
-pub(super) fn markers_in_html(
-    markdown: &str,
-    range: Range<usize>,
-) -> impl Iterator<Item = AnchorMarker<'_>> {
-    find_markers_in_html(markdown, range, "<span id=\"", "\"></span>")
+/// CommonMark only identifies HTML ranges, including comments, raw-text
+/// elements and complete tags with quoted attributes. Require the exact
+/// emitted anchor spelling at a tag boundary, not a substring of that range.
+/// An HTML block may split over events; a consumed token or element can cross
+/// those boundaries, as can the closing tag of an inline marker.
+#[derive(Default)]
+pub(super) struct HtmlAnchorScanner {
+    consumed: usize,
 }
 
-fn find_markers_in_html<'a>(
-    markdown: &'a str,
-    range: Range<usize>,
-    prefix: &'static str,
-    suffix: &'static str,
-) -> impl Iterator<Item = AnchorMarker<'a>> {
-    let mut cursor = range.start;
-    std::iter::from_fn(move || {
-        while let Some(relative) = markdown[cursor..range.end].find(prefix) {
+impl HtmlAnchorScanner {
+    pub(super) fn scan<'a>(
+        &mut self,
+        markdown: &'a str,
+        range: Range<usize>,
+        legacy: bool,
+        mut emit: impl FnMut(AnchorMarker<'a>),
+    ) {
+        let mut cursor = self.consumed.max(range.start);
+        while cursor < range.end
+            && let Some(relative) = markdown[cursor..range.end].find('<')
+        {
             let start = cursor + relative;
-            cursor = start + prefix.len();
-            let length = markdown[cursor..range.end].find(['<', '>', '\n', '\r', '"'])?;
-            let id_end = cursor + length;
-            if markdown[id_end..].starts_with(suffix) {
-                let id = &markdown[cursor..id_end];
-                let end = id_end + suffix.len();
-                cursor = end.min(range.end);
-                return Some(AnchorMarker {
-                    id,
-                    range: start..end,
-                });
+            let rest = &markdown[start..];
+            if let Some(marker) =
+                marker_at(rest, start, "<span id=\"", "\"></span>").or_else(|| {
+                    legacy
+                        .then(|| marker_at(rest, start, "<a id=\"", "\"></a>"))
+                        .flatten()
+                })
+            {
+                cursor = marker.range.end;
+                emit(marker);
+                continue;
+            }
+            let skip = if let Some(comment) = rest.strip_prefix("<!--") {
+                // In an HTML block the comment can contain multiple source
+                // lines, each delivered as a separate HTML event.
+                if comment.starts_with('>') {
+                    5
+                } else if comment.starts_with("->") {
+                    6
+                } else {
+                    ["-->", "--!>"]
+                        .into_iter()
+                        .filter_map(|end| comment.find(end).map(|at| 4 + at + end.len()))
+                        .min()
+                        .unwrap_or(rest.len())
+                }
+            } else if let Some(cdata) = rest.strip_prefix("<![CDATA[") {
+                cdata.find("]]>").map_or(rest.len(), |at| 9 + at + 3)
+            } else if rest.starts_with("<!") || rest.starts_with("<?") {
+                rest.find('>').map_or(rest.len(), |at| at + 1)
+            } else if let Some((name, closing)) = tag_name(rest) {
+                let end = tag_end(rest).unwrap_or(rest.len());
+                if closing {
+                    end
+                } else if name.eq_ignore_ascii_case("plaintext") {
+                    rest.len()
+                } else if is_raw_text(name) {
+                    // In HTML a trailing slash does not close these elements.
+                    end + raw_text_end(&rest[end..], name)
+                } else {
+                    end
+                }
+            } else {
+                1
+            };
+            cursor = start + skip;
+        }
+        self.consumed = cursor;
+    }
+}
+
+fn marker_at<'a>(
+    rest: &'a str,
+    start: usize,
+    prefix: &str,
+    suffix: &str,
+) -> Option<AnchorMarker<'a>> {
+    let id = rest.strip_prefix(prefix)?;
+    let id_end = id.find(['<', '>', '\n', '\r', '"'])?;
+    if id_end == 0 || !id[id_end..].starts_with(suffix) {
+        return None;
+    }
+    Some(AnchorMarker {
+        id: &id[..id_end],
+        range: start..start + prefix.len() + id_end + suffix.len(),
+    })
+}
+
+fn tag_name(rest: &str) -> Option<(&str, bool)> {
+    let rest = rest.strip_prefix('<')?;
+    let (rest, closing) = rest
+        .strip_prefix('/')
+        .map_or((rest, false), |rest| (rest, true));
+    if !rest.as_bytes().first()?.is_ascii_alphabetic() {
+        return None;
+    }
+    let end = rest.find(|ch: char| ch.is_ascii_whitespace() || matches!(ch, '>' | '/'))?;
+    Some((&rest[..end], closing))
+}
+
+fn tag_end(rest: &str) -> Option<usize> {
+    let mut quote = None;
+    for (at, ch) in rest.bytes().enumerate().skip(1) {
+        match (quote, ch) {
+            (Some(expected), actual) if expected == actual => quote = None,
+            (None, b'\'' | b'"') => quote = Some(ch),
+            (None, b'>') => return Some(at + 1),
+            _ => {}
+        }
+    }
+    None
+}
+
+fn is_raw_text(name: &str) -> bool {
+    [
+        "script", "style", "xmp", "iframe", "noembed", "noframes", "noscript", "textarea", "title",
+    ]
+    .iter()
+    .any(|element| name.eq_ignore_ascii_case(element))
+}
+
+fn raw_text_end(rest: &str, name: &str) -> usize {
+    // Script may use HTML's double escaped state. Once that occurs, the
+    // next closing spelling leaves that state rather than closing the tag.
+    let mut escaped_script = false;
+    let mut double_escaped_script = false;
+    let script = name.eq_ignore_ascii_case("script");
+    for (at, ch) in rest.char_indices() {
+        let tail = &rest[at..];
+        if script && ch == '<' && tail.starts_with("<!--") {
+            escaped_script = true;
+        } else if script && ch == '-' && tail.starts_with("-->") {
+            escaped_script = false;
+            double_escaped_script = false;
+        } else if ch == '<' {
+            if raw_tag_boundary(&tail[1..], "/", name) {
+                if !double_escaped_script {
+                    return at + tag_end(tail).unwrap_or(tail.len());
+                }
+                double_escaped_script = false;
+            } else if escaped_script && raw_tag_boundary(&tail[1..], "", name) {
+                double_escaped_script = true;
             }
         }
-        None
-    })
+    }
+    rest.len()
+}
+
+fn raw_tag_boundary(tail: &str, prefix: &str, name: &str) -> bool {
+    let Some(tail) = tail.strip_prefix(prefix) else {
+        return false;
+    };
+    tail.get(..name.len())
+        .is_some_and(|candidate| candidate.eq_ignore_ascii_case(name))
+        && tail
+            .as_bytes()
+            .get(name.len())
+            .is_some_and(|ch| ch.is_ascii_whitespace() || matches!(*ch, b'>' | b'/'))
 }
 
 #[cfg(test)]
@@ -98,5 +218,31 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["first", "second"]
         );
+    }
+
+    #[test]
+    fn scanner_skips_lookalikes_inside_comments_attributes_and_raw_text() {
+        let fake = r#"<span id="fake"></span><a id="legacy-fake"></a>"#;
+        let real = r#"<span id="real"></span><span id="next"></span>"#;
+        for hidden in [
+            format!("before <!-- {fake} --> "),
+            format!("<br />\n<!--\n{fake}\n-->\n"),
+            format!("<i title='{fake}'>label</i> "),
+            format!("<br />\n<div title='quoted\n{fake}\nvalue'>label</div>\n"),
+            format!("<script>\n{fake}\n</script>\n\n"),
+            format!("<StYlE>{fake}</sTyLe>\n\n"),
+            format!("Label <textarea>{fake}</TEXTAREA> "),
+            format!("<script><!--<script></script>\n{fake}\n</script>\n\n"),
+        ] {
+            let markdown = format!("{hidden}{real} after");
+            assert_eq!(
+                anchor_markers(&markdown)
+                    .into_iter()
+                    .map(|marker| marker.id)
+                    .collect::<Vec<_>>(),
+                ["real", "next"],
+                "{markdown}"
+            );
+        }
     }
 }
