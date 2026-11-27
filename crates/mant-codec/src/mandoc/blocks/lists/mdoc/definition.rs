@@ -76,7 +76,7 @@ pub(super) fn lower_mdoc_definition_list(
                 list_indent,
                 paragraph_distance,
                 geometry,
-                node.definition_list_style,
+                node,
                 formatter,
             );
             all_ordinal_labels_replaceable &= lowered.ordinal_label_can_be_replaced;
@@ -123,7 +123,7 @@ fn lower_mdoc_definition_item(
     list_indent: crate::mandoc::layout::SourceIndent,
     paragraph_distance: &mut u16,
     geometry: crate::mandoc::layout::DefinitionGeometry,
-    style: Option<DefinitionListStyle>,
+    list: &Node,
     formatter: &mut crate::mandoc::formatter::FormatterState,
 ) -> LoweredDefinitionItem {
     context.lower_inline_with_spacing(
@@ -131,6 +131,7 @@ fn lower_mdoc_definition_item(
         formatter.spacing_enabled(),
         formatter,
     );
+    let style = list.definition_list_style;
     let shares_pending_term_row = style != Some(DefinitionListStyle::Overhang);
     let head = first_part_children(item.node, NodeKind::Head);
     let mut lowered = definition_item(
@@ -143,6 +144,7 @@ fn lower_mdoc_definition_item(
             spacing_enabled: formatter.spacing_enabled(),
             paragraph_predecessor: true,
             shares_pending_term_row,
+            compact_inset: list.compact && style == Some(DefinitionListStyle::Inset),
             head: match style {
                 Some(DefinitionListStyle::Inset) => DefinitionHeadFlow::RunIn {
                     cells: u8::from(!head.is_empty()),

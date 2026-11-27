@@ -14,6 +14,7 @@ pub(super) struct DefinitionFlow {
     pub(super) spacing_enabled: bool,
     pub(super) paragraph_predecessor: bool,
     pub(super) shares_pending_term_row: bool,
+    pub(super) compact_inset: bool,
     pub(super) head: DefinitionHeadFlow,
 }
 
@@ -188,6 +189,14 @@ pub(super) fn definition_item(
         &terms,
         !closed_head_row && !finished.definition_field_exited,
     );
+    let omits_childless_body_padding = flow.compact_inset
+        && node.flags.no_fill
+        && body.is_empty()
+        && !closed_head_row
+        && !finished.definition_field_exited
+        && completed_head_rows == 0
+        && carried_head_rows == 0
+        && formatter.definition_head_row_pending();
     let deferred_head_projection = run_in_execution
         .as_ref()
         .and_then(|run_in| run_in.state.deferred_head_projection())
@@ -198,7 +207,14 @@ pub(super) fn definition_item(
         context,
         paragraph_distance,
         formatter,
-        definition_body_flow(node, body_origin, spacing_enabled, flow, run_in_execution),
+        definition_body_flow(
+            node,
+            body_origin,
+            spacing_enabled,
+            flow,
+            run_in_execution,
+            omits_childless_body_padding,
+        ),
     );
     if let Some(receiver) = &deferred_head_projection
         && let Some(captured) = receiver.resume_terms(&mut terms, &mut description)

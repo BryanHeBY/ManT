@@ -134,6 +134,7 @@ pub(super) fn definition_body_flow(
     spacing_enabled: bool,
     flow: DefinitionFlow,
     run_in_execution: Option<RunInExecution>,
+    omits_childless_body_padding: bool,
 ) -> ScopeFlow<'_> {
     if let Some(run_in) = run_in_execution {
         ScopeFlow {
@@ -142,20 +143,10 @@ pub(super) fn definition_body_flow(
             paragraph_predecessor: flow.paragraph_predecessor,
             run_in: Some(RunInBody {
                 execution: run_in.state,
-                // It BODY pre still executes its generated inset word. When
-                // there is no BODY child to print it, term_field leaves its
-                // trailing padding unprinted (term.c:389-427).
-                generated_cells: if node.flags.no_fill
-                    && matches!(
-                        flow.head,
-                        DefinitionHeadFlow::RunIn {
-                            cells: 1,
-                            style: super::RunInHeadStyle::Plain,
-                            ..
-                        }
-                    )
-                    && super::first_part_children(node, NodeKind::Body).is_empty()
-                {
+                // The generated inset word still executes. It is trailing
+                // padding of the open HEAD row, not a separate BODY row.
+                // A real HEAD endline can instead make it the next row.
+                generated_cells: if omits_childless_body_padding {
                     0
                 } else {
                     run_in.surviving_cells

@@ -537,6 +537,17 @@ fn compact_inset_no_fill_does_not_publish_a_body_with_only_generated_padding() {
 }
 
 #[test]
+fn compact_inset_childless_body_keeps_a_row_after_completed_head_spacing() {
+    // Pinned CVS UTF-8 has a vertical row from HEAD's .sp and a second
+    // row carrying only the generated NBSP before R. The reading layer
+    // drops the generated glyph, not the independent output row.
+    assert_eq!(
+        description_rows(".nf\n.Bl -inset -compact -width 8n\n.It Xo\n.sp 1\n.Xc\n.El\n.fi\nR\n"),
+        ["", "", "R"],
+    );
+}
+
+#[test]
 fn explicit_break_keeps_a_completed_continued_inset_body_row() {
     // Each exact input ran against pinned CVS mandoc. NODE_LINE closes
     // HEAD before the continued BODY word. The .br's completed empty
