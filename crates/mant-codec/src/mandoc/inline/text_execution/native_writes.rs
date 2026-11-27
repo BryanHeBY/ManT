@@ -11,6 +11,12 @@ pub(super) struct AppendedFonts {
 }
 
 impl AppendedFonts {
+    pub(super) fn new(retain_pending_controls: bool) -> Self {
+        Self {
+            retain_pending_controls,
+            ..Self::default()
+        }
+    }
     /// `encode1()` (`term.c:900-929`) adds decoration at each graph and
     /// converts `TERMP_BACKAFTER` to `TERMP_BACKBEFORE` after writing it;
     /// non-graph blanks in `encode()`/`bufferc()` (`term.c:860-872, 947-967`)
@@ -85,7 +91,17 @@ impl AppendedFonts {
         // in `self.fonts` without a pending encode1() retreat, so
         // `raw_tail_fonts` is exact for `NativeSlots::with_field_prefix`
         // (term.c:899-969).
-        let replay_tail = if self.pending {
+        let replay_tail = if self.pending && self.retain_pending_controls {
+            let raw = self.fonts.iter().fold(self.cells, |slots, (range, font)| {
+                slots.saturating_add(range.len().saturating_mul(
+                    crate::mandoc::inline::flow::native_slots::decoration_slots(*font),
+                ))
+            });
+            if raw > crate::mandoc::inline::flow::field_buffer::MAX_RUN_IN_REPLAY_CELLS {
+                return None;
+            }
+            None
+        } else if self.pending {
             match styled_tail {
                 Some((count, _)) if count == decorated => None,
                 Some((count, _)) => Some(count),

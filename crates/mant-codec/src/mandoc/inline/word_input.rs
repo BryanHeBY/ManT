@@ -177,6 +177,7 @@ fn execute_roff_word_entry(
             slot_entry,
             table_field_units: None,
             table_leading_blanks: 0,
+            prove_pending_run_in_head: producer_proof.is_some(),
             policy,
         },
     );

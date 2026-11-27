@@ -407,6 +407,7 @@ impl<'a> LoweringContext<'a> {
                 slot_entry: inline::SlotEntry::default(),
                 table_field_units,
                 table_leading_blanks: table_cell.leading_blanks,
+                prove_pending_run_in_head: false,
                 policy: inline::TextExecutionPolicy {
                     recognize_generated_references: self.macro_set == MacroSet::Mdoc,
                     record_native_cells,

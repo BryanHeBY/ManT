@@ -20,6 +20,7 @@ fn contiguous_deferred_source_spaces_use_one_run_receipt() {
             slot_entry: SlotEntry::default(),
             table_field_units: None,
             table_leading_blanks: 0,
+            prove_pending_run_in_head: false,
             policy: TextExecutionPolicy {
                 recognize_generated_references: false,
                 record_native_cells: true,
@@ -65,6 +66,7 @@ fn function_word_policy_changes_only_literal_source_blanks() {
                     slot_entry: SlotEntry::default(),
                     table_field_units: None,
                     table_leading_blanks: 0,
+                    prove_pending_run_in_head: false,
                     policy: TextExecutionPolicy {
                         recognize_generated_references: false,
                         record_native_cells: true,
@@ -139,6 +141,7 @@ fn breakpoint_writes_do_not_claim_zero_width_graph_acceptance() {
             slot_entry: SlotEntry::default(),
             table_field_units: None,
             table_leading_blanks: 0,
+            prove_pending_run_in_head: false,
             policy: TextExecutionPolicy {
                 recognize_generated_references: false,
                 record_native_cells: true,
@@ -176,6 +179,7 @@ fn field_recording_does_not_select_another_text_executor() {
                 slot_entry: SlotEntry::default(),
                 table_field_units: None,
                 table_leading_blanks: 0,
+                prove_pending_run_in_head: false,
                 policy: TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: record,

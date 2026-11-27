@@ -66,6 +66,7 @@ fn rewound_word_entry_walks_over_the_invisible_tail_before_filling() {
                 slot_entry,
                 table_field_units: None,
                 table_leading_blanks: 0,
+                prove_pending_run_in_head: false,
                 policy: TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,

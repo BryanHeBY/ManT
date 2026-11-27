@@ -53,6 +53,8 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     /// Non-breaking slots written by numeric tbl alignment before this word.
     pub(in crate::mandoc) table_leading_blanks: usize,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
+    /// A fresh run-in HEAD can retain its pending raw slots through an inline font change.
+    pub(in crate::mandoc) prove_pending_run_in_head: bool,
 }
 
 /// A presentation write borrows one word's output and the caller's pending
@@ -92,6 +94,7 @@ pub(in crate::mandoc) fn parse_roff_text_with_scan_status(
             slot_entry: SlotEntry::default(),
             table_field_units: None,
             table_leading_blanks: 0,
+            prove_pending_run_in_head: false,
             policy: TextExecutionPolicy {
                 recognize_generated_references,
                 record_native_cells: false,
@@ -235,7 +238,7 @@ fn execute_formatter_word_events(
                     RoffInlineEvent::Font(_) | RoffInlineEvent::PreviousFont
                 )
             })))
-    .then(native_writes::AppendedFonts::default);
+    .then(|| native_writes::AppendedFonts::new(context.prove_pending_run_in_head));
     let mut unproved_motion = false;
     for (index, event) in events.iter().enumerate() {
         let armed_before = context.zero_advance.is_armed();

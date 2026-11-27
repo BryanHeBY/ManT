@@ -189,6 +189,7 @@ impl InlineExecutionState {
                 slot_entry: SlotEntry::default(),
                 table_field_units: None,
                 table_leading_blanks: 0,
+                prove_pending_run_in_head: false,
                 policy: crate::mandoc::inline::TextExecutionPolicy {
                     recognize_generated_references: false,
                     record_native_cells: true,

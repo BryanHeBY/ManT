@@ -274,3 +274,32 @@ fn inset_absolute_body_replays_a_decorated_combining_head() {
         assert_eq!(rows, ["e\u{301}ai\u{301}\u{301}"], "{source}\n{rendered}");
     }
 }
+
+#[test]
+fn mixed_font_head_keeps_pending_slots_until_body_rewind_or_flush() {
+    // term.c::term_word() changes fonts without emitting slots; encode1()
+    // uses each graph's active font. The \p, \: and ordinary space do
+    // not consume BACKBEFORE. A real .br still commits the preceding row.
+    let cases: &[Case] = &[
+        ("", "inset", r"\fBJ\fP\zA\p\: ", "", &["CA"]),
+        (".Sm off\n", "inset", r"\fBJ\fP\zA\p\: ", "", &["CA"]),
+        ("", "diag", r"\fBJ\fP\zA\p\: ", "", &["Co JA"]),
+        ("", "inset", r"\fBJ\fPA", "", &["CA"]),
+        ("", "inset", r"\fBJ\fP\zA\p\: ", ".br\n", &["JA", "B C"]),
+    ];
+    for &(spacing, kind, head, request, expected) in cases {
+        let source = format!(
+            ".Dd November 26, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field review\n.Sh DESCRIPTION\n{spacing}.Bl -{kind}\n.It No \"{head}\"\n{request}\\h'|0n'B C\n.El\n.Sh ENDTEST\nDone.\n"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, &source);
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|row| row.trim())
+            .filter(|row| !row.is_empty())
+            .collect();
+        assert_eq!(rows, expected, "{source}\n{rendered}");
+    }
+}
