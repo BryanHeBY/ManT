@@ -400,7 +400,7 @@ fn take_target(nodes: &mut [Inline], marker: &str) -> Option<[Inline; 2]> {
         match node {
             Inline::Anchor { id, .. }
                 if !id.as_str().starts_with('\0')
-                    && matches!(remaining.last(), Some(Inline::Anchor { id, .. }) if id.as_str() == marker) =>
+                    && matches!(remaining.last(), Some(Inline::Anchor { id, .. }) if id.as_str() == marker || id.as_str().strip_prefix(marker).is_some_and(|tail| tail.starts_with(':'))) =>
             {
                 let retired = || Inline::anchor(NAVIGATION_WORD);
                 return Some([

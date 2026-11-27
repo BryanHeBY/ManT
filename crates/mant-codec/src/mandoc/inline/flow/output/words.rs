@@ -34,13 +34,14 @@ impl InlineBuilder {
 
     pub(in crate::mandoc::inline) fn with_inline_word_target(
         &mut self,
+        scope: u32,
         target: Inline,
         visit: impl FnOnce(&mut Self),
     ) {
         let start = self.begin_output_checkpoint();
-        self.pending_navigation_targets.push(Some(target));
+        self.pending_navigation_targets.push((scope, Some(target)));
         visit(self);
-        if let Some(Some(target)) = self.pending_navigation_targets.pop() {
+        if let Some((_, Some(target))) = self.pending_navigation_targets.pop() {
             // No authored word supplied ink. Keep the explicit fragment at
             // its own boundary, without handing it to a following sibling.
             let index = self.output_checkpoint_index(&start);
@@ -54,7 +55,7 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc::inline) fn claim_inline_word_targets(&mut self, output: &[Inline]) {
-        if self.pending_navigation_targets.iter().all(Option::is_none) {
+        if self.pending_navigation_targets.is_empty() {
             return;
         }
         let state = &self.execution.zero_advance;
@@ -64,13 +65,15 @@ impl InlineBuilder {
             return;
         }
         let serial = self.execution.native_owner_serial;
-        let targets: Vec<_> = self
-            .pending_navigation_targets
-            .iter_mut()
-            .filter_map(Option::take)
-            .collect();
-        for target in targets {
-            self.record_inline_word_target(serial, target);
+        for (scope, target) in &mut self.pending_navigation_targets {
+            let prefix = if target.is_some() {
+                super::NAVIGATION_WORD
+            } else {
+                super::NAVIGATION_FOLLOWUP
+            };
+            self.nodes
+                .push(Inline::anchor(format!("{prefix}{serial}:{scope}")));
+            self.nodes.extend(target.take());
         }
     }
 

@@ -230,10 +230,12 @@ pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
 }
 
 pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
+    super::navigation::resolve(nodes);
     strip_projection_markers(nodes, false);
 }
 
 pub(in crate::mandoc) fn strip_literal_projection_markers(nodes: &mut Vec<Inline>) {
+    super::navigation::resolve(nodes);
     strip_projection_markers(nodes, true);
 }
 

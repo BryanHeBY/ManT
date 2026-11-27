@@ -52,6 +52,7 @@ pub(super) fn is_term_alternative(node: &Inline) -> bool {
 
 pub(in crate::mandoc::inline) const INTERNAL_FIELD_WORD: &str = "\0mant:field-word:";
 pub(in crate::mandoc::inline) const INTERNAL_OUTPUT_SCOPE: &str = "\0mant:output-scope:";
+const NAVIGATION_FOLLOWUP: &str = "\0mant:output-scope:navigation-followup:";
 pub(super) const NAVIGATION_WORD: &str = "\0mant:output-scope:navigation-word:";
 pub(in crate::mandoc::inline::flow) const DEFERRED_SOURCE_BLANK: &str =
     "\0mant:output-scope:deferred-blank:";
@@ -71,6 +72,7 @@ mod checkpoints;
 pub(in crate::mandoc::inline::flow) mod deferred_blanks;
 mod drain;
 mod hard_breaks;
+mod navigation;
 mod projection;
 mod row_layout;
 pub(super) mod row_observation;

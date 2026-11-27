@@ -36,7 +36,7 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
     }
     if let Some(anchor) = navigation_anchor(node) {
         if navigation_targets_authored_word(node) {
-            builder.with_inline_word_target(anchor, |builder| {
+            builder.with_inline_word_target(node.id, anchor, |builder| {
                 append_inline_scope(builder, node, name);
             });
             return;

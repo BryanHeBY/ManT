@@ -145,3 +145,64 @@ fn native_section_ids(titles: &[&str]) -> Vec<String> {
         .map(|(base, full)| ids.complete(&base, full).0)
         .collect()
 }
+
+#[test]
+fn authored_macro_target_survives_repaint_without_adopting_a_sibling() {
+    #[derive(Default)]
+    struct Position {
+        ink: String,
+        hits: Vec<usize>,
+    }
+    impl<'ir> Visit<'ir> for Position {
+        fn visit_inline(&mut self, inline: &'ir Inline) {
+            match inline {
+                Inline::Anchor {
+                    id,
+                    fragment_aliases,
+                    ..
+                } if id.as_str() == "body-target" => {
+                    assert_eq!(fragment_aliases.len(), 1);
+                    assert_eq!(fragment_aliases[0].as_str(), "Body.Target");
+                    self.hits.push(self.ink.len());
+                }
+                Inline::Text { value } | Inline::Code { value } => self
+                    .ink
+                    .extend(value.chars().filter(|ch| !ch.is_whitespace())),
+                _ => {}
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
+    // Pinned CVS 20261013T025419Z: mdoc_validate.c::post_tg assigns
+    // the target to Ev; terminal ASCII and UTF-8 agree on the survivors.
+    // The sibling No repaint does not acquire Ev's target even though it
+    // occupies Ev's former columns. An entirely empty Ev remains zero-width.
+    for (line, expected, target) in [
+        (r#".Ev "\%<>" K"#, "JA<>K", Some(2)),
+        (r#".Ev "\%<>" K No "\h'|6n'S""#, "JAS>K", Some(3)),
+        (r#".Ev "\%<>" K No "\h'|6n'ST""#, "JASTK", Some(4)),
+        (r#".Ev "<>" K No "\h'|5n'ST""#, "JASTK", Some(4)),
+        (
+            r#".Ev "\X'tty: link https://a.test'\%<>\X'tty: link'" K No "\h'|7n'ST""#,
+            "JASTK",
+            Some(4),
+        ),
+        (r#".Ev "\%<>" No "\h'|6n'ST""#, "JAST", None),
+    ] {
+        let source = format!(
+            ".Dd November 26, 2026\n.Dt INSPECTION 1\n.Os\n.Sh NAME\n.Nm inspection\n.Nd annotations\n.Sh DESCRIPTION\n.No JA\n.Tg Body.Target\n{line}\n.Sh ENDTEST\nDone.\n"
+        );
+        let document = parse_manual_bytes(std::path::Path::new("inspection.1"), source.as_bytes())
+            .expect("valid mdoc page");
+        let mut position = Position::default();
+        for block in &document.sections[1].blocks {
+            position.visit_block(block);
+        }
+        assert_eq!(position.ink, expected, "{line}");
+        assert_eq!(position.hits.len(), 1, "{line}");
+        if let Some(expected) = target {
+            assert_eq!(position.hits[0], expected, "{line}");
+        }
+    }
+}
