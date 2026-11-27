@@ -296,8 +296,9 @@ fn searches_contiguous_text_across_an_unsafe_style_boundary() {
 
 #[test]
 fn source_map_stripping_uses_codec_supplied_anchor_ranges() {
-    let source = "before<span id=\"node\"></span>after";
-    let lines = LineIndex::with_anchors(source, std::iter::once(6..23).collect());
+    const ANCHOR: &str = "<span id=\"node\"></span>";
+    let source = format!("before{ANCHOR}after");
+    let lines = LineIndex::with_anchors(&source, std::iter::once(6..6 + ANCHOR.len()).collect());
     assert_eq!(lines.presented_line(0).text, "beforeafter");
     assert_eq!(
         display_markdown_line("before<span id=\"node\">payload</span>after"),
