@@ -683,6 +683,19 @@ impl<'a> Scanner<'a> {
                         .len_utf8();
                 }
             }
+            // An authored slash outside a complete joined Pa can separate
+            // two Fl receipts even when both are adjacent. The slash itself
+            // is not part of the path argument.
+            if separator
+                && character == '/'
+                && self.view.independent_slash(self.cursor)
+                && self.view.native_option_starts(following)
+                && self.attached_path_ends(self.cursor)
+            {
+                self.finish_argument();
+                self.cursor = following;
+                return;
+            }
             // term_word() may change fonts within one native TEXT operand.
             // A complete parameter token followed by literal punctuation is
             // declaration syntax, without claiming that the font change was
@@ -777,6 +790,25 @@ impl<'a> Scanner<'a> {
             parameter,
         );
         self.cursor = next_offset;
+    }
+
+    fn attached_path_ends(&self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        return self.argument_start.as_ref().is_some_and(|argument| {
+            argument.attached_to_name
+                && self
+                    .view
+                    .operand(argument.bytes.start)
+                    .is_some_and(|operand| {
+                        operand.bytes == (argument.bytes.start..offset)
+                            && matches!(operand.role, NativeOperandRole::PathOperand(_))
+                    })
+        });
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = offset;
+            false
+        }
     }
 
     // A separator at the start of a distinct literal operand can end the

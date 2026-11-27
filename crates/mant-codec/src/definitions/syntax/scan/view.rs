@@ -268,9 +268,10 @@ impl<'a> HeadView<'a> {
         }
     }
 
-    /// Prove the first joined atom, not the complete argument list.
-    /// An independently appended or repainted glyph before the first
-    /// whitespace still invalidates the atom's owner.
+    /// Prove the joined value, not the complete argument list.
+    /// A typed Pa receipt can include authored whitespace; other value
+    /// kinds still use the first visible atom. A joined foreign glyph is
+    /// not part of the receipt in either case.
     pub(super) fn native_composite_value_atom(&self, span: Range<usize>) -> Option<&str> {
         if !self.native_composite_value_starts(span.start) {
             return None;
@@ -279,6 +280,13 @@ impl<'a> HeadView<'a> {
         let atom = &source[..source.find(char::is_whitespace).unwrap_or(source.len())];
         let operand = self.operand(span.start)?;
         let accepted = self.text[operand.bytes.clone()].trim_end();
+        #[cfg(feature = "roff")]
+        if matches!(operand.role, NativeOperandRole::PathOperand(_)) {
+            let rest = source.strip_prefix(accepted)?;
+            return (!accepted.is_empty()
+                && (rest.is_empty() || rest.starts_with(char::is_whitespace)))
+            .then_some(accepted);
+        }
         (!atom.is_empty() && atom == accepted).then_some(atom)
     }
 

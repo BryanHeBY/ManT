@@ -943,3 +943,69 @@ fn attached_value_rewind_requires_actual_ink_loss() {
         );
     }
 }
+
+#[test]
+fn a_quoted_attached_path_keeps_its_native_receipt_before_separate_arguments() {
+    // Pinned CVS gives quoted Pa one text child (mdoc_macro.c's in_line),
+    // and termp_under_pre styles that child's complete spelling.
+    for (head, form, names) in [
+        (
+            r#"Fl a Ar mode No / Fl v Ns Pa "foo/bar baz""#,
+            "-a mode / -vfoo/bar baz",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl v Ns Pa "foo/bar baz" No / Fl a Ar mode"#,
+            "-vfoo/bar baz / -a mode",
+            ["-v", "-a"],
+        ),
+        (
+            r#"Fl a Ar mode No / Fl v Ns Pa "foo/bar baz" Ar profile"#,
+            "-a mode / -vfoo/bar baz profile",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl v Ns Pa "foo/bar baz" Ar profile No / Fl a Ar mode"#,
+            "-vfoo/bar baz profile / -a mode",
+            ["-v", "-a"],
+        ),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &names, &["-vfoo/bar"]);
+    }
+
+    let head = r#"Fl a Ar mode No / Fl v Ns Pa "foo/bar baz" Ns No qux"#;
+    let form = "-a mode / -vfoo/bar bazqux";
+    assert_attached_display(head, form);
+    assert_eq!(
+        explain_attached_tail(head, form).counts.direct_entry.total,
+        0
+    );
+}
+
+#[test]
+fn an_independently_authored_slash_can_touch_a_complete_path() {
+    for (head, form, names) in [
+        (
+            "Fl v Ns Pa a/b Ns No / Ns Fl a Ar mode",
+            "-va/b/-a mode",
+            ["-v", "-a"],
+        ),
+        (
+            "Fl a Ar mode Ns No / Ns Fl v Ns Pa a/b",
+            "-a mode/-va/b",
+            ["-a", "-v"],
+        ),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &names, &["-va/b"]);
+    }
+
+    let head = "Fl v Ns Pa a Ns No /b Ns No / Ns Fl a Ar mode";
+    let form = "-va/b/-a mode";
+    assert_attached_display(head, form);
+    assert_eq!(
+        explain_attached_tail(head, form).counts.direct_entry.total,
+        0
+    );
+}
