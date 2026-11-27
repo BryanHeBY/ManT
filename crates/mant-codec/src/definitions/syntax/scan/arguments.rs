@@ -8,6 +8,48 @@ mod native_assignment;
 #[cfg(feature = "roff")]
 pub(super) use native_assignment::proves_native_assignment;
 
+#[cfg(feature = "roff")]
+pub(super) fn proves_slash_arm(view: &HeadView<'_>, argument: &Argument) -> bool {
+    use crate::definitions::NativeOperandRole as Role;
+    let range = &argument.bytes;
+    let assignment = argument.attached_to_name && view.text[range.clone()].starts_with('=');
+    view.operands_in(range.clone())
+        .all(|operand| match operand.role {
+            Role::IncompletePlaceholder | Role::ClippedValue | Role::ReferenceText(_) => false,
+            Role::Placeholder { .. } | Role::PathOperand(_) if !assignment => {
+                // CVS can style adjacent Ar and Pa alike, with Ns removing
+                // intervening spacing. The visual parameter run cannot give
+                // either source word the other word's ink. Explicit assignment
+                // grammar supplies its own RHS boundary checks.
+                let start = operand.bytes.start.max(range.start);
+                let end = operand.bytes.end.min(range.end);
+                let word = &view.text[start..end];
+                let first = start + word.len() - word.trim_start().len();
+                let last = start + word.trim_end().len();
+                if first >= last {
+                    return true;
+                }
+                let before = view.text[range.start..first].char_indices().next_back();
+                let after = view.text[last..range.end].chars().next();
+                before.is_none_or(|(offset, ch)| slash_arm_boundary(view, range.start + offset, ch))
+                    && after.is_none_or(|ch| slash_arm_boundary(view, last, ch))
+            }
+            _ => true,
+        })
+}
+
+#[cfg(feature = "roff")]
+fn slash_arm_boundary(view: &HeadView<'_>, offset: usize, ch: char) -> bool {
+    use crate::definitions::NativeOperandRole as Role;
+    ch.is_whitespace()
+        || view.operand(offset).is_some_and(|operand| {
+            matches!(
+                operand.role,
+                Role::EnclosureStart { .. } | Role::EnclosureEnd(_)
+            )
+        })
+}
+
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {
     let range = &argument.bytes;
     let mut literal = String::new();

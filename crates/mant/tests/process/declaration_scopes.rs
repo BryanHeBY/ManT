@@ -1204,3 +1204,74 @@ fn authored_slash_requires_complete_receipts_on_both_arms() {
         }
     }
 }
+
+#[test]
+fn slash_arms_require_one_receipt_for_each_native_parameter_word() {
+    // termp_under_pre styles either macro's own TEXT. Ns suppresses
+    // whitespace, not the authored Ar/Pa boundary in the CVS tree.
+    for (head, form, names) in [
+        ("Fl a Ns Li / Fl v Ns Pa a/b", "-a/ -va/b", ["-a", "-v"]),
+        ("Fl a Ns Li / Fl v Pa a/b", "-a/ -v a/b", ["-a", "-v"]),
+        ("Fl v Ns Pa a/b Ns Li / Fl a", "-va/b/ -a", ["-v", "-a"]),
+        ("Fl a Ns Li / Fl v Ar a/ Pa b", "-a/ -v a/ b", ["-a", "-v"]),
+        (
+            "Fl a Ns Li / Fl v Ns Pa a/b Ar more",
+            "-a/ -va/b more",
+            ["-a", "-v"],
+        ),
+        (
+            "Fl a Ns Li / Fl v Ns Li tls Ar mode",
+            "-a/ -vtls mode",
+            ["-a", "-v"],
+        ),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &names, &["-va", "-va/b"]);
+    }
+    for (head, form) in [
+        ("Fl a Ns Li / Fl v Ns Ar a/ Ns Pa b", "-a/ -va/b"),
+        ("Fl a Ns Li / Fl v Pa a Ns Pa /b", "-a/ -v a/b"),
+        ("Fl v Ns Ar a/ Ns Pa b Ns Li / Fl a", "-va/b/ -a"),
+    ] {
+        assert_attached_display(head, form);
+        for (query, hits) in [(form, 0), ("-a", 1), ("-v", 1), ("-va", 0), ("-va/b", 0)] {
+            assert_eq!(
+                explain_attached_tail(head, query).counts.direct_entry.total,
+                hits,
+                "{head}: {query}"
+            );
+        }
+    }
+}
+
+#[test]
+fn intact_slash_arm_is_the_only_exact_owner_of_a_split_lookalike() {
+    let intact = ".It Fl a Ns Li / Fl v Ns Pa a/b\n.Tg intact\nIntact body.\n";
+    let split = ".It Fl a Ns Li / Fl v Ns Ar a/ Ns Pa b\n.Tg split\nSplit body.\n";
+    for (first, second, owner) in [(split, intact, "2/e2"), (intact, split, "2/e1")] {
+        let source = format!("{HEADER}{first}{second}.El\n");
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "json",
+                "--compact",
+                "--explain=-a/ -va/b",
+            ],
+            &source,
+        );
+        assert!(output.status.success());
+        let reply: QueryExplanation = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(reply.counts.direct_entry.total, 1);
+        let evidence = reply
+            .evidence
+            .iter()
+            .find(|e| e.class == EvidenceClass::DirectEntry)
+            .unwrap();
+        assert_eq!(evidence.outline.path().to_string(), owner);
+        assert_eq!(evidence.entry.as_ref().unwrap().names, ["-a", "-v"]);
+    }
+}

@@ -852,17 +852,7 @@ impl<'a> Scanner<'a> {
             if self.slash_arms.binary_search(&index).is_err() {
                 return true;
             }
-            !self
-                .view
-                .operands_in(argument.bytes.clone())
-                .any(|operand| {
-                    matches!(
-                        operand.role,
-                        NativeOperandRole::IncompletePlaceholder
-                            | NativeOperandRole::ClippedValue
-                            | NativeOperandRole::ReferenceText(_)
-                    )
-                })
+            arguments::proves_slash_arm(self.view, argument)
                 && (!argument.attached_to_name
                     || !self.view.native_argument_starts(argument.bytes.start)
                     || self.names[index]
