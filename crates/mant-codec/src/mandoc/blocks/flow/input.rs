@@ -431,6 +431,31 @@ impl BlockState {
         self.pre_break_request_in_source_mode(self.formatter.no_fill);
     }
 
+    /// Keep a completed, invisible no-fill BODY row when its continued
+    /// source word is followed by an explicit break. NODE_LINE already
+    /// closed HEAD; a distinct completed literal receipt must survive the
+    /// initial-code-row reading exception (mdoc_term.c:314-317, term.c:475-481).
+    pub(in crate::mandoc::blocks) fn preserve_completed_continued_body_row(&mut self) {
+        if !self.formatter.definition_body_follows_head_source_close()
+            || !self.formatter.execution.source_row_continues()
+            || self.row_owner(true) != RowOwner::Literal
+        {
+            return;
+        }
+        let nodes = self.literal.output_nodes_mut();
+        if !mant_ir::has_printable_character(nodes)
+            && crate::mandoc::inline::trailing_completed_row_origins(nodes)
+                == [CompletedRowOrigin::LiteralText]
+        {
+            // The literal drain retires the empty projection and re-appends
+            // the completed row; its zero-width proof is retained at the start.
+            nodes.insert(
+                0,
+                mant_ir::Inline::anchor(crate::mandoc::literal_reading::INDEPENDENT_BODY_ROW),
+            );
+        }
+    }
+
     /// fi/nf have selected the next output mode in the block driver, but
     /// their `pre_br` still consumes the request node's original source owner.
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {

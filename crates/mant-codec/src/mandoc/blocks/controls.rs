@@ -41,6 +41,9 @@ impl super::BlockLowerer<'_, '_> {
         {
             return false;
         }
+        if !space {
+            self.state.preserve_completed_continued_body_row();
+        }
         let requested = vertical_space_delta(node);
         if requested > 0 {
             // roff_term_pre_sp() first calls term_vspace: consume the live

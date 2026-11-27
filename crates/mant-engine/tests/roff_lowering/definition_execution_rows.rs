@@ -11,7 +11,9 @@ fn description_rows(body: &str) -> Vec<String> {
     let json =
         serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).expect("serialize query");
     assert!(
-        !json.contains("\\u0000mant:field-word:") && !json.contains("paint-order:"),
+        !json.contains("\\u0000mant:field-word:")
+            && !json.contains("paint-order:")
+            && !json.contains("independent-body-row"),
         "private execution owner leaked into JSON"
     );
     let decoded: mant_protocol::QueryBundle =
@@ -531,5 +533,36 @@ fn compact_inset_no_fill_does_not_publish_a_body_with_only_generated_padding() {
     assert_eq!(
         description_rows("L\n.nf\n.Bl -inset -compact\n.It No A\n.El\n.fi\nR\n"),
         ["L", "A", "R"],
+    );
+}
+
+#[test]
+fn explicit_break_keeps_a_completed_continued_inset_body_row() {
+    // Each exact input ran against pinned CVS mandoc. NODE_LINE closes
+    // HEAD before the continued BODY word. The .br's completed empty
+    // BODY row is not the initial code row reading normally omits.
+    for (head, body, expected) in [
+        ("No A", r#".No "\&\c""#, &["L", "A", "", "Y", "R"][..]),
+        ("No A", r#".No "\&""#, &["L", "A", "", "Y", "R"][..]),
+        ("No A", r#".No "X\c""#, &["L", "A", "X", "Y", "R"][..]),
+        (r#"No "A\&\c""#, "", &["L", "A", "Y", "R"][..]),
+        ("No A", "", &["L", "A", "Y", "R"][..]),
+    ] {
+        let body = if body.is_empty() {
+            String::new()
+        } else {
+            format!("{body}\n")
+        };
+        assert_eq!(
+            description_rows(&format!(
+                "L\n.nf\n.Bl -inset -compact\n.It {head}\n{body}.br\nY\n.El\n.fi\nR\n"
+            )),
+            expected,
+            "case {head} / {body}"
+        );
+    }
+    assert_eq!(
+        description_rows("L\n.Bl -inset -compact\n.It No A\n.No \"\\&\\c\"\n.br\nY\n.El\nR\n"),
+        ["L", "A", "Y", "R"]
     );
 }
