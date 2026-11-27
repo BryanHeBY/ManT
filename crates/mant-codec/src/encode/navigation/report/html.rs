@@ -1,9 +1,11 @@
 //! Map literal source markers and Markdown links to the live report HTML tree.
 use crate::encode::anchors::{AnchorMarker, marker_at};
-use dom_query::Document;
 use html5ever::{ParseOpts, QualName, local_name, ns, parse_fragment, tendril::TendrilSink};
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::{collections::HashSet, fmt::Write as _};
+
+mod tree;
+use tree::{Node, ReportTree};
 
 const PREFIX: &str = "<span id=\"";
 const SUFFIX: &str = "\"></span>";
@@ -28,9 +30,9 @@ pub(super) fn report_navigation(markdown: &str) -> (Vec<AnchorMarker<'_>>, HashS
     (markers, links)
 }
 
-fn parse_report(html: String) -> Document {
+fn parse_report(html: String) -> Vec<Node> {
     parse_fragment(
-        Document::fragment_sink(),
+        ReportTree::default(),
         ParseOpts::default(),
         QualName::new(None, ns!(html), local_name!("div")),
         Vec::new(),
@@ -69,14 +71,12 @@ fn probe_attribute(markdown: &str) -> String {
             Parser::new_ext(markdown, Options::ENABLE_MATH),
         );
         let document = parse_report(plain_html);
-        let mut stack = vec![document.root()];
-        while let Some(node) = stack.pop() {
+        for node in ReportTree::elements(&document) {
             if node.has_name("a")
                 && let Some(href) = node.attr("href")
             {
-                used.extend(observed_probe_ids(&href));
+                used.extend(observed_probe_ids(href));
             }
-            stack.extend(node.children_it(false));
         }
     }
     let id = (0..=used.len())
@@ -180,27 +180,26 @@ fn mark_raw<'a>(
 }
 
 fn observe_document(
-    document: &Document,
+    document: &[Node],
     probe: &str,
     anchors: &[AnchorMarker<'_>],
     links: &[String],
 ) -> (Vec<bool>, HashSet<String>, HashSet<String>) {
-    let mut stack = vec![document.root()];
     let mut live = vec![false; anchors.len()];
     let mut live_links = HashSet::new();
     let mut host_ids = HashSet::new();
     let link_prefix = format!("#{probe}-link-");
-    while let Some(node) = stack.pop() {
+    for node in ReportTree::elements(document) {
         if let Some(id) = node.attr("id") {
             let index = node
                 .attr(probe)
                 .and_then(|attr| attr.parse::<usize>().ok())
                 .filter(|&index| {
-                    node.has_name("span") && anchors.get(index).is_some_and(|a| a.id == id.as_ref())
+                    node.has_name("span") && anchors.get(index).is_some_and(|a| a.id == id)
                 });
             if let Some(index) = index {
                 live[index] = true;
-            } else if scoped_id(&id) {
+            } else if scoped_id(id) {
                 // Host IDs are not ours to rewrite, and ambiguous links
                 // must not take the reader to an unrelated element.
                 host_ids.insert(id.to_string());
@@ -214,8 +213,26 @@ fn observe_document(
         {
             live_links.insert(link.clone());
         }
-        // Template fragments are not reachable by document fragment links.
-        stack.extend(node.children_it(false));
     }
     (live, live_links, host_ids)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fragment_observes_fostered_and_reparented_elements_but_not_template_contents() {
+        let document = parse_report(
+            "<table><span id='fostered'></span><tr><td id='cell'>x</table>             <b><p><span id='reparented'></span></b></p>             <template><span id='inert'></span></template>             <math><annotation-xml encoding='text/html'><span id='math-child'></span></annotation-xml></math>"
+                .to_owned(),
+        );
+        let ids: HashSet<_> = ReportTree::elements(&document)
+            .filter_map(|node| node.attr("id"))
+            .collect();
+        assert_eq!(
+            ids,
+            HashSet::from(["fostered", "cell", "reparented", "math-child"])
+        );
+    }
 }

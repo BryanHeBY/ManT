@@ -16,8 +16,8 @@
     <p>This file is generated from the locked dependency graph by cargo-about. It lists the license texts and Rust packages included in ManT native distributions.</p>
     <h2>Licenses</h2>
     <ul>
-      <li><a href="#Apache-2.0">Apache License 2.0</a> (163 packages)</li>
-      <li><a href="#MIT">MIT License</a> (59 packages)</li>
+      <li><a href="#Apache-2.0">Apache License 2.0</a> (171 packages)</li>
+      <li><a href="#MIT">MIT License</a> (66 packages)</li>
       <li><a href="#ISC">ISC License</a> (34 packages)</li>
       <li><a href="#BSD-3-Clause">BSD 3-Clause &quot;New&quot; or &quot;Revised&quot; License</a> (7 packages)</li>
       <li><a href="#BSD-2-Clause">BSD 2-Clause &quot;Simplified&quot; License</a> (2 packages)</li>
@@ -30,6 +30,7 @@
       <h2 id="Apache-2.0">Apache License 2.0</h2>
       <p>Used by:</p>
       <ul class="used-by">
+        <li><a href="https://github.com/jedisct1/rust-siphash">siphasher 1.0.4</a></li>
         <li><a href="https://github.com/nvzqz/static-assertions-rs">static_assertions 1.1.0</a></li>
         <li><a href="https://github.com/Lokathor/tinyvec">tinyvec 1.13.3</a></li>
         <li><a href="https://github.com/algesten/ureq-proto">ureq-proto 0.6.5</a></li>
@@ -3103,6 +3104,7 @@ limitations under the License.
         <li><a href="https://github.com/rayon-rs/either">either 1.19.0</a></li>
         <li><a href="https://github.com/indexmap-rs/equivalent">equivalent 1.0.3</a></li>
         <li><a href="https://github.com/lambda-fairy/rust-errno">errno 0.3.14</a></li>
+        <li><a href="https://github.com/smol-rs/fastrand">fastrand 2.5.0</a></li>
         <li><a href="https://github.com/alexcrichton/filetime">filetime 0.2.29</a></li>
         <li><a href="https://github.com/rust-lang/cc-rs">find-msvc-tools 0.1.15</a></li>
         <li><a href="https://github.com/petgraph/fixedbitset">fixedbitset 0.5.7</a></li>
@@ -3111,6 +3113,7 @@ limitations under the License.
         <li><a href="https://github.com/rust-lang/hashbrown">hashbrown 0.15.5</a></li>
         <li><a href="https://github.com/rust-lang/hashbrown">hashbrown 0.17.1</a></li>
         <li><a href="https://github.com/withoutboats/heck">heck 0.5.0</a></li>
+        <li><a href="https://github.com/servo/html5ever">html5ever 0.40.1</a></li>
         <li><a href="https://github.com/seanmonstar/httparse">httparse 1.10.1</a></li>
         <li><a href="https://github.com/indexmap-rs/indexmap">indexmap 2.14.2</a></li>
         <li><a href="https://github.com/rust-itertools/itertools">itertools 0.14.0</a></li>
@@ -3118,6 +3121,7 @@ limitations under the License.
         <li><a href="https://github.com/sunfishcode/linux-raw-sys">linux-raw-sys 0.12.1</a></li>
         <li><a href="https://github.com/Amanieu/parking_lot">lock_api 0.4.14</a></li>
         <li><a href="https://github.com/rust-lang/log">log 0.4.34</a></li>
+        <li><a href="https://github.com/servo/html5ever">markup5ever 0.40.0</a></li>
         <li><a href="https://github.com/rust-num/num-traits">num-traits 0.2.19</a></li>
         <li><a href="https://github.com/matklad/once_cell">once_cell 1.21.4</a></li>
         <li><a href="https://github.com/Amanieu/parking_lot">parking_lot 0.12.5</a></li>
@@ -3139,13 +3143,17 @@ limitations under the License.
         <li><a href="https://github.com/vorner/signal-hook">signal-hook 0.4.5</a></li>
         <li><a href="https://github.com/servo/rust-smallvec">smallvec 1.16.4</a></li>
         <li><a href="https://github.com/rust-lang/socket2">socket2 0.6.5</a></li>
+        <li><a href="https://github.com/servo/string-cache">string_cache 0.11.0</a></li>
+        <li><a href="https://github.com/servo/string-cache">string_cache_codegen 0.11.2</a></li>
         <li><a href="https://github.com/composefs/tar-rs">tar 0.4.46</a></li>
+        <li><a href="https://github.com/servo/html5ever">tendril 0.5.1</a></li>
         <li><a href="https://github.com/seanmonstar/unicase">unicase 2.10.0</a></li>
         <li><a href="https://github.com/unicode-rs/unicode-normalization">unicode-normalization 0.1.26</a></li>
         <li><a href="https://github.com/unicode-rs/unicode-segmentation">unicode-segmentation 1.13.3</a></li>
         <li><a href="https://github.com/Aetf/unicode-truncate">unicode-truncate 2.0.1</a></li>
         <li><a href="https://github.com/unicode-rs/unicode-width">unicode-width 0.2.2</a></li>
         <li><a href="https://github.com/uuid-rs/uuid">uuid 1.26.1</a></li>
+        <li><a href="https://github.com/servo/html5ever">web_atoms 0.3.0</a></li>
         <li><a href="https://github.com/YaLTeR/wl-clipboard-rs">wl-clipboard-rs 0.9.5</a></li>
       </ul>
       <pre>                              Apache License
@@ -6321,6 +6329,39 @@ THE SOFTWARE.
       <h2 id="MIT">MIT License</h2>
       <p>Used by:</p>
       <ul class="used-by">
+        <li><a href="https://github.com/mbrubeck/rust-debug-unreachable">new_debug_unreachable 1.0.6</a></li>
+      </ul>
+      <pre>Copyright (c) 2015 Jonathan Reem
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the &quot;Software&quot;), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+</pre>
+    </section>
+    <section>
+      <h2 id="MIT">MIT License</h2>
+      <p>Used by:</p>
+      <ul class="used-by">
         <li><a href="https://github.com/tokio-rs/bytes">bytes 1.12.1</a></li>
       </ul>
       <pre>Copyright (c) 2018 Carl Lerche
@@ -6525,6 +6566,35 @@ SOFTWARE.
       <pre>MIT License
 
 Copyright (c) 2017 Aaron Hancock
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the &quot;Software&quot;), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</pre>
+    </section>
+    <section>
+      <h2 id="MIT">MIT License</h2>
+      <p>Used by:</p>
+      <ul class="used-by">
+        <li><a href="https://github.com/emilio/precomputed-hash">precomputed-hash 0.1.1</a></li>
+      </ul>
+      <pre>MIT License
+
+Copyright (c) 2017 Emilio Cobos Álvarez
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the &quot;Software&quot;), to deal
@@ -6947,6 +7017,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
       <h2 id="MIT">MIT License</h2>
       <p>Used by:</p>
       <ul class="used-by">
+        <li><a href="https://github.com/raphlinus/pulldown-cmark">pulldown-cmark-escape 0.11.0</a></li>
         <li><a href="https://github.com/raphlinus/pulldown-cmark">pulldown-cmark 0.13.6</a></li>
       </ul>
       <pre>The MIT License
@@ -7000,6 +7071,37 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+</pre>
+    </section>
+    <section>
+      <h2 id="MIT">MIT License</h2>
+      <p>Used by:</p>
+      <ul class="used-by">
+        <li><a href="https://github.com/rust-phf/rust-phf">phf 0.14.0</a></li>
+        <li><a href="https://github.com/rust-phf/rust-phf">phf_codegen 0.14.0</a></li>
+        <li><a href="https://github.com/rust-phf/rust-phf">phf_generator 0.14.0</a></li>
+        <li><a href="https://github.com/rust-phf/rust-phf">phf_shared 0.14.0</a></li>
+      </ul>
+      <pre>The MIT License (MIT)
+
+Copyright (c) 2014-2022 Steven Fackler, Yuki Okushi
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the &quot;Software&quot;), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED &quot;AS IS&quot;, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 </pre>
     </section>
     <section>
