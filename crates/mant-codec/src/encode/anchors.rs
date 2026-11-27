@@ -105,7 +105,7 @@ impl HtmlAnchorScanner {
     }
 }
 
-fn marker_at<'a>(
+pub(super) fn marker_at<'a>(
     rest: &'a str,
     start: usize,
     prefix: &str,

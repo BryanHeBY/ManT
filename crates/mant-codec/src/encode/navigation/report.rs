@@ -1,7 +1,7 @@
 //! Accepted local destinations in a composed Markdown report.
-use crate::encode::anchors::HtmlAnchorScanner;
-use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::{collections::HashSet, ops::Range};
+
+mod html;
 
 /// Prepare and encode one bounded page of source-qualified Markdown fragments.
 ///
@@ -10,6 +10,8 @@ use std::{collections::HashSet, ops::Range};
 /// the IDs of actual anchors when missing link destinations require a new
 /// pass. This accounts for output decisions such as fenced carriers, inline
 /// fallback and repeated supports without indexing omitted source content.
+/// The generated ID namespace is reserved for scoped fragments; host HTML
+/// using the same ID does not authorize an ambiguous local link.
 #[must_use]
 pub fn render_scoped_report_page(render: impl Fn(Option<&HashSet<String>>) -> String) -> String {
     let page = render(None);
@@ -42,23 +44,10 @@ impl PageNavigation {
     fn scan(markdown: &str) -> Self {
         let mut anchors = HashSet::new();
         let mut duplicates = Vec::new();
-        let mut links = HashSet::new();
-        let mut scanner = HtmlAnchorScanner::default();
-        for (event, range) in Parser::new_ext(markdown, Options::ENABLE_MATH).into_offset_iter() {
-            match event {
-                Event::Start(Tag::Link { dest_url, .. }) => {
-                    if let Some(id) = dest_url.strip_prefix('#') {
-                        links.insert(id.to_owned());
-                    }
-                }
-                Event::Html(_) | Event::InlineHtml(_) => {
-                    scanner.scan(markdown, range, false, |anchor| {
-                        if !anchors.insert(anchor.id.to_owned()) {
-                            duplicates.push(anchor.range);
-                        }
-                    });
-                }
-                _ => {}
+        let (markers, links) = html::report_navigation(markdown);
+        for marker in markers {
+            if !anchors.insert(marker.id.to_owned()) {
+                duplicates.push(marker.range);
             }
         }
         Self {
@@ -90,6 +79,7 @@ impl PageNavigation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pulldown_cmark::{Event, Parser};
 
     #[test]
     fn accepted_markers_deduplicate_raw_html_and_keep_literal_lookalikes() {
@@ -136,6 +126,73 @@ mod tests {
             retained,
             format!("{hidden}\n\n> <br />\n> {marker}<span></span>\n\n[jump](#mant-report-0-61)")
         );
+    }
+
+    #[test]
+    fn report_navigation_observes_html_token_boundaries_and_foreign_elements() {
+        const ID: &str = "mant-report-0-61";
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        for leading in [
+            "<div>\n<textarea>note\n</textarea\n>\n</div>".to_owned(),
+            "<div>\n<textarea>note\n</textarea data-ignored=\"a>\n b\"\n>\n</div>".to_owned(),
+            "<svg><title/></svg>".to_owned(),
+            "<svg><title></title></svg>".to_owned(),
+            format!("<svg><![CDATA[{MARKER}]]></svg>"),
+            format!("<template><div><template>{MARKER}</template></div></template>"),
+            format!("<div>\n<!--\n\n`-->`\n\n<div>\n{MARKER}\n-->\n</div>"),
+            format!("<svg><foreignObject><textarea>{MARKER}</textarea></foreignObject></svg>"),
+        ] {
+            let markdown = format!("{leading}\n\n{MARKER}{MARKER}\n\n[jump](#{ID})");
+            let navigation = PageNavigation::scan(&markdown);
+            assert!(navigation.complete, "{leading}");
+            assert_eq!(
+                navigation.anchors,
+                HashSet::from([ID.to_owned()]),
+                "{leading}"
+            );
+            assert_eq!(navigation.duplicates.len(), 1, "{leading}");
+            let last_marker = markdown.rfind(MARKER).unwrap();
+            assert_eq!(
+                navigation.duplicates[0],
+                last_marker..last_marker + MARKER.len()
+            );
+            let rendered = render_scoped_report_page(|anchors| {
+                assert!(anchors.is_none(), "{leading}");
+                markdown.clone()
+            });
+            assert_eq!(
+                rendered,
+                format!("{leading}\n\n{MARKER}<span></span>\n\n[jump](#{ID})")
+            );
+        }
+    }
+
+    #[test]
+    fn inert_host_links_do_not_remove_a_reachable_scoped_jump() {
+        let host = "<template>\n\n[decoy](#missing)\n\n</template>";
+        let marker = r#"<span id="mant-report-0-61"></span>"#;
+        let markdown = format!("{host}\n\n{marker}\n\n[jump](#mant-report-0-61)");
+        let rendered = render_scoped_report_page(|anchors| {
+            assert!(anchors.is_none());
+            markdown.clone()
+        });
+        assert_eq!(rendered, markdown);
+    }
+
+    #[test]
+    fn a_conflicting_host_id_is_not_rewritten_or_used_as_the_scoped_target() {
+        const ID: &str = "mant-report-0-61";
+        let host = format!("<div id='{ID}'>Host</div>");
+        let marker = r#"<span id="mant-report-0-61"></span>"#;
+        let markdown = render_scoped_report_page(|anchors| {
+            let jump = if anchors.is_none_or(|ids| ids.contains(ID)) {
+                "[jump](#mant-report-0-61)"
+            } else {
+                "jump"
+            };
+            format!("{host}\n\n{marker}\n\n{jump}")
+        });
+        assert_eq!(markdown, format!("{host}\n\n{marker}\n\njump"));
     }
 
     #[test]
