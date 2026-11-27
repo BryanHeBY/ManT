@@ -74,8 +74,8 @@ pub(super) fn enter_definition_body(
     body_origin: crate::mandoc::layout::SourceIndent,
     macro_set: libmandoc_rs::MacroSet,
     terms: &[Vec<Inline>],
-    head_open: bool,
-) {
+    (head_open, completed_head_rows, carried_head_rows): (bool, u16, u16),
+) -> bool {
     let man_node = macro_set == libmandoc_rs::MacroSet::Man;
     if !man_node
         && matches!(flow.head, DefinitionHeadFlow::Detached { .. })
@@ -112,6 +112,15 @@ pub(super) fn enter_definition_body(
             }
             && head_open,
     );
+    // A real HEAD endline can cause the generated inset word to print on
+    // a separate row even when BODY is childless (term.c:475-497).
+    flow.head.is_compact_inset()
+        && node.flags.no_fill
+        && super::first_part_children(node, NodeKind::Body).is_empty()
+        && head_open
+        && completed_head_rows == 0
+        && carried_head_rows == 0
+        && formatter.definition_head_row_pending()
 }
 
 pub(super) fn close_pending_definition_prefix(

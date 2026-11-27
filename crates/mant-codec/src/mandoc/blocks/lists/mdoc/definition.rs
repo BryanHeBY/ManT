@@ -144,17 +144,18 @@ fn lower_mdoc_definition_item(
             spacing_enabled: formatter.spacing_enabled(),
             paragraph_predecessor: true,
             shares_pending_term_row,
-            compact_inset: list.compact && style == Some(DefinitionListStyle::Inset),
             head: match style {
                 Some(DefinitionListStyle::Inset) => DefinitionHeadFlow::RunIn {
                     cells: u8::from(!head.is_empty()),
                     style: RunInHeadStyle::Plain,
+                    compact: list.compact,
                     // mdoc_term.c:795-797: inset sets no pad/break flags.
                     flags: crate::mandoc::inline::FieldFlags::inset(),
                 },
                 Some(DefinitionListStyle::Diagnostic) => DefinitionHeadFlow::RunIn {
                     cells: 2,
                     style: RunInHeadStyle::Strong,
+                    compact: false,
                     // mdoc_term.c:827-831: NOBREAK|BRIND, no HANG.
                     flags: crate::mandoc::inline::FieldFlags::diag(),
                 },

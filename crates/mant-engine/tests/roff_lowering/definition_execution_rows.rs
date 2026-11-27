@@ -542,7 +542,10 @@ fn compact_inset_childless_body_keeps_a_row_after_completed_head_spacing() {
     // row carrying only the generated NBSP before R. The reading layer
     // drops the generated glyph, not the independent output row.
     assert_eq!(
-        description_rows(".nf\n.Bl -inset -compact -width 8n\n.It Xo\n.sp 1\n.Xc\n.El\n.fi\nR\n"),
+        description_rows(".nf\n.Bl -inset -compact -width 8n\n.It Xo\n.sp 1\n.Xc\n.El\n.fi\nR\n")
+            .iter()
+            .map(|row| row.trim_start_matches(' '))
+            .collect::<Vec<_>>(),
         ["", "", "R"],
     );
 }

@@ -14,7 +14,6 @@ pub(super) struct DefinitionFlow {
     pub(super) spacing_enabled: bool,
     pub(super) paragraph_predecessor: bool,
     pub(super) shares_pending_term_row: bool,
-    pub(super) compact_inset: bool,
     pub(super) head: DefinitionHeadFlow,
 }
 
@@ -30,6 +29,7 @@ pub(super) enum DefinitionHeadFlow {
     RunIn {
         cells: u8,
         style: RunInHeadStyle,
+        compact: bool,
         flags: crate::mandoc::inline::FieldFlags,
     },
 }
@@ -102,6 +102,17 @@ impl DefinitionHeadFlow {
         }
     }
 
+    fn is_compact_inset(self) -> bool {
+        matches!(
+            self,
+            Self::RunIn {
+                style: RunInHeadStyle::Plain,
+                compact: true,
+                ..
+            }
+        )
+    }
+
     fn strong_scope(self) -> bool {
         matches!(
             self,
@@ -129,6 +140,22 @@ use layout::{
     apply_executed_definition_body_layout, apply_retired_head_gap, carry_completed_head_rows,
     normalize_executed_definition_head, transfer_completed_empty_head_rows,
 };
+
+fn apply_executed_head_geometry(
+    geometry: &mut crate::mandoc::layout::DefinitionGeometry,
+    finished: &crate::mandoc::formatter::FinishedInlineLine,
+    man_node: bool,
+) {
+    if finished.definition_field_exited && !man_node {
+        // man tag width fitting remains responsive IR geometry. The actual
+        // HEAD post's device close controls formatter registers below, but
+        // a width-only overrun does not author a hard layout boundary.
+        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
+    }
+    if finished.definition_body_gap_consumed {
+        geometry.gap = 0;
+    }
+}
 
 // Keep the native HEAD/BODY checkpoint decisions in source execution order.
 pub(super) fn definition_item(
@@ -162,15 +189,7 @@ pub(super) fn definition_item(
     if man_node {
         handoff_man_definition_head(formatter);
     }
-    if finished.definition_field_exited && !man_node {
-        // man tag width fitting remains responsive IR geometry. The actual
-        // HEAD post's device close controls formatter registers below, but
-        // a width-only overrun does not author a hard layout boundary.
-        geometry.placement = crate::mandoc::layout::TermPlacement::Stacked;
-    }
-    if finished.definition_body_gap_consumed {
-        geometry.gap = 0;
-    }
+    apply_executed_head_geometry(&mut geometry, &finished, man_node);
     let (mut terms, closed_head_row) = normalize_executed_definition_head(
         finished.output,
         &finished.definition_term_breaks,
@@ -180,23 +199,19 @@ pub(super) fn definition_item(
     );
     let empty_head_rows = transfer_completed_empty_head_rows(&mut terms, completed_head_rows);
     let body_origin = geometry.body_origin(context, node, indent_columns);
-    enter_definition_body(
+    let omits_childless_body_padding = enter_definition_body(
         node,
         formatter,
         flow,
         body_origin,
         context.macro_set,
         &terms,
-        !closed_head_row && !finished.definition_field_exited,
+        (
+            !closed_head_row && !finished.definition_field_exited,
+            completed_head_rows,
+            carried_head_rows,
+        ),
     );
-    let omits_childless_body_padding = flow.compact_inset
-        && node.flags.no_fill
-        && body.is_empty()
-        && !closed_head_row
-        && !finished.definition_field_exited
-        && completed_head_rows == 0
-        && carried_head_rows == 0
-        && formatter.definition_head_row_pending();
     let deferred_head_projection = run_in_execution
         .as_ref()
         .and_then(|run_in| run_in.state.deferred_head_projection())
