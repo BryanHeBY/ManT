@@ -88,7 +88,10 @@ fn append_terminal_link_suffix(
         presentation::Part::Colon,
         address,
         Some(presentation::Part::Description),
-        |builder| builder.append_text(":"),
+        // term_word(":") can write into the live prefix left by HORIZ,
+        // before old glyphs already projected during the description. Use
+        // native word replay, not a literal append after the occupied tail.
+        |builder| super::word_input::append_normalized_word(builder, ":"),
     );
     presentation::append_owned_part(
         builder,

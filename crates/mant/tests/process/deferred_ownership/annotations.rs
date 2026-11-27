@@ -181,3 +181,134 @@ fn original_born_members_reach_both_actual_terminal_widths() {
     assert_eq!(selected.len(), 15);
     super::check_pty(&selected);
 }
+
+const LINK_COLON_URI: &str = "https://z.test";
+// Earlier source, movement, output writer, inset context, native row, label.
+type LinkColonCase<'a> = (&'a str, &'a str, &'a str, bool, &'a str, Option<&'a str>);
+const LINK_COLON_CASES: [LinkColonCase<'_>; 9] = [
+    (
+        "Y",
+        "\\h'|0n'R",
+        ".Lk https://z.test Z",
+        false,
+        "REZ:Yhttps://z.test END",
+        Some("Z"),
+    ),
+    (
+        "Z",
+        "\\h'|0n'R",
+        ".Lk https://z.test Z",
+        false,
+        "REZ:Zhttps://z.test END",
+        Some("Z"),
+    ),
+    (
+        ".Sy Y",
+        "\\h'|0n'R",
+        ".Lk https://z.test Z",
+        false,
+        "REZ:Yhttps://z.test END",
+        Some("Z"),
+    ),
+    (
+        "Y",
+        "\\h'|0n'R",
+        ".Lk https://z.test ZX",
+        false,
+        "REZX: https://z.test END",
+        Some("ZX"),
+    ),
+    (
+        "Y",
+        "\\h'|0n'R",
+        ".Lk https://z.test Z",
+        true,
+        "REZ:Yhttps://z.test END",
+        Some("Z"),
+    ),
+    (
+        "Y",
+        "\\h'-7n'R",
+        ".Lk https://z.test Z",
+        false,
+        "HERDZ: https://z.test END",
+        Some("Z"),
+    ),
+    (
+        "Y",
+        "R",
+        ".Lk https://z.test Z",
+        false,
+        "HEAD Y R Z: https://z.test END",
+        Some("Z"),
+    ),
+    (
+        "Y",
+        "\\h'|0n'R",
+        ".Lk https://z.test",
+        false,
+        "REhttps://z.test END",
+        Some(LINK_COLON_URI),
+    ),
+    (
+        "Y",
+        "\\h'|0n'R",
+        ".No Z : https://z.test",
+        false,
+        "REZ:https://z.test END",
+        None,
+    ),
+];
+
+#[test]
+fn generated_link_colon_writes_through_the_live_cursor_without_owning_old_ink() {
+    // CVS mdoc_term.c::termp_lk_pre() executes the label, an unspaced
+    // term_word(":"), then the address. term.c::bufferc() advances col
+    // through the existing lastcol, rather than appending at lastcol.
+    // The pinned ASCII and UTF-8 devices agree on these exact body rows.
+    const HEAD: &str = ".Dd November 27, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd annotations\n.Sh DESCRIPTION\n";
+    for (previous, motion, link, inset, expected, label) in LINK_COLON_CASES {
+        let (open, close) = if inset {
+            (".Bl -inset\n.It\n", ".El\n")
+        } else {
+            ("", "")
+        };
+        let source =
+            format!("{HEAD}{open}.No HEAD\n{previous}\n.No \"{motion}\"\n{link}\nEND\n{close}");
+        let case = serde_json::json!({ "id": &source, "source": &source });
+        let plain = String::from_utf8(run(&case, "text", "never").stdout).unwrap();
+        let (_, body) = plain.split_once("DESCRIPTION\n").unwrap();
+        assert_eq!(body.trim(), expected, "{source}");
+
+        let bundle: mant_protocol::QueryBundle =
+            serde_json::from_slice(&run(&case, "json", "never").stdout).unwrap();
+        let content: mant_ir::ResolvedContent = bundle.into();
+        let mut links = Links::default();
+        links.visit_document(content.document.as_ref().unwrap());
+        let expected_link = label.map(|label| {
+            (
+                mant_ir::LinkTarget::External {
+                    uri: LINK_COLON_URI.into(),
+                },
+                label.to_owned(),
+            )
+        });
+        assert_eq!(
+            links.0,
+            expected_link.into_iter().collect::<Vec<_>>(),
+            "{source}"
+        );
+
+        let markdown = String::from_utf8(run(&case, "markdown", "never").stdout).unwrap();
+        if let Some(label) = label.filter(|label| *label != LINK_COLON_URI) {
+            assert!(
+                markdown.contains(&format!("[*{label}*]({LINK_COLON_URI})\\:")),
+                "{source}\n{markdown}"
+            );
+            assert_eq!(markdown.matches(&format!("]({LINK_COLON_URI})")).count(), 1);
+        }
+        if previous == ".Sy Y" {
+            assert!(markdown.contains(r"\:**Y**https"), "{markdown}");
+        }
+    }
+}

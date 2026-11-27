@@ -386,3 +386,36 @@ mod annotation_ownership;
 mod annotation_publication;
 #[path = "../../mant-engine/tests/support/annotation_publication.rs"]
 pub mod publication_fixture;
+
+#[test]
+fn generated_link_colon_keeps_old_ink_outside_the_actual_click_area() {
+    // The pinned CVS termp_lk_pre() output has the generated colon before
+    // the old glyph, and mdoc_lk_pre() gives the outer URI only to label Z.
+    let source = ".Dd November 27, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd annotations\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|0n'R\"\n.Lk https://z.test Z\nEND\n";
+    let visible = "REZ:Yhttps://z.test";
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    for width in [28, 40, 78] {
+        let mut app = App::new(&content);
+        let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let positions = wrapped_positions(terminal.backend().buffer(), visible);
+        let [cells] = positions.as_slice() else {
+            panic!("{width}: {positions:?}\n{}", terminal.backend());
+        };
+        for (offset, &(column, row)) in cells.iter().enumerate() {
+            reader_actions::click(&mut app, column, row);
+            assert_eq!(
+                reader_actions::opened_targets(&mut app),
+                if offset == 2 {
+                    vec!["https://z.test"]
+                } else {
+                    vec![]
+                },
+                "actual width {width}, body column {offset}",
+            );
+        }
+        check_copy(&mut app, cells, visible, "generated link colon");
+    }
+}

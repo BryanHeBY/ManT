@@ -18,8 +18,9 @@ pub(super) fn append_text_node(builder: &mut InlineBuilder, node: &Node) {
     append_roff_word(builder, source, WordSource::Text(node));
 }
 
-/// Es stores normalized operand spelling on En. Execute those bytes now,
-/// at En's current source/owner, without re-entering the Es definition node.
+/// Execute normalized spelling as a native word at the current owner, with
+/// live cursor replay but without entering a source node. En uses this for
+/// stored Es operands; Lk uses it for its generated colon.
 pub(in crate::mandoc) fn append_normalized_word(builder: &mut InlineBuilder, source: &str) {
     append_roff_word(builder, source, WordSource::NormalizedOperand);
 }
