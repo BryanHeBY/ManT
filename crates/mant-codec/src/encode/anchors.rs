@@ -22,7 +22,7 @@ pub(crate) fn anchor_markers(markdown: &str) -> Vec<AnchorMarker<'_>> {
     markers
 }
 
-/// CommonMark only identifies HTML ranges, including comments, raw-text
+/// `CommonMark` only identifies HTML ranges, including comments, raw-text
 /// elements and complete tags with quoted attributes. Require the exact
 /// emitted anchor spelling at a tag boundary, not a substring of that range.
 /// An HTML block may split over events. The raw-text context survives
