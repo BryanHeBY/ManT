@@ -174,6 +174,7 @@ enum FormEvidence {
     #[default]
     Proved,
     AttachedPath,
+    AttachedValue,
     Unproved,
 }
 
@@ -187,6 +188,12 @@ impl FormEvidence {
     fn attach_path(&mut self) {
         if *self == Self::Proved {
             *self = Self::AttachedPath;
+        }
+    }
+
+    fn attach_value(&mut self) {
+        if *self != Self::Unproved {
+            *self = Self::AttachedValue;
         }
     }
 }
@@ -267,17 +274,33 @@ impl<'a> Scanner<'a> {
                 .arguments
                 .iter()
                 .all(|argument| valid_arguments(self.view, argument));
+        let unproved_form = match self.form_evidence {
+            FormEvidence::Proved => false,
+            // A tight Pa may be an argument in a larger form, but a whole
+            // label indistinguishable from one flag cannot prove that flag.
+            FormEvidence::AttachedPath => {
+                super::options::option_prefix(self.view.text.trim()) == Some(self.view.text.trim())
+            }
+            // A separately executed literal supplies value bytes, never
+            // part of a flag's name. Require a second independently typed
+            // option before it can contribute to a complete composite.
+            FormEvidence::AttachedValue => {
+                !complete
+                    || self.names.len() < 2
+                    || self.names.iter().any(|name| {
+                        name.parts
+                            .first()
+                            .is_none_or(|part| !self.view.native_option_starts(part.start))
+                    })
+            }
+            FormEvidence::Unproved => true,
+        };
         OptionHead {
             names: self.names,
             #[cfg(test)]
             complete,
             inferred_complete: complete && self.admission == OwnerAdmission::Proved,
-            // A tight Pa may be an argument in a larger form, but a whole
-            // label indistinguishable from one flag cannot prove that flag.
-            unproved_form: self.form_evidence == FormEvidence::Unproved
-                || self.form_evidence == FormEvidence::AttachedPath
-                    && super::options::option_prefix(self.view.text.trim())
-                        == Some(self.view.text.trim()),
+            unproved_form,
             limit: None,
         }
     }
@@ -502,11 +525,13 @@ impl<'a> Scanner<'a> {
         let foreign_tail = native
             && self.current().is_some_and(|ch| !ch.is_whitespace())
             && self.view.independent_option_suffix(self.cursor);
-        // A separately executed Pa is an attached path argument, while
-        // other independent suffixes do not prove a complete option form.
+        // Keep the option's own native spelling separate from a joined
+        // value. References, clipped values, and prose still fail closed.
         if foreign_tail {
             if self.view.native_argument_starts(self.cursor) {
                 self.form_evidence.attach_path();
+            } else if self.view.native_composite_value_starts(self.cursor) {
+                self.form_evidence.attach_value();
             } else {
                 self.form_evidence = FormEvidence::Unproved;
             }

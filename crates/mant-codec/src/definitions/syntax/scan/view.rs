@@ -254,6 +254,25 @@ impl<'a> HeadView<'a> {
         }
     }
 
+    pub(super) fn native_composite_value_starts(&self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        return self.operand(offset).is_some_and(|operand| {
+            operand.bytes.start == offset
+                && matches!(
+                    operand.role,
+                    NativeOperandRole::LiteralValue
+                        | NativeOperandRole::Command
+                        | NativeOperandRole::SymbolicText
+                        | NativeOperandRole::Environment { .. }
+                )
+        });
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = offset;
+            false
+        }
+    }
+
     pub(super) fn permits_option_spelling(
         &self,
         span: Range<usize>,

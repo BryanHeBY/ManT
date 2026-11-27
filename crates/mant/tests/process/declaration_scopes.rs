@@ -501,3 +501,141 @@ fn check_occurrence(
     assert_eq!(form_text, expected, "{head}");
     assert_eq!(content_text, expected, "{head}");
 }
+
+#[test]
+fn attached_native_values_preserve_composites_without_naming_a_joined_flag() {
+    // Each suffix below has an independently executed native value receipt.
+    // Ns changes spacing, not the accepted range of the preceding Fl name.
+    for (role, value) in [
+        ("Li", "data"),
+        ("Cm", "data"),
+        ("Ic", "data"),
+        ("Sy", "data"),
+        ("Ev", "DATA"),
+    ] {
+        let right = format!("Fl v Ns {role} {value}");
+        let joined = format!("-v{value}");
+        for (head, form, names) in [
+            (
+                format!("Fl a Ar mode No / {right}"),
+                format!("-a mode / {joined}"),
+                ["-a", "-v"],
+            ),
+            (
+                format!("{right} No / Fl a Ar mode"),
+                format!("{joined} / -a mode"),
+                ["-v", "-a"],
+            ),
+        ] {
+            check_declaration(&head, &form, &names, &[joined.as_str()]);
+        }
+        assert_eq!(
+            explain_attached_tail(&right, "-v")
+                .counts
+                .direct_entry
+                .total,
+            1
+        );
+        assert_eq!(
+            explain_attached_tail(&right, &joined)
+                .counts
+                .direct_entry
+                .total,
+            0
+        );
+    }
+}
+
+#[test]
+fn attached_literal_exact_lookup_keeps_original_owner_and_full_range() {
+    let form = "-a mode / -vdata";
+    let reply = explain_attached_tail("Fl a Ar mode No / Fl v Ns Li data", form);
+    assert_eq!(reply.counts.direct_entry.total, 1);
+    let evidence = reply
+        .evidence
+        .iter()
+        .find(|item| item.class == EvidenceClass::DirectEntry)
+        .unwrap();
+    assert_eq!(evidence.outline.path().to_string(), "2/e1");
+    let ranges: Vec<_> = evidence
+        .bases
+        .iter()
+        .filter_map(|basis| match basis {
+            EvidenceBasis::Form { matches } => Some(matches),
+            _ => None,
+        })
+        .flatten()
+        .filter(|matched| matched.text == form)
+        .flat_map(|matched| &matched.occurrences)
+        .flat_map(|occurrence| &occurrence.forms)
+        .map(|r| (r.form_index, r.start_char, r.end_char))
+        .collect();
+    assert_eq!(ranges, [(0, 0, 16)]);
+}
+
+#[test]
+fn unproved_attached_tails_do_not_gain_a_composite_form() {
+    for (head, query) in [
+        (
+            "Fl a Ar mode No / Fl v Ns Xr printf 3",
+            "-a mode / -vprintf(3)",
+        ),
+        (
+            "Fl a Ar mode No / Fl v Ns Lk https://example.test data",
+            "-a mode / -vdata: https://example.test",
+        ),
+    ] {
+        assert_eq!(
+            explain_attached_tail(head, "-v").counts.direct_entry.total,
+            1
+        );
+        assert_eq!(
+            explain_attached_tail(head, query).counts.direct_entry.total,
+            0
+        );
+    }
+    // The pre-existing styled-argument route does not admit the short
+    // -v name here and is not the independent native-value route.
+    let styled = "Fl a Ar mode No / Fl v Ns Em data";
+    assert_eq!(
+        explain_attached_tail(styled, "-v")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    assert_eq!(
+        explain_attached_tail(styled, "-a mode / -vdata")
+            .counts
+            .direct_entry
+            .total,
+        1
+    );
+    assert_eq!(
+        explain_attached_tail("Fl vdata", "-vdata")
+            .counts
+            .direct_entry
+            .total,
+        1
+    );
+}
+
+fn explain_attached_tail(head: &str, query: &str) -> QueryExplanation {
+    let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
+    let flag = format!("--explain={query}");
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "json",
+            "--compact",
+            &flag,
+        ],
+        &source,
+    );
+    assert!(output.status.success(), "{head}: {query}");
+    serde_json::from_slice(&output.stdout).unwrap()
+}
