@@ -95,8 +95,8 @@ fn markdown_is_clean_by_default_and_preserves_anchors_on_request() {
 
     let (status, output, diagnostics) = invoke(&["demo", "--preserve-anchors"], b"", &host);
     assert_eq!(status, 0);
-    assert!(output.contains("<a id=\"name-1\"></a>"));
-    assert!(output.contains("<a id=\"options-2\"></a>"));
+    assert!(output.contains("<span id=\"name-1\"></span>"));
+    assert!(output.contains("<span id=\"options-2\"></span>"));
     assert_eq!(diagnostics.len(), 0);
 }
 

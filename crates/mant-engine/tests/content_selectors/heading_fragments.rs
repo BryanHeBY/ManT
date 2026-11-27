@@ -194,7 +194,7 @@ fn duplicate_explicit_fragments_are_never_resolved_to_an_arbitrary_owner() {
         }
         let export = render_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
         assert!(export.contains("Pick [Pick self]"));
-        assert!(!export.contains(&format!("<a id=\"{alias}\"></a>")));
+        assert!(!export.contains(&format!("<span id=\"{alias}\"></span>")));
         assert_body(&content, 0, doc.sections[0].id.as_str(), "BODY FIRST.");
         assert_body(&content, 1, doc.sections[1].id.as_str(), "BODY SECOND.");
     }

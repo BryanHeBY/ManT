@@ -28,7 +28,9 @@ fn assert_independent_destinations(
             "{body}"
         );
         assert_eq!(
-            markdown.matches(&format!("<a id=\"{id}\"></a>")).count(),
+            markdown
+                .matches(&format!("<span id=\"{id}\"></span>"))
+                .count(),
             1,
             "{body}\n{markdown}"
         );
@@ -42,7 +44,7 @@ fn assert_independent_destinations(
     assert_eq!(index.fragment_target(alias), None, "{body}");
     assert!(index.is_fragment_ambiguous(alias), "{body}");
     assert!(
-        !markdown.contains(&format!("<a id=\"{alias}\"></a>")),
+        !markdown.contains(&format!("<span id=\"{alias}\"></span>")),
         "{body}\n{markdown}"
     );
     let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
@@ -58,7 +60,7 @@ fn assert_independent_destinations(
         })
         .collect::<Vec<_>>();
     for id in ids {
-        let marker = format!("<a id=\"{id}\">");
+        let marker = format!("<span id=\"{id}\">");
         assert_eq!(
             html.iter()
                 .map(|event| event.matches(&marker).count())

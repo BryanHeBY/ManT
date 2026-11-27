@@ -184,8 +184,8 @@ fn body_blocks(blocks: &[Block]) -> impl Iterator<Item = &Block> {
         // source fallback on reimport is separate from the authored body.
         if let Block::Paragraph { children, .. } = block
             && let [Inline::Text { value }] = children.as_slice()
-            && value.starts_with("<a id=\"")
-            && value.ends_with("\"></a>")
+            && value.starts_with("<span id=\"")
+            && value.ends_with("\"></span>")
         {
             return false;
         }

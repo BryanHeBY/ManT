@@ -205,7 +205,7 @@ fn visible_search_maps_inline_formatting_to_markdown_and_option_nodes() {
     assert_eq!(result.matches[0].occurrences[0].line_ranges.len(), 1);
     assert!(result.matches[0].occurrences[0].markdown.start_line > 1);
     assert!(result.matches[0].preview.contains("**access control**"));
-    assert!(!result.matches[0].preview.contains("<a id="));
+    assert!(!result.matches[0].preview.contains("<span id="));
     assert_ne!(result.matches[0].context.len(), 0);
 }
 
@@ -296,16 +296,16 @@ fn searches_contiguous_text_across_an_unsafe_style_boundary() {
 
 #[test]
 fn source_map_stripping_uses_codec_supplied_anchor_ranges() {
-    let source = "before<a id=\"node\"></a>after";
+    let source = "before<span id=\"node\"></span>after";
     let lines = LineIndex::with_anchors(source, std::iter::once(6..23).collect());
     assert_eq!(lines.presented_line(0).text, "beforeafter");
     assert_eq!(
-        display_markdown_line("before<a id=\"node\">payload</a>after"),
-        "before<a id=\"node\">payload</a>after"
+        display_markdown_line("before<span id=\"node\">payload</span>after"),
+        "before<span id=\"node\">payload</span>after"
     );
     assert_eq!(
-        display_markdown_line("before<a id=\"node\"after"),
-        "before<a id=\"node\"after"
+        display_markdown_line("before<span id=\"node\"after"),
+        "before<span id=\"node\"after"
     );
 }
 
@@ -344,7 +344,7 @@ fn synthetic_visible_whitespace_occurrences_are_skipped_without_failing_the_quer
 
 #[test]
 fn markdown_anchor_only_matches_do_not_become_phantom_results() {
-    let mut request = request("a id=");
+    let mut request = request("span id=");
     request.scope = SearchScope::Markdown;
     request.case = SearchCase::Sensitive;
 
@@ -357,7 +357,7 @@ fn markdown_anchor_only_matches_do_not_become_phantom_results() {
 #[test]
 fn markdown_matches_crossing_an_anchor_expose_only_presented_text() {
     let markdown = render_addressable_markdown(&query()).into_text();
-    let marker = "\"></a>`--acls";
+    let marker = "\"></span>`--acls";
     assert!(
         markdown.contains(marker),
         "fixture anchor shape changed:\n{markdown}"
@@ -371,7 +371,7 @@ fn markdown_matches_crossing_an_anchor_expose_only_presented_text() {
 
     assert_eq!(occurrence.matched_text, "`--acls");
     assert_ne!(occurrence.line_ranges.len(), 0);
-    assert!(!result.matches[0].preview.contains("<a id="));
+    assert!(!result.matches[0].preview.contains("<span id="));
 }
 
 #[test]

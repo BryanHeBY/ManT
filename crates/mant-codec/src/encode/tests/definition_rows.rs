@@ -178,7 +178,7 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
             rows(&markdown),
             [
                 if preserve_anchors {
-                    "HEAD <a id=\"destination\"></a>"
+                    "HEAD <span id=\"destination\"></span>"
                 } else {
                     "HEAD "
                 },
@@ -187,7 +187,7 @@ fn transparent_root_selection_keeps_fixed_code_spacing_and_nested_destinations()
             "{markdown}"
         );
         assert_eq!(
-            markdown.matches("<a id=\"destination\"").count(),
+            markdown.matches("<span id=\"destination\"").count(),
             usize::from(preserve_anchors)
         );
     }
@@ -287,7 +287,7 @@ fn leading_space_and_zero_output_roots_keep_effective_body_boundaries() {
                         )
                         .join("\n\n");
                         let anchor = if preserve_anchors && has_anchor {
-                            "<a id=\"destination\"></a>"
+                            "<span id=\"destination\"></span>"
                         } else {
                             ""
                         };
@@ -481,7 +481,7 @@ fn joined_last_term_uses_original_roots_once_and_keeps_prior_hard_rows() {
         )
         .join("\n\n");
         let head = if preserve_anchors {
-            "FIRST\nHEAD<a id=\"destination\"></a>BODY"
+            "FIRST\nHEAD<span id=\"destination\"></span>BODY"
         } else {
             "FIRST\nHEADBODY"
         };

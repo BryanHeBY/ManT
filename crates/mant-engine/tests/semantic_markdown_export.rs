@@ -21,12 +21,12 @@ fn no_fill_function_target_survives_addressable_markdown_export() {
         },
     );
     assert_eq!(
-        markdown.matches("<a id=\"call\"></a>").count(),
+        markdown.matches("<span id=\"call\"></span>").count(),
         1,
         "{markdown}"
     );
     assert!(
-        markdown.contains("<a id=\"call\"></a>\n\n```"),
+        markdown.contains("<span id=\"call\"></span>\n\n```"),
         "{markdown}"
     );
     assert!(markdown.contains("call(\nfirst,\nsecond)"), "{markdown}");
@@ -47,12 +47,12 @@ fn literal_display_target_survives_addressable_markdown_export() {
         },
     );
     assert_eq!(
-        markdown.matches("<a id=\"inner\"></a>").count(),
+        markdown.matches("<span id=\"inner\"></span>").count(),
         1,
         "{markdown}"
     );
     assert!(
-        markdown.contains("<a id=\"inner\"></a>\n\n```"),
+        markdown.contains("<span id=\"inner\"></span>\n\n```"),
         "{markdown}"
     );
     assert!(markdown.contains("```\ninner\n```"), "{markdown}");

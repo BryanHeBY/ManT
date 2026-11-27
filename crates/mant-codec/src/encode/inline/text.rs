@@ -1,7 +1,9 @@
 //! Preserve literal text and zero-width HTML destinations in Markdown syntax.
 
 pub(crate) fn html_anchor(id: &str) -> String {
-    format!("<a id=\"{}\"></a>", escape_html_attribute(id))
+    // A destination can be inside a link label. An <a id> here would
+    // close its enclosing hyperlink when an HTML5 parser constructs the DOM.
+    format!("<span id=\"{}\"></span>", escape_html_attribute(id))
 }
 
 pub(in crate::encode) fn render_html_anchors<'a>(

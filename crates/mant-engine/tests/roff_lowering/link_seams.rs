@@ -95,7 +95,7 @@ fn cells(nodes: &[Inline], style: u8, literal_destinations: bool, output: &mut V
                 {
                     // All native-generated fixture destinations are safe
                     // ASCII ids; the reader retains this exact source text.
-                    let marker = format!("<a id=\"{target}\"></a>");
+                    let marker = format!("<span id=\"{target}\"></span>");
                     output.extend(marker.chars().map(|glyph| (glyph, style)));
                 }
             }
@@ -170,7 +170,7 @@ fn portable_head_style(
         let end = text.find(label).unwrap() + label.len();
         // Only a real retained destination between this label and BODY is
         // a syntax barrier. The current fixtures' ids contain no author words.
-        if text[end..].starts_with("<a id=\"") {
+        if text[end..].starts_with("<span id=\"") {
             return head;
         }
     }

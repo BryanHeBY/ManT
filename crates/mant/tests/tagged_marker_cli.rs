@@ -7,9 +7,13 @@ use std::process::{Command, Stdio};
 use serde_json::Value;
 
 const HEADER: &str = ".Dd November 26, 2026\n.Dt INSPECTION 1\n.Os\n.Sh NAME\n.Nm inspection\n.Nd annotations\n.Sh DESCRIPTION\n";
-const TARGET: &str = "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>";
+const TARGET: &str = "<span id=\"body-target\"></span><span id=\"Body.Target\"></span>";
 
 fn run(body: &str, format: &str) -> String {
+    run_with_options(body, format, true)
+}
+
+fn run_with_options(body: &str, format: &str, preserve_anchors: bool) -> String {
     let source = format!("{HEADER}{body}.Sh ENDTEST\nDone.\n");
     let mut command = Command::new(env!("CARGO_BIN_EXE_mant"));
     command.args([
@@ -24,7 +28,7 @@ fn run(body: &str, format: &str) -> String {
     ]);
     if format == "json" {
         command.arg("--compact");
-    } else {
+    } else if preserve_anchors {
         command.arg("--preserve-anchors");
     }
     let mut child = command
@@ -229,4 +233,33 @@ fn tagged_sphinx_reference_remains_a_manual_link() {
         markdown.find(TARGET).unwrap() < markdown.find("printf(3)").unwrap(),
         "{markdown}"
     );
+}
+
+#[test]
+fn linked_survivor_keeps_href_and_both_destinations_in_export() {
+    // CVS mdoc_html.c emits a non-link target for Tg and a distinct href
+    // owner for links. The pinned terminal witness reads JA ST K after
+    // the sibling No overwrites the Ev's first operand.
+    let body = ".No JA\n.Tg Body.Target\n.Ev \"\\%<>\" \"\\X'tty: link https://a.test'K\\X'tty: link'\" No \"\\h'|6n'ST\"\n";
+    let observed = json_observation(body);
+    assert_eq!(observed.ink, "JASTK");
+    assert_eq!(observed.links, [(4, 'K', "https://a.test".into())]);
+    assert_eq!(
+        observed.anchors,
+        [(4, "body-target".into(), vec!["Body.Target".into()])]
+    );
+
+    let clean = run_with_options(body, "markdown", false);
+    assert!(clean.contains("[K](https://a.test)"), "{clean}");
+    assert!(!clean.contains("Body.Target"), "{clean}");
+
+    let auto = format!("{body}.Ss Sx DESCRIPTION\nMore.\n");
+    for markdown in [
+        run(body, "markdown"),
+        run_with_options(&auto, "markdown", false),
+    ] {
+        let label = format!("[{TARGET}K](https://a.test)");
+        assert!(markdown.contains(&label), "{markdown}");
+        assert_eq!(markdown.matches(TARGET).count(), 1, "{markdown}");
+    }
 }

@@ -120,7 +120,7 @@ fn uri_equal_labels_keep_navigation_children_out_of_the_autolink_shortcut() {
             )
         });
         let marker = if preserve_anchors {
-            "<a id=\"label-destination\"></a><a id=\"Alias\"></a><a id=\"Second.Alias\"></a>"
+            "<span id=\"label-destination\"></span><span id=\"Alias\"></span><span id=\"Second.Alias\"></span>"
         } else {
             ""
         };
@@ -132,7 +132,9 @@ fn uri_equal_labels_keep_navigation_children_out_of_the_autolink_shortcut() {
         assert_eq!(visible(&outputs[0]), uri);
         for id in ["label-destination", "Alias", "Second.Alias"] {
             assert_eq!(
-                outputs[0].matches(&format!("<a id=\"{id}\"></a>")).count(),
+                outputs[0]
+                    .matches(&format!("<span id=\"{id}\"></span>"))
+                    .count(),
                 usize::from(preserve_anchors)
             );
         }
@@ -223,7 +225,7 @@ fn anchors_before_a_positioned_link_label_do_not_create_empty_links() {
         }
         assert_eq!(starts, 1, "{markdown}");
         assert_eq!(label, "A", "{markdown}");
-        assert!(markdown.contains("<a id=\"before\"></a>"));
+        assert!(markdown.contains("<span id=\"before\"></span>"));
         let parsed = parse_content(&markdown, None).unwrap();
         assert_eq!(reference_counts(parsed.document.as_ref().unwrap()), (1, 1));
     }

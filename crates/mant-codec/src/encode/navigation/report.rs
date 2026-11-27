@@ -51,7 +51,7 @@ impl PageNavigation {
                     }
                 }
                 Event::Html(_) | Event::InlineHtml(_) => {
-                    for anchor in markers_in_html(markdown, range, "<span id=\"", "\"></span>") {
+                    for anchor in markers_in_html(markdown, range) {
                         if !anchors.insert(anchor.id.to_owned()) {
                             duplicates.push(anchor.range);
                         }

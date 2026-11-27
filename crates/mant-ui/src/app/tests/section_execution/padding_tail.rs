@@ -257,7 +257,7 @@ fn markdown_keeps_the_literal_bytes_and_never_exports_a_second_gap() {
                 };
                 assert_eq!(block_text(body), BODY);
                 if options.preserve_anchors {
-                    assert_eq!(carried.as_deref(), Some(r#"<a id="next"></a>"#));
+                    assert_eq!(carried.as_deref(), Some(r#"<span id="next"></span>"#));
                 }
                 input = readback;
             }

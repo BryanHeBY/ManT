@@ -46,7 +46,10 @@ fn navigation_only_tables_emit_targets_without_empty_fences() {
         )
         .join("\n\n");
         if preserve_anchors {
-            assert_eq!(output, "<a id=\"target\"></a>\n<a id=\"Exact.Target\"></a>");
+            assert_eq!(
+                output,
+                "<span id=\"target\"></span>\n<span id=\"Exact.Target\"></span>"
+            );
         } else {
             assert_eq!(output, "");
         }
@@ -184,10 +187,10 @@ fn addressable_markdown_emits_canonical_and_authored_fragments() {
     };
 
     let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-    assert!(markdown.contains("<a id=\"mixed-target\"></a>"));
-    assert!(markdown.contains("<a id=\"Mixed.Target\"></a>"));
-    assert!(markdown.contains("<a id=\"option\"></a>"));
-    assert!(markdown.contains("<a id=\"--option\"></a>"));
+    assert!(markdown.contains("<span id=\"mixed-target\"></span>"));
+    assert!(markdown.contains("<span id=\"Mixed.Target\"></span>"));
+    assert!(markdown.contains("<span id=\"option\"></span>"));
+    assert!(markdown.contains("<span id=\"--option\"></span>"));
 }
 
 #[test]
@@ -205,8 +208,8 @@ fn addressable_markdown_emits_document_root_fragments() {
     };
 
     let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-    assert!(markdown.contains("<a id=\"document-overview\"></a>"));
-    assert!(markdown.contains("<a id=\"Mixed.Root\"></a>"));
+    assert!(markdown.contains("<span id=\"document-overview\"></span>"));
+    assert!(markdown.contains("<span id=\"Mixed.Root\"></span>"));
 }
 
 #[test]

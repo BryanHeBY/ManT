@@ -237,7 +237,7 @@ fn both_markdown_rounds_keep_original_interior_and_trailing_hard_lines() {
                         .map(block_text)
                         .collect();
                     if options.preserve_anchors {
-                        assert_eq!(carried.as_deref(), Some(r#"<a id="next"></a>"#));
+                        assert_eq!(carried.as_deref(), Some(r#"<span id="next"></span>"#));
                     }
                     let expected = if suffix.is_empty() && mode.is_empty() {
                         vec!["ALPHA\n\n"]

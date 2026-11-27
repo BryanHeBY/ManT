@@ -206,8 +206,8 @@ fn transparent_links_empty_anchors_and_external_labels_share_the_sequence() {
                 // HTML as visible source (markdown/inline.rs); that existing
                 // policy is independent of delimiter pairing. Pin it exactly
                 // while checking the standard parser's navigation below.
-                let html = "<a id=\"seam\"></a><a id=\"Exact.Seam\"></a>";
-                let empty = "<a id=\"empty-style\"></a>";
+                let html = "<span id=\"seam\"></span><span id=\"Exact.Seam\"></span>";
+                let empty = "<span id=\"empty-style\"></span>";
                 // Adjacent Strong roots coalesce, including the zero-width
                 // destination before the next Strong word. Standard HTML
                 // still contributes no glyphs; the conservative reader's

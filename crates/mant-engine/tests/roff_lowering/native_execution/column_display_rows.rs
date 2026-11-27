@@ -86,12 +86,14 @@ fn check_pair(row: &str, display: &str, next_item: &str, slot: usize, expected: 
                 Some("mixed-target")
             );
             assert_eq!(
-                addressable.matches("<a id=\"Mixed.Target\"></a>").count(),
+                addressable
+                    .matches("<span id=\"Mixed.Target\"></span>")
+                    .count(),
                 1
             );
         } else {
             assert!(index.fragment_target("Mixed.Target").is_none());
-            assert!(!addressable.contains("<a id=\"Mixed.Target\"></a>"));
+            assert!(!addressable.contains("<span id=\"Mixed.Target\"></span>"));
             prior = Some((rendered, fences, flags));
         }
     }

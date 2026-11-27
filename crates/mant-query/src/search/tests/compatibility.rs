@@ -52,7 +52,7 @@ fn compatibility_requests() -> Vec<SearchQuery> {
             (r"a|中|e\x{301}", SearchSyntax::Regex),
             (r"\s+", SearchSyntax::Regex),
             ("a id=", SearchSyntax::Literal),
-            ("\"></a>`--acls", SearchSyntax::Literal),
+            ("\"></span>`--acls", SearchSyntax::Literal),
             (r"lists(?s:.*?)NEXT", SearchSyntax::Regex),
             ("  \n", SearchSyntax::Literal),
             ("a  \n中", SearchSyntax::Literal),

@@ -42,7 +42,7 @@ fn exercise_public_codec() -> Result<(), Box<dyn std::error::Error>> {
         artifact
             .text()
             .get(range.clone())
-            .is_some_and(|text| text.starts_with("<a id="))
+            .is_some_and(|text| text.starts_with("<span id="))
     }));
     let mut entry_count = 0;
     for mapped in artifact.nodes() {

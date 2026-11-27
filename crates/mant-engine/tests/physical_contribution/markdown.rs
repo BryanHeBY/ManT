@@ -216,7 +216,9 @@ fn assert_source_obligations(
             artifact
                 .anchor_ranges()
                 .iter()
-                .filter(|range| artifact.text()[(*range).clone()] == *"<a id=\"Source.Nav\"></a>")
+                .filter(
+                    |range| artifact.text()[(*range).clone()] == *"<span id=\"Source.Nav\"></span>"
+                )
                 .count(),
             1
         );

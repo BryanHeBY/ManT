@@ -8,13 +8,16 @@ fn final_artifact_owns_only_real_anchor_ranges() {
         ..super::ArtifactBuilder::default()
     };
     builder.begin_root(0);
-    builder.push("<a id=\"real\"></a>\n`<a id=\"literal\"></a>`\n\n ");
+    builder.push("<span id=\"real\"></span>\n`<span id=\"literal\"></span>`\n\n ");
     let artifact = builder.finish();
     assert!(artifact.anchors.get().is_none());
     let ranges = artifact.anchor_ranges();
     assert_eq!(ranges.len(), 1);
-    assert_eq!(ranges[0], 0.."<a id=\"real\"></a>".len());
-    assert_eq!(&artifact.text()[ranges[0].clone()], "<a id=\"real\"></a>");
+    assert_eq!(ranges[0], 0.."<span id=\"real\"></span>".len());
+    assert_eq!(
+        &artifact.text()[ranges[0].clone()],
+        "<span id=\"real\"></span>"
+    );
     assert!(std::ptr::eq(ranges, artifact.anchor_ranges()));
     assert!(artifact.text().ends_with('`'));
     assert_eq!(artifact.nodes().len(), 1);

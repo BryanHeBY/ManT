@@ -59,13 +59,13 @@ fn cells(document: &mant_ir::Document) -> &[mant_ir::TableCell] {
 fn check_markdown(query: &ResolvedContent, markers: &[&str], omitted: &[&str]) {
     let markdown = render_markdown_with_options(query, MarkdownOptions::ADDRESSABLE);
     for marker in markers {
-        let anchor = format!("<a id=\"{marker}\"></a>");
+        let anchor = format!("<span id=\"{marker}\"></span>");
         assert_eq!(markdown.matches(&anchor).count(), 1, "{markdown}");
         assert!(markdown.find(&anchor).unwrap() < markdown.find("```").unwrap());
     }
     for marker in omitted {
         assert!(
-            !markdown.contains(&format!("<a id=\"{marker}\"></a>")),
+            !markdown.contains(&format!("<span id=\"{marker}\"></span>")),
             "{markdown}"
         );
     }
@@ -123,16 +123,26 @@ fn repeated_normalized_spelling_remains_only_an_ambiguous_alias() {
             check_ambiguous(document, "mixed-target", ids);
             let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
             for id in ids {
-                assert_eq!(markdown.matches(&format!("<a id=\"{id}\"></a>")).count(), 1);
+                assert_eq!(
+                    markdown
+                        .matches(&format!("<span id=\"{id}\"></span>"))
+                        .count(),
+                    1
+                );
             }
-            assert!(!markdown.contains("<a id=\"mixed-target\"></a>"));
+            assert!(!markdown.contains("<span id=\"mixed-target\"></span>"));
             if !already_reserved.is_empty() {
                 let index = DocumentIndex::build(document);
                 assert_eq!(
                     index.fragment_target("mixed-target-2").map(NodeId::as_str),
                     Some("mixed-target-2")
                 );
-                assert_eq!(markdown.matches("<a id=\"mixed-target-2\"></a>").count(), 1);
+                assert_eq!(
+                    markdown
+                        .matches("<span id=\"mixed-target-2\"></span>")
+                        .count(),
+                    1
+                );
             }
         }
     }

@@ -36,6 +36,6 @@ fn renders_the_shared_query_contract_without_leaking_json() {
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
     assert!(addressable.contains("[OPTIONS](#options-1)"));
-    assert!(addressable.contains("<a id=\"options-1\"></a>\n\n## OPTIONS"));
-    assert!(addressable.contains("<a id=\"all-option\"></a>"));
+    assert!(addressable.contains("<span id=\"options-1\"></span>\n\n## OPTIONS"));
+    assert!(addressable.contains("<span id=\"all-option\"></span>"));
 }

@@ -46,7 +46,7 @@ fn entry_fragments_validate_without_inserting_a_head_anchor() {
         if !definition_owner {
             let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
             assert!(
-                markdown.contains("<a id=\"option-help\"></a>"),
+                markdown.contains("<span id=\"option-help\"></span>"),
                 "{markdown}"
             );
         }

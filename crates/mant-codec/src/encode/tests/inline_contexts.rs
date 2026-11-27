@@ -467,7 +467,7 @@ fn transparent_nested_labels_keep_anchors_backticks_and_executed_hard_rows() {
                     "{target_kind}/{preserve_anchors}/{api}: {markdown}"
                 );
                 assert_eq!(
-                    markdown.matches("<a id=\"label-anchor\"").count(),
+                    markdown.matches("<span id=\"label-anchor\"").count(),
                     usize::from(preserve_anchors)
                 );
             }
@@ -576,4 +576,61 @@ fn heading_manual_targets_keep_their_visible_link_wrapper() {
             .map(|glyph| (glyph, 4, Some("man:printf(3)".to_owned()))),
     );
     assert_eq!(seam_cells(&markdown), expected, "{markdown}");
+}
+
+#[test]
+fn detached_and_scoped_fragments_keep_empty_destinations_inside_owned_links() {
+    use crate::encode::{ScopedMarkdownFragments, render_scoped_report_page};
+    use mant_ir::InlineContentRef;
+
+    let external = Inline::Link {
+        target: mant_ir::LinkTarget::External {
+            uri: "https://a.test".into(),
+        },
+        title: None,
+        children: vec![
+            Inline::anchor_with_aliases("target", vec!["A&\"<>".into(), "A&\"<>".into()]),
+            Inline::Text { value: "K".into() },
+        ],
+    };
+    let content = [external.clone()];
+    let block = [paragraph(content.to_vec())];
+    let options = MarkdownFragmentOptions {
+        preserve_anchors: true,
+        ..Default::default()
+    };
+    let detached = ScopedMarkdownFragments::from(options);
+    let expected_label =
+        "[<span id=\"target\"></span><span id=\"A&amp;&quot;&lt;&gt;\"></span>K](https://a.test)";
+    for result in [
+        detached.inline(InlineContentRef::unpositioned(&content)),
+        detached.blocks(&block, None).join("\n\n"),
+    ] {
+        assert_eq!(result, expected_label);
+        assert_eq!(
+            seam_cells(&result),
+            [('K', 0, Some("https://a.test".into()))]
+        );
+        assert_eq!(crate::encode::anchors::anchor_markers(&result).len(), 2);
+    }
+    let report = render_scoped_report_page(|anchors| {
+        [0, 1]
+            .map(|origin| {
+                ScopedMarkdownFragments::from(options)
+                    .in_report_scope(origin, anchors)
+                    .blocks(&block, None)
+                    .join("\n\n")
+            })
+            .join("\n\n")
+    });
+    for origin in [0, 1] {
+        let target = format!("<span id=\"mant-report-{origin}-746172676574\"></span>");
+        let alias = format!("<span id=\"mant-report-{origin}-4126223c3e\"></span>");
+        assert!(
+            report.contains(&format!("[{target}{alias}K](https://a.test)")),
+            "{report}"
+        );
+        assert_eq!(report.matches(&target).count(), 1);
+        assert_eq!(report.matches(&alias).count(), 1);
+    }
 }

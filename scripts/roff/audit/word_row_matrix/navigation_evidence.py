@@ -3,7 +3,7 @@
 import re
 
 
-def anchor_lines(target):
+def anchor_lines(target, tag):
     if target is None:
         return ()
     identity = target["id"]
@@ -13,7 +13,7 @@ def anchor_lines(target):
     if any(not value or any(not (ch.isalnum() or ch in "_.:-") for ch in value)
            for value in ids):
         return ()
-    return tuple(f'<a id="{value}"></a>' for value in ids)
+    return tuple(f'<{tag} id="{value}"></{tag}>' for value in ids)
 
 
 def syntax_adjacent(markdown, before, after):
@@ -59,6 +59,16 @@ def anchor_block(block, markdown, lines, *, predecessor=None, inherited=False):
     return raw in (spelling.encode(), (spelling + "\n").encode())
 
 
+def generated_anchor_lines(block, markdown, target, *, predecessor=None):
+    # The older reference CLI emits empty a markers. Require the exact
+    # marker spelling for a whole destination/aliases group in either form.
+    for tag in ("span", "a"):
+        lines = anchor_lines(target, tag)
+        if anchor_block(block, markdown, lines, predecessor=predecessor):
+            return lines
+    return ()
+
+
 def exact_generated_title(markdown, heading, label):
     """The bounded fallback H1 is a simple, unescaped query label."""
     span = (heading.get("source") or {}).get("byteRange")
@@ -83,11 +93,12 @@ def section_anchors(document, markdown, source, inherited=None, *, label=None):
         if target is None or not blocks:
             return False
         index = len(blocks) - 1
-        lines = anchor_lines(target)
         heading = following["heading"]
-        if (not syntax_adjacent(markdown, blocks[index], heading)
-                or not anchor_block(blocks[index], markdown, lines,
-                                    predecessor=blocks[index - 1] if index else None)):
+        if not syntax_adjacent(markdown, blocks[index], heading):
+            return False
+        lines = generated_anchor_lines(blocks[index], markdown, target,
+                                       predecessor=blocks[index - 1] if index else None)
+        if not lines:
             return False
         exclusions.add((path, index))
         carried[path] = lines
@@ -116,9 +127,9 @@ def section_anchors(document, markdown, source, inherited=None, *, label=None):
     heading = document.get("heading")
     if (source.get("heading") and heading and blocks
             and syntax_adjacent(markdown, blocks[0], heading)
-            and anchor_block(blocks[0], markdown, anchor_lines(root))):
+            and (root_lines := generated_anchor_lines(blocks[0], markdown, root))):
         exclusions.add((("root",), 0))
-        carried[("heading",)] = anchor_lines(root)
+        carried[("heading",)] = root_lines
         # The next export escapes the first readback's root marker as an
         # ordinary paragraph. Require the already-proven first-round marker
         # and its exact new span after the heading, before any authored body.
@@ -129,13 +140,13 @@ def section_anchors(document, markdown, source, inherited=None, *, label=None):
     elif (not source.get("heading") and (source.get("blocks") or source.get("fragmentAliases"))
           and heading and blocks and exact_generated_title(markdown, heading, label)
           and syntax_adjacent(markdown, heading, blocks[0])
-          and anchor_block(blocks[0], markdown, anchor_lines(root))):
+          and (root_lines := generated_anchor_lines(blocks[0], markdown, root))):
         # render_markdown_with_context emits a root destination after its
         # fallback H1 when the source has root owners, even if those owners
         # have no Markdown projection. Its raw span, title and slot must
         # all agree before omitting it from source-owned glyphs.
         exclusions.add((("root",), 0))
-        carried[("heading",)] = anchor_lines(root)
+        carried[("heading",)] = root_lines
 
     # Parsed headings can acquire a new slug while the export still carries
     # the source ID. A marker at that exact heading boundary can prove this

@@ -194,7 +194,7 @@ fn renders_and_selects_content_before_the_first_heading() {
     assert!(!markdown.contains("<a "));
 
     let addressable = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-    assert!(addressable.contains("<a id=\"document-overview\"></a>\n\nDocument preface."));
+    assert!(addressable.contains("<span id=\"document-overview\"></span>\n\nDocument preface."));
 
     let outline = build_outline(&query).expect("Markdown outline");
     assert_eq!(outline.nodes[0].path(), "root");

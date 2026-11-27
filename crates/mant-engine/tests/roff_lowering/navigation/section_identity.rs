@@ -485,7 +485,7 @@ fn assert_destinations(query: &ResolvedContent, expected: &[&str]) -> Vec<String
     for id in &ids {
         // The addressable export publishes the destination as HTML for
         // Markdown readers. Raw HTML is not a semantic reimport format.
-        let anchor = format!("<a id=\"{id}\">");
+        let anchor = format!("<span id=\"{id}\">");
         assert!(
             anchors
                 .iter()

@@ -196,7 +196,7 @@ fn dense_matches_on_an_anchored_line_copy_its_presentation_once() {
             assert_eq!(work.range_mappings, MAX_OCCURRENCES_PER_MATCH);
             assert_eq!(work.presentation_builds, 1);
             assert_eq!(work.presentation_bytes_copied, hit.preview.len());
-            assert!(!hit.preview.contains("<a id="));
+            assert!(!hit.preview.contains("<span id="));
             assert!(work.scalar_index_bytes <= work.line_index_bytes);
         } else {
             assert_eq!(result.returned, 0);
@@ -210,8 +210,8 @@ fn dense_matches_on_an_anchored_line_copy_its_presentation_once() {
 
 #[test]
 fn cheap_validity_and_cached_columns_preserve_all_unicode_byte_boundaries() {
-    let text = "前<a id=\"first\"></a>中 e\u{301} \t\u{a0}\n \t\u{a0}\n<a id=\"last\"></a>\n尾";
-    let anchors = ["<a id=\"first\"></a>", "<a id=\"last\"></a>"]
+    let text = "前<span id=\"first\"></span>中 e\u{301} \t\u{a0}\n \t\u{a0}\n<span id=\"last\"></span>\n尾";
+    let anchors = ["<span id=\"first\"></span>", "<span id=\"last\"></span>"]
         .into_iter()
         .map(|anchor| {
             let start = text.find(anchor).unwrap();

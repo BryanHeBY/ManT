@@ -79,10 +79,10 @@ fn addressable_readback_keeps_the_relocated_body_targets_with_their_words() {
     // before the first BODY operand on the still-open inset row. The HTML
     // mdoc_no_pre handler assigns the target to that operand's own span.
     for (body, target, word) in [
-        (".No B No \"\\h'|1n'C\"\n", "<a id=\"b\"></a>", "B"),
+        (".No B No \"\\h'|1n'C\"\n", "<span id=\"b\"></span>", "B"),
         (
             ".Tg Body.Target\n.No BC No \"\\h'|1n'C\"\n",
-            "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>",
+            "<span id=\"body-target\"></span><span id=\"Body.Target\"></span>",
             "BC",
         ),
     ] {
@@ -595,7 +595,7 @@ fn fractional_tab_advances_update_each_printed_device_segment() {
 fn empty_tagged_operands_keep_the_macro_target_on_its_ink() {
     use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 
-    const TARGET: &str = "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>";
+    const TARGET: &str = "<span id=\"body-target\"></span><span id=\"Body.Target\"></span>";
     // Frozen native HTML assigns Tg to the whole command/constant/error
     // macro. Its empty first word still executes, so C can land before BK;
     // the original fragment and normalized alias both belong before BK.
@@ -638,7 +638,7 @@ fn tagged_native_scope_binds_to_its_first_executed_ink() {
     use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
 
     const HEADER: &str = ".Dd November 26, 2026\n.Dt INSPECTION 1\n.Os\n.Sh NAME\n.Nm inspection\n.Nd annotations\n.Sh DESCRIPTION\n";
-    const TARGET: &str = "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>";
+    const TARGET: &str = "<span id=\"body-target\"></span><span id=\"Body.Target\"></span>";
     // post_tg() in mdoc_validate.c tags the element; the HTML wrapper
     // contains BK, not the sibling macro's C. term_word() still executes
     // the empty or control-only operands, including their spacing.

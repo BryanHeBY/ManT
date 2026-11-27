@@ -209,11 +209,11 @@ fn heading_wrappers_remove_only_the_structural_bold_layer() {
     assert_eq!(external.id.as_str(), "label-https-example-org");
     let markdown = mant_codec::encode::render_markdown(&query);
     assert!(
-        markdown.contains("<a id=\"target\"></a>\n\n## TARGET\n\nBODY"),
+        markdown.contains("<span id=\"target\"></span>\n\n## TARGET\n\nBODY"),
         "{markdown}"
     );
     assert!(
-        markdown.contains("<a id=\"target-2\"></a>\n\n## [*TARGET*](#target)\n\nSX"),
+        markdown.contains("<span id=\"target-2\"></span>\n\n## [*TARGET*](#target)\n\nSX"),
         "{markdown}"
     );
     assert!(

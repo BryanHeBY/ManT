@@ -83,8 +83,6 @@ impl ReportNavigation<'_> {
     }
 
     pub(super) fn anchor(self, original: &str) -> String {
-        // An inline destination can occur inside a link label. A span stays
-        // zero width there and does not introduce a nested HTML hyperlink.
-        format!("<span id=\"{}\"></span>", self.fragment(original))
+        super::inline::html_anchor(&self.fragment(original))
     }
 }

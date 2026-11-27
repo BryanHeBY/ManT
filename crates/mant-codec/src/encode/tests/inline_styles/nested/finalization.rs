@@ -438,7 +438,7 @@ fn addressable_anchors_keep_commonmark_targets_and_the_explicit_native_html_poli
     );
     assert_eq!(
         markdown,
-        "!<a id=\"seam\"></a><a id=\"Alias.Target\"></a>[a](https://a.test/! \"owner!\")"
+        "!<span id=\"seam\"></span><span id=\"Alias.Target\"></span>[a](https://a.test/! \"owner!\")"
     );
     let mut actual = Meaning::default();
     let mut owner = None;
@@ -464,14 +464,19 @@ fn addressable_anchors_keep_commonmark_targets_and_the_explicit_native_html_poli
     assert_eq!(actual, meaning(&nodes));
     assert_eq!(
         anchors,
-        ["<a id=\"seam\">", "</a>", "<a id=\"Alias.Target\">", "</a>"]
+        [
+            "<span id=\"seam\">",
+            "</span>",
+            "<span id=\"Alias.Target\">",
+            "</span>"
+        ]
     );
 
     // The native reader deliberately preserves unsupported HTML as exact source
     // prose. This is a declared projection for ADDRESSABLE, not a lossless IR
     // roundtrip claim. Both native reads retain that source and active link.
     let native_expected = meaning(&[
-        text("!<a id=\"seam\"></a><a id=\"Alias.Target\"></a>"),
+        text("!<span id=\"seam\"></span><span id=\"Alias.Target\"></span>"),
         external("a", "https://a.test/!", Some("owner!")),
     ]);
     let mut query = parse_content(&markdown, None).unwrap();

@@ -82,7 +82,8 @@ fn section_source_owners_survive_both_markdown_rounds() {
                         artifact
                             .anchor_ranges()
                             .iter()
-                            .any(|range| &artifact.text()[range.clone()] == r#"<a id="next"></a>"#),
+                            .any(|range| &artifact.text()[range.clone()]
+                                == r#"<span id="next"></span>"#),
                         "source navigation identity {}",
                         case.id
                     );

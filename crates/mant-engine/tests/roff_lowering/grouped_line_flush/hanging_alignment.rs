@@ -187,7 +187,7 @@ fn heading_anchor(round: usize) -> String {
     // The Markdown loader preserves raw heading IDs as authored HTML text.
     // The only unsupported source-generated HTML in this cohort is the END
     // heading's immediately preceding marker, reproduced once per export.
-    "\n\n<a id=\"end\"></a>".repeat(round)
+    "\n\n<span id=\"end\"></span>".repeat(round)
 }
 
 fn native_group_witness(case: &Case, paragraph_gap_policy: bool) {
@@ -307,7 +307,7 @@ fn alignment_groups_preserve_hard_rows_across_hanging_paragraphs() {
                 if options.preserve_anchors && id[0] == "mdoc" && matches!(id[1], "tag" | "hang") {
                     // The raw definition term ID, like the END heading ID,
                     // stays literal on import. This is the one exact marker.
-                    expected[0].insert_str("• ".len(), "<a id=\"term-label\"></a>");
+                    expected[0].insert_str("• ".len(), "<span id=\"term-label\"></span>");
                 }
                 let mut content = original.clone();
                 for round in 1..=2 {

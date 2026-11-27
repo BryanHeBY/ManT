@@ -52,7 +52,7 @@ fn structural_target_survives_body_and_definition_head_lowering() {
                 );
             }
             let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-            let marker = "<a id=\"Mixed.Target\"></a>";
+            let marker = "<span id=\"Mixed.Target\"></span>";
             assert_eq!(markdown.matches(marker).count(), 1, "{markdown}");
             assert!(marker_precedes_content(&markdown, marker, "MARK", "BODY."));
         }
@@ -101,8 +101,8 @@ fn adjacent_head_structures_keep_their_individual_native_targets() {
                 .is_none()
         );
         let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-        let first_marker = "<a id=\"First.Target\"></a>";
-        let second_marker = "<a id=\"Second.Target\"></a>";
+        let first_marker = "<span id=\"First.Target\"></span>";
+        let second_marker = "<span id=\"Second.Target\"></span>";
         for marker in [first_marker, second_marker] {
             assert_eq!(markdown.matches(marker).count(), 1, "{markdown}");
         }

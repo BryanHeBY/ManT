@@ -147,8 +147,8 @@ fn markdown_local_and_external_fragments_keep_their_owner_after_canonical_collis
         [&first.id, &duplicate.id, &first.id]
     );
     let addressable = render_markdown_with_options(&content, MarkdownOptions::ADDRESSABLE);
-    assert!(addressable.contains(&format!("<a id=\"{full}\"></a>")));
-    assert!(addressable.contains(&format!("<a id=\"{raw_duplicate}\"></a>")));
+    assert!(addressable.contains(&format!("<span id=\"{full}\"></span>")));
+    assert!(addressable.contains(&format!("<span id=\"{raw_duplicate}\"></span>")));
     assert!(addressable.contains(&format!("[Duplicate](#{})", duplicate.id)));
     assert_readable_outline(&content);
 }
@@ -350,7 +350,7 @@ fn assert_literal_heading_owner(content: &ResolvedContent, literal: &str) {
     assert!(!text.contains("BODY-A"));
     assert_readable_outline(content);
     let exported = render_markdown_with_options(content, MarkdownOptions::ADDRESSABLE);
-    let anchor = format!("<a id=\"{literal}\"></a>");
+    let anchor = format!("<span id=\"{literal}\"></span>");
     assert_eq!(exported.matches(&anchor).count(), 1);
     let (_, destination) = exported.split_once(&anchor).unwrap();
     assert_eq!(

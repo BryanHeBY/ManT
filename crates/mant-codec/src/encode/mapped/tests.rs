@@ -63,16 +63,16 @@ fn parent_navigation_preserves_a_childs_own_anchor_and_unicode_range() {
     }))
     .unwrap();
     let mut rendered = MappedText::from("α".to_owned()).syntax_site(BlockSyntax::Phrasing);
-    rendered.attach_navigation("<a id=\"own\"></a>");
+    rendered.attach_navigation("<span id=\"own\"></span>");
     let mut rendered = rendered
         .with_owner(EntryOwner::List(&item), true)
         .prefix("- ")
         .unwrap();
     rendered.append_navigation("[](parent)");
-    assert_eq!(rendered.text, "- [](parent)<a id=\"own\"></a>α");
+    assert_eq!(rendered.text, "- [](parent)<span id=\"own\"></span>α");
     assert_eq!(
         &rendered.text[rendered.owners[0].1.clone()],
-        "<a id=\"own\"></a>α"
+        "<span id=\"own\"></span>α"
     );
 }
 

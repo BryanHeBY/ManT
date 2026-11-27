@@ -103,7 +103,7 @@ fn ordinary_and_fenced_layout_policies_keep_owner_names_and_exact_search_bytes()
     );
     let form_range = &entry.name_bindings[0].occurrences[0].forms[0];
     assert_eq!((form_range.start_char, form_range.end_char), (1, 8));
-    assert_readback_rows(artifact.text(), "<a id=\"option-alpha\"></a>");
+    assert_readback_rows(artifact.text(), "<span id=\"option-alpha\"></span>");
     assert_readback_rows(&mant_codec::encode::render_markdown(&decoded), "");
     assert_eq!(decoded.document, original.document);
 }

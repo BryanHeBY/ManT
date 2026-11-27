@@ -309,27 +309,27 @@ class FirstReadbackTests(unittest.TestCase):
                              "difference")
 
     def test_raw_anchor_exception_requires_whole_source_span_and_destination(self):
-        marker = '<a id="body"></a>'
-        authored = '\\' + marker
-        original = dict(sections=[dict(id="body", heading=dict(content=[text("BODY")]),
-                                       spacingBeforeLines=1, blocks=[], children=[])])
-        read = copy.deepcopy(original)
-        read["blocks"] = [dict(type="paragraph", children=[text(marker)],
-                               source=dict(byteRange=dict(start=0, end=len(marker))))]
-        read["sections"][0]["heading"]["source"] = dict(
-            byteRange=dict(start=len(marker) + 1, end=len(marker + "\n## BODY")))
-        self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
-                                  export="addressable")["owner"][0], "exact")
-        self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
-                                  export="addressable")["owner-content"][0], "exact")
-        self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
-                                  export="addressable")["owner"][0], "difference")
-        self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
-                                  export="addressable")["owner-content"][0], "review")
-        read["blocks"][0]["layout"] = dict(spacingBeforeLines=1)
-        self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
-                                  export="addressable")["gap"][0], "difference")
-
+        for tag in ("span", "a"):
+            marker = f'<{tag} id="body"></{tag}>'
+            authored = '\\' + marker
+            original = dict(sections=[dict(id="body", heading=dict(content=[text("BODY")]),
+                                           spacingBeforeLines=1, blocks=[], children=[])])
+            read = copy.deepcopy(original)
+            read["blocks"] = [dict(type="paragraph", children=[text(marker)],
+                                   source=dict(byteRange=dict(start=0, end=len(marker))))]
+            read["sections"][0]["heading"]["source"] = dict(
+                byteRange=dict(start=len(marker) + 1, end=len(marker + "\n## BODY")))
+            self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
+                                      export="addressable")["owner"][0], "exact")
+            self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
+                                      export="addressable")["owner-content"][0], "exact")
+            self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
+                                      export="addressable")["owner"][0], "difference")
+            self.assertEqual(readback(observe(original), observe(read, markdown=authored + "\n## BODY"),
+                                      export="addressable")["owner-content"][0], "review")
+            read["blocks"][0]["layout"] = dict(spacingBeforeLines=1)
+            self.assertEqual(readback(observe(original), observe(read, markdown=marker + "\n## BODY"),
+                                      export="addressable")["gap"][0], "difference")
 
     def test_addressable_proof_follows_section_preorder(self):
         def section(name, children=()):

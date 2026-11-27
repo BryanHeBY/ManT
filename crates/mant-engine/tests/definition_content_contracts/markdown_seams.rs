@@ -189,7 +189,7 @@ fn generated_inline_owner_html_keeps_the_existing_literal_reader_policy() {
     // This is generated artifact navigation, not authored source content. The
     // locked reader preserves this inline HTML as text. Do not teach the
     // product a broader HTML interpretation to simplify the seam matrix.
-    let expected = format!("Probe\n\n• <a id=\"{OWNER}\"></a>{BODY}");
+    let expected = format!("Probe\n\n• <span id=\"{OWNER}\"></span>{BODY}");
     let mut value = source;
     for cycle in 1..=2 {
         let (parsed, markdown) = next(&value, true);

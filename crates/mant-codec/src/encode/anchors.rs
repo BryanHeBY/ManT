@@ -17,17 +17,28 @@ pub(crate) fn anchor_markers(markdown: &str) -> Vec<AnchorMarker<'_>> {
     {
         match event {
             Event::Html(_) | Event::InlineHtml(_) => {
-                markers.extend(markers_in_html(markdown, range, "<a id=\"", "\"></a>"));
+                markers.extend(markers_in_html(markdown, range.clone()));
+                markers.extend(find_markers_in_html(markdown, range, "<a id=\"", "\"></a>"));
             }
             _ => {}
         }
     }
+    // Events are in source order; an HTML block can interleave current and
+    // legacy empty destinations. Project both as one ordered set of ranges.
+    markers.sort_unstable_by_key(|marker| marker.range.start);
     markers
 }
 
 /// Find complete zero-width markers whose opening tags are in an accepted
 /// HTML event. The close may be a separate inline event.
-pub(super) fn markers_in_html<'a>(
+pub(super) fn markers_in_html(
+    markdown: &str,
+    range: Range<usize>,
+) -> impl Iterator<Item = AnchorMarker<'_>> {
+    find_markers_in_html(markdown, range, "<span id=\"", "\"></span>")
+}
+
+fn find_markers_in_html<'a>(
     markdown: &'a str,
     range: Range<usize>,
     prefix: &'static str,
@@ -60,15 +71,32 @@ mod tests {
 
     #[test]
     fn scanner_indexes_only_complete_empty_inline_anchors() {
-        let text = "before<a id=\"node\"></a>after";
-        let ranges: Vec<_> = anchor_markers(text).into_iter().map(|m| m.range).collect();
-        assert_eq!(ranges, vec![6..23]);
-        assert_eq!(&text[ranges[0].clone()], "<a id=\"node\"></a>");
-        for retained in [
-            "before<a id=\"node\">payload</a>after",
-            "before<a id=\"node\"after",
-        ] {
-            assert!(anchor_markers(retained).is_empty(), "{retained}");
+        for tag in ["span", "a"] {
+            let marker = format!("<{tag} id=\"node\"></{tag}>");
+            let text = format!("before{marker}after");
+            let ranges: Vec<_> = anchor_markers(&text).into_iter().map(|m| m.range).collect();
+            assert_eq!(ranges, vec![6..6 + marker.len()]);
+            for retained in [
+                format!("before<{tag} id=\"node\">payload</{tag}>after"),
+                format!("before<{tag} id=\"node\"after"),
+                format!("\u{60}{marker}\u{60}"),
+                format!("\\{marker}"),
+                format!("~~~html\n{marker}\n~~~"),
+            ] {
+                assert!(anchor_markers(&retained).is_empty(), "{retained}");
+            }
         }
+    }
+
+    #[test]
+    fn scanner_orders_current_and_legacy_markers_in_one_html_block() {
+        let text = "<br />\n<a id=\"first\"></a><span id=\"second\"></span>\n";
+        assert_eq!(
+            anchor_markers(text)
+                .into_iter()
+                .map(|marker| marker.id)
+                .collect::<Vec<_>>(),
+            ["first", "second"]
+        );
     }
 }

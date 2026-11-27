@@ -142,7 +142,7 @@ fn pending_section_rows_do_not_resurrect_rejected_text_after_markdown_readback()
                             .anchor_ranges()
                             .iter()
                             .filter(|range| {
-                                &artifact.text()[(*range).clone()] == r#"<a id="next"></a>"#
+                                &artifact.text()[(*range).clone()] == r#"<span id="next"></span>"#
                             })
                             .count(),
                         1,

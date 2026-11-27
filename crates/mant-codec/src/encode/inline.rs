@@ -293,7 +293,7 @@ mod tests {
                 &children,
                 super::RenderOptions::portable(super::super::MarkdownOptions::ADDRESSABLE)
             ),
-            "<a id=\"first\"></a>\n<a id=\"second\"></a>"
+            "<span id=\"first\"></span>\n<span id=\"second\"></span>"
         );
     }
 

@@ -325,10 +325,10 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
         );
         assert!(markdown.contains("[Run](#command-run)"), "{markdown}");
         assert!(!markdown.contains("mant:entries"), "{markdown}");
-        let root = markdown.find("<a id=\"document-overview\"").unwrap();
+        let root = markdown.find("<span id=\"document-overview\"").unwrap();
         assert!(root < markdown.find("# [Catalog]").unwrap(), "{markdown}");
         assert_eq!(
-            markdown.matches("<a id=\"document-overview\"").count(),
+            markdown.matches("<span id=\"document-overview\"").count(),
             1,
             "{markdown}"
         );
@@ -338,7 +338,10 @@ fn local_heading_links_force_addressable_export_even_when_semantics_were_request
         // reimport semantic identities from otherwise unsupported raw HTML.
         for target in &before {
             if let LinkTarget::Section { id } = target {
-                assert!(markdown.contains(&format!("<a id=\"{id}\"")), "{markdown}");
+                assert!(
+                    markdown.contains(&format!("<span id=\"{id}\"")),
+                    "{markdown}"
+                );
             }
         }
     }
@@ -355,7 +358,7 @@ fn root_anchor_precedes_the_real_heading_and_never_moves_after_tldr() {
         let query = load_markdown_text(&source, None).unwrap();
         let markdown = render_markdown(&query);
         assert!(
-            markdown.find("<a id=\"document-overview\"").unwrap()
+            markdown.find("<span id=\"document-overview\"").unwrap()
                 < markdown.find("# [Catalog]").unwrap(),
             "{markdown}"
         );
@@ -406,5 +409,8 @@ fn heading_links_to_inline_anchors_preserve_both_destination_and_occurrence() {
     });
     let markdown = render_markdown(&query);
     assert!(markdown.contains("[Spot](#inline-target)"), "{markdown}");
-    assert!(markdown.contains("<a id=\"inline-target\""), "{markdown}");
+    assert!(
+        markdown.contains("<span id=\"inline-target\""),
+        "{markdown}"
+    );
 }

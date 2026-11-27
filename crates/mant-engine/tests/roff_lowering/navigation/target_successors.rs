@@ -40,7 +40,7 @@ fn check_destination(query: &ResolvedContent, line: u32, label: &str) {
     anchor_line(document, TARGET, line);
 
     let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-    let marker = format!("<a id=\"{TARGET}\"></a>");
+    let marker = format!("<span id=\"{TARGET}\"></span>");
     assert_eq!(markdown.matches(&marker).count(), 1, "{markdown}");
     let (_, trailing) = markdown.split_once(&marker).unwrap();
     let (owner, _) = trailing.split_once("OWNERBODY.").unwrap();
@@ -183,12 +183,12 @@ fn authored_target_spelling_survives_native_operand_normalization() {
                         anchor_line(document, authored, owner_line);
                         let markdown =
                             render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-                        let marker = format!("<a id=\"{authored}\"></a>");
+                        let marker = format!("<span id=\"{authored}\"></span>");
                         assert_eq!(markdown.matches(&marker).count(), 1, "{markdown}");
                         assert!(markdown.find(&marker).unwrap() < markdown.find("ALPHA.").unwrap());
                         if !later.is_empty() {
                             anchor_line(document, automatic_id, later_line);
-                            let marker = format!("<a id=\"{automatic_id}\"></a>");
+                            let marker = format!("<span id=\"{automatic_id}\"></span>");
                             let automatic_pos = markdown.find(&marker).unwrap();
                             assert!(markdown.find("ALPHA.").unwrap() < automatic_pos);
                             assert!(automatic_pos < markdown.find("BETA.").unwrap());
@@ -220,7 +220,7 @@ fn reordered_or_superseded_tags_keep_only_their_actual_owner() {
     let document = query.document.as_ref().unwrap();
     anchor_line(document, TARGET, 12);
     let markdown = render_markdown_with_options(&query, MarkdownOptions::ADDRESSABLE);
-    let marker = markdown.find("<a id=\"Mixed.Target\"></a>").unwrap();
+    let marker = markdown.find("<span id=\"Mixed.Target\"></span>").unwrap();
     assert!(markdown.find("FIRSTBODY.").unwrap() < marker);
     assert!(marker < markdown.find("SECONDBODY.").unwrap());
 }
