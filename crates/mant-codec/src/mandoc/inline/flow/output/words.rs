@@ -17,10 +17,18 @@ pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
 }
 
 impl InlineBuilder {
-    /// Record the first word of a tagged inline element with a text operand.
+    /// Record the owning word of a tagged inline element with a text operand.
     /// A standalone target has no word owner and uses the ordinary append.
-    pub(in crate::mandoc::inline) fn append_inline_word_target(&mut self, target: Inline) {
-        let serial = self.execution.native_owner_serial.wrapping_add(1);
+    pub(in crate::mandoc::inline) fn append_inline_word_target(
+        &mut self,
+        target: Inline,
+        leading_empty_words: u64,
+    ) {
+        let serial = self
+            .execution
+            .native_owner_serial
+            .wrapping_add(1)
+            .wrapping_add(leading_empty_words);
         self.nodes.push(Inline::anchor(format!(
             "{}{serial}",
             super::NAVIGATION_WORD

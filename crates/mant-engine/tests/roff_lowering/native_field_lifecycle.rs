@@ -590,3 +590,45 @@ fn fractional_tab_advances_update_each_printed_device_segment() {
         assert_rows(body, expected);
     }
 }
+
+#[test]
+fn empty_tagged_operands_keep_the_macro_target_on_its_ink() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+
+    const TARGET: &str = "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>";
+    // Frozen native HTML assigns Tg to the whole command/constant/error
+    // macro. Its empty first word still executes, so C can land before BK;
+    // the original fragment and normalized alias both belong before BK.
+    let cases: &[(&str, &str, u8, &str)] = &[
+        (".No JA\n", "", 0, "CA"),
+        (".No JA\n", "", 1, "JC"),
+        (".No JA\n", "", 2, "JAC"),
+        (".Bl -inset\n.It No JA\n", ".El\n", 0, "CA"),
+        (".Bl -inset\n.It No JA\n", ".El\n", 1, "JC"),
+        (".Bl -inset\n.It No JA\n", ".El\n", 2, "JAC"),
+        (".Bl -tag -width 4n\n.It No JA\n", ".El\n", 0, "JAC"),
+    ];
+    let ink = |s: &str| {
+        s.chars()
+            .filter(|c| "JABKC".contains(*c))
+            .collect::<String>()
+    };
+    for (head, post, column, prefix) in cases {
+        for token in ["Cm", "Dv", "Er"] {
+            let source = format!(
+                "{HEADER}{head}.Tg Body.Target\n.{token} \"\" BK No \"\\h'|{column}n'C\"\n{post}"
+            );
+            let original = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let decoded = super::json_roundtrip::json_string_roundtrip(&original);
+            let markdown = render_markdown_with_options(&decoded, MarkdownOptions::ADDRESSABLE);
+            let body = markdown.split_once("## DESCRIPTION\n").unwrap().1;
+            let (before, after) = body
+                .split_once(TARGET)
+                .unwrap_or_else(|| panic!("{source}\n{body}"));
+            assert_eq!(ink(before), *prefix, "{source}\n{body}");
+            assert_eq!(ink(after), "BK", "{source}\n{body}");
+            assert_eq!(body.matches("id=\"body-target\"").count(), 1, "{body}");
+            assert_eq!(body.matches("id=\"Body.Target\"").count(), 1, "{body}");
+        }
+    }
+}
