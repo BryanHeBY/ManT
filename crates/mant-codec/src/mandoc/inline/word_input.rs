@@ -111,7 +111,13 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         defer_leading_blanks,
     );
     receive_word_effects(builder, &execution);
-    if has_glyph && matches!(origin, WordSource::Text(node) if !node.flags.generated) {
+    // The combined marker also executes two literal glyphs. Keep this
+    // ownership check separate from the field-boundary prediction above.
+    let may_have_own_ink = has_glyph
+        || events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::EmptyDestination));
+    if may_have_own_ink && matches!(origin, WordSource::Text(node) if !node.flags.generated) {
         builder.claim_inline_word_targets(&execution.output);
     }
 
