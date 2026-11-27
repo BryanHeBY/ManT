@@ -191,8 +191,11 @@ impl PrefixEdits {
         }
     }
 
-    pub(super) fn changed_owner_receipts(&self) -> bool {
-        self.gaps.changed_owner_keys || !self.moved.is_empty()
+    pub(super) fn changed_owner_receipts_from(&self, initial: usize) -> Option<usize> {
+        self.gaps.changed_owner_keys_from.or_else(|| {
+            // Relocation can replace the just-pushed receipt or extend its run.
+            (!self.moved.is_empty()).then_some(initial)
+        })
     }
 
     pub(super) fn first_incoming(&self) -> Option<usize> {
@@ -556,7 +559,7 @@ fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: us
 
 #[derive(Default)]
 struct GapEdits {
-    changed_owner_keys: bool,
+    changed_owner_keys_from: Option<usize>,
     remove: BTreeMap<String, GapRemoval>,
     relocate: BTreeMap<usize, GapLanding>,
     retained_before_incoming: Option<usize>,
@@ -633,7 +636,9 @@ fn rebase_earlier_words(
             owner.start = owner.start.min(position);
             owner.content = owner.content.min(position);
         }
-        gaps.changed_owner_keys |= previous_key != neutral_key(owner);
+        if previous_key != neutral_key(owner) && gaps.changed_owner_keys_from.is_none() {
+            gaps.changed_owner_keys_from = Some(index);
+        }
     }
     gaps
 }

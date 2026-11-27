@@ -467,7 +467,7 @@ impl InlineBuilder {
             let definition = execution.definition.as_mut().expect("session");
             let buffer = std::mem::take(&mut definition.field_buffer);
             let anchors = std::mem::take(&mut definition.field_word_anchors);
-            definition.owner_replay_dirty = false;
+            definition.owner_replay_dirty_from = None;
             if buffer.is_empty() {
                 Self::clear_authorless_definition_at(execution, nodes);
                 return None;
@@ -485,7 +485,7 @@ impl InlineBuilder {
                 buffer,
                 anchors,
                 output_start: execution.plain_input.output_start.min(nodes.len()),
-                owner_replay_dirty: false,
+                owner_replay_dirty_from: None,
             },
         ))
     }

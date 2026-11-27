@@ -11,6 +11,17 @@ mod passes;
 mod repeated_owners;
 use input::{ExecutedWordEntry, RecordedWordInput, observe_definition_word};
 
+fn note_definition_replay(
+    definition: &mut super::super::definition::DefinitionFieldState,
+    entry: &ExecutedWordEntry,
+    initial_anchor: usize,
+) {
+    repeated_owners::widen_dirty_suffix(
+        &mut definition.owner_replay_dirty_from,
+        entry.changed_owner_receipts_from(initial_anchor),
+    );
+}
+
 #[derive(Default)]
 pub(super) struct WordPassProjection {
     pub(super) closes_before: Vec<std::ops::Range<usize>>,
@@ -368,7 +379,7 @@ impl InlineBuilder {
             &entry,
         ));
         entry.append_owner_intervals(&mut definition.field_word_anchors);
-        definition.owner_replay_dirty |= entry.changed_owner_receipts();
+        note_definition_replay(definition, &entry, initial_anchor_index);
         observe_definition_word(definition, incoming, separator);
         let mut projection = self.record_authored_native_passes(
             incoming,
@@ -412,7 +423,7 @@ impl InlineBuilder {
             {
                 repeated_owners::compact_at_checkpoint(
                     anchors,
-                    &mut definition.owner_replay_dirty,
+                    &mut definition.owner_replay_dirty_from,
                     self.execution.native_owner_serial,
                 );
             }
@@ -482,7 +493,10 @@ impl InlineBuilder {
                 &entry,
             ));
         entry.append_owner_intervals(&mut self.execution.plain_input.anchors);
-        self.execution.plain_input.owner_replay_dirty |= entry.changed_owner_receipts();
+        repeated_owners::widen_dirty_suffix(
+            &mut self.execution.plain_input.owner_replay_dirty_from,
+            entry.changed_owner_receipts_from(initial_anchor_index),
+        );
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.

@@ -6,12 +6,20 @@ use super::super::super::{NativeWordAnchor, WordProjectionPolicy};
 /// Keep the old checkpoint, but do not revisit clean owner history.
 pub(super) fn compact_at_checkpoint(
     anchors: &mut Vec<NativeWordAnchor>,
-    dirty: &mut bool,
+    dirty: &mut Option<usize>,
     serial: u64,
 ) {
-    if *dirty && serial.is_multiple_of(16) && anchors.len() >= 64 {
-        compact_neutral_copies(anchors);
-        *dirty = false;
+    if serial.is_multiple_of(16)
+        && anchors.len() >= 64
+        && let Some(from) = dirty.take()
+    {
+        compact_neutral_copies(anchors, from);
+    }
+}
+
+pub(super) fn widen_dirty_suffix(dirty: &mut Option<usize>, changed: Option<usize>) {
+    if let Some(changed) = changed {
+        *dirty = Some(dirty.map_or(changed, |prior| prior.min(changed)));
     }
 }
 
@@ -20,14 +28,19 @@ pub(super) fn compact_at_checkpoint(
 /// it cannot paint, own a separator, or mark an accepted row. The unchanged
 /// first and last copies preserve source-resolving and reverse word lookup
 /// ties; keep the original relative sequence of all other receipts.
-pub(super) fn compact_neutral_copies(anchors: &mut Vec<NativeWordAnchor>) {
-    if anchors.len() < 64 {
-        return;
+fn compact_neutral_copies(anchors: &mut Vec<NativeWordAnchor>, mut from: usize) {
+    debug_assert!(from < anchors.len());
+    // A dirty key can extend an earlier run across the suffix boundary.
+    // Include the entire matching run so its original first/reverse ties
+    // still arbitrate duplicates. All other earlier runs are unaffected.
+    if let Some(key) = neutral_key(&anchors[from]) {
+        while from > 0 && neutral_key(&anchors[from - 1]) == Some(key) {
+            from -= 1;
+        }
     }
-    #[cfg(test)]
-    let before = anchors.len();
-    let mut drop = vec![false; anchors.len()];
-    let mut next = 0;
+    let scanned = anchors.len() - from;
+    let mut drop = vec![false; scanned];
+    let mut next = from;
     while let Some(first) = anchors.get(next) {
         let start = next;
         next += 1;
@@ -40,12 +53,28 @@ pub(super) fn compact_neutral_copies(anchors: &mut Vec<NativeWordAnchor>) {
         {
             next += 1;
         }
-        retain_run_endpoints(&anchors[start..next], &mut drop[start..next]);
+        retain_run_endpoints(&anchors[start..next], &mut drop[start - from..next - from]);
     }
-    let mut mask = drop.into_iter();
-    anchors.retain(|_| !mask.next().expect("unchanged receipt count"));
+    // Do not rewrite or traverse the prefix with Vec::retain. Stable
+    // forward swaps leave the undropped suffix in its original order.
+    let mut write = from;
     #[cfg(test)]
-    tests::count_compaction(before, anchors.len());
+    let mut moved = 0;
+    for (read, drop) in (from..anchors.len()).zip(drop) {
+        if !drop {
+            if write != read {
+                anchors.swap(write, read);
+                #[cfg(test)]
+                {
+                    moved += 1;
+                }
+            }
+            write += 1;
+        }
+    }
+    #[cfg(test)]
+    tests::count_compaction(scanned, write - from, moved);
+    anchors.truncate(write);
 }
 
 pub(super) fn neutral_key(anchor: &NativeWordAnchor) -> Option<usize> {
@@ -88,17 +117,21 @@ mod tests {
         calls: usize,
         scanned: usize,
         removed: usize,
+        mask_slots: usize,
+        moved: usize,
     }
 
     thread_local! {
         static COSTS: std::cell::Cell<Option<Costs>> = const { std::cell::Cell::new(None) };
     }
 
-    pub(super) fn count_compaction(before: usize, after: usize) {
+    pub(super) fn count_compaction(before: usize, after: usize, moved: usize) {
         COSTS.with(|slot| {
             if let Some(mut count) = slot.get() {
                 count.calls += 1;
                 count.scanned += before;
+                count.mask_slots += before;
+                count.moved += moved;
                 count.removed += before - after;
                 slot.set(Some(count));
             }
@@ -143,7 +176,7 @@ mod tests {
         let long = parse_costs(head, "", repaint, 96);
         assert_eq!((short.calls, short.removed), (2, 210), "{short:?}");
         assert_eq!((long.calls, long.removed), (11, 1074), "{long:?}");
-        assert_eq!((short.scanned, long.scanned), (372, 3549));
+        assert!(short.scanned <= 372 && long.scanned <= 3549);
 
         // The old periodic scan kept visiting ordinary appended words
         // forever after a single replay. Pending dirt may cross the small
@@ -153,6 +186,25 @@ mod tests {
         let once_long = parse_costs(head, once, ".No Y\n", 4096);
         assert!(once_short.calls <= 1, "{once_short:?}");
         assert_eq!(once_short, once_long);
+    }
+
+    #[test]
+    fn sparse_local_rewind_does_not_scan_or_move_unrelated_receipts() {
+        let initial = "Y\n".repeat(64);
+        for retreat in [3, 4] {
+            let repaint = format!("{}.No \"\\h'-{retreat}n'X\"\n", "Y\n".repeat(7));
+            for repeats in [8, 32, 128, 512, 2048] {
+                let costs = parse_costs("No HEAD", &initial, &repaint, repeats);
+                eprintln!("retreat={retreat} groups={repeats} {costs:?}");
+                assert!(costs.calls > 0, "{retreat} {repeats}: {costs:?}");
+                assert!(
+                    costs.scanned <= 48 * costs.calls,
+                    "{retreat} {repeats}: {costs:?}"
+                );
+                assert_eq!(costs.scanned, costs.mask_slots);
+                assert_eq!((costs.removed, costs.moved), (0, 0));
+            }
+        }
     }
 
     fn receipt(owner: &str, coordinate: usize) -> NativeWordAnchor {
@@ -168,6 +220,34 @@ mod tests {
     }
 
     #[test]
+    fn a_run_crossing_the_dirty_boundary_keeps_complete_ties() {
+        let mut before: Vec<_> = (0..128)
+            .map(|cell| receipt(&format!("earlier-{cell}"), cell))
+            .collect();
+        before.extend([
+            receipt("same", 130),
+            receipt("independent", 130),
+            receipt("same", 130),
+        ]);
+        let from = before.len();
+        before.extend([receipt("same", 130), receipt("later", 131)]);
+        let mut whole = before.clone();
+        compact_neutral_copies(&mut whole, 0);
+        compact_neutral_copies(&mut before, from);
+        assert_eq!(
+            before
+                .iter()
+                .map(|item| (&item.owner, item.content))
+                .collect::<Vec<_>>(),
+            whole
+                .iter()
+                .map(|item| (&item.owner, item.content))
+                .collect::<Vec<_>>(),
+        );
+        assert_eq!(before.len(), 132);
+    }
+
+    #[test]
     fn preserves_both_ties_distinct_empty_ids_and_earlier_live_fragment() {
         let mut before = vec![receipt("earlier", 0)];
         before.extend((0..65).flat_map(|_| [receipt("alias", 3), receipt("word", 3)]));
@@ -177,7 +257,7 @@ mod tests {
         before.extend((0..65).map(|_| receipt("word", 3)));
         before.push(receipt("inkless", 3));
         let mut after = before.clone();
-        compact_neutral_copies(&mut after);
+        compact_neutral_copies(&mut after, 0);
         assert_eq!(
             after
                 .iter()
