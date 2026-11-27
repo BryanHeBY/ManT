@@ -266,16 +266,18 @@ impl<'a> HeadView<'a> {
         }
     }
 
-    /// The entire attached atom must be one unchanged executed operand.
-    /// A repainted or independently appended tail is a different owner,
-    /// even when the serialized spelling would look plausible.
-    pub(super) fn complete_native_composite_value(&self, span: Range<usize>) -> bool {
+    /// Prove the first joined atom, not the complete argument list.
+    /// An independently appended or repainted glyph before the first
+    /// whitespace still invalidates the atom's owner.
+    pub(super) fn native_composite_value_atom(&self, span: Range<usize>) -> Option<&str> {
         if !self.native_composite_value_starts(span.start) {
-            return false;
+            return None;
         }
-        let value = self.text[span.clone()].trim_end();
-        self.operand(span.start)
-            .is_some_and(|operand| self.text[operand.bytes.clone()].trim_end().len() == value.len())
+        let source = &self.text[span.clone()];
+        let atom = &source[..source.find(char::is_whitespace).unwrap_or(source.len())];
+        let operand = self.operand(span.start)?;
+        let accepted = self.text[operand.bytes.clone()].trim_end();
+        (!atom.is_empty() && atom == accepted).then_some(atom)
     }
 
     pub(super) fn permits_option_spelling(

@@ -750,3 +750,82 @@ fn assert_attached_display(head: &str, form: &str) {
         "{head}: {text}"
     );
 }
+
+#[test]
+fn a_complete_attached_atom_can_precede_separate_typed_arguments() {
+    for literal in ["tls", "v1.2"] {
+        for (head, form, names) in [
+            (
+                format!("Fl a Ar mode No / Fl v Ns Li {literal} Ar profile"),
+                format!("-a mode / -v{literal} profile"),
+                ["-a", "-v"],
+            ),
+            (
+                format!("Fl v Ns Li {literal} Ar profile No / Fl a Ar mode"),
+                format!("-v{literal} profile / -a mode"),
+                ["-v", "-a"],
+            ),
+        ] {
+            check_declaration(&head, &form, &names, &[&format!("-v{literal}")]);
+        }
+    }
+    let joined = "Fl a Ar mode No / Fl v Ns Li tls Ns Ar profile";
+    let form = "-a mode / -vtlsprofile";
+    assert_attached_display(joined, form);
+    assert_eq!(
+        explain_attached_tail(joined, form)
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+}
+
+#[test]
+fn relative_rewind_only_clips_an_attached_value_at_whole_columns() {
+    for motion in ["-1u", "-23u"] {
+        let head = format!(r#"Fl a Ar mode No / Fl v Ns Li "tl\h'{motion}'s""#);
+        check_declaration(&head, "-a mode / -vtls", &["-a", "-v"], &["-vtls"]);
+    }
+    check_declaration(
+        r#"Fl a Ar mode No / Fl v Ns Li "tl\z\h'-24u's""#,
+        "-a mode / -vtls",
+        &["-a", "-v"],
+        &["-vtls"],
+    );
+    let inherited_backbefore = r#"Fl a Ar mode No / Fl v Ns Li "t\zl\h'-1u's""#;
+    assert_attached_display(inherited_backbefore, "-a mode / -vts");
+    assert_eq!(
+        explain_attached_tail(inherited_backbefore, "-a mode / -vts")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    let destructive = r#"Fl a Ar mode No / Fl v Ns Li "tl\h'-24u's""#;
+    let form = "-a mode / -vts";
+    assert_attached_display(destructive, form);
+    assert_eq!(
+        explain_attached_tail(destructive, form)
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    check_declaration(
+        "Fl a Ar mode No / Fl v Ns Li ts",
+        form,
+        &["-a", "-v"],
+        &["-vts"],
+    );
+}
+
+#[test]
+fn an_attached_li_equals_uses_complete_assignment_provenance() {
+    check_declaration(
+        r"Fl a Ns Li \&= Ns Ar x Ns / Ns Ar y Ns Op , Ns Ar z",
+        "-a=x/y[,z]",
+        &["-a"],
+        &["-z"],
+    );
+}

@@ -503,7 +503,7 @@ fn native_spelling_role(
         !decoded.proves_native_glyphs()
             || follows_option
                 && role.is_attached_composite_value()
-                && decoded.events.iter().any(repositions_typed_value)
+                && repositions_typed_value(&decoded.events)
     }) {
         return role;
     }
@@ -518,19 +518,52 @@ fn native_spelling_role(
 
 /// A motion inside a single value can replace its own glyph before any
 /// cross-owner receipt exists. That resulting word is not the authored atom.
-fn repositions_typed_value(event: &RoffInlineEvent) -> bool {
-    let RoffInlineEvent::HorizontalMotion {
-        argument: Some(argument),
-        ..
-    } = event
-    else {
-        return false;
-    };
-    let (length, absolute) = argument
-        .strip_prefix('|')
-        .map_or((argument.as_str(), false), |length| (length, true));
-    libmandoc_rs::TableColumnMetrics::motion_argument(length)
-        .is_some_and(|(units, _)| absolute || units < 0)
+fn repositions_typed_value(events: &[RoffInlineEvent]) -> bool {
+    // term_word() consumes BACKAFTER before even parsing HORIZ. A graph
+    // transfers that arm to BACKBEFORE, which is a separate decrement on
+    // a later negative move even if its distance rounds to zero columns.
+    let mut backafter = false;
+    let mut backbefore = false;
+    for event in events {
+        match event {
+            RoffInlineEvent::ZeroAdvance => backafter = true,
+            RoffInlineEvent::NoSpace => backafter = false,
+            RoffInlineEvent::HorizontalMotion { argument, .. } => {
+                if std::mem::take(&mut backafter) {
+                    continue;
+                }
+                let Some(argument) = argument.as_deref() else {
+                    continue;
+                };
+                if let Some(target) = argument.strip_prefix('|') {
+                    // An absolute address needs the previous field origin,
+                    // which cannot be certified by this operand alone.
+                    if libmandoc_rs::TableColumnMetrics::motion_argument(target).is_some() {
+                        return true;
+                    }
+                } else if crate::mandoc::inline::word_input::negative_entry_columns(Some(argument))
+                    .is_some_and(|columns| columns > 0 || backbefore)
+                {
+                    return true;
+                } else if libmandoc_rs::TableColumnMetrics::motion_argument(argument)
+                    .is_some_and(|(units, _)| units > 0)
+                {
+                    backbefore = false;
+                }
+            }
+            RoffInlineEvent::Text(text) | RoffInlineEvent::Glyph(text, _) => {
+                for _ in text
+                    .chars()
+                    .filter(|character| character.is_ascii_graphic() || !character.is_ascii())
+                {
+                    backbefore = std::mem::take(&mut backafter);
+                }
+            }
+            RoffInlineEvent::BreakableHyphen => backbefore = std::mem::take(&mut backafter),
+            _ => {}
+        }
+    }
+    false
 }
 
 #[derive(Clone)]

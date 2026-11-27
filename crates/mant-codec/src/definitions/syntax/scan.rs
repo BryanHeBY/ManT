@@ -609,15 +609,18 @@ impl<'a> Scanner<'a> {
                 self.form_evidence
                     .reject_if(!arguments::proves_native_assignment(self.view, &argument));
             }
+            // The complete assignment has its own scoped RHS proof.
+            // A separately authored Li '=' is an operator, not a value.
             if argument.attached_to_name
+                && !self.view.text[argument.bytes.clone()].starts_with('=')
                 && self
                     .view
                     .native_composite_value_starts(argument.bytes.start)
             {
                 self.form_evidence.reject_if(
-                    !self
-                        .view
-                        .complete_native_composite_value(argument.bytes.clone()),
+                    self.view
+                        .native_composite_value_atom(argument.bytes.clone())
+                        .is_none(),
                 );
             }
             self.arguments.push(argument);
