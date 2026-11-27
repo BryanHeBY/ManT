@@ -2,11 +2,13 @@
 
 use super::super::{
     Inline, InlineBuilder, PendingBoundary, ProjectedNativeGap, WordProjectionPolicy,
+    field_buffer::FieldProjectionOwner,
 };
 use super::source_blanks::take_retreated_source_blank;
 
 mod input;
 mod passes;
+mod repeated_owners;
 use input::{ExecutedWordEntry, RecordedWordInput, observe_definition_word};
 
 #[derive(Default)]
@@ -398,13 +400,18 @@ impl InlineBuilder {
         initial_index: usize,
         content: usize,
     ) {
-        if let Some(anchors) = self
-            .execution
-            .definition
-            .as_mut()
-            .map(|definition| &mut definition.field_word_anchors)
-        {
+        if let Some(definition) = &mut self.execution.definition {
+            let anchors = &mut definition.field_word_anchors;
             projection.align_separator_owners(anchors, initial_index, content);
+            // The current overlay no longer holds owner indices. Only the
+            // detached run-in may accumulate repeated relocation receipts.
+            if definition.field_buffer.projection_owner() == FieldProjectionOwner::Detached
+                && definition.run_in_continuation
+                && definition.deferred_head_projection.is_some()
+                && self.execution.native_owner_serial.is_multiple_of(16)
+            {
+                repeated_owners::compact_neutral_copies(anchors);
+            }
         }
     }
 
