@@ -205,7 +205,7 @@ impl<'node> ContainerSink<'node> for BlockContainerSink<'node, '_, '_> {
                 .formatter
                 .execution
                 .take_no_fill_source_line_entered(source.id);
-            if !entered && self.lowerer.state.settle_no_fill_row(true) {
+            if !entered && self.lowerer.state.settle_no_fill_row(Some(source)) {
                 self.lowerer
                     .state
                     .formatter

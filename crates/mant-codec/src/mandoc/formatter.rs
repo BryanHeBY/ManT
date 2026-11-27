@@ -105,6 +105,7 @@ enum DefinitionBodyPlacement {
     Pending,
     BreakRequested,
     HeadClosedAtSourceLine,
+    HeadClosedAtRunInEntry,
     StructuralRowClosed,
 }
 
@@ -274,11 +275,19 @@ impl FormatterState {
     }
 
     pub(super) fn note_definition_head_source_close(&mut self) {
-        self.note_definition_head_source_close_with_unrepresented_row(false);
+        self.note_definition_head_close(DefinitionBodyPlacement::HeadClosedAtSourceLine, false);
     }
 
-    pub(super) fn note_definition_head_source_close_with_unrepresented_row(
+    pub(super) fn note_run_in_definition_head_source_close(&mut self, unrepresented_row: bool) {
+        self.note_definition_head_close(
+            DefinitionBodyPlacement::HeadClosedAtRunInEntry,
+            unrepresented_row,
+        );
+    }
+
+    fn note_definition_head_close(
         &mut self,
+        placement: DefinitionBodyPlacement,
         unrepresented_row: bool,
     ) {
         if let Some(body) = self.definition_bodies.last_mut()
@@ -286,17 +295,29 @@ impl FormatterState {
             && (body.head_row == DefinitionHeadRow::Pending || unrepresented_row)
             && !body.structural_row_closed()
         {
-            body.placement = DefinitionBodyPlacement::HeadClosedAtSourceLine;
+            body.placement = placement;
         }
     }
 
     pub(super) fn definition_body_follows_head_source_close(&self) -> bool {
+        self.definition_body_closes_independent_literal_row(false)
+    }
+
+    pub(super) fn definition_body_closes_independent_literal_row(
+        &self,
+        before_explicit_break: bool,
+    ) -> bool {
         self.definition_bodies.last().is_some_and(|body| {
             body.before_visible
-                && matches!(
-                    body.placement,
-                    DefinitionBodyPlacement::HeadClosedAtSourceLine
-                )
+                && match body.placement {
+                    DefinitionBodyPlacement::HeadClosedAtSourceLine => true,
+                    // An uncontinued explicit .br observes NODE_LINE first,
+                    // but its leading empty literal row remains subject to
+                    // the reading exception. A continued .br skips this
+                    // source gate and instead keeps its completed receipt.
+                    DefinitionBodyPlacement::HeadClosedAtRunInEntry => !before_explicit_break,
+                    _ => false,
+                }
         })
     }
 

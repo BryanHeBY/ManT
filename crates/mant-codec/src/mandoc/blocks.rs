@@ -370,7 +370,7 @@ impl<'a, 'source> BlockLowerer<'a, 'source> {
     }
 
     fn settle_no_fill_inline(&mut self) -> bool {
-        self.state.settle_no_fill_row(false)
+        self.state.settle_no_fill_row(None)
     }
 
     fn finish_into(

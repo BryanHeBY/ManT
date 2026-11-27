@@ -325,7 +325,11 @@ impl BlockState {
         self.observe_inline_source_effects(visible_before);
     }
 
-    pub(in crate::mandoc::blocks) fn settle_no_fill_row(&mut self, source_line: bool) -> bool {
+    pub(in crate::mandoc::blocks) fn settle_no_fill_row(
+        &mut self,
+        source_node: Option<&libmandoc_rs::Node>,
+    ) -> bool {
+        let source_line = source_node.is_some();
         let paragraph_owns_row = !self.paragraph.is_empty() && self.literal.is_empty();
         let executed_native_newline = self.formatter.execution.has_native_definition_field()
             && (source_line
@@ -348,8 +352,12 @@ impl BlockState {
                     InlineBuilder::execute_native_newline_with_tail,
                 )
             } else {
-                let follows_head =
-                    source_line && self.formatter.definition_body_follows_head_source_close();
+                let follows_head = source_node.is_some_and(|node| {
+                    let before_explicit_break = node.macro_token.as_ref()
+                        == Some(&libmandoc_rs::MacroToken::Roff(libmandoc_rs::RoffMacro::Br));
+                    self.formatter
+                        .definition_body_closes_independent_literal_row(before_explicit_break)
+                });
                 self.with_row_builder(RowOwner::Literal, |builder| {
                     builder.execute_native_literal_source_newline(follows_head)
                 })

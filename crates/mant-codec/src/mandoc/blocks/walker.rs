@@ -520,7 +520,7 @@ impl BlockLowerer<'_, '_> {
         }
         self.resume_no_fill_row();
         if !self.state.formatter.execution.source_row_continues() {
-            if self.state.settle_no_fill_row(true) {
+            if self.state.settle_no_fill_row(Some(node)) {
                 self.state
                     .formatter
                     .execution

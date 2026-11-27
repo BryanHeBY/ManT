@@ -315,9 +315,7 @@ impl BlockState {
                     )
                     .is_empty();
                 self.formatter
-                    .note_definition_head_source_close_with_unrepresented_row(
-                        completed_invisible_head,
-                    );
+                    .note_run_in_definition_head_source_close(completed_invisible_head);
                 if represented
                     && self
                         .paragraph
