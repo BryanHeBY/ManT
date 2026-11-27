@@ -829,3 +829,44 @@ fn an_attached_li_equals_uses_complete_assignment_provenance() {
         &["-z"],
     );
 }
+
+#[test]
+fn attached_value_rewind_requires_actual_ink_loss() {
+    // CVS keeps the old lastcol on rewind. Filling motion padding and
+    // a retreat that is never followed by paint do not replace any glyph.
+    for value in [
+        r#"Li "tl\h'1n'\h'-1n's""#,
+        r#"Li "tls\h'-1n'""#,
+        r#"Li "tls""#,
+    ] {
+        let head = format!("Fl a Ar mode No / Fl v Ns {value}");
+        let form = "-a mode / -vtls";
+        assert_attached_display(&head, form);
+        check_declaration(&head, form, &["-a", "-v"], &["-vtls"]);
+    }
+    let reverse = r#"Fl v Ns Li "tl\h'1n'\h'-1n's" No / Fl a Ar mode"#;
+    check_declaration(reverse, "-vtls / -a mode", &["-v", "-a"], &["-vtls"]);
+    // Pinned CVS terminal removes the space before the reverse
+    // separator after a trailing rewind. It is not the spaced compound.
+    let reverse_trailing = r#"Fl v Ns Li "tls\h'-1n'" No / Fl a Ar mode"#;
+    assert_attached_display(reverse_trailing, "-vtls/ -a mode");
+    assert_eq!(
+        explain_attached_tail(reverse_trailing, "-vtls / -a mode")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    for (value, form) in [
+        (r#"Li "tl\h'-1n's""#, "-a mode / -vts"),
+        (r#"Li "tls\h'-1n's""#, "-a mode / -vtls"),
+    ] {
+        let head = format!("Fl a Ar mode No / Fl v Ns {value}");
+        assert_attached_display(&head, form);
+        assert_eq!(
+            explain_attached_tail(&head, form).counts.direct_entry.total,
+            0,
+            "{head}"
+        );
+    }
+}
