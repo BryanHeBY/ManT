@@ -1377,6 +1377,7 @@ fn execute_seed<'a>(
         return Err(PriorSlotEdit::Unresolved);
     }
     let pre_column_retreat = seed.placement.pre_column_retreat_units;
+    let edited_source_start = seed.placement.retreated.then_some(seed.earlier);
     let placed = PlacedWord::prepare(
         seed,
         retain_suffix,
@@ -1394,7 +1395,7 @@ fn execute_seed<'a>(
     if plan.tracks_origin_retreat {
         word.native_origin_retreat_units = pre_column_retreat;
     }
-    placed.project(context, word);
+    placed.project(context, word, edited_source_start);
     Ok(())
 }
 

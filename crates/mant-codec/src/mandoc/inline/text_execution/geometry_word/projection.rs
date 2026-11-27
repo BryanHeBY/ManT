@@ -153,11 +153,36 @@ impl<'a> PlacedWord<'a> {
         })
     }
 
+    fn revised_authored_ink(&self, start: usize) -> bool {
+        // Each authored scalar gets one reading owner, including the two
+        // terminal copies of a bold glyph. Install the proof only if all
+        // raw copies of an actual source scalar disappeared; blanks and
+        // generated/presentation writes do not establish author ink.
+        let mut survives = vec![false; self.reading.len() - start];
+        for slot in &self.slots {
+            if let Some(owner) = slot.owner.and_then(|owner| owner.checked_sub(start)) {
+                survives[owner] = true;
+            }
+        }
+        self.reading[start..]
+            .iter()
+            .zip(survives)
+            .any(|(cell, owns)| {
+                !owns && matches!(cell.glyph, ReadingGlyph::Scalar(ch) if !ch.is_whitespace())
+            })
+    }
+
     pub(super) fn project(
         mut self,
         context: &mut TextExecutionContext<'_>,
         word: &mut WordExecution,
+        edited_source_start: Option<usize>,
     ) {
+        if context.zero_advance.tracks_authored_ink()
+            && edited_source_start.is_some_and(|start| self.revised_authored_ink(start))
+        {
+            context.zero_advance.record_revised_authored_ink();
+        }
         let prior = self.prior.and_then(|prior| match prior {
             PriorSlotProjection::Buffered { owner, survives } => {
                 let output = context.zero_advance.project_prior_slot(survives);

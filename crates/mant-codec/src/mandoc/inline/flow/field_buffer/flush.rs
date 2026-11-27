@@ -394,6 +394,29 @@ impl FieldBuffer {
         !self.pass_retreats.is_empty()
     }
 
+    /// Does this native cell stand for visible source ink, rather than
+    /// spacing or a formatter-only overstrike prefix? A literal underscore
+    /// is a graph, unlike an underline prefix stored as decoration.
+    pub(in crate::mandoc::inline::flow) fn has_projected_ink_at(&self, cell: usize) -> bool {
+        let graph = match self.cells.get(cell) {
+            Some(FieldCell::Graph { text, .. }) => !text.is_whitespace(),
+            Some(FieldCell::Hyphen) => true,
+            _ => false,
+        };
+        graph
+            && self.underline_strokes.binary_search(&cell).is_err()
+            && self.projection_length(cell, cell + 1) != 0
+    }
+
+    /// A bold or underline copy may do the writing before its source
+    /// word's visible content anchor. Resolve that copy to the real owner.
+    pub(in crate::mandoc::inline::flow) fn native_ink_owner_cell(&self, cell: usize) -> usize {
+        self.raw_copy_aliases
+            .binary_search_by_key(&cell, |&(copy, _)| copy)
+            .ok()
+            .map_or(cell, |index| self.raw_copy_aliases[index].1)
+    }
+
     pub(in crate::mandoc::inline::flow) fn covered_pass_retreats(
         &self,
         passes: &[FillPass],

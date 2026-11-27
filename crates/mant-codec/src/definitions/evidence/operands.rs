@@ -335,7 +335,7 @@ impl NativeOperandRole {
 pub(crate) struct NativeOperand {
     pub(crate) bytes: Range<usize>,
     pub(crate) role: NativeOperandRole,
-    /// A different authored word occupied ink which this receipt overwrote.
+    /// This receipt revised authored ink before final projection.
     /// Keep the visible role for names separately from exact-form proof.
     pub(crate) replaces_native_ink: bool,
 }

@@ -56,7 +56,7 @@ fn slash_arm_boundary(view: &HeadView<'_>, range: &Range<usize>, offset: usize, 
             matches!(
                 operand.role,
                 Role::EnclosureStart { .. } | Role::EnclosureEnd(_)
-            ) || matches!(ch, '=' | ':')
+            ) || crate::definitions::is_native_field_operator(ch)
                 && matches!(
                     operand.role,
                     Role::LiteralContinuation(_) | Role::LiteralValue | Role::SymbolicText

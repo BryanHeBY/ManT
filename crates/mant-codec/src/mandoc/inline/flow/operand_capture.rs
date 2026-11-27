@@ -9,7 +9,9 @@
 
 use std::collections::{HashMap, HashSet};
 
-use crate::definitions::{CapturedHeadOperands, NativeOperand, NativeOperandRole};
+use crate::definitions::{
+    CapturedHeadOperands, NativeOperand, NativeOperandRole, is_native_field_operator,
+};
 use crate::mandoc::declaration_groups::search::SearchHead;
 use crate::mandoc::roff_escape::{DecodedText, PresentationKind, RoffInlineEvent};
 use libmandoc_rs::Node;
@@ -22,7 +24,7 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     search_head: Option<SearchHead>,
     roles: HashMap<u64, NativeOperandRole>,
     replaces_native_ink: HashSet<u64>,
-    spelling_receipts: Vec<(usize, u64)>,
+    projected_operands: Vec<ProjectedOperand>,
     unsplit_receipts: HashMap<u64, usize>,
     fl_spellings: HashMap<u64, FlSpelling>,
     captured: CapturedHeadOperands,
@@ -33,6 +35,14 @@ pub(in crate::mandoc) struct HeadOperandCapture {
     enclosures: Vec<u32>,
     has_environment: bool,
     has_option: bool,
+}
+
+/// Accepted output can be drained before a later word's paint pass is
+/// finalized. Retain its native owner independently of its grammar role.
+#[derive(Clone)]
+struct ProjectedOperand {
+    owner: u64,
+    tracks_spelling: bool,
 }
 
 impl HeadOperandCapture {
@@ -57,16 +67,10 @@ impl HeadOperandCapture {
 
     fn mark_clipped_operands(&mut self, owners: impl Iterator<Item = u64>, writer: Option<u64>) {
         for owner in owners {
-            // Track the accepted writer even when the old word has no
-            // surviving bytes. A subsequent overwrite inherits the fact.
-            if let Some(writer) = writer.filter(|&writer| writer != owner)
-                && (self.replaces_native_ink.contains(&owner)
-                    || self
-                        .roles
-                        .get(&owner)
-                        .copied()
-                        .is_some_and(proves_authored_ink))
-            {
+            // The execution receipt proves displaced ink, even if the
+            // erased word had no recognized role (e.g. ordinary No text).
+            // A subsequent overwrite keeps the same proof on its writer.
+            if let Some(writer) = writer.filter(|&writer| writer != owner) {
                 self.replaces_native_ink.insert(writer);
             }
             if let Some(role) = self.roles.get_mut(&owner) {
@@ -130,31 +134,44 @@ impl HeadOperandCapture {
         // Unlike immediate BACKBEFORE projection, these glyphs remained
         // available for later writes. Only the accepted pass proves clipping.
         buffer.visit_accepted_covers(passes, |target, by| {
-            if buffer.projection_length(target, target + 1) != 0
+            if buffer.has_projected_ink_at(target)
                 && let Some(owner) = word_at(target)
             {
-                self.mark_clipped_operands(std::iter::once(owner), by.and_then(word_at));
+                let writer = by
+                    .map(|cell| buffer.native_ink_owner_cell(cell))
+                    .and_then(word_at);
+                self.mark_clipped_operands(std::iter::once(owner), writer);
             }
         });
     }
 
     pub(in crate::mandoc) fn take(&mut self) -> CapturedHeadOperands {
         let mut captured = std::mem::take(&mut self.captured);
-        for (index, serial) in self.spelling_receipts.drain(..) {
-            let operand = &mut captured.operands[index];
-            let role = self.roles[&serial];
-            // termp_fl_pre's generated dash is independent of these source
-            // glyphs. Later writes can cover only part of a word during
-            // term_field(), so validate the surviving source owner here.
-            operand.role = if matches!(role, NativeOperandRole::FlWord(_))
-                && self.fl_spellings.get(&serial).is_some_and(|spelling| {
-                    !spelling.survived(captured.text[operand.bytes.clone()].trim())
-                }) {
-                NativeOperandRole::ClippedOption
-            } else {
-                role
+        let mut receipts = self.projected_operands.drain(..);
+        captured.operands.retain_mut(|operand| {
+            let receipt = receipts.next().expect("projected operand owner");
+            let owner = receipt.owner;
+            operand.replaces_native_ink = self.replaces_native_ink.contains(&owner);
+            let Some(&role) = self.roles.get(&owner) else {
+                // Unclassified words only supply a receipt if they are
+                // the visible writer of covered author's ink.
+                return operand.replaces_native_ink;
             };
-        }
+            if receipt.tracks_spelling {
+                // termp_fl_pre's generated dash is independent of these
+                // glyphs. Validate the surviving spelling after all covers.
+                operand.role = if matches!(role, NativeOperandRole::FlWord(_))
+                    && self.fl_spellings.get(&owner).is_some_and(|spelling| {
+                        !spelling.survived(captured.text[operand.bytes.clone()].trim())
+                    }) {
+                    NativeOperandRole::ClippedOption
+                } else {
+                    role
+                };
+            }
+            true
+        });
+        debug_assert!(receipts.next().is_none());
         self.unsplit_receipts.clear();
         captured.qualify_optional_keys();
         captured.bodies = self.bodies.take();
@@ -196,16 +213,11 @@ impl HeadOperandCapture {
             self.last_owner = owner;
             return;
         };
-        let replaces_native_ink = self.replaces_native_ink.contains(&serial);
-        let Some(mut role) = self
+        let mut role = self
             .roles
             .get(&serial)
             .copied()
-            .or(replaces_native_ink.then_some(NativeOperandRole::Argument))
-        else {
-            self.last_owner = owner;
-            return;
-        };
+            .unwrap_or(NativeOperandRole::Argument);
         if text.is_empty() {
             return;
         }
@@ -217,28 +229,27 @@ impl HeadOperandCapture {
             && self.last_owner == owner
         {
             previous.bytes.end = end;
-            previous.replaces_native_ink |= replaces_native_ink;
         } else {
-            if matches!(
-                role,
-                NativeOperandRole::Placeholder { .. }
-                    | NativeOperandRole::FlDash(_)
-                    | NativeOperandRole::FlWord(_)
-                    | NativeOperandRole::Subject(..)
-                    | NativeOperandRole::Environment { .. }
-                    | NativeOperandRole::LiteralValue
-                    | NativeOperandRole::SymbolicText
-                    | NativeOperandRole::PathOperand(_)
-                    | NativeOperandRole::LiteralContinuation(_)
-                    | NativeOperandRole::Command
-                    | NativeOperandRole::ProgramName(_)
-                    | NativeOperandRole::FunctionSignature { .. }
-                    | NativeOperandRole::EnclosureStart { .. }
-                    | NativeOperandRole::EnclosureEnd(_)
-            ) {
-                self.spelling_receipts
-                    .push((self.captured.operands.len(), serial));
-            }
+            self.projected_operands.push(ProjectedOperand {
+                owner: serial,
+                tracks_spelling: matches!(
+                    role,
+                    NativeOperandRole::Placeholder { .. }
+                        | NativeOperandRole::FlDash(_)
+                        | NativeOperandRole::FlWord(_)
+                        | NativeOperandRole::Subject(..)
+                        | NativeOperandRole::Environment { .. }
+                        | NativeOperandRole::LiteralValue
+                        | NativeOperandRole::SymbolicText
+                        | NativeOperandRole::PathOperand(_)
+                        | NativeOperandRole::LiteralContinuation(_)
+                        | NativeOperandRole::Command
+                        | NativeOperandRole::ProgramName(_)
+                        | NativeOperandRole::FunctionSignature { .. }
+                        | NativeOperandRole::EnclosureStart { .. }
+                        | NativeOperandRole::EnclosureEnd(_)
+                ),
+            });
             // A split projected word cannot prove a complete option key or
             // enclosure delimiter, even when all its glyphs survived.
             if matches!(
@@ -261,7 +272,7 @@ impl HeadOperandCapture {
                 self.roles.insert(serial, role);
             }
             self.captured.operands.push(NativeOperand {
-                replaces_native_ink,
+                replaces_native_ink: false,
                 bytes: start..end,
                 role,
             });
@@ -395,12 +406,14 @@ impl super::InlineBuilder {
 
     pub(super) fn record_clipped_operands(&mut self) {
         let writer = self.execution.native_owner_serial;
-        if let Some(capture) = &self.head_operand_capture
-            && let Some(owners) = self.execution.zero_advance.take_overwritten_word_owners()
-        {
-            capture
-                .borrow_mut()
-                .mark_clipped_operands(owners, Some(writer));
+        if let Some(capture) = &self.head_operand_capture {
+            let mut capture = capture.borrow_mut();
+            if let Some(owner) = self.execution.zero_advance.take_revised_authored_ink() {
+                capture.replaces_native_ink.insert(owner);
+            }
+            if let Some(owners) = self.execution.zero_advance.take_overwritten_word_owners() {
+                capture.mark_clipped_operands(owners, Some(writer));
+            }
         }
     }
 
@@ -465,25 +478,6 @@ impl super::InlineBuilder {
     }
 }
 
-fn proves_authored_ink(role: NativeOperandRole) -> bool {
-    use NativeOperandRole as Role;
-    role.is_attached_composite_value()
-        || matches!(
-            role,
-            Role::Placeholder { .. }
-                | Role::IncompletePlaceholder
-                | Role::ClippedValue
-                | Role::ClippedEnvironment { .. }
-                | Role::ClippedInvocation
-                | Role::Subject(..)
-                | Role::ClippedSubject(..)
-                | Role::ProgramName(_)
-                | Role::FlDash(_)
-                | Role::FlWord(_)
-                | Role::ClippedOption
-        )
-}
-
 fn literal_delimiter(node: &Node) -> Option<char> {
     // mdoc_macro.c::dword sets NODE_DELIMO/C for bare delimiters.
     // A glyph within a styled word is not such a native boundary.
@@ -520,7 +514,7 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
 
 fn standalone_field_operator(decoded: &DecodedText) -> bool {
     let mut chars = literal_declaration_chars(decoded).skip_while(|glyph| glyph.is_whitespace());
-    matches!(chars.next(), Some('=' | ':')) && chars.all(char::is_whitespace)
+    chars.next().is_some_and(is_native_field_operator) && chars.all(char::is_whitespace)
 }
 
 fn declaration_separator(decoded: &DecodedText) -> bool {
@@ -577,7 +571,7 @@ fn native_spelling_role(
         !decoded.proves_native_glyphs()
             || follows_option
                 && role.is_attached_composite_value()
-                && !sole_authored_slash(role, decoded)
+                && !sole_authored_joiner(role, decoded)
                 && loses_typed_ink(&decoded.events, font)
     }) {
         return role;
@@ -591,18 +585,21 @@ fn native_spelling_role(
     }
 }
 
-fn sole_authored_slash(role: NativeOperandRole, decoded: &DecodedText) -> bool {
+fn sole_authored_joiner(role: NativeOperandRole, decoded: &DecodedText) -> bool {
     if !matches!(
         role,
         NativeOperandRole::LiteralValue | NativeOperandRole::SymbolicText
     ) {
         return false;
     }
-    // Geometry preceding the sole slash cannot consume ink of this
-    // source word. The independent receipt can still separate names;
-    // the accepted cross-word write marks any exact form as unproved.
+    // A leading rewind cannot clip this word's sole authored glyph.
+    // Receiver and writer still need accepted receipts: covering another
+    // word vetoes an exact form, and losing this glyph clips its role.
     let mut glyphs = literal_declaration_chars(decoded).filter(|glyph| !glyph.is_whitespace());
-    glyphs.next() == Some('/') && glyphs.next().is_none()
+    glyphs
+        .next()
+        .is_some_and(|glyph| glyph == '/' || is_native_field_operator(glyph))
+        && glyphs.next().is_none()
 }
 
 /// Recover same-word clipping in the bounded, relative terminal input

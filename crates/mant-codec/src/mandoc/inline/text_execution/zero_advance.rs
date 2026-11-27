@@ -18,6 +18,7 @@ pub(in crate::mandoc) struct ZeroAdvanceState {
     machine: ZeroAdvanceMachine<OwnedGlyph>,
     native_word_owner: Option<u64>,
     overwritten_word_owners: Option<Vec<u64>>,
+    revised_authored_ink: Option<u64>,
     fragment_started_pending: bool,
     resolved_preexisting: bool,
     membership: membership::MembershipState,
@@ -67,6 +68,7 @@ impl ZeroAdvanceState {
             machine: ZeroAdvanceMachine::new(),
             native_word_owner: None,
             overwritten_word_owners: None,
+            revised_authored_ink: None,
             fragment_started_pending: false,
             resolved_preexisting: false,
             membership: membership::MembershipState::new(),
@@ -88,7 +90,20 @@ impl ZeroAdvanceState {
         self.native_word_owner = Some(owner);
         if self.overwritten_word_owners.is_some() != track_overwrites {
             self.overwritten_word_owners = track_overwrites.then(Vec::new);
+            self.revised_authored_ink = None;
         }
+    }
+
+    pub(super) const fn tracks_authored_ink(&self) -> bool {
+        self.overwritten_word_owners.is_some()
+    }
+
+    pub(super) fn record_revised_authored_ink(&mut self) {
+        self.revised_authored_ink = self.native_word_owner;
+    }
+
+    pub(in crate::mandoc) fn take_revised_authored_ink(&mut self) -> Option<u64> {
+        self.revised_authored_ink.take()
     }
 
     pub(in crate::mandoc) fn take_overwritten_word_owners(

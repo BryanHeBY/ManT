@@ -1,5 +1,8 @@
 //! Native HEAD scopes cannot supply alias boundaries to their parents.
 
+#[path = "declaration_scopes/ar.rs"]
+mod ar;
+
 use crate::process_support::run_text_input;
 use mant_ir::{Block, inline_plain_text};
 use mant_protocol::{EvidenceBasis, EvidenceClass, ExplanationContent, QueryExplanation};

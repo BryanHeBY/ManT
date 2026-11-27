@@ -41,6 +41,12 @@ pub(crate) use syntax::{
 #[cfg(test)]
 use syntax::{is_value_name, option_names};
 
+/// Explicit operators that can join two independent typed native fields.
+#[cfg(feature = "roff")]
+pub(crate) fn is_native_field_operator(glyph: char) -> bool {
+    matches!(glyph, '=' | ':' | '@')
+}
+
 /// Annotate recognizable definitions and deliver their navigation targets
 /// together with diagnostics from the same recognition pass.
 pub(crate) fn identify_definitions(
