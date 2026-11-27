@@ -142,7 +142,24 @@ pub(super) fn definition_body_flow(
             paragraph_predecessor: flow.paragraph_predecessor,
             run_in: Some(RunInBody {
                 execution: run_in.state,
-                generated_cells: run_in.surviving_cells,
+                // It BODY pre still executes its generated inset word. When
+                // there is no BODY child to print it, term_field leaves its
+                // trailing padding unprinted (term.c:389-427).
+                generated_cells: if node.flags.no_fill
+                    && matches!(
+                        flow.head,
+                        DefinitionHeadFlow::RunIn {
+                            cells: 1,
+                            style: super::RunInHeadStyle::Plain,
+                            ..
+                        }
+                    )
+                    && super::first_part_children(node, NodeKind::Body).is_empty()
+                {
+                    0
+                } else {
+                    run_in.surviving_cells
+                },
                 native_generated_cells: usize::from(
                     flow.head.generated_cells().unwrap_or_default(),
                 ),

@@ -522,3 +522,14 @@ fn run_in_definition_projects_shared_native_paint_before_splitting_owners() {
         assert_eq!(description_rows(body), [expected], "{body}");
     }
 }
+
+#[test]
+fn compact_inset_no_fill_does_not_publish_a_body_with_only_generated_padding() {
+    // Fixed CVS, mdoc_term.c::termp_it_pre/post and term.c::term_field:
+    // execute the generated BODY separator, but do not print padding
+    // as its own BODY row when there was no authored BODY child.
+    assert_eq!(
+        description_rows("L\n.nf\n.Bl -inset -compact\n.It No A\n.El\n.fi\nR\n"),
+        ["L", "A", "R"],
+    );
+}
