@@ -679,3 +679,36 @@ fn first_definition_has_body(blocks: &[mant_ir::Block]) -> Option<bool> {
     }
     found.0
 }
+
+#[test]
+fn body_entry_stays_local_in_filled_and_nested_run_in_definitions() {
+    // Pinned CVS lint, ASCII and UTF-8 agree on all three exact pages.
+    // An inner source-line close can consume only its own pending HEAD.
+    // mdoc_term.c:314-321 applies no-fill before the current BODY pre.
+    for (label, body, expected) in [
+        (
+            "filled split",
+            "L\n.Bl -inset -compact\n.It Xo No A\n.Xc\n.El\nR\n",
+            &["L", "A", "R"][..],
+        ),
+        (
+            "nested split",
+            "L\n.nf\n.Bl -inset -compact\n.It No OUTER\n.Bl -inset -compact\n.It Xo No A\n.Xc\n.El\nZ\n.El\n.fi\nR\n",
+            &["L", "OUTER", "A", "", "Z", "R"][..],
+        ),
+        (
+            "nested continued",
+            "L\n.nf\n.Bl -inset -compact\n.It No OUTER\n.Bl -inset -compact\n.It Xo No \"A\\c\"\n.Xc\n.El\nZ\n.El\n.fi\nR\n",
+            &["L", "OUTER", "A", "Z", "R"][..],
+        ),
+    ] {
+        assert_eq!(
+            description_rows(body)
+                .iter()
+                .map(|row| row.trim())
+                .collect::<Vec<_>>(),
+            expected,
+            "{label}"
+        );
+    }
+}
