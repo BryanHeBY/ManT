@@ -25,11 +25,12 @@ pub(crate) fn anchor_markers(markdown: &str) -> Vec<AnchorMarker<'_>> {
 /// CommonMark only identifies HTML ranges, including comments, raw-text
 /// elements and complete tags with quoted attributes. Require the exact
 /// emitted anchor spelling at a tag boundary, not a substring of that range.
-/// An HTML block may split over events; a consumed token or element can cross
-/// those boundaries, as can the closing tag of an inline marker.
+/// An HTML block may split over events. The raw-text context survives
+/// intervening Markdown events, but only literal HTML can close it.
 #[derive(Default)]
 pub(super) struct HtmlAnchorScanner {
     consumed: usize,
+    raw_text: Option<RawText>,
 }
 
 impl HtmlAnchorScanner {
@@ -41,9 +42,18 @@ impl HtmlAnchorScanner {
         mut emit: impl FnMut(AnchorMarker<'a>),
     ) {
         let mut cursor = self.consumed.max(range.start);
-        while cursor < range.end
-            && let Some(relative) = markdown[cursor..range.end].find('<')
-        {
+        while cursor < range.end {
+            if let Some(raw_text) = &mut self.raw_text {
+                let Some(end) = raw_text.consume(&markdown[cursor..range.end]) else {
+                    break;
+                };
+                cursor += end;
+                self.raw_text = None;
+                continue;
+            }
+            let Some(relative) = markdown[cursor..range.end].find('<') else {
+                break;
+            };
             let start = cursor + relative;
             let rest = &markdown[start..];
             if let Some(marker) =
@@ -77,16 +87,15 @@ impl HtmlAnchorScanner {
                 rest.find('>').map_or(rest.len(), |at| at + 1)
             } else if let Some((name, closing)) = tag_name(rest) {
                 let end = tag_end(rest).unwrap_or(rest.len());
-                if closing {
-                    end
-                } else if name.eq_ignore_ascii_case("plaintext") {
-                    rest.len()
-                } else if is_raw_text(name) {
+                if !closing {
+                    if name.eq_ignore_ascii_case("plaintext") {
+                        cursor = markdown.len();
+                        break;
+                    }
                     // In HTML a trailing slash does not close these elements.
-                    end + raw_text_end(&rest[end..], name)
-                } else {
-                    end
+                    self.raw_text = raw_text_element(name).map(RawText::new);
                 }
+                end
             } else {
                 1
             };
@@ -138,39 +147,53 @@ fn tag_end(rest: &str) -> Option<usize> {
     None
 }
 
-fn is_raw_text(name: &str) -> bool {
+fn raw_text_element(name: &str) -> Option<&'static str> {
     [
         "script", "style", "xmp", "iframe", "noembed", "noframes", "noscript", "textarea", "title",
     ]
-    .iter()
-    .any(|element| name.eq_ignore_ascii_case(element))
+    .into_iter()
+    .find(|element| name.eq_ignore_ascii_case(element))
 }
 
-fn raw_text_end(rest: &str, name: &str) -> usize {
-    // Script may use HTML's double escaped state. Once that occurs, the
-    // next closing spelling leaves that state rather than closing the tag.
-    let mut escaped_script = false;
-    let mut double_escaped_script = false;
-    let script = name.eq_ignore_ascii_case("script");
-    for (at, ch) in rest.char_indices() {
-        let tail = &rest[at..];
-        if script && ch == '<' && tail.starts_with("<!--") {
-            escaped_script = true;
-        } else if script && ch == '-' && tail.starts_with("-->") {
-            escaped_script = false;
-            double_escaped_script = false;
-        } else if ch == '<' {
-            if raw_tag_boundary(&tail[1..], "/", name) {
-                if !double_escaped_script {
-                    return at + tag_end(tail).unwrap_or(tail.len());
-                }
-                double_escaped_script = false;
-            } else if escaped_script && raw_tag_boundary(&tail[1..], "", name) {
-                double_escaped_script = true;
-            }
+struct RawText {
+    name: &'static str,
+    escaped_script: bool,
+    double_escaped_script: bool,
+}
+
+impl RawText {
+    fn new(name: &'static str) -> Self {
+        Self {
+            name,
+            escaped_script: false,
+            double_escaped_script: false,
         }
     }
-    rest.len()
+
+    fn consume(&mut self, html: &str) -> Option<usize> {
+        // Script may use HTML's double escaped state. Once that occurs, the
+        // next closing spelling leaves that state rather than closing the tag.
+        let script = self.name == "script";
+        for (at, ch) in html.char_indices() {
+            let tail = &html[at..];
+            if script && ch == '<' && tail.starts_with("<!--") {
+                self.escaped_script = true;
+            } else if script && ch == '-' && tail.starts_with("-->") {
+                self.escaped_script = false;
+                self.double_escaped_script = false;
+            } else if ch == '<' {
+                if raw_tag_boundary(&tail[1..], "/", self.name) {
+                    if !self.double_escaped_script {
+                        return tag_end(tail).map(|end| at + end);
+                    }
+                    self.double_escaped_script = false;
+                } else if self.escaped_script && raw_tag_boundary(&tail[1..], "", self.name) {
+                    self.double_escaped_script = true;
+                }
+            }
+        }
+        None
+    }
 }
 
 fn raw_tag_boundary(tail: &str, prefix: &str, name: &str) -> bool {

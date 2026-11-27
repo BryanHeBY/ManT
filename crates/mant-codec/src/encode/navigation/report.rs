@@ -137,4 +137,22 @@ mod tests {
             format!("{hidden}\n\n> <br />\n> {marker}<span></span>\n\n[jump](#mant-report-0-61)")
         );
     }
+
+    #[test]
+    fn fenced_closing_spelling_cannot_steal_a_visible_scoped_target() {
+        let marker = r#"<span id="mant-report-0-61"></span>"#;
+        let markdown = format!(
+            "Label <textarea>\n\n~~~html\n</textarea>\n~~~\n\n{marker}\n\n</textarea>\n\n{marker}[jump](#mant-report-0-61)"
+        );
+        let live = crate::encode::anchors::anchor_markers(&markdown);
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].range.start, markdown.rfind(marker).unwrap());
+        assert_eq!(
+            render_scoped_report_page(|anchors| {
+                assert!(anchors.is_none());
+                markdown.clone()
+            }),
+            markdown
+        );
+    }
 }
