@@ -19,21 +19,59 @@ pub(in crate::mandoc) struct SemanticOwnerCheckpoint {
 impl InlineBuilder {
     /// Record the owning word of a tagged inline element with a text operand.
     /// A standalone target has no word owner and uses the ordinary append.
-    pub(in crate::mandoc::inline) fn append_inline_word_target(
-        &mut self,
-        target: Inline,
-        leading_empty_words: u64,
-    ) {
-        let serial = self
-            .execution
-            .native_owner_serial
-            .wrapping_add(1)
-            .wrapping_add(leading_empty_words);
+    pub(in crate::mandoc::inline) fn append_inline_word_target(&mut self, target: Inline) {
+        let serial = self.execution.native_owner_serial.wrapping_add(1);
+        self.record_inline_word_target(serial, target);
+    }
+
+    fn record_inline_word_target(&mut self, serial: u64, target: Inline) {
         self.nodes.push(Inline::anchor(format!(
             "{}{serial}",
             super::NAVIGATION_WORD
         )));
         self.nodes.push(target);
+    }
+
+    pub(in crate::mandoc::inline) fn with_inline_word_target(
+        &mut self,
+        target: Inline,
+        visit: impl FnOnce(&mut Self),
+    ) {
+        let start = self.begin_output_checkpoint();
+        self.pending_navigation_targets.push(Some(target));
+        visit(self);
+        if let Some(Some(target)) = self.pending_navigation_targets.pop() {
+            // No authored word supplied ink. Keep the explicit fragment at
+            // its own boundary, without handing it to a following sibling.
+            let index = self.output_checkpoint_index(&start);
+            self.nodes.insert(index, target);
+            self.remap_output_positions(super::row_origins::OutputNodeEdit {
+                start: index,
+                removed: 0,
+                inserted: 1,
+            });
+        }
+    }
+
+    pub(in crate::mandoc::inline) fn claim_inline_word_targets(&mut self, output: &[Inline]) {
+        if self.pending_navigation_targets.iter().all(Option::is_none) {
+            return;
+        }
+        let state = &self.execution.zero_advance;
+        let has_own_pending_ink =
+            state.buffered_glyph_belongs_to_current_word() && state.has_printable_pending_glyph();
+        if !(has_rendered_formatter_glyph(output) || has_own_pending_ink) {
+            return;
+        }
+        let serial = self.execution.native_owner_serial;
+        let targets: Vec<_> = self
+            .pending_navigation_targets
+            .iter_mut()
+            .filter_map(Option::take)
+            .collect();
+        for target in targets {
+            self.record_inline_word_target(serial, target);
+        }
     }
 
     pub(in crate::mandoc::inline) fn defers_blanks_after_prior_breakpoint(&self) -> bool {

@@ -15,6 +15,7 @@ impl InlineBuilder {
     pub(in crate::mandoc) fn with_spacing(spacing_enabled: bool) -> Self {
         Self {
             nodes: Vec::new(),
+            pending_navigation_targets: Vec::new(),
             output_positions: None,
             head_operand_capture: None,
             run_in_head_word_proof: None,
@@ -34,6 +35,7 @@ impl InlineBuilder {
     ) -> Self {
         Self {
             nodes,
+            pending_navigation_targets: Vec::new(),
             output_positions: None,
             head_operand_capture: None,
             run_in_head_word_proof: None,

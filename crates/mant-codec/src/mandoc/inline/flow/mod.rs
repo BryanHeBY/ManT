@@ -114,6 +114,7 @@ pub(in crate::mandoc) enum RunInHeadWordProof {
 
 pub(in crate::mandoc) struct InlineBuilder {
     nodes: Vec<Inline>,
+    pending_navigation_targets: Vec<Option<Inline>>,
     // Only live annotation scopes have an address. A checkpoint's last
     // handle unregisters on return, including unused/early-return branches.
     output_positions: Option<Rc<OutputPositionRegistry>>,

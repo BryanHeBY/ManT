@@ -35,45 +35,61 @@ pub(super) fn append(builder: &mut InlineBuilder, node: &Node, name: Option<&str
         return;
     }
     if let Some(anchor) = navigation_anchor(node) {
-        if let Some(leading_empty_words) = navigation_word_offset(node) {
-            builder.append_inline_word_target(anchor, leading_empty_words);
+        if navigation_targets_authored_word(node) {
+            builder.with_inline_word_target(anchor, |builder| {
+                append_inline_scope(builder, node, name);
+            });
+            return;
+        }
+        if first_printed_text_operand(node) {
+            // Generated prefixes such as Fl's dash retain their existing owner.
+            builder.append_inline_word_target(anchor);
         } else {
             builder.append(vec![anchor]);
         }
     }
+    append_inline_scope(builder, node, name);
+}
+
+fn append_inline_scope(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) {
     let posts = builder.scope_posts.clone();
     let mut sink = InlineContainerSink {
         builder,
         name,
         root_id: node.id,
     };
-    if crate::mandoc::containers::drive(node, &posts, &mut sink) {
-        return;
+    if !crate::mandoc::containers::drive(node, &posts, &mut sink) {
+        append_scope_children(builder, node, name);
     }
-    append_scope_children(builder, node, name);
 }
 
-/// The validator assigns .Tg to the entire macro, not to an empty first
-/// operand. Keep its native empty word(s) and spacing, but let the first
-/// actual text operand carry the target through subsequent field edits.
-fn navigation_word_offset(node: &Node) -> Option<u64> {
-    if node.kind != NodeKind::Element {
-        return None;
-    }
-    let mut children = node.children.iter();
-    let is_printed_text = |child: &Node| child.kind == NodeKind::Text && !child.flags.no_print;
-    let mut child = children.next().filter(|child| is_printed_text(child))?;
-    let mut offset = 0;
-    if matches!(
-        node.macro_token,
-        Some(Mdoc(MdocMacro::Cm | MdocMacro::Dv | MdocMacro::Er))
-    ) {
-        while child.decoder_text() == Some("") && !child.flags.line_start {
-            child = children.next().filter(|child| is_printed_text(child))?;
-            offset += 1;
-        }
-    }
-    Some(offset)
+fn first_printed_text_operand(node: &Node) -> bool {
+    node.kind == NodeKind::Element
+        && node
+            .children
+            .first()
+            .is_some_and(|child| child.kind == NodeKind::Text && !child.flags.no_print)
+}
+
+// post_tg (mdoc_validate.c) targets the whole element. These elements take
+// their label from authored operands, without a generated prefix like Fl.
+fn navigation_targets_authored_word(node: &Node) -> bool {
+    first_printed_text_operand(node)
+        && matches!(
+            node.macro_token,
+            Some(Mdoc(
+                MdocMacro::Cm
+                    | MdocMacro::Dv
+                    | MdocMacro::Em
+                    | MdocMacro::Er
+                    | MdocMacro::Ev
+                    | MdocMacro::Ic
+                    | MdocMacro::Li
+                    | MdocMacro::Ms
+                    | MdocMacro::No
+                    | MdocMacro::Sy
+            ))
+        )
 }
 
 fn append_structural_scope(builder: &mut InlineBuilder, node: &Node, name: Option<&str>) -> bool {

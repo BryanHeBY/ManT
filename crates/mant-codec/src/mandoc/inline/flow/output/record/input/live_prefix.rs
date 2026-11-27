@@ -236,8 +236,8 @@ impl PrefixEdits {
                 slot.is_some() || detached.is_some(),
             );
             let edited_live_owner = edit.is_some();
-            let starts_word =
-                edit.as_ref().is_some_and(|edit| edit.starts_word) && !glyph.scalar.is_whitespace();
+            let starts_word = edit.as_ref().is_some_and(|edit| edit.starts_word_ink)
+                && !glyph.scalar.is_whitespace();
             if edited_live_owner {
                 // Successful removals without retained style still shorten
                 // this owner's scalar suffix for the next blank check.
@@ -369,7 +369,7 @@ impl PrefixEdits {
             {
                 // HORIZ can place another macro's ink before this word
                 // (term.c:678–718). Move its validated target with the
-                // first source scalar, along with the original styling.
+                // first ink past its leading blanks, along with its styling.
                 if starts_word && let Some(target) = take_word_target(nodes, &owner) {
                     incoming.extend(target);
                 }

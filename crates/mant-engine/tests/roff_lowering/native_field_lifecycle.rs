@@ -632,3 +632,52 @@ fn empty_tagged_operands_keep_the_macro_target_on_its_ink() {
         }
     }
 }
+
+#[test]
+fn tagged_native_scope_binds_to_its_first_executed_ink() {
+    use mant_codec::encode::{MarkdownOptions, render_markdown_with_options};
+
+    const HEADER: &str = ".Dd November 26, 2026\n.Dt INSPECTION 1\n.Os\n.Sh NAME\n.Nm inspection\n.Nd annotations\n.Sh DESCRIPTION\n";
+    const TARGET: &str = "<a id=\"body-target\"></a><a id=\"Body.Target\"></a>";
+    // post_tg() in mdoc_validate.c tags the element; the HTML wrapper
+    // contains BK, not the sibling macro's C. term_word() still executes
+    // the empty or control-only operands, including their spacing.
+    for (prefix, macro_name, operands, column, closing) in [
+        (".No JA\n", "Cm", r#""\&" BK"#, 2, ""),
+        (".No JA\n", "Cm", r#""\fI\fP" BK"#, 2, ""),
+        (".No JA\n", "Ev", r#""" BK"#, 2, ""),
+        (".No JA\n", "Cm", r#""" BK"#, 2, ""),
+        (
+            ".Bl -tag -width 6n\n.It No JA\n",
+            "Em",
+            r#""" "\&" BK"#,
+            1,
+            ".El\n",
+        ),
+    ] {
+        let source = format!(
+            "{HEADER}{prefix}.Tg Body.Target\n.{macro_name} {operands} No \"\\h'|{column}n'C\"\n{closing}.Sh ENDTEST\nDone.\n"
+        );
+        let content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let decoded = super::json_roundtrip::json_string_roundtrip(&content);
+        let markdown = render_markdown_with_options(&decoded, MarkdownOptions::ADDRESSABLE);
+        let body = markdown.split_once("## DESCRIPTION\n").unwrap().1;
+        let body = body.split_once("## ENDTEST").unwrap().0;
+        let ink = |value: &str| {
+            value
+                .chars()
+                .filter(|ch| "JABKC".contains(*ch))
+                .collect::<String>()
+        };
+        let (before, after) = body
+            .split_once(TARGET)
+            .unwrap_or_else(|| panic!("{source}\n{body}"));
+        assert_eq!(ink(before), "JAC", "{source}\n{body}");
+        assert_eq!(ink(after), "BK", "{source}\n{body}");
+        assert_eq!(body.matches(TARGET).count(), 1, "{source}\n{body}");
+        let rendered = mant_render::render_query_man(&decoded);
+        let body = rendered.split_once("DESCRIPTION\n").unwrap().1;
+        let body = body.split_once("ENDTEST\n").unwrap().0;
+        assert_eq!(ink(body), "JACBK", "{source}\n{rendered}");
+    }
+}

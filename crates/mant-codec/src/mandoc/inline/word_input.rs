@@ -111,6 +111,10 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         defer_leading_blanks,
     );
     receive_word_effects(builder, &execution);
+    if has_glyph && matches!(origin, WordSource::Text(node) if !node.flags.generated) {
+        builder.claim_inline_word_targets(&execution.output);
+    }
+
     builder.native_word_writes = Some(execution.native_writes);
     // A visited empty source TEXT takes the vertical path before reaching
     // here. roff_term_pre_ce() executes its empty TEXT as a direct term_word:

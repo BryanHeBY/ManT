@@ -16,11 +16,17 @@ pub(super) fn remove_rewound_glyph(
     edit_rewound_glyph(nodes, incoming, owner, receipt, false);
 }
 
+struct RewindCandidate<'a> {
+    value: &'a mut String,
+    byte: usize,
+    ink_before: bool,
+}
+
 struct ReverseOwnerCursor<'a, 'b> {
     owner: &'a str,
     remaining: usize,
     group: usize,
-    candidate: Option<(&'b mut String, usize)>,
+    candidate: Option<RewindCandidate<'b>>,
     retain_style: bool,
     trailing_only: bool,
     crossed_ink: bool,
@@ -105,7 +111,17 @@ impl<'b> ReverseOwnerCursor<'_, 'b> {
                                 Inline::Text { value }
                             }
                         });
-                        self.candidate = Some((value, byte));
+                        let ink_before = value[..byte]
+                            .chars()
+                            .any(|character| !character.is_whitespace());
+                        self.candidate = Some(RewindCandidate {
+                            value,
+                            byte,
+                            ink_before,
+                        });
+                    } else if let Some(candidate) = &mut self.candidate {
+                        candidate.ink_before |=
+                            value.chars().any(|character| !character.is_whitespace());
                     }
                     self.crossed_ink |= has_ink;
                     self.group += scalars;
@@ -114,6 +130,9 @@ impl<'b> ReverseOwnerCursor<'_, 'b> {
                     // Never change the cache of an already published equation.
                     self.group += value.chars().count();
                     self.crossed_ink |= !value.is_empty();
+                    if let Some(candidate) = &mut self.candidate {
+                        candidate.ink_before |= !value.is_empty();
+                    }
                 }
                 Inline::LineBreak { .. } => self.crossed_ink = true,
                 Inline::Anchor { id, .. }
@@ -142,7 +161,7 @@ pub(in crate::mandoc::inline::flow) fn take_rewound_glyph(
 
 pub(super) struct RewoundGlyphEdit {
     pub(super) projection: Option<Inline>,
-    pub(super) starts_word: bool,
+    pub(super) starts_word_ink: bool,
 }
 
 pub(super) fn edit_rewound_glyph(
@@ -211,7 +230,11 @@ fn rewound_glyph(
         cursor.visit(nodes)
     };
     if found
-        && let Some((value, byte)) = cursor.candidate
+        && let Some(RewindCandidate {
+            value,
+            byte,
+            ink_before,
+        }) = cursor.candidate
         && value[byte..].starts_with(receipt.scalar)
     {
         if matches!(mode, RewindProjection::Remove { .. }) {
@@ -219,7 +242,7 @@ fn rewound_glyph(
         }
         return Some(RewoundGlyphEdit {
             projection: cursor.projection,
-            starts_word: cursor.remaining == cursor.group - 1,
+            starts_word_ink: !ink_before,
         });
     }
     None
