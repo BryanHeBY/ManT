@@ -12,19 +12,42 @@ use mant_ir::{
 
 use crate::definitions::NativeHeadEvidence;
 
+use super::InitialCodeRow;
+
+pub(super) const INDEPENDENT_BODY_ROW: &str = "\0mant:output-scope:independent-body-row";
+
+pub(super) fn is_independent_body_row(node: &Inline) -> bool {
+    matches!(node, Inline::Anchor { id, .. } if id.as_str() == INDEPENDENT_BODY_ROW)
+}
+
 pub(super) fn normalize(
     blocks: &mut [Block],
     sections: &mut [Section],
     evidence: &mut NativeHeadEvidence,
+    policy: InitialCodeRow,
 ) {
-    struct Normalize<'a>(&'a mut NativeHeadEvidence);
+    struct Normalize<'a> {
+        evidence: &'a mut NativeHeadEvidence,
+        policy: InitialCodeRow,
+    }
+
+    impl Normalize<'_> {
+        fn literal(&mut self, block: &mut Block, shared: bool) {
+            if !shared && matches!(self.policy, InitialCodeRow::OmitSingle) {
+                self.evidence
+                    .hanging
+                    .transform_literal_head(block, omit_initial_row);
+            }
+            if let Block::Preformatted { children, .. } = block {
+                remove_body_row_markers(children);
+            }
+        }
+    }
 
     impl VisitMut for Normalize<'_> {
         fn visit_block_mut(&mut self, block: &mut Block) {
             if matches!(block, Block::Preformatted { .. }) {
-                self.0
-                    .hanging
-                    .transform_literal_head(block, omit_initial_row);
+                self.literal(block, false);
             } else {
                 visit::walk_block_mut(self, block);
             }
@@ -36,20 +59,34 @@ pub(super) fn normalize(
             // Use the borrowed selection so transparent prefixes keep identity.
             let shared = item.shared_description().map(|body| body.block_index);
             for (index, block) in item.description.iter_mut().enumerate() {
-                if Some(index) != shared || !matches!(block, Block::Preformatted { .. }) {
+                if Some(index) == shared && matches!(block, Block::Preformatted { .. }) {
+                    self.literal(block, true);
+                } else {
                     self.visit_block_mut(block);
                 }
             }
         }
     }
 
-    let mut visitor = Normalize(evidence);
+    let mut visitor = Normalize { evidence, policy };
     for block in blocks {
         visitor.visit_block_mut(block);
     }
     for section in sections {
         visitor.visit_section_mut(section);
     }
+}
+
+fn remove_body_row_markers(nodes: &mut Vec<Inline>) {
+    nodes.retain_mut(|node| match node {
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => {
+            remove_body_row_markers(children);
+            true
+        }
+        _ => !is_independent_body_row(node),
+    });
 }
 
 /// Return removed UTF-8 prefix bytes for a matching native-head proof.
@@ -132,7 +169,9 @@ fn eligible(children: &[Inline]) -> bool {
                             self.text(value);
                         }
                     }
-                    Inline::Anchor { .. } => {}
+                    Inline::Anchor { .. } => {
+                        self.rejected = self.scalars == 0 && is_independent_body_row(child);
+                    }
                 }
             }
         }

@@ -342,24 +342,25 @@ impl BlockState {
             // Filled-to-no-fill entry still consumes the old destination:
             // the generated inset BODY word can be buffered there. Its
             // native anchors must not be applied to an empty literal Vec.
-            let (owner, newline): (_, fn(&mut InlineBuilder) -> bool) = if paragraph_owns_row {
-                (
+            let ended_row = if paragraph_owns_row {
+                self.with_row_builder(
                     RowOwner::Paragraph,
                     InlineBuilder::execute_native_newline_with_tail,
                 )
             } else {
-                (
-                    RowOwner::Literal,
-                    InlineBuilder::execute_native_literal_newline_with_tail,
-                )
+                let follows_head =
+                    source_line && self.formatter.definition_body_follows_head_source_close();
+                self.with_row_builder(RowOwner::Literal, |builder| {
+                    builder.execute_native_literal_source_newline(follows_head)
+                })
             };
-            let ended_row = self.with_row_builder(owner, newline);
             if source_line && ended_row {
                 // NODE_LINE closed the actual inherited physical row.
                 // Deliver that fact before an owner drain clears its local
                 // leading break; its eventual Block kind is irrelevant.
                 self.note_relocated_body_ink_before_boundary();
                 self.formatter.note_definition_boundary();
+                self.formatter.note_definition_head_source_close();
             }
             // The native print receipt already delivered every completed
             // row to this literal owner. Retire the old cell classification

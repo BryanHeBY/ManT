@@ -10,7 +10,7 @@ pub(super) fn literal_blocks(
 ) -> Vec<Block> {
     let mut rows = Origins::default();
     rows.visit(&mut nodes);
-    crate::mandoc::inline::strip_native_projection_markers(&mut nodes);
+    crate::mandoc::inline::strip_literal_projection_markers(&mut nodes);
     let mut inline_layout = crate::mandoc::inline::take_inline_layout(&mut nodes);
     if nodes.is_empty() {
         return Vec::new();

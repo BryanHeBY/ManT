@@ -7,6 +7,13 @@ use super::{
     tab_projection,
 };
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum HardBreakBoundary {
+    Ordinary,
+    ManSectionHeading,
+    DefinitionBodySourceLine,
+}
+
 impl InlineBuilder {
     /// Preserve a formatter-requested line boundary without creating empty
     /// leading, repeated, or trailing rows around the paragraph.
@@ -16,7 +23,12 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn finish_man_section_heading(&mut self) {
         self.tighten_next_boundary();
-        if self.hard_break_using_field(None, false, CompletedRowOrigin::Layout, true) {
+        if self.hard_break_using_field(
+            None,
+            false,
+            CompletedRowOrigin::Layout,
+            HardBreakBoundary::ManSectionHeading,
+        ) {
             // pre_SH assigns the page's five-cell default indent to
             // trailspace. term_flushln restores it even without endline.
             self.execution.detached_device_row = Some(super::super::DetachedDeviceRow {
@@ -65,7 +77,7 @@ impl InlineBuilder {
             for edits in self.project_consumed_row_layout(&native) {
                 native.remap_output_projection(&edits);
             }
-            self.hard_break_using_field(Some(&native), true, origin, false);
+            self.hard_break_using_field(Some(&native), true, origin, HardBreakBoundary::Ordinary);
             // This standalone term_newln() has no later field-retirement
             // caller. Its row reset already consumed the live buffer, so
             // deliver the captured text receipt without re-running the tail
@@ -89,7 +101,7 @@ impl InlineBuilder {
                 receiver.accept_tabs(&tabs);
             }
         } else {
-            self.hard_break_using_field(None, false, origin, false);
+            self.hard_break_using_field(None, false, origin, HardBreakBoundary::Ordinary);
         }
         // The separator that caused this projected row end belongs to the
         // consumed row, not to the new IR line. This is a projection join;
@@ -104,7 +116,19 @@ impl InlineBuilder {
         native: Option<&super::super::definition::NativeFieldDevice>,
         origin: CompletedRowOrigin,
     ) {
-        self.hard_break_using_field(native, true, origin, false);
+        self.hard_break_using_field(native, true, origin, HardBreakBoundary::Ordinary);
+    }
+
+    pub(in crate::mandoc::inline::flow) fn hard_break_after_definition_body_source_line(
+        &mut self,
+        native: &super::super::definition::NativeFieldDevice,
+    ) {
+        self.hard_break_using_field(
+            Some(native),
+            true,
+            CompletedRowOrigin::LiteralText,
+            HardBreakBoundary::DefinitionBodySourceLine,
+        );
     }
 
     fn hard_break_using_field(
@@ -112,7 +136,7 @@ impl InlineBuilder {
         captured: Option<&super::super::definition::NativeFieldDevice>,
         projected: bool,
         origin: CompletedRowOrigin,
-        man_section_heading: bool,
+        boundary: HardBreakBoundary,
     ) -> bool {
         let had_native_buffer = self.has_unconsumed_field_cells();
         let unprinted_field_tail = had_native_buffer
@@ -126,8 +150,11 @@ impl InlineBuilder {
         let exited_definition_row = self.has_open_exited_definition_row();
         // term_newln() flushes the plain flush unit through the same
         // term_flushln(): a definitive rejection ends its own row here.
-        let (plain_flush, fitting_heading_tail) =
-            self.consume_hard_break_buffer(projected, origin, man_section_heading);
+        let (plain_flush, fitting_heading_tail) = self.consume_hard_break_buffer(
+            projected,
+            origin,
+            boundary == HardBreakBoundary::ManSectionHeading,
+        );
         let closes_preceding_printed_row = captured
             .is_some_and(super::super::definition::NativeFieldDevice::closes_preceding_printed_row)
             || plain_flush.closes_represented_row();
@@ -187,12 +214,7 @@ impl InlineBuilder {
                         .rev()
                         .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
                         .any(|node| has_rendered_formatter_glyph(std::slice::from_ref(node))));
-        let current_row_has_printable = self
-            .nodes
-            .iter()
-            .rev()
-            .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-            .any(|node| has_printable_character(std::slice::from_ref(node)));
+        let current_row_has_printable = self.trailing_row_has_printable_character();
         if !closes_preceding_printed_row
             && (had_native_buffer
                 || self.execution.formatter_column == FormatterColumn::Advanced
@@ -215,6 +237,17 @@ impl InlineBuilder {
             // it (term.c:389-427). If the literal owner already represents
             // that row with retained source SP/TAB, the same endline closes
             // that content. A separate empty-row receipt would replay it.
+            // After NODE_LINE settled HEAD, the next term_newln closes
+            // the BODY's own buffered row (mdoc_term.c:314-317,
+            // term.c:475-481). Retain the proof until reading normalization:
+            // this row is internal to the definition's content.
+            if boundary == HardBreakBoundary::DefinitionBodySourceLine
+                && captured.is_some_and(|field| self.has_unprinted_run_in_tail(field))
+            {
+                self.nodes.push(Inline::anchor(
+                    crate::mandoc::literal_reading::INDEPENDENT_BODY_ROW,
+                ));
+            }
             self.record_completed_rows(1, plain_flush.row_origin(origin));
         }
         // An empty or invisible field can end an already projected device
@@ -267,6 +300,27 @@ impl InlineBuilder {
             &self.execution.plain_input.buffer
         };
         buffer.resume_offset() < buffer.cells().len()
+    }
+
+    pub(super) fn has_unprinted_run_in_tail(
+        &self,
+        field: &super::super::definition::NativeFieldDevice,
+    ) -> bool {
+        self.execution
+            .definition
+            .as_ref()
+            .is_some_and(|state| state.run_in_continuation)
+            && self.has_unconsumed_field_cells()
+            && field.closes_unprinted_row()
+            && field.receipt.accepted_passes().is_some()
+    }
+
+    pub(super) fn trailing_row_has_printable_character(&self) -> bool {
+        self.nodes
+            .iter()
+            .rev()
+            .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
+            .any(|node| has_printable_character(std::slice::from_ref(node)))
     }
 
     fn consume_hard_break_buffer(
@@ -395,11 +449,6 @@ impl InlineBuilder {
 
     pub(in crate::mandoc) fn has_invisible_formatter_cell(&self) -> bool {
         self.execution.formatter_column == FormatterColumn::Advanced
-            && !self
-                .nodes
-                .iter()
-                .rev()
-                .take_while(|node| !matches!(node, Inline::LineBreak { .. }))
-                .any(|node| has_printable_character(std::slice::from_ref(node)))
+            && !self.trailing_row_has_printable_character()
     }
 }

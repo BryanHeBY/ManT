@@ -230,6 +230,14 @@ pub(in crate::mandoc) fn prepare_inline_output(nodes: &mut Vec<Inline>) {
 }
 
 pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>) {
+    strip_projection_markers(nodes, false);
+}
+
+pub(in crate::mandoc) fn strip_literal_projection_markers(nodes: &mut Vec<Inline>) {
+    strip_projection_markers(nodes, true);
+}
+
+fn strip_projection_markers(nodes: &mut Vec<Inline>, literal: bool) {
     nodes.retain_mut(|node| match node {
         Inline::Anchor { id, .. } if id.as_str() == super::row_origins::CLOSED_UNDERLINE => {
             *node = Inline::Text {
@@ -245,12 +253,13 @@ pub(in crate::mandoc) fn strip_native_projection_markers(nodes: &mut Vec<Inline>
         Inline::Anchor { .. } => {
             super::row_origins::is_layout_carrier(node)
                 || super::is_term_alternative(node)
+                || literal && crate::mandoc::literal_reading::is_independent_body_row(node)
                 || !super::is_private_output_marker(node)
         }
         Inline::Strong { children }
         | Inline::Emphasis { children }
         | Inline::Link { children, .. } => {
-            strip_native_projection_markers(children);
+            strip_projection_markers(children, literal);
             true
         }
         _ => true,

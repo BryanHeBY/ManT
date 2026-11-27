@@ -88,7 +88,7 @@ pub(in crate::mandoc::inline) use projection::trailing_ascii_spaces;
 pub(in crate::mandoc) use projection::trim_trailing_breakable_spaces;
 pub(in crate::mandoc) use projection::{
     native_row_origin, prepare_inline_output, split_output_scope_prefix,
-    strip_native_projection_markers,
+    strip_literal_projection_markers, strip_native_projection_markers,
 };
 pub(super) use row_observation::ProjectedTail;
 use row_observation::RowReceipt;

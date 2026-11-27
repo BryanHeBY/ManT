@@ -213,7 +213,12 @@ fn shared_body_preserves_its_break_but_independent_owners_normalize() {
                     layout: LayoutHint::default(),
                     source: None,
                 }];
-                normalize(&mut blocks, &mut [], &mut NativeHeadEvidence::default());
+                normalize(
+                    &mut blocks,
+                    &mut [],
+                    &mut NativeHeadEvidence::default(),
+                    InitialCodeRow::OmitSingle,
+                );
                 let Block::DefinitionList { items, .. } = &blocks[0] else {
                     unreachable!()
                 };
@@ -256,6 +261,7 @@ fn only_complete_literal_roots_are_normalized_in_nested_containers() {
         &mut document.blocks,
         &mut document.sections,
         &mut NativeHeadEvidence::default(),
+        InitialCodeRow::OmitSingle,
     );
     let encoded = serde_json::to_value(&document).unwrap();
     assert_eq!(encoded["blocks"][0]["children"][0]["value"], "\nPROSE");

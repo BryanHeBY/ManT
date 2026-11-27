@@ -9,7 +9,11 @@ fn rows(body: &str) -> Vec<String> {
     let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
     let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
     let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
-    mant_render::render_query_man(&decoded.into())
+    description_rows(&decoded.into())
+}
+
+fn description_rows(content: &mant_ir::ResolvedContent) -> Vec<String> {
+    mant_render::render_query_man(content)
         .split_once("DESCRIPTION\n")
         .unwrap()
         .1
@@ -17,6 +21,73 @@ fn rows(body: &str) -> Vec<String> {
         .lines()
         .map(|row| row.split_whitespace().collect::<Vec<_>>().join(" "))
         .collect()
+}
+
+#[test]
+fn no_fill_source_line_settles_invisible_body_before_request() {
+    // mdoc_term.c::print_mdoc_node calls term_newln at NODE_NOFILL |
+    // NODE_LINE; term.c::term_vspace adds a separate row after that flush.
+    // Pristine CVS ASCII and UTF-8 agree on these row counts.
+    for no_fill in [false, true] {
+        for invisible_body in [false, true] {
+            for (request, extra) in [(".br", 0), (".sp 0", 0), (".sp 1", 1)] {
+                let start = if no_fill { ".nf\n" } else { "" };
+                let end = if no_fill { ".fi\n" } else { "" };
+                let body = if invisible_body { ".No \"\\&\"\n" } else { "" };
+                let source = format!(
+                    "{start}.Bl -inset\n.It Em \"\\X'tty: link https://k.test'A\\X'tty: link'\\p\" Sy \"\\h'-2n'\"\n{body}{request}\nY\n.El\n{end}"
+                );
+                let mut expected = vec!["A"];
+                expected.extend(std::iter::repeat_n(
+                    "",
+                    usize::from(no_fill && invisible_body) + extra,
+                ));
+                expected.push("Y");
+                let actual = rows(&source);
+                let first = actual.iter().position(|row| !row.is_empty()).unwrap();
+                assert_eq!(&actual[first..], expected, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn no_fill_source_lines_settle_even_without_an_explicit_break() {
+    // mdoc_term.c::print_mdoc_node runs term_newln before Y in BODY.
+    // If Y is outside the list, termp_it_post closes BODY instead.
+    // Both CVS devices close the row with or without motion in HEAD.
+    for motion in ["", r#" Sy "\h'-2n'""#] {
+        for (body, body_row) in [(r"\&", ""), ("M", "M")] {
+            for tail in ["Y\n.El", ".El\nY"] {
+                let source = format!(
+                    ".nf\n.Bl -inset\n.It Em \"\\X'tty: link https://k.test'A\\X'tty: link'\\p\"{motion}\n.No \"{body}\"\n{tail}\n.fi\n"
+                );
+                let actual = rows(&source);
+                let first = actual.iter().position(|row| !row.is_empty()).unwrap();
+                assert_eq!(&actual[first..], ["A", body_row, "Y"], "{source}");
+            }
+        }
+    }
+}
+
+#[test]
+fn markdown_keeps_the_body_row_and_the_requested_space() {
+    // roff_term_pre_sp runs term_vspace for a positive count. Its row
+    // follows the BODY row that NODE_LINE already closed in mdoc_term.c.
+    for (request, blanks) in [(".br", 1), (".sp 0", 1), (".sp 1", 2)] {
+        let source = format!(
+            "{HEADER}.nf\n.Bl -inset\n.It Em \"\\X'tty: link https://k.test'A\\X'tty: link'\\p\" Sy \"\\h'-2n'\"\n.No \"\\&\"\n{request}\nY\n.El\n.fi\n"
+        );
+        let mut content = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        for _ in 0..2 {
+            let markdown = mant_codec::encode::render_markdown(&content);
+            content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+            let rows = description_rows(&content);
+            let head = rows.iter().position(|row| row.ends_with('A')).unwrap();
+            let tail = rows.iter().position(|row| row == "Y").unwrap();
+            assert_eq!(rows[head + 1..tail], vec![""; blanks], "{source}");
+        }
+    }
 }
 
 #[test]

@@ -436,7 +436,10 @@ impl BlockState {
             } else {
                 crate::mandoc::inline::CompletedRowOrigin::Layout
             };
-            self.with_active_output_builder(|builder| builder.finish_mdoc_item_body(origin));
+            let follows_head = self.formatter.definition_body_follows_head_source_close();
+            self.with_active_output_builder(|builder| {
+                builder.finish_mdoc_item_body(origin, follows_head);
+            });
             self.formatter.retire_no_fill_row_projection();
         } else if row_boundary == super::super::FormatterRowBoundary::Settle {
             // The caller identified a native BODY post, not an IR owner

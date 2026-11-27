@@ -33,9 +33,9 @@ pub(in crate::mandoc) use flow::{
     RunInBoundaryReceipt, TableCellExecution, consume_one_row_ending,
     ends_with_executed_line_break, has_rendered_formatter_glyph,
     lower_no_fill_fragment_with_formatter, native_row_origin, prepare_inline_output,
-    retain_inline_identities, split_row_origin, strip_native_projection_markers,
-    table_word_needs_native_slots, take_definition_term_breaks, take_inline_layout,
-    take_leading_column_rows, trailing_completed_row_origins,
+    retain_inline_identities, split_row_origin, strip_literal_projection_markers,
+    strip_native_projection_markers, table_word_needs_native_slots, take_definition_term_breaks,
+    take_inline_layout, take_leading_column_rows, trailing_completed_row_origins,
 };
 pub(super) use flow::{FontScope, FontState, InlineBuilder};
 mod node;

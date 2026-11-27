@@ -423,14 +423,20 @@ impl InlineBuilder {
     }
 
     /// Execute the actual original mdoc It BODY post, exactly once.
-    pub(in crate::mandoc) fn finish_mdoc_item_body(&mut self, origin: super::CompletedRowOrigin) {
+    pub(in crate::mandoc) fn finish_mdoc_item_body(
+        &mut self,
+        origin: CompletedRowOrigin,
+        follows_head_source_close: bool,
+    ) {
         if self
             .execution
             .definition
             .as_ref()
             .is_some_and(|state| state.run_in_continuation)
         {
-            self.finish_run_in_field_row();
+            self.finish_run_in_field_row_with_body_gap(
+                origin == CompletedRowOrigin::LiteralText && follows_head_source_close,
+            );
         } else {
             self.execute_native_newline_with_origin(origin);
         }
@@ -440,6 +446,10 @@ impl InlineBuilder {
     /// Settle run-in output after the caller's native post.
     /// An IR paragraph drain or a Preserve return must not invoke this.
     pub(in crate::mandoc) fn finish_run_in_field_row(&mut self) {
+        self.finish_run_in_field_row_with_body_gap(false);
+    }
+
+    fn finish_run_in_field_row_with_body_gap(&mut self, follows_head_source_close: bool) {
         // This entry represents the real BODY post, including the ordinary
         // no-field path. term_newln() selects NOSPACE before testing cells.
         self.tighten_next_boundary();
@@ -489,9 +499,18 @@ impl InlineBuilder {
             } else {
                 self.discard_unprinted_definition_field_output()
             };
+            // The inset/diag BODY post calls term_newln() just like the
+            // no-fill source-line gate (mdoc_term.c:939-945). After that
+            // gate closed HEAD, a buffered invisible BODY word can make
+            // the post end a separate row even when its pass was accepted.
+            let body_gap = follows_head_source_close
+                && native
+                    .as_ref()
+                    .is_some_and(|field| self.has_unprinted_run_in_tail(field))
+                && !self.trailing_row_has_printable_character();
             self.retire_native_field_with_device(native.as_ref());
             self.record_completed_vertical_rows(u16::from(
-                extra_row_end && !closes_represented_head,
+                (extra_row_end || body_gap) && !closes_represented_head,
             ));
         }
         if let Some(state) = &mut self.execution.definition {

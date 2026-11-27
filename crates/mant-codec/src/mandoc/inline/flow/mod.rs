@@ -43,8 +43,8 @@ pub(in crate::mandoc) use output::{
     ColumnLeadingRows, CompletedRowOrigin, OutputRowEnd, consume_one_row_ending,
     ends_with_executed_line_break, has_rendered_formatter_glyph, native_row_origin,
     prepare_inline_output, retain_inline_identities, split_output_scope_prefix, split_row_origin,
-    strip_native_projection_markers, take_definition_term_breaks, take_inline_layout,
-    take_leading_column_rows, trailing_completed_row_origins,
+    strip_literal_projection_markers, strip_native_projection_markers, take_definition_term_breaks,
+    take_inline_layout, take_leading_column_rows, trailing_completed_row_origins,
 };
 
 /// Reading projection of one executed formatter word.

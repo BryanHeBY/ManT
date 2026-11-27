@@ -172,15 +172,12 @@ fn lower_mandoc_document_with_source(
     diagnostics.extend(publication_diagnostics);
     diagnostics.extend(context.annotations.take_diagnostics());
     diagnostics.extend(context.take_diagnostics());
-    match initial_code_row {
-        InitialCodeRow::OmitSingle => literal_reading::normalize(
-            &mut root_blocks,
-            &mut sections,
-            &mut context.native_heads.borrow_mut(),
-        ),
-        #[cfg(test)]
-        InitialCodeRow::RetainExecuted => {}
-    }
+    literal_reading::normalize(
+        &mut root_blocks,
+        &mut sections,
+        &mut context.native_heads.borrow_mut(),
+        initial_code_row,
+    );
     navigation::normalize_generated_anchors(&mut root_blocks, &mut sections, explicit_targets);
     let identified = crate::definitions::identify_definitions_with_evidence(
         &mut root_blocks,

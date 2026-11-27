@@ -104,6 +104,7 @@ impl DefinitionHeadRow {
 enum DefinitionBodyPlacement {
     Pending,
     BreakRequested,
+    HeadClosedAtSourceLine,
     StructuralRowClosed,
 }
 
@@ -270,6 +271,26 @@ impl FormatterState {
                 body.placement = DefinitionBodyPlacement::BreakRequested;
             }
         }
+    }
+
+    pub(super) fn note_definition_head_source_close(&mut self) {
+        if let Some(body) = self.definition_bodies.last_mut()
+            && body.before_visible
+            && body.head_row == DefinitionHeadRow::Pending
+            && !body.structural_row_closed()
+        {
+            body.placement = DefinitionBodyPlacement::HeadClosedAtSourceLine;
+        }
+    }
+
+    pub(super) fn definition_body_follows_head_source_close(&self) -> bool {
+        self.definition_bodies.last().is_some_and(|body| {
+            body.before_visible
+                && matches!(
+                    body.placement,
+                    DefinitionBodyPlacement::HeadClosedAtSourceLine
+                )
+        })
     }
 
     pub(super) fn note_definition_structural_row_close(&mut self) {

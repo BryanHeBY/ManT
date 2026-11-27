@@ -236,7 +236,7 @@ impl InlineBuilder {
                 .is_some_and(|state| !state.field_buffer.is_empty())
             || !self.execution.plain_input.buffer.is_empty();
         if occupied {
-            self.consume_execution_line_with_origin(origin);
+            self.consume_execution_line_with_origin(origin, false);
         } else {
             self.flush_empty_execution_line(origin);
         }
@@ -284,17 +284,29 @@ impl InlineBuilder {
         self.execute_native_newline_with_origin(super::super::CompletedRowOrigin::LiteralText)
     }
 
+    pub(in crate::mandoc) fn execute_native_literal_source_newline(
+        &mut self,
+        follows_head: bool,
+    ) -> bool {
+        self.tighten_next_boundary();
+        self.consume_execution_line_with_origin(
+            super::super::CompletedRowOrigin::LiteralText,
+            follows_head,
+        )
+    }
+
     pub(in crate::mandoc::inline::flow) fn execute_native_newline_with_origin(
         &mut self,
         origin: super::super::CompletedRowOrigin,
     ) -> bool {
         self.tighten_next_boundary();
-        self.consume_execution_line_with_origin(origin)
+        self.consume_execution_line_with_origin(origin, false)
     }
 
     fn consume_execution_line_with_origin(
         &mut self,
         origin: super::super::CompletedRowOrigin,
+        follows_head: bool,
     ) -> bool {
         let _ = self.commit_definition_row_origin();
         if self.execution.definition.as_ref().is_some_and(|state| {
@@ -367,7 +379,11 @@ impl InlineBuilder {
                 .is_some_and(super::NativeFieldDevice::ends_row);
             if let Some(native) = &native {
                 self.project_captured_definition_field(native);
-                self.hard_break_after_field_projection_with_origin(Some(native), origin);
+                if follows_head {
+                    self.hard_break_after_definition_body_source_line(native);
+                } else {
+                    self.hard_break_after_field_projection_with_origin(Some(native), origin);
+                }
             } else {
                 self.project_hard_break_with_origin(origin);
             }
