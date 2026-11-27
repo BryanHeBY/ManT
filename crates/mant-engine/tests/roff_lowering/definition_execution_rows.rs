@@ -738,6 +738,30 @@ fn split_run_in_keeps_independent_invisible_body_rows() {
             &["L", "A", "", "", "R"][..],
         ),
         (
+            "invisible head and body",
+            ".It Xo No \"\\&\"\n.Xc",
+            ".No \"\\&\\c\"\n.br\nY",
+            &["L", "", "", "", "Y", "R"][..],
+        ),
+        (
+            "invisible head then authored source line",
+            ".It Xo No \"\\&\"\n.Xc",
+            ".No \"\\&\"\nY",
+            &["L", "", "", "", "Y", "R"][..],
+        ),
+        (
+            "invisible split head with visible body",
+            ".It Xo No \"\\&\"\n.Xc",
+            ".No X\n.br\nY",
+            &["L", "", "", "X", "Y", "R"][..],
+        ),
+        (
+            "invisible split head without authored body",
+            ".It Xo No \"\\&\"\n.Xc",
+            "",
+            &["L", "", "", "R"][..],
+        ),
+        (
             "continued head",
             ".It Xo No \"A\\c\"\n.Xc",
             ".No \"\\&\\c\"\n.br\nY",
@@ -762,7 +786,8 @@ fn split_run_in_keeps_independent_invisible_body_rows() {
             &["L", "A", "", "X", "Y", "R"][..],
         ),
     ] {
-        let input = format!("L\n.nf\n.Bl -inset -compact\n{head}\n{body}\n.El\n.fi\nR\n");
+        let newline = if body.is_empty() { "" } else { "\n" };
+        let input = format!("L\n.nf\n.Bl -inset -compact\n{head}\n{body}{newline}.El\n.fi\nR\n");
         assert_eq!(
             description_rows(&input)
                 .iter()

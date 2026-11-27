@@ -274,9 +274,16 @@ impl FormatterState {
     }
 
     pub(super) fn note_definition_head_source_close(&mut self) {
+        self.note_definition_head_source_close_with_unrepresented_row(false);
+    }
+
+    pub(super) fn note_definition_head_source_close_with_unrepresented_row(
+        &mut self,
+        unrepresented_row: bool,
+    ) {
         if let Some(body) = self.definition_bodies.last_mut()
             && body.before_visible
-            && body.head_row == DefinitionHeadRow::Pending
+            && (body.head_row == DefinitionHeadRow::Pending || unrepresented_row)
             && !body.structural_row_closed()
         {
             body.placement = DefinitionBodyPlacement::HeadClosedAtSourceLine;

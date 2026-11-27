@@ -129,6 +129,10 @@ impl BlockState {
         self.flush_paragraph_with(ParagraphDrain::Ordinary);
     }
 
+    pub(super) fn publish_closed_run_in_head(&mut self) {
+        self.flush_paragraph_with(ParagraphDrain::AfterNativeFlush);
+    }
+
     pub(in crate::mandoc::blocks) fn flush_paragraph_for_line_request(&mut self) {
         self.flush_paragraph_with(ParagraphDrain::LineRequest);
     }

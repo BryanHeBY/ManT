@@ -303,17 +303,30 @@ impl BlockState {
                         began_source_line
                     });
             if began_source_line {
-                // This BODY entry ran the native source-line gate before
-                // the generated separator. Preserve the pending HEAD close
-                // before settlement so later invisible BODY rows remain
-                // independent of the term's projection.
-                self.formatter.note_definition_head_source_close();
-                if self.formatter.definition_head_row_pending()
+                // NODE_LINE ran before BODY's generated word. Keep its
+                // HEAD close distinct from that word's later row. A term
+                // with no projected glyph needs the completed-row receipt
+                // delivered now, before the generated row can reuse the
+                // same paragraph owner's trailing delimiter.
+                let represented = self.formatter.definition_head_row_pending();
+                let completed_invisible_head = !represented
+                    && !crate::mandoc::inline::trailing_completed_row_origins(
+                        self.paragraph.output_nodes_mut(),
+                    )
+                    .is_empty();
+                self.formatter
+                    .note_definition_head_source_close_with_unrepresented_row(
+                        completed_invisible_head,
+                    );
+                if represented
                     && self
                         .paragraph
                         .consume_invisible_head_row(&mut self.formatter)
                 {
                     self.formatter.consume_definition_head_row();
+                }
+                if completed_invisible_head {
+                    self.publish_closed_run_in_head();
                 }
                 self.formatter.settle_definition_head_rows();
             }
