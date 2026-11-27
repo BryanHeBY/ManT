@@ -347,26 +347,35 @@ impl<'a> Scanner<'a> {
     }
 
     fn standalone_slash(&self) -> bool {
-        let tail = &self.view.text[self.cursor + 1..];
-        if !tail.starts_with(char::is_whitespace) {
+        let tail_start = self.cursor + 1;
+        let name_start = self.view.skip_space(tail_start);
+        if !self.view.text[name_start..].starts_with('-')
+            || self.view.is_parameter(name_start)
+            || self.view.reference_or_environment(name_start)
+            || name_start == tail_start
+                && !(self.view.independent_slash(self.cursor)
+                    && self.view.native_option_starts(name_start))
+        {
             return false;
         }
-        let tail = tail.trim_start();
-        let Some(name) = super::options::option_prefix(tail) else {
-            return false;
-        };
-        let name_start = self.view.text.len() - tail.len();
+
+        let native = self.view.explicit_option(name_start);
+        let (name, _) = self.option_name_prefix(name_start, native);
+        let Some(name) = name else { return false };
         let end = name_start + name.len();
-        tail[name.len()..].chars().next().is_none_or(|next| {
-            next.is_whitespace()
-                || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
-                || next == '/'
-                    && !self.view.is_parameter(end)
-                    && !self.view.literal_punctuation(end)
-                    && self.view.explicit_option(name_start)
-                    && self.view.native_option_starts(end + 1)
-                || self.wrappers.last().is_some_and(|w| w.closer() == next)
-        })
+        self.view.permits_option_spelling(name_start..end, true)
+            && self.view.text[end..].chars().next().is_none_or(|next| {
+                next.is_whitespace()
+                    || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
+                    || native && self.view.native_argument_starts(end)
+                    || next == '/'
+                        && native
+                        && self.view.independent_slash(end)
+                        && self
+                            .view
+                            .native_option_starts(self.view.skip_space(end + 1))
+                    || self.wrappers.last().is_some_and(|w| w.closer() == next)
+            })
     }
 
     fn numeric_enumeration(&self) -> bool {
@@ -384,22 +393,8 @@ impl<'a> Scanner<'a> {
         if self.view.reference_or_environment(start) {
             return false;
         }
-        if native && let Some(marker) = self.explicit_marker(start) {
-            self.accept_name(marker, true, false);
-            return true;
-        }
-        let mut end = start + 1;
-        for (index, next) in self.view.text[end..].char_indices() {
-            let offset = start + 1 + index;
-            if !option_character(next)
-                || self.view.is_parameter(offset)
-                || native && self.view.independent_option_suffix(offset)
-            {
-                break;
-            }
-            end = offset + next.len_utf8();
-        }
-        if let Some(name) = super::options::option_prefix(&self.view.text[start..end]) {
+        let (name, end) = self.option_name_prefix(start, native);
+        if let Some(name) = name {
             if !self
                 .view
                 .permits_option_spelling(start..start + name.len(), true)
@@ -442,6 +437,30 @@ impl<'a> Scanner<'a> {
             return true;
         }
         false
+    }
+
+    // Both slash lookahead and actual consumption use the same native key
+    // boundary. In particular a special Fl spelling or a tight Ar suffix
+    // is not equivalent to a lexical option_prefix() of the whole tail.
+    fn option_name_prefix(&self, start: usize, native: bool) -> (Option<&'a str>, usize) {
+        if native && let Some(marker) = self.explicit_marker(start) {
+            return (Some(marker), start + marker.len());
+        }
+        let mut end = start + 1;
+        for (index, next) in self.view.text[end..].char_indices() {
+            let offset = start + 1 + index;
+            if !option_character(next)
+                || self.view.is_parameter(offset)
+                || native && self.view.independent_option_suffix(offset)
+            {
+                break;
+            }
+            end = offset + next.len_utf8();
+        }
+        (
+            super::options::option_prefix(&self.view.text[start..end]),
+            end,
+        )
     }
 
     fn accept_name(&mut self, name: &str, native: bool, begins_argument: bool) {
@@ -548,7 +567,8 @@ impl<'a> Scanner<'a> {
     fn is_argument_separator(&self, character: char, operand: Option<&NativeOperand>) -> bool {
         (matches!(character, ',' | '|')
             || character == '/'
-                && self.view.text[..self.cursor].ends_with(char::is_whitespace)
+                && (self.view.text[..self.cursor].ends_with(char::is_whitespace)
+                    || self.view.independent_slash(self.cursor))
                 && !self.view.is_parameter(self.cursor)
                 && self.standalone_slash())
             && !self.view.literal_punctuation(self.cursor)

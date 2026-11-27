@@ -438,27 +438,28 @@ fn literal_delimiter(node: &Node) -> Option<char> {
     }
 }
 
-fn declaration_separator(decoded: &DecodedText) -> bool {
+fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char> + '_ {
     // CVS term_word() writes a zero-width cell for the ESCAPE_IGNORE
     // produced by roff_escape.c for color and point-size escapes. Those
     // cells and font controls do not change one No operand's spelling.
-    let mut chars = decoded
-        .events
-        .iter()
-        .flat_map(|event| match event {
-            RoffInlineEvent::Font(_)
-            | RoffInlineEvent::PreviousFont
-            | RoffInlineEvent::ZeroWidthGlyph
-            | RoffInlineEvent::Presentation {
-                kind: PresentationKind::Color | PresentationKind::PointSize,
-                ..
-            } => "".chars(),
-            RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word, _) => word.chars(),
-            _ => "\0".chars(),
-        })
-        .skip_while(|glyph| glyph.is_whitespace());
+    decoded.events.iter().flat_map(|event| match event {
+        RoffInlineEvent::Font(_)
+        | RoffInlineEvent::PreviousFont
+        | RoffInlineEvent::ZeroWidthGlyph
+        | RoffInlineEvent::Presentation {
+            kind: PresentationKind::Color | PresentationKind::PointSize,
+            ..
+        } => "".chars(),
+        RoffInlineEvent::Text(word) | RoffInlineEvent::Glyph(word, _) => word.chars(),
+        RoffInlineEvent::NonBreakingWordBlank => " ".chars(),
+        _ => "\0".chars(),
+    })
+}
+
+fn declaration_separator(decoded: &DecodedText) -> bool {
+    let mut chars = literal_declaration_chars(decoded).skip_while(|glyph| glyph.is_whitespace());
     let separator = match chars.next() {
-        Some(',' | '|') => true,
+        Some(',' | '|' | '/') => true,
         Some('o') => chars.next() == Some('r'),
         _ => false,
     };
@@ -484,12 +485,19 @@ fn captured_bare_delimiter(
 
 fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> {
     if declaration_separator(decoded) {
-        Some(NativeOperandRole::LiteralContinuation(None))
-    } else {
-        decoded.events.iter().any(|event| matches!(
-            event, RoffInlineEvent::Text(value) | RoffInlineEvent::Glyph(value, _) if value.contains([',', '|'])
-        )).then_some(NativeOperandRole::LiteralPunctuation)
+        return Some(NativeOperandRole::LiteralContinuation(None));
     }
+    // Keep only separator-like slashes opaque. A tight path such as
+    // /var/log is still an ordinary literal in a complete assignment.
+    let mut slash = false;
+    literal_declaration_chars(decoded)
+        .any(|character| {
+            let looks_like_separator =
+                matches!(character, ',' | '|') || slash && character.is_whitespace();
+            slash = character == '/';
+            looks_like_separator
+        })
+        .then_some(NativeOperandRole::LiteralPunctuation)
 }
 
 #[derive(Clone)]

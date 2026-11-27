@@ -167,3 +167,144 @@ fn independent_slashes_end_parameters_and_chain_aliases() {
         check(&source, &names, form, &absent);
     }
 }
+
+#[test]
+fn slash_inside_one_literal_value_cannot_start_a_second_declaration() {
+    // Pinned CVS mdoc_macro.c::in_line retains each quoted string as one
+    // TEXT operand. Fl, unlike these values, supplies an independent key.
+    for role in ["No", "Li", "Sy", "Ar"] {
+        for prefix in ["", "alpha ", "literal data "] {
+            check(
+                &format!(
+                    "{MDOC}.It Fl x Ar file {role} \"{prefix}/ --fake\"\nThe same documented setting.\n.El\n"
+                ),
+                &["-x"],
+                &format!("-x file {prefix}/ --fake"),
+                &["--fake"],
+            );
+        }
+    }
+    for (tail, names, form) in [
+        (r#""/ --fake/path""#, &["-x"][..], "-x file / --fake/path"),
+        (
+            r#""/ --fake" No / Fl Fl all"#,
+            &["-x", "--all"],
+            "-x file / --fake / --all",
+        ),
+    ] {
+        check(
+            &format!("{MDOC}.It Fl x Ar file No {tail}\nThe same documented setting.\n.El\n"),
+            names,
+            form,
+            &["--fake"],
+        );
+    }
+}
+
+#[test]
+fn slash_lookahead_and_selection_share_the_native_option_boundary() {
+    // CVS termp_fl_pre/mdoc_fl_pre supply each dash, and mdoc_ar_pre
+    // separately owns the attached parameter after Fl. Both terminals
+    // and the native tree were run on these exact source forms.
+    for (tail, names, form) in [
+        (r"No / Fl \-", &["-x", "--"][..], "-x file / --"),
+        ("No / Fl +", &["-x", "-+"], "-x file / -+"),
+        (r"No / Fl \-%", &["-x", "--%"], "-x file / --%"),
+        ("No / Fl y Ns Ar 界", &["-x", "-y"], "-x file / -y界"),
+        (
+            r"No / Fl Fl enable Ns Ar \&/file",
+            &["-x", "--enable"],
+            "-x file / --enable/file",
+        ),
+        (
+            "No / Fl ! Ns No / Ns Fl Fl enable",
+            &["-x", "-!", "--enable"],
+            "-x file / -!/--enable",
+        ),
+        (
+            "No / Fl 0 No / Fl !",
+            &["-x", "-0", "-!"],
+            "-x file / -0 / -!",
+        ),
+    ] {
+        check(
+            &format!("{MDOC}.It Fl x Ar file {tail}\nThe same documented setting.\n.El\n"),
+            names,
+            form,
+            &["--fake"],
+        );
+    }
+}
+
+#[test]
+fn mdoc_literal_value_protection_does_not_change_man_aliases() {
+    const SOURCE: &str = ".TH PROBE 1\n.SH NAME\nprobe \\- declaration probe\n.SH OPTIONS\n.TP\n";
+    // In man_term.c::pre_alternate each TEXT child executes independently;
+    // a simple .B alias string without parameters is lexical instead.
+    for tag in [r#".BR \-x " / " \-\-long"#, r#".B "\-x / \-\-long""#] {
+        check(
+            &format!("{SOURCE}{tag}\nThe same documented setting.\n"),
+            &["-x", "--long"],
+            "-x / --long",
+            &["--fake"],
+        );
+    }
+    for (tag, form) in [
+        (r#".BI \-x " file / \-\-fake""#, "-x file / --fake"),
+        (r#".B "\-x / \-\-fake/path""#, "-x / --fake/path"),
+    ] {
+        check(
+            &format!("{SOURCE}{tag}\nThe same documented setting.\n"),
+            &["-x"],
+            form,
+            &["--fake"],
+        );
+    }
+}
+
+#[test]
+fn a_literal_word_keeps_its_accepted_comma_or_pipe() {
+    // mdoc_macro.c::in_line gives each quoted string one TEXT child. The
+    // accepted per-scalar argument receipt for its punctuation is not a
+    // separate native delimiter, even between strong rendered fragments.
+    for role in ["No", "Li", "Sy", "Ar"] {
+        for sep in [',', '|'] {
+            check(
+                &format!(
+                    "{MDOC}.It Fl x Ar file {role} \"alpha {sep} --fake\"\nThe same documented setting.\n.El\n"
+                ),
+                &["-x"],
+                &format!("-x file alpha {sep} --fake"),
+                &["--fake"],
+            );
+        }
+    }
+}
+
+#[test]
+fn native_slash_marker_keeps_the_complete_assigned_form() {
+    // termp_fl_pre and mdoc_fl_pre independently execute both Fl scopes.
+    // The native HTML keeps the fully assigned first form plus the marker.
+    check(
+        &format!("{MDOC}.It Fl x Ns = Ns Ar file No / Fl \\-\nThe same documented setting.\n.El\n"),
+        &["-x", "--"],
+        "-x=file / --",
+        &["--fake"],
+    );
+}
+
+#[test]
+fn a_tight_path_does_not_clip_the_assigned_form() {
+    // A No TEXT child remains a full path value according to the CVS
+    // terminals and HTML, while the following No / is a distinct operand.
+    for value in ["/var/log", "path/file"] {
+        check(
+            &format!(
+                "{MDOC}.It Fl x Ns = Ns No {value} No / Fl Fl all\nThe same documented setting.\n.El\n"
+            ),
+            &["-x", "--all"],
+            &format!("-x={value} / --all"),
+            &["--fake"],
+        );
+    }
+}

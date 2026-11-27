@@ -204,9 +204,47 @@ impl<'a> HeadView<'a> {
         self.operand(offset)
             .is_some_and(|operand| match operand.role {
                 #[cfg(feature = "roff")]
-                NativeOperandRole::LiteralPunctuation => true,
+                NativeOperandRole::LiteralPunctuation
+                | NativeOperandRole::LiteralValue
+                | NativeOperandRole::SymbolicText => true,
+                #[cfg(feature = "roff")]
+                NativeOperandRole::Argument => {
+                    // A separator scalar replayed inside a quoted native
+                    // TEXT can get its own protected argument receipt.
+                    // Actual bare punctuation has a non-argument role.
+                    matches!(
+                        self.text[operand.bytes.clone()].as_bytes(),
+                        [b',' | b'|' | b'/']
+                    )
+                }
                 _ => false,
             })
+    }
+
+    pub(super) fn independent_slash(&self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        return self.operand(offset).is_some_and(|operand| {
+            matches!(operand.role, NativeOperandRole::LiteralContinuation(_))
+                && self.text[operand.bytes.clone()].trim() == "/"
+        });
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = offset;
+            false
+        }
+    }
+
+    pub(super) fn native_argument_starts(&self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        return self.operand(offset).is_some_and(|operand| {
+            operand.bytes.start == offset
+                && matches!(operand.role, NativeOperandRole::Placeholder { .. })
+        });
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = offset;
+            false
+        }
     }
 
     pub(super) fn permits_option_spelling(

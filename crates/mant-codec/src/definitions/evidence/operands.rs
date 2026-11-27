@@ -19,7 +19,7 @@ pub(crate) enum NativeOperandRole {
         pipe: bool,
         enclosure: Option<u32>,
     },
-    /// A comma or pipe belongs to the complete text of a No operand.
+    /// A comma, pipe or slash belongs to the complete text of a No operand.
     #[cfg(feature = "roff")]
     LiteralPunctuation,
     #[cfg(any(feature = "roff", test))]
