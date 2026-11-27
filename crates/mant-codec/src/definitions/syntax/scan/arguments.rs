@@ -9,6 +9,19 @@ mod native_assignment;
 pub(super) use native_assignment::proves_native_assignment;
 
 pub(super) fn valid_arguments(view: &HeadView<'_>, argument: &Argument) -> bool {
+    let spelling = view.text[argument.bytes.clone()].trim_end();
+    if argument.attached_to_name
+        && spelling.contains('.')
+        && !spelling.chars().any(char::is_whitespace)
+        && view.complete_native_composite_value(argument.bytes.clone())
+        && spelling
+            .split('.')
+            .all(|part| ParameterToken::from_text(part).is_bare())
+    {
+        // One complete typed atom can contain interior dots (such as a
+        // version literal); this does not widen untyped word grammar.
+        return true;
+    }
     let range = &argument.bytes;
     let mut literal = String::new();
     let mut offset = range.start;

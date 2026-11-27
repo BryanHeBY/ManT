@@ -639,3 +639,114 @@ fn explain_attached_tail(head: &str, query: &str) -> QueryExplanation {
     assert!(output.status.success(), "{head}: {query}");
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
+#[test]
+fn overwritten_or_split_values_cannot_prove_a_complete_option_form() {
+    // An actual foreign native word covers the last glyph. Even when it
+    // paints the same character, the retained value is not complete.
+    for (role, original, replacement, intact) in [
+        ("Li", "data", "x", "datx"),
+        ("Sy", "data", "x", "datx"),
+        ("Cm", "data", "x", "datx"),
+        ("Ev", "DATA", "X", "DATX"),
+        ("Li", "data", "a", "data"),
+    ] {
+        let native = format!("Fl v Ns {role} {intact} No / Fl a Ar mode");
+        let repainted =
+            format!(r#"Fl v Ns {role} {original} Ns No "\h'-1n'{replacement}" No / Fl a Ar mode"#);
+        let form = format!("-v{intact} / -a mode");
+        assert_attached_display(&repainted, &form);
+        assert_attached_display(&native, &form);
+        assert_eq!(
+            explain_attached_tail(&repainted, &form)
+                .counts
+                .direct_entry
+                .total,
+            0,
+            "{repainted}"
+        );
+        check_declaration(&native, &form, &["-v", "-a"], &[&format!("-v{intact}")]);
+    }
+
+    for (value, spelling) in [
+        ("Li dat Ns No x", "-vdatx"),
+        ("Li dat Ns Li x", "-vdatx"),
+        ("Cm dat Ns No x", "-vdatx"),
+        ("Sy dat Ns No x", "-vdatx"),
+        ("Ev DAT Ns No X", "-vDATX"),
+        (r#"Li "data\h'-1n'x""#, "-vdatx"),
+    ] {
+        let head = format!("Fl v Ns {value} No / Fl a Ar mode");
+        let query = format!("{spelling} / -a mode");
+        assert_attached_display(&head, &query);
+        assert_eq!(
+            explain_attached_tail(&head, &query)
+                .counts
+                .direct_entry
+                .total,
+            0,
+            "{head}"
+        );
+    }
+}
+
+#[test]
+fn dotted_typed_atom_keeps_its_exact_composite_without_granting_a_new_flag() {
+    for value in ["v1.2", "v12"] {
+        for (head, form, names) in [
+            (
+                format!("Fl a Ar mode No / Fl v Ns Li {value}"),
+                format!("-a mode / -v{value}"),
+                ["-a", "-v"],
+            ),
+            (
+                format!("Fl v Ns Li {value} No / Fl a Ar mode"),
+                format!("-v{value} / -a mode"),
+                ["-v", "-a"],
+            ),
+        ] {
+            check_declaration(&head, &form, &names, &[&format!("-v{value}")]);
+        }
+    }
+    assert_eq!(
+        explain_attached_tail("Fl vv1.2", "-vv1.2")
+            .counts
+            .direct_entry
+            .total,
+        1
+    );
+    let split = "Fl a Ar mode No / Fl v Ns Li v1 Ns No .2";
+    assert_attached_display(split, "-a mode / -vv1.2");
+    assert_eq!(
+        explain_attached_tail(split, "-a mode / -vv1.2")
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+}
+
+fn assert_attached_display(head: &str, form: &str) {
+    let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "text",
+            "--display",
+            "direct",
+            "--color",
+            "never",
+        ],
+        &source,
+    );
+    assert!(output.status.success(), "{head}");
+    let text = std::str::from_utf8(&output.stdout).unwrap();
+    assert!(
+        text.lines().any(|line| line.trim() == form),
+        "{head}: {text}"
+    );
+}

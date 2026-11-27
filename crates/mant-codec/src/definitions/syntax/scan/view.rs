@@ -204,7 +204,7 @@ impl<'a> HeadView<'a> {
         self.operand(offset)
             .is_some_and(|operand| match operand.role {
                 #[cfg(feature = "roff")]
-                NativeOperandRole::LiteralPunctuation => true,
+                NativeOperandRole::LiteralPunctuation | NativeOperandRole::ClippedValue => true,
                 #[cfg(feature = "roff")]
                 NativeOperandRole::LiteralValue | NativeOperandRole::SymbolicText => {
                     // A whole punctuation operand can separate declarations;
@@ -257,20 +257,25 @@ impl<'a> HeadView<'a> {
     pub(super) fn native_composite_value_starts(&self, offset: usize) -> bool {
         #[cfg(feature = "roff")]
         return self.operand(offset).is_some_and(|operand| {
-            operand.bytes.start == offset
-                && matches!(
-                    operand.role,
-                    NativeOperandRole::LiteralValue
-                        | NativeOperandRole::Command
-                        | NativeOperandRole::SymbolicText
-                        | NativeOperandRole::Environment { .. }
-                )
+            operand.bytes.start == offset && operand.role.is_attached_composite_value()
         });
         #[cfg(not(feature = "roff"))]
         {
             let _ = offset;
             false
         }
+    }
+
+    /// The entire attached atom must be one unchanged executed operand.
+    /// A repainted or independently appended tail is a different owner,
+    /// even when the serialized spelling would look plausible.
+    pub(super) fn complete_native_composite_value(&self, span: Range<usize>) -> bool {
+        if !self.native_composite_value_starts(span.start) {
+            return false;
+        }
+        let value = self.text[span.clone()].trim_end();
+        self.operand(span.start)
+            .is_some_and(|operand| self.text[operand.bytes.clone()].trim_end().len() == value.len())
     }
 
     pub(super) fn permits_option_spelling(

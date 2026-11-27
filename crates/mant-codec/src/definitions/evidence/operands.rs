@@ -73,6 +73,9 @@ pub(crate) enum NativeOperandRole {
     /// A literal word executed by Li, distinct from styled prose.
     #[cfg(feature = "roff")]
     LiteralValue,
+    /// Surviving Li or Sy bytes cannot prove an unchanged spelling.
+    #[cfg(feature = "roff")]
+    ClippedValue,
     /// An independently executed mdoc Sy word.
     #[cfg(feature = "roff")]
     SymbolicText,
@@ -207,10 +210,19 @@ impl NativeOperandRole {
             self,
             Self::Description
                 | Self::LiteralValue
+                | Self::ClippedValue
                 | Self::SymbolicText
                 | Self::Command
                 | Self::ProgramName(_)
                 | Self::ClippedInvocation
+        )
+    }
+
+    #[cfg(feature = "roff")]
+    pub(crate) fn is_attached_composite_value(self) -> bool {
+        matches!(
+            self,
+            Self::LiteralValue | Self::Command | Self::SymbolicText | Self::Environment { .. }
         )
     }
 
@@ -307,6 +319,7 @@ impl NativeOperandRole {
             | Self::FlReopening { .. }
             | Self::FunctionSignature { .. } => Self::Argument,
             Self::Command | Self::ProgramName(_) => Self::ClippedInvocation,
+            Self::LiteralValue | Self::SymbolicText => Self::ClippedValue,
             Self::PathOperand(enclosure) => Self::ReferenceText(enclosure),
             Self::EnclosureStart { .. } | Self::EnclosureEnd(_) => Self::ClippedEnclosure,
             role => role,

@@ -190,6 +190,8 @@ impl HeadOperandCapture {
                     | NativeOperandRole::FlWord(_)
                     | NativeOperandRole::Subject(..)
                     | NativeOperandRole::Environment { .. }
+                    | NativeOperandRole::LiteralValue
+                    | NativeOperandRole::SymbolicText
                     | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::Command
                     | NativeOperandRole::ProgramName(_)
@@ -330,19 +332,11 @@ impl super::InlineBuilder {
                 if matches!(role, NativeOperandRole::FlDash(_)) {
                     capture.option_dash = Some(serial);
                 }
-                let role = if text.is_some_and(|(_, decoded)| !decoded.proves_native_glyphs()) {
-                    match role {
-                        NativeOperandRole::Placeholder { .. } => {
-                            NativeOperandRole::IncompletePlaceholder
-                        }
-                        NativeOperandRole::SearchArgument(_) | NativeOperandRole::FlWord(_) => {
-                            NativeOperandRole::Argument
-                        }
-                        _ => role.without_complete_spelling(),
-                    }
-                } else {
-                    role
-                };
+                let role = native_spelling_role(
+                    role,
+                    text.map(|(_, decoded)| decoded),
+                    capture.has_option,
+                );
                 if matches!(role, NativeOperandRole::FlWord(_))
                     && let Some((_, decoded)) = text
                     && let Some(spelling) = FlSpelling::from_events(&decoded.events)
@@ -498,6 +492,45 @@ fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOperandRole> 
             looks_like_separator
         })
         .then_some(NativeOperandRole::LiteralPunctuation)
+}
+
+fn native_spelling_role(
+    role: NativeOperandRole,
+    decoded: Option<&DecodedText>,
+    follows_option: bool,
+) -> NativeOperandRole {
+    if !decoded.is_some_and(|decoded| {
+        !decoded.proves_native_glyphs()
+            || follows_option
+                && role.is_attached_composite_value()
+                && decoded.events.iter().any(repositions_typed_value)
+    }) {
+        return role;
+    }
+    match role {
+        NativeOperandRole::Placeholder { .. } => NativeOperandRole::IncompletePlaceholder,
+        NativeOperandRole::SearchArgument(_) | NativeOperandRole::FlWord(_) => {
+            NativeOperandRole::Argument
+        }
+        _ => role.without_complete_spelling(),
+    }
+}
+
+/// A motion inside a single value can replace its own glyph before any
+/// cross-owner receipt exists. That resulting word is not the authored atom.
+fn repositions_typed_value(event: &RoffInlineEvent) -> bool {
+    let RoffInlineEvent::HorizontalMotion {
+        argument: Some(argument),
+        ..
+    } = event
+    else {
+        return false;
+    };
+    let (length, absolute) = argument
+        .strip_prefix('|')
+        .map_or((argument.as_str(), false), |length| (length, true));
+    libmandoc_rs::TableColumnMetrics::motion_argument(length)
+        .is_some_and(|(units, _)| absolute || units < 0)
 }
 
 #[derive(Clone)]

@@ -609,6 +609,17 @@ impl<'a> Scanner<'a> {
                 self.form_evidence
                     .reject_if(!arguments::proves_native_assignment(self.view, &argument));
             }
+            if argument.attached_to_name
+                && self
+                    .view
+                    .native_composite_value_starts(argument.bytes.start)
+            {
+                self.form_evidence.reject_if(
+                    !self
+                        .view
+                        .complete_native_composite_value(argument.bytes.clone()),
+                );
+            }
             self.arguments.push(argument);
         }
         self.styled_argument = false;
