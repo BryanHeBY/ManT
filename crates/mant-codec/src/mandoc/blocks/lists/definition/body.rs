@@ -112,8 +112,8 @@ pub(super) fn enter_definition_body(
             }
             && head_open,
     );
-    // A real HEAD endline can cause the generated inset word to print on
-    // a separate row even when BODY is childless (term.c:475-497).
+    // This is only eligibility to suppress a shared-row projection.
+    // BODY source entry must execute before deciding its actual row.
     flow.head.is_compact_inset()
         && node.flags.no_fill
         && super::first_part_children(node, NodeKind::Body).is_empty()
@@ -143,7 +143,7 @@ pub(super) fn definition_body_flow(
     spacing_enabled: bool,
     flow: DefinitionFlow,
     run_in_execution: Option<RunInExecution>,
-    omits_childless_body_padding: bool,
+    suppress_padding_on_shared_head: bool,
 ) -> ScopeFlow<'_> {
     if let Some(run_in) = run_in_execution {
         ScopeFlow {
@@ -152,14 +152,8 @@ pub(super) fn definition_body_flow(
             paragraph_predecessor: flow.paragraph_predecessor,
             run_in: Some(RunInBody {
                 execution: run_in.state,
-                // The generated inset word still executes. It is trailing
-                // padding of the open HEAD row, not a separate BODY row.
-                // A real HEAD endline can instead make it the next row.
-                generated_cells: if omits_childless_body_padding {
-                    0
-                } else {
-                    run_in.surviving_cells
-                },
+                generated_cells: run_in.surviving_cells,
+                suppress_padding_on_shared_head,
                 native_generated_cells: usize::from(
                     flow.head.generated_cells().unwrap_or_default(),
                 ),

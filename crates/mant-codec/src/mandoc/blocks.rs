@@ -86,6 +86,7 @@ pub(super) struct ColumnBodyNodes<'node> {
 pub(super) struct RunInBody<'node> {
     pub(super) execution: crate::mandoc::inline::PreservedInlineState,
     pub(super) generated_cells: usize,
+    pub(super) suppress_padding_on_shared_head: bool,
     /// Native pre-handler writes, before compact HEAD/BODY ownership splits.
     pub(super) native_generated_cells: usize,
     pub(super) generated_word: bool,
@@ -232,13 +233,7 @@ fn walk_scope<'a, 'source>(
         std::mem::take(formatter),
     );
     if let Some(run_in) = flow.run_in {
-        lowerer.state.inherit_run_in_execution(
-            run_in.execution,
-            run_in.generated_cells,
-            run_in.native_generated_cells,
-            run_in.generated_word,
-            run_in.entry,
-        );
+        lowerer.state.inherit_run_in_execution(run_in);
     }
     lowerer.paragraph_predecessor = flow.paragraph_predecessor;
     if let Some(entry) = flow.column_nodes.as_ref().and_then(|nodes| nodes.entry) {

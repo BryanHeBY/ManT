@@ -199,7 +199,7 @@ pub(super) fn definition_item(
     );
     let empty_head_rows = transfer_completed_empty_head_rows(&mut terms, completed_head_rows);
     let body_origin = geometry.body_origin(context, node, indent_columns);
-    let omits_childless_body_padding = enter_definition_body(
+    let suppress_padding_on_shared_head = enter_definition_body(
         node,
         formatter,
         flow,
@@ -228,7 +228,7 @@ pub(super) fn definition_item(
             spacing_enabled,
             flow,
             run_in_execution,
-            omits_childless_body_padding,
+            suppress_padding_on_shared_head,
         ),
     );
     if let Some(receiver) = &deferred_head_projection

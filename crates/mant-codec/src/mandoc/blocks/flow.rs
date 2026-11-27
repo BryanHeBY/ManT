@@ -281,34 +281,28 @@ impl BlockState {
             });
     }
 
-    pub(super) fn inherit_run_in_execution(
-        &mut self,
-        state: crate::mandoc::inline::PreservedInlineState,
-        generated_cells: usize,
-        native_generated_cells: usize,
-        generated_word: bool,
-        entry: Option<&libmandoc_rs::Node>,
-    ) {
+    pub(super) fn inherit_run_in_execution(&mut self, run_in: super::RunInBody<'_>) {
         self.paragraph
-            .inherit_preserved_execution(&mut self.formatter, state);
-        if let Some(entry) = entry {
+            .inherit_preserved_execution(&mut self.formatter, run_in.execution);
+        let mut began_source_line = false;
+        if let Some(entry) = run_in.entry {
             // print_mdoc_node() enters the actual It BODY before its pre
             // emits the run-in separator. Explicitly closed extended heads
             // give this BODY NODE_LINE; ordinary Bq does not. Observe these
             // facts now, never infer them from a later child or topology.
-            let closes_head = entry.flags.no_fill
-                && entry.flags.line_start
-                && !self.formatter.execution.source_row_continues();
             if entry.flags.line_start {
                 self.formatter.note_definition_source_line();
             }
-            self.paragraph
-                .with_inline_builder(&mut self.formatter, |builder| {
-                    builder.observe_no_fill_source_lines(true);
-                    builder.begin_executed_node(entry);
-                    builder.observe_no_fill_source_lines(false);
-                });
-            if closes_head {
+            began_source_line =
+                self.paragraph
+                    .with_inline_builder(&mut self.formatter, |builder| {
+                        builder.observe_no_fill_source_lines(true);
+                        let began_source_line =
+                            builder.begin_executed_node_observing_source_row(entry);
+                        builder.observe_no_fill_source_lines(false);
+                        began_source_line
+                    });
+            if began_source_line {
                 if self.formatter.definition_head_row_pending()
                     && self
                         .paragraph
@@ -327,11 +321,19 @@ impl BlockState {
                     .execution
                     .enter_definition_body_origin(self.indent_columns.physical_basic_units());
             });
+        // Native BODY pre writes its generated word even when the
+        // reading projection omits trailing padding of a shared HEAD.
+        // A real source-line entry instead gives that word its own row.
+        let projected_cells = if run_in.suppress_padding_on_shared_head && !began_source_line {
+            0
+        } else {
+            run_in.generated_cells
+        };
         let boundary = self.paragraph.append_run_in_cells(
             &mut self.formatter,
-            generated_cells,
-            native_generated_cells,
-            generated_word,
+            projected_cells,
+            run_in.native_generated_cells,
+            run_in.generated_word,
         );
         self.formatter.note_definition_run_in_executed(boundary);
     }

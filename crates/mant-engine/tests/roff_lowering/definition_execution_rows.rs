@@ -580,3 +580,102 @@ fn explicit_break_keeps_a_completed_continued_inset_body_row() {
         ["L", "A", "Y", "R"]
     );
 }
+
+#[test]
+fn childless_run_in_padding_uses_the_executed_body_source_line() {
+    // CVS mdoc_term.c:314-321 and termp_it_pre/post: the original BODY
+    // NODE_LINE gate precedes its generated inset word. Neither the Xc
+    // token nor the mere absence of authored BODY children proves sharing.
+    // Frozen AR fixtures were executed on pinned ASCII/UTF-8 before these
+    // assertions, including opposite cases where a blank must not appear.
+    for (label, body, expected, body_present) in [
+        (
+            "plain",
+            "L\n.nf\n.Bl -inset -compact\n.It No A\n.El\n.fi\nR\n",
+            &["L", "A", "R"][..],
+            false,
+        ),
+        (
+            "explicit",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo No A\n.Xc\n.El\n.fi\nR\n",
+            &["L", "A", "", "R"][..],
+            true,
+        ),
+        (
+            "same",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo No A Xc\n.El\n.fi\nR\n",
+            &["L", "A", "R"][..],
+            false,
+        ),
+        (
+            "tight",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo No \"A\\c\"\n.Xc\n.El\n.fi\nR\n",
+            &["L", "A", "R"][..],
+            false,
+        ),
+        (
+            "sp-before",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo\n.sp 1\n.No A\n.Xc\n.El\n.fi\nR\n",
+            &["L", "", "A", "", "R"][..],
+            true,
+        ),
+        (
+            "sp-after",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo\n.No A\n.sp 1\n.Xc\n.El\n.fi\nR\n",
+            &["L", "A", "", "", "R"][..],
+            true,
+        ),
+        (
+            "next",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo No A\n.Xc\n.It No N\nZ\n.El\n.fi\nR\n",
+            &["L", "A", "", "N", "Z", "R"][..],
+            true,
+        ),
+        (
+            "printed-body",
+            "L\n.nf\n.Bl -inset -compact\n.It Xo No A\n.Xc\nY\n.El\n.fi\nR\n",
+            &["L", "A", "", "Y", "R"][..],
+            true,
+        ),
+        (
+            "literal",
+            "L\n.Bd -literal -compact\n.Bl -inset -compact\n.It Xo No A\n.Xc\n.El\n.Ed\nR\n",
+            &["L", "A", "", "R"][..],
+            true,
+        ),
+    ] {
+        let rows = description_rows(body);
+        assert_eq!(
+            rows.iter().map(|row| row.trim()).collect::<Vec<_>>(),
+            expected,
+            "{label}"
+        );
+        let query =
+            mant_loader::load_roff_bytes(source(body).as_bytes()).expect("lower definition");
+        // The display check above passes through a JSON roundtrip; inspect
+        // the producer too, so a renderer cannot compensate for a lost row.
+        let document = query.document.expect("lowered document");
+        assert_eq!(
+            first_definition_has_body(&document.sections[1].blocks),
+            Some(body_present),
+            "{label}"
+        );
+    }
+}
+
+fn first_definition_has_body(blocks: &[mant_ir::Block]) -> Option<bool> {
+    use mant_ir::visit::{self, Visit};
+
+    struct FirstDefinitionBody(Option<bool>);
+    impl<'a> Visit<'a> for FirstDefinitionBody {
+        fn visit_definition_item(&mut self, item: &'a mant_ir::DefinitionItem) {
+            self.0.get_or_insert(!item.description.is_empty());
+            visit::walk_definition_item(self, item);
+        }
+    }
+    let mut found = FirstDefinitionBody(None);
+    for block in blocks {
+        found.visit_block(block);
+    }
+    found.0
+}

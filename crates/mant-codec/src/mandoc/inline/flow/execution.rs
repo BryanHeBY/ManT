@@ -331,12 +331,20 @@ impl InlineBuilder {
     }
 
     pub(in crate::mandoc) fn begin_executed_node(&mut self, node: &libmandoc_rs::Node) {
-        self.begin_source_row(node);
+        let _ = self.begin_executed_node_observing_source_row(node);
+    }
+
+    /// Execute node entry and report whether its no-fill source-line gate ran.
+    pub(in crate::mandoc) fn begin_executed_node_observing_source_row(
+        &mut self,
+        node: &libmandoc_rs::Node,
+    ) -> bool {
+        let began_source_line = self.begin_source_row_observed(node);
         // NODE_LINE settles the previous field under its old settings;
         // roff_term_pre_ta() then changes stops for the subsequent field.
         self.execution.execute_tab_configuration(node);
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::Grouped {
-            return;
+            return began_source_line;
         }
         // mdoc_term.c keys KEEP lifetime from each executed NODE_LINE event,
         // not from the numeric source coordinate. User-macro expansion can
@@ -344,21 +352,27 @@ impl InlineBuilder {
         if self.execution.keep.keeping() && node.flags.line_start {
             self.execution.keep.phase = KeepPhase::PreKeep;
         }
+        began_source_line
     }
 
     /// The line/fill preamble precedes the native NOPRT/comment return.
     pub(in crate::mandoc) fn begin_source_row(&mut self, node: &libmandoc_rs::Node) {
+        let _ = self.begin_source_row_observed(node);
+    }
+
+    fn begin_source_row_observed(&mut self, node: &libmandoc_rs::Node) -> bool {
         if self.execution.observe_no_fill_source_lines == SourceLineObservation::Grouped {
-            return;
+            return false;
         }
         let line_entered = self.execution.take_no_fill_source_line_entered(node.id);
         self.execution.enter_tab_source_node(node);
-        if self.execution.observe_no_fill_source_lines == SourceLineObservation::NoFill
+        let began_source_line = self.execution.observe_no_fill_source_lines
+            == SourceLineObservation::NoFill
             && !line_entered
             && node.flags.no_fill
             && node.flags.line_start
-            && !self.final_source_continuation_or(false)
-        {
+            && !self.final_source_continuation_or(false);
+        if began_source_line {
             // mdoc_term.c::print_mdoc_node() performs NODE_NOFILL/NODE_LINE
             // before macro pre or generated punctuation, even in It HEAD.
             // Distinct expanded rows can have the same source coordinate.
@@ -370,6 +384,7 @@ impl InlineBuilder {
         // BRNEVER widens term_fill's target, not term_flushln's final
         // NOBREAK tail comparison (term.c:143-144,250-253).
         self.execution.no_fill_word_active = node.flags.no_fill;
+        began_source_line
     }
 
     /// Apply the TEXT-specific branches of `print_man_node` and `print_mdoc_node`
