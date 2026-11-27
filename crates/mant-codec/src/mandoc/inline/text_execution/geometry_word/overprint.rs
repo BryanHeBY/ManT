@@ -1,7 +1,7 @@
 //! Map overlapping terminal writes to the source owners still visible in each column.
 
 use super::FieldCell;
-use crate::mandoc::inline::flow::native_slots::FillSlot;
+use crate::mandoc::inline::flow::native_slots::{FillSlot, Underline};
 use std::ops::Range;
 
 #[derive(Default)]
@@ -66,7 +66,7 @@ fn settle_columns(
         } else {
             if cursor == columns.len() {
                 columns.push((index, index, slot.owner));
-            } else {
+            } else if slot.underline != Underline::Overstrike {
                 columns[cursor].1 = index;
                 columns[cursor].2 = slot.owner;
             }

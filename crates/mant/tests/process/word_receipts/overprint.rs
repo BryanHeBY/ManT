@@ -1,11 +1,60 @@
 //! Glyph, style and link ownership after native overprinting.
 
-use mant_ir::{Inline, inline_plain_text};
+use mant_ir::{Block, Inline, inline_plain_text};
 
 use super::{
     EDITABLE_FIELD, FIELD_PROBE, LinkTarget, assert_link, assert_readbacks, description,
     document_links, render, run_text_input, search_visible_word, search_visible_word_with_format,
 };
+
+#[test]
+fn armed_inset_rewind_preserves_ink_under_the_separator_decoration() {
+    let header = ".Dd November 27, 2026\n.Dt NEIGHBOR 1\n.Os\n.Sh NAME\n.Nm neighbor\n.Nd small review inputs\n.Sh DESCRIPTION\n";
+    // termp_ns_pre makes Cm tight and termp_bold_pre selects bold for R
+    // (mdoc_term.c). The BODY separator consumes BACKBEFORE. After HORIZ,
+    // term_field emits the separator's surviving underline over R's
+    // column (term.c:678–718, 903–929, 425–436).
+    for (font, head, rewind, expected_term) in [
+        ("I", r"No Q\z Ns Cm R", -3, "QR"),
+        ("I", r"No Q\z Ns Cm R", -2, "Q"),
+        ("B", r"No Q\z Ns Cm R", -2, "Q"),
+        ("I", r#"No "\fR_Q\fP\z" Ns Cm R"#, -3, "_QR"),
+    ] {
+        let source = format!(
+            "{header}.ft {font}\n.Bl -inset\n.It {head}\n\\h'{rewind}n'X\n.El\n.Sh ENDTEST\nDone.\n"
+        );
+        let text = render(&source, "roff", "text", "never", false);
+        let (reading, _) = description(&text).split_once("\nENDTEST\n").unwrap();
+        assert_eq!(reading.trim(), format!("{expected_term}X"), "{source}");
+
+        let wire = render(&source, "roff", "json", "never", false);
+        let bundle: mant_protocol::QueryBundle = serde_json::from_str(&wire).unwrap();
+        let document = bundle.document.unwrap();
+        let [Block::DefinitionList { items, .. }] = document.sections[1].blocks.as_slice() else {
+            panic!("{source}");
+        };
+        let term = &items[0].terms[0].content;
+        assert_eq!(inline_plain_text(term), expected_term, "{source}");
+        if expected_term.ends_with('R') {
+            assert!(
+                matches!(
+                    term.last(),
+                    Some(Inline::Strong { children }) if inline_plain_text(children) == "R"
+                ),
+                "{source}"
+            );
+        }
+        let [Block::Paragraph { children, .. }] = items[0].description.as_slice() else {
+            panic!("{source}");
+        };
+        let (([Inline::Emphasis { children }], "I") | ([Inline::Strong { children }], "B")) =
+            (children.as_slice(), font)
+        else {
+            panic!("{source}");
+        };
+        assert_eq!(inline_plain_text(children), "X", "{source}");
+    }
+}
 
 #[test]
 fn later_native_writes_resolve_backlines_without_losing_source_owners() {

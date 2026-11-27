@@ -258,7 +258,19 @@ impl FieldBuffer {
                 }
                 _ => return None,
             }
-            if let Some(previous) = row.get_mut(cursor)?.replace(index) {
+            let column = row.get_mut(cursor)?;
+            // term_field() emits both the backspace and the stroke
+            // (term.c:425–436). An unpaired automatic underline can paint
+            // over the existing character without owning its reading.
+            if self.projection_owner == super::super::FieldProjectionOwner::Detached
+                && self.underline_strokes.binary_search(&index).is_ok()
+                && cells.get(offset + 1) != Some(&FieldCell::Backline)
+                && column.is_some_and(|previous| self.projected_ink(owner_at(previous)))
+            {
+                cursor += 1;
+                continue;
+            }
+            if let Some(previous) = column.replace(index) {
                 let owner = owner_at(previous).checked_sub(start)?;
                 *covered_by.get_mut(owner)? = Some(index);
             }

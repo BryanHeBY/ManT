@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use super::{AdvanceReading, FieldCell, FillSlot, ReadingCell, ReadingGlyph};
+use super::{AdvanceReading, FieldCell, FillSlot, ReadingCell, ReadingGlyph, Underline};
 use crate::mandoc::inline::flow::field_buffer::{DeferredSourceBlank, MAX_EDITABLE_APPEND_CELLS};
 
 /// Project buffered `HORIZ` advances (`term.c:691-699`) and `bufferc` gaps
@@ -147,7 +147,7 @@ fn defer_trailing_advances(
                     owner: Some(id),
                     drawing_advance: true,
                     advance_source: None,
-                    underline_decoration: false,
+                    underline: Underline::None,
                     owned_deferred_blank: false,
                 }
             }),
@@ -198,7 +198,7 @@ fn split_buffered_advance(
             owner: None,
             drawing_advance: true,
             advance_source: None,
-            underline_decoration: false,
+            underline: Underline::None,
             owned_deferred_blank: false,
         }),
     );
@@ -546,7 +546,7 @@ fn assign_inner_advance_spaces(
                     owner: Some(id),
                     drawing_advance: false,
                     advance_source: None,
-                    underline_decoration: false,
+                    underline: Underline::None,
                     owned_deferred_blank: false,
                 }
             })

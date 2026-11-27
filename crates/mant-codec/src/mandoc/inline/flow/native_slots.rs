@@ -16,8 +16,15 @@ pub(in crate::mandoc::inline) struct FillSlot {
     pub(in crate::mandoc::inline) owner: Option<usize>,
     pub(in crate::mandoc::inline) drawing_advance: bool,
     pub(in crate::mandoc::inline) advance_source: Option<usize>,
-    pub(in crate::mandoc::inline) underline_decoration: bool,
+    pub(in crate::mandoc::inline) underline: Underline,
     pub(in crate::mandoc::inline) owned_deferred_blank: bool,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum Underline {
+    None,
+    Stroke,
+    Overstrike,
 }
 
 #[derive(Clone, Debug)]
@@ -86,7 +93,7 @@ impl Pattern {
                     owner: previous.owner,
                     drawing_advance: previous.drawing_advance,
                     advance_source: previous.advance_source,
-                    underline_decoration: previous.underline_decoration,
+                    underline: previous.underline,
                     owned_deferred_blank: previous.owned_deferred_blank,
                 };
                 out.push(tail);
@@ -97,7 +104,11 @@ impl Pattern {
                 owner,
                 drawing_advance: self.is_fixed_advance(),
                 advance_source,
-                underline_decoration: matches!(self, Self::UnderlineDecoration),
+                underline: if matches!(self, Self::UnderlineDecoration) {
+                    Underline::Stroke
+                } else {
+                    Underline::None
+                },
                 owned_deferred_blank: matches!(self, Self::DeferredAdvance(_)),
             });
         };
@@ -249,6 +260,8 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) kept: bool,
     pub(in crate::mandoc::inline) tail_fonts: Vec<(std::ops::Range<usize>, RoffFont)>,
     pub(in crate::mandoc::inline) duplicates: Vec<(usize, usize)>,
+    /// Automatic underline slots that remain typed even after an edit.
+    pub(in crate::mandoc::inline::flow) underline_strokes: Vec<usize>,
     pub(in crate::mandoc::inline) backbefore: bool,
     pub(in crate::mandoc::inline) backafter: bool,
     pub(in crate::mandoc::inline) pending_cell: Option<usize>,
@@ -458,7 +471,11 @@ impl NativeSlots {
                     width: 1,
                 } if *scalars == 0
                     && owner == index
-                    && matches!(prefix.cells.get(index + 1), Some((FieldCell::Backline, _))) =>
+                    && (prefix.underline_strokes.binary_search(&index).is_ok()
+                        || matches!(
+                            prefix.cells.get(index + 1),
+                            Some((FieldCell::Backline, _))
+                        )) =>
                 {
                     slots.write_pattern(Pattern::UnderlineDecoration, 1, Some(index));
                 }

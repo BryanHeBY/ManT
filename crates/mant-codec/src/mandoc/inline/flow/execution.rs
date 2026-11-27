@@ -716,7 +716,7 @@ impl InlineBuilder {
             (count.min(native_count), native_count),
             owner_serial,
             (display_font, native_font),
-            domain,
+            (domain, self.execution.word_input().0.projection_owner()),
             &mut replay_zero_advance,
             (&mut projected, &mut pending_head_ink),
         ) else {

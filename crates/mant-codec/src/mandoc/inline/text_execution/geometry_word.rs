@@ -1238,7 +1238,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
     (count, native_count): (usize, usize),
     owner_serial: u64,
     (display_font, native_font): (Font, RoffFont),
-    domain: ReplayDomain,
+    replay_scope: (ReplayDomain, FieldProjectionOwner),
     zero_advance: &mut super::ZeroAdvanceState,
     (projected, pending_head_ink): (&mut Vec<mant_ir::Inline>, &mut Vec<mant_ir::Inline>),
 ) -> Option<Vec<FieldWrite>> {
@@ -1307,7 +1307,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
         true,
         AdvanceReading::Unprojected,
         editable_marker,
-        domain,
+        replay_scope,
         Some(owner_serial),
     )
     .ok()?;
@@ -1382,7 +1382,10 @@ fn execute_seed<'a>(
         retain_suffix,
         advances,
         editable_marker,
-        context.slot_entry.domain,
+        (
+            context.slot_entry.domain,
+            context.slot_entry.projection_owner,
+        ),
         context.zero_advance.native_word_owner(),
     )?;
     *context.font = font;

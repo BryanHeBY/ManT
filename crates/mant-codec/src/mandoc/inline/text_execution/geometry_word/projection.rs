@@ -2,11 +2,15 @@
 
 use super::super::{WordOutput, references};
 use super::{
-    AdvanceReading, FieldCell, FieldWrite, Font, GeometrySeed, Placement, PriorPendingSlot,
-    PriorSlotEdit, ReadingCell, ReadingGlyph, ReplayDomain, TextExecutionContext, WordExecution,
+    AdvanceReading, FieldCell, FieldProjectionOwner, FieldWrite, Font, GeometrySeed, Placement,
+    PriorPendingSlot, PriorSlotEdit, ReadingCell, ReadingGlyph, ReplayDomain, TextExecutionContext,
+    WordExecution,
 };
 use crate::mandoc::inline::{
-    flow::{field_buffer::isolated_passes, native_slots::FillSlot},
+    flow::{
+        field_buffer::isolated_passes,
+        native_slots::{FillSlot, Underline},
+    },
     font::style::styled_link,
 };
 
@@ -41,7 +45,7 @@ impl<'a> PlacedWord<'a> {
         retain_suffix: bool,
         advances: AdvanceReading,
         editable_marker: bool,
-        domain: ReplayDomain,
+        (domain, projection_owner): (ReplayDomain, FieldProjectionOwner),
         word_owner: Option<u64>,
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
@@ -72,7 +76,7 @@ impl<'a> PlacedWord<'a> {
         let tail_fill_sum = device_tail_raw_sum(next_tail.as_ref(), &slots);
         let can_edit_tail = retain_suffix && extent <= slot_limit;
         if can_edit_tail && (editable_pass || domain == ReplayDomain::Filled) {
-            release_unpaired_underlines(&mut slots, &mut reading, domain);
+            release_unpaired_underlines(&mut slots, &mut reading, domain, projection_owner);
         }
         let replaced_advance_marker =
             advance_marker.filter(|_| can_edit_tail && word_owner.is_some());
@@ -479,6 +483,7 @@ fn release_unpaired_underlines(
     slots: &mut [FillSlot],
     reading: &mut Vec<ReadingCell<'_>>,
     domain: ReplayDomain,
+    projection_owner: FieldProjectionOwner,
 ) {
     // encode1() writes '_' then BS followed by the glyph. A proved
     // edit can overwrite the BS, leaving the stroke at its own column.
@@ -486,7 +491,7 @@ fn release_unpaired_underlines(
     // paired glyph with a marker. Definition fields need their eventual
     // row placement to establish where such a trailing BS lands.
     for index in 0..slots.len() {
-        if !slots[index].underline_decoration {
+        if slots[index].underline != Underline::Stroke {
             continue;
         }
         let retains_backline = slots
@@ -508,6 +513,21 @@ fn release_unpaired_underlines(
                         )
                 }));
         if !retains_backline || overwritten_by_marker {
+            // term_field() emits the preceding backspace before the
+            // stroke (term.c:425–436). Losing the stroke's own backspace
+            // does not give it a separate column over an authored glyph.
+            if projection_owner == FieldProjectionOwner::Detached
+                && !retains_backline
+                && index.checked_sub(2).is_some_and(|target| {
+                    slots[index - 1].cell == FieldCell::Backline
+                        && matches!(slots[target].cell, FieldCell::Graph { text, width: 1 } if !text.is_whitespace())
+                        && slots[target].owner.is_some_and(|owner| reading[owner].glyph.scalars() > 0)
+                })
+            {
+                slots[index].underline = Underline::Overstrike;
+                slots[index].owner = None;
+                continue;
+            }
             slots[index].owner = Some(Placement::push_reading(
                 reading,
                 ReadingGlyph::Scalar('_'),
@@ -557,7 +577,7 @@ fn expand_replay_advances(slots: &mut Vec<FillSlot>, expand_unowned_blanks: bool
                     owner: None,
                     drawing_advance,
                     advance_source,
-                    underline_decoration: false,
+                    underline: Underline::None,
                     owned_deferred_blank: false,
                 }),
             );
@@ -591,12 +611,12 @@ fn placed_slot_writes(
         ));
     }
     writes.extend(slots.iter().enumerate().map(|(index, slot)| {
-        if defer_strokes
-            && slot.underline_decoration
+        let deferred = slot.underline == Underline::Stroke
+            && defer_strokes
             && slots.get(index + 1..index + 3).is_some_and(|tail| {
                 tail[0].cell == FieldCell::Backline && tail[1].cell == FieldCell::BreakMarker
-            })
-        {
+            });
+        if deferred || slot.underline == Underline::Overstrike {
             FieldWrite::PlacedUnderlineStroke
         } else {
             slot_write(slot, reading)
@@ -863,7 +883,9 @@ fn resolve_backlines(
                 previous = Some(index);
             }
             FieldCell::Graph { .. } | FieldCell::Hyphen => {
-                if let Some((target, backline)) = retreat.take() {
+                if let Some((target, backline)) = retreat.take()
+                    && slots[index].underline != Underline::Overstrike
+                {
                     if editable
                         || matches!(slots[index].cell, FieldCell::Graph { width: 0, .. })
                         || target + 1 != backline
@@ -1069,7 +1091,7 @@ mod tests {
             true,
             AdvanceReading::Unprojected,
             true,
-            ReplayDomain::Filled,
+            (ReplayDomain::Filled, FieldProjectionOwner::Active),
             None,
         )
         .expect("prepared");

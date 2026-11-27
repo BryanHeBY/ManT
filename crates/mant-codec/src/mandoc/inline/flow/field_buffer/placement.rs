@@ -599,6 +599,12 @@ impl FieldBuffer {
                 .iter()
                 .map(|&(copy, owner)| (copy - start, owner - start))
                 .collect(),
+            underline_strokes: self.underline_strokes[self
+                .underline_strokes
+                .partition_point(|&stroke| stroke < start)..]
+                .iter()
+                .map(|&stroke| stroke - start)
+                .collect(),
             backbefore: self.backbefore_armed,
             backafter: self.backafter_armed,
             pending_cell: self
