@@ -56,10 +56,7 @@ fn declaration_operator_rewind_distinguishes_separator_from_author_ink_in_both_o
                 let evidence = reply
                     .evidence
                     .iter()
-                    .find(|e| {
-                        e.class == EvidenceClass::DirectEntry
-                            && e.outline.path().to_string() == path
-                    })
+                    .find(|e| e.class == EvidenceClass::DirectEntry && e.outline.path() == path)
                     .unwrap();
                 assert!(evidence.bases.iter().any(|basis| matches!(basis, EvidenceBasis::Name { matches } if matches.iter().any(|entry| entry.name == name && !entry.occurrences.is_empty()))));
             }
@@ -124,9 +121,12 @@ fn author_ink_loss_is_independent_of_grammar_role_and_font_copies() {
     let styled = include_str!("ar/styled-writer.1");
     let exact = explain(styled, "-a user=port / -v");
     assert_eq!(exact.counts.direct_entry.total, 1);
-    assert!(exact.evidence.iter().any(|e| {
-        e.class == EvidenceClass::DirectEntry && e.outline.path().to_string() == "2/e1"
-    }));
+    assert!(
+        exact
+            .evidence
+            .iter()
+            .any(|e| { e.class == EvidenceClass::DirectEntry && e.outline.path() == "2/e1" })
+    );
 
     // Native relative motion can revise previously written ink inside one
     // word without borrowing a sibling. It still is not a complete form.
