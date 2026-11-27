@@ -202,9 +202,23 @@ fn run_in_head_entry_proof(
         // Diagnostic HEAD keeps its own native field flags until It post.
         super::RunInHeadWordProof::Diagonal => ReplayDomain::Scoped,
     };
+    // .Sm off can deliver a diagnostic HEAD as several tight source words.
+    // termp_sm_pre() / termp_it_pre() (mdoc_term.c) leave the earlier encoded
+    // bytes in the same field. Its complete, unretreated prefix can still
+    // establish that the next word only appends fresh raw slots.
+    let tight_diag_head = matches!(head, super::RunInHeadWordProof::Diagonal)
+        && !builder.spacing_enabled()
+        && slot.cursor == EntryCursor::AtEnd
+        && slot.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.cursor_retreat == 0
+                && !prefix.backbefore
+                && !prefix.backafter
+                && prefix.raw_slot_count() <= prefix.slot_limit
+        });
     (matches!(origin, WordSource::Text(node) if !node.flags.no_fill && !node.flags.generated)
         && slot.domain == domain
-        && slot.cursor == EntryCursor::Empty
+        && (slot.cursor == EntryCursor::Empty || tight_diag_head)
         && slot.automatic_blanks == 0
         && slot.device_tail.is_none()
         && !builder.zero_advance.is_armed()

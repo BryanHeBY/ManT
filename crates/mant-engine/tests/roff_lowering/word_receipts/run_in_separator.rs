@@ -303,3 +303,38 @@ fn mixed_font_head_keeps_pending_slots_until_body_rewind_or_flush() {
         assert_eq!(rows, expected, "{source}\n{rendered}");
     }
 }
+
+#[test]
+fn tight_diagnostic_head_keeps_its_proved_prefix_until_body_rewind() {
+    // mdoc_term.c::termp_sm_pre() suppresses automatic blanks under
+    // .Sm off; termp_it_pre() still writes two BODY no-break spaces.
+    // A separately emitted HEAD fragment retains the same native prefix
+    // until an absolute motion edits it or a real request flushes it.
+    let cases: &[(&str, &str, &str, &[&str])] = &[
+        (".Sm off\n", r#"No "\fBJ\fP\zA\p\: ""#, "", &["BCNoJA"]),
+        (".Sm off\n", r#"Sy "J\fRA\fP\zK\p\: ""#, "", &["BCSyJAK"]),
+        (".Sm off\n", r#"Em "J\zA\p\: ""#, "", &["BCEmJA"]),
+        ("", r#"No "\fBJ\fP\zA\p\: ""#, "", &["Co JA"]),
+        (
+            ".Sm off\n",
+            r#"No "\fBJ\fP\zA\p\: ""#,
+            ".br\n",
+            &["NoJA", "BC"],
+        ),
+    ];
+    for &(spacing, head, request, expected) in cases {
+        let source = format!(
+            ".Dd November 26, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd field review\n.Sh DESCRIPTION\n{spacing}.Bl -diag\n.It {head}\n{request}.No \"\\h'|0n'B\" No C\n.El\n.Sh ENDTEST\nDone.\n"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, &source);
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|row| row.trim())
+            .filter(|row| !row.is_empty())
+            .collect();
+        assert_eq!(rows, expected, "{source}\n{rendered}");
+    }
+}

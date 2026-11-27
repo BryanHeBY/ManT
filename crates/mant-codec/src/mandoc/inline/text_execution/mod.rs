@@ -53,7 +53,7 @@ pub(in crate::mandoc) struct TextExecutionContext<'state> {
     /// Non-breaking slots written by numeric tbl alignment before this word.
     pub(in crate::mandoc) table_leading_blanks: usize,
     pub(in crate::mandoc) policy: TextExecutionPolicy,
-    /// A fresh run-in HEAD can retain its pending raw slots through an inline font change.
+    /// A proved run-in HEAD can retain its pending raw slots through an inline font change.
     pub(in crate::mandoc) prove_pending_run_in_head: bool,
 }
 
