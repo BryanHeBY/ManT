@@ -124,6 +124,7 @@ pub(in crate::mandoc) enum FieldWrite {
         backbefore: bool,
         duplicates: Vec<(usize, usize)>,
         editable_marker: bool,
+        preserve_edit_origin: bool,
     },
     /// Earlier cell to new cell indices. Empty entries were overwritten.
     ReplaceLivePrefix {

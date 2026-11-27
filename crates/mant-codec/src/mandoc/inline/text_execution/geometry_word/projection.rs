@@ -50,7 +50,7 @@ impl<'a> PlacedWord<'a> {
     ) -> Result<Self, PriorSlotEdit> {
         let GeometrySeed {
             placement,
-            prefix_start,
+            prefix_origin: (prefix_start, import),
             earlier,
             prior_pending,
             replace_tail,
@@ -65,10 +65,8 @@ impl<'a> PlacedWord<'a> {
             links,
             ..
         } = placement;
-        let armed = slots.backafter();
-        let backbefore = slots.backbefore();
-        let pending_owner = slots.pending_owner();
-        let raw_backbefore_slot = slots.backbefore_slot();
+        let (armed, backbefore) = (slots.backafter(), slots.backbefore());
+        let (pending_owner, raw_backbefore_slot) = (slots.pending_owner(), slots.backbefore_slot());
         let pending = pending_owner.filter(|&owner| owner >= earlier);
         let (extent, cursor_retreat) = slots.extent_and_retreat();
         let mut next_tail = retain_suffix.then(|| slots.unowned_tail()).flatten();
@@ -130,6 +128,7 @@ impl<'a> PlacedWord<'a> {
             backbefore,
             duplicates,
             editable_marker,
+            preserve_edit_origin: import == super::PrefixImport::RunInTail,
         });
         record_slot_proof(&mut writes, &settled.spans, &slots, extent, proof);
         append_placement_receipts(
@@ -1079,7 +1078,7 @@ mod tests {
             placement,
             replace_tail: 0,
             replayed_entry: false,
-            prefix_start: 0,
+            prefix_origin: (0, super::super::PrefixImport::Regular),
             earlier: 0,
             prior_pending: None,
             advance_marker: None,

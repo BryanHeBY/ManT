@@ -243,6 +243,12 @@ pub(in crate::mandoc::inline) enum ReplayPass {
     Editable,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum PrefixImport {
+    Regular,
+    RunInTail,
+}
+
 /// A small, uncommitted field with a proved one-to-one slot correspondence.
 /// Earlier characters remain owned by the existing projection until replay
 /// returns their surviving cell positions.
@@ -250,6 +256,7 @@ pub(in crate::mandoc::inline) struct FieldPrefix {
     pub(in crate::mandoc::inline) slot_limit: usize,
     pub(in crate::mandoc::inline) deferred_tail: DeferredTail,
     pub(in crate::mandoc::inline) start: usize,
+    pub(in crate::mandoc::inline) import: PrefixImport,
     pub(in crate::mandoc::inline) cells: Vec<(FieldCell, usize)>,
     /// Existing reading seams whose originating advance normalized to one NBRSP.
     pub(in crate::mandoc::inline::flow) projected_advances: Vec<usize>,

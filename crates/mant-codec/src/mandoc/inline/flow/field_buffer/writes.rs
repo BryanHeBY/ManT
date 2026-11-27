@@ -29,6 +29,14 @@ std::thread_local! {
 
 impl FieldBuffer {
     pub(super) fn push_cell(&mut self, cell: FieldCell) {
+        // One compressed drawing run can stand for many raw bytes. This
+        // conservative flag costs nothing to recompute during tail edits.
+        if matches!(
+            cell,
+            FieldCell::DrawnSpaces(0 | 2..) | FieldCell::FixedDrawingAdvance(0 | 2..)
+        ) {
+            self.first_uncompact_slot.get_or_insert(self.cells.len());
+        }
         if self.word_first_content.is_none() {
             self.word_first_content = Some(self.cells.len());
         }
@@ -249,6 +257,7 @@ impl FieldBuffer {
     /// both by the accepted-exit and by the nbr==0 wipe).
     pub(in crate::mandoc::inline::flow) fn clear(&mut self) {
         self.cells.clear();
+        self.first_uncompact_slot = None;
         self.device_tail = None;
         self.raw_slot_fence = 0;
         self.raw_edit_fence = 0;
@@ -331,7 +340,7 @@ impl FieldBuffer {
         &mut self,
         writes: &[FieldWrite],
     ) -> WordWriteReceipt {
-        let prior_raw_fence = self.proven_prefix_fence(writes.first());
+        let prior_raw_fence = self.proven_prefix_fence(writes);
         self.word_first_content = None;
         self.begin_word_writes(writes);
         self.device_tail = None;
@@ -383,8 +392,7 @@ impl FieldBuffer {
                     self.staged_backline_projection = self.backbefore_armed;
                 }
                 FieldWrite::RecoveryGlyph { projected_scalars } => {
-                    self.push_cell(FieldCell::ZeroWidthGraph);
-                    *self.projection_prefix.last_mut().expect("recovery cell") += projected_scalars;
+                    self.push_recovery_glyph(*projected_scalars);
                 }
                 FieldWrite::DrawSpaces(count) => drawing_start = self.draw_spaces(*count),
                 FieldWrite::MoveInDrawing { absolute, units } => {
@@ -431,11 +439,23 @@ impl FieldBuffer {
         self.finish_word_writes(leading_retreat, consumed_motion_padding)
     }
 
-    fn proven_prefix_fence(&self, first: Option<&FieldWrite>) -> Option<usize> {
+    fn push_recovery_glyph(&mut self, scalars: usize) {
+        self.push_cell(FieldCell::ZeroWidthGraph);
+        *self.projection_prefix.last_mut().expect("recovery cell") += scalars;
+        if scalars > 0 {
+            self.first_uncompact_slot
+                .get_or_insert(self.cells.len() - 1);
+        }
+    }
+
+    fn proven_prefix_fence(&self, writes: &[FieldWrite]) -> Option<usize> {
         // Replaying a suffix cannot invalidate raw bytes before that suffix.
-        match first {
+        match writes.first() {
             Some(FieldWrite::ReplaceLivePrefix { start, .. })
                 if (self.projection_owner == super::FieldProjectionOwner::Detached
+                    || self.projection_owner == super::FieldProjectionOwner::RunInHead
+                        && self.raw_slot_fence == 0
+                        && self.raw_edit_fence == 0
                     || matches!(self.word_scan, WordScanPolicy::AwaitFlush))
                     && self.raw_slot_fence < *start =>
             {

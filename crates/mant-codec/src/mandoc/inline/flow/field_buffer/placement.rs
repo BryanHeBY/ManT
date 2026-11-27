@@ -114,11 +114,16 @@ impl FieldBuffer {
                 backbefore,
                 duplicates,
                 editable_marker,
+                preserve_edit_origin,
             } => {
                 let appended_start = self.cells.len() - count;
                 self.raw_slot_fence =
                     prior_raw_fence.map_or(appended_start, |fence| fence.min(appended_start));
-                self.raw_edit_fence = appended_start;
+                self.raw_edit_fence = if *preserve_edit_origin && prior_raw_fence == Some(0) {
+                    0
+                } else {
+                    appended_start
+                };
                 if self.raw_slot_fence == 0
                     && !self.deferred_blanks.is_empty()
                     && self
@@ -502,12 +507,86 @@ impl FieldBuffer {
         self.field_prefix_with_limit(automatic, kept, live_replay, MAX_REPLAY_PREFIX_CELLS)
     }
 
+    pub(in crate::mandoc::inline::flow) fn word_replay_prefix(
+        &self,
+        (automatic, kept): (usize, bool),
+        live_replay: bool,
+        short_append: bool,
+    ) -> Option<super::super::native_slots::FieldPrefix> {
+        if short_append
+            && self.projection_owner == super::FieldProjectionOwner::RunInHead
+            && let Some(tail) = self.compact_run_in_prefix(automatic, kept)
+        {
+            return Some(tail);
+        }
+        self.field_prefix(automatic, kept, live_replay)
+    }
+
+    /// Motionless short words can observe only the trailing BACK pair,
+    /// a possible preceding blank and their own new slots. Keep the rest
+    /// of the native field available, without replaying its owners.
+    fn compact_run_in_prefix(
+        &self,
+        automatic: usize,
+        kept: bool,
+    ) -> Option<super::super::native_slots::FieldPrefix> {
+        const TAIL: usize = 12;
+        #[cfg(test)]
+        if FORCE_FULL_REPLAY.with(std::cell::Cell::get) {
+            return None;
+        }
+        let end = self.cells.len();
+        let mut floor = end.checked_sub(TAIL)?;
+        // The new tape still owns the whole dependency before any first
+        // local backspace; a cut through a paint/backline pair cannot be used.
+        while floor > 0 && self.cells[floor] == FieldCell::Backline {
+            floor -= 1;
+        }
+        let limit = self.replay_slot_limit();
+        if floor == 0
+            || !self.has_bounded_run_in_projection()
+            || self.raw_edit_fence != 0
+            || self.has_pending_break_markers()
+            || self.write_cursor.retreat() != 0
+            || !self.deferred_blanks.is_empty()
+            || self.backbefore_graph.is_some_and(|cell| cell < floor)
+            || self
+                .raw_tail_fonts
+                .first()
+                .is_some_and(|(range, _)| range.start < floor)
+            || self.first_uncompact_slot.is_some()
+        {
+            return None;
+        }
+        let mut prefix = self.field_prefix_from((automatic, kept), true, (limit, floor))?;
+        // An alias crossing the cut, a non-native projection or an old
+        // BACK dependency can still require the ordinary full tape.
+        if prefix.start != floor
+            || floor + prefix.raw_slot_count() > limit
+            || prefix.backbefore && prefix.pending_cell.is_none()
+        {
+            return None;
+        }
+        prefix.slot_limit = limit - floor;
+        prefix.import = super::super::native_slots::PrefixImport::RunInTail;
+        Some(prefix)
+    }
+
     fn field_prefix_with_limit(
         &self,
         automatic: usize,
         kept: bool,
         live_replay: bool,
         slot_limit: usize,
+    ) -> Option<super::super::native_slots::FieldPrefix> {
+        self.field_prefix_from((automatic, kept), live_replay, (slot_limit, 0))
+    }
+
+    fn field_prefix_from(
+        &self,
+        (automatic, kept): (usize, bool),
+        live_replay: bool,
+        (slot_limit, requested_floor): (usize, usize),
     ) -> Option<super::super::native_slots::FieldPrefix> {
         let control_prefix = self.has_editable_control_prefix();
         let complete_tail = self.has_replayable_trailing_advance();
@@ -536,6 +615,7 @@ impl FieldBuffer {
         let fence = self.retained_cursor_fence(fence);
         let floor = fence
             .max(self.resume)
+            .max(requested_floor)
             .max(self.cells.len().saturating_sub(slot_limit));
         // A projection-only recovery spelling can fence its own native
         // position without hiding complete glyph slots appended after it.
@@ -574,6 +654,7 @@ impl FieldBuffer {
         Some(super::super::native_slots::FieldPrefix {
             start,
             slot_limit,
+            import: super::super::native_slots::PrefixImport::Regular,
             deferred_tail: if complete_tail && start == 0 {
                 if self.deferred_blanks.is_empty() {
                     super::super::native_slots::DeferredTail::Covered
@@ -621,6 +702,12 @@ impl FieldBuffer {
     }
 
     fn prefix_cells(&self, start: usize) -> Vec<(FieldCell, usize)> {
+        #[cfg(test)]
+        PREFIX_COPY_WORK.with(|work| {
+            let (total, max) = work.get();
+            let count = self.cells.len() - start;
+            work.set((total + count, max.max(count)));
+        });
         let mut cells = Vec::with_capacity(self.cells.len() - start);
         let trailing_marker =
             (self.cells.last() == Some(&FieldCell::BreakMarker)).then(|| self.cells.len() - 1);
@@ -1159,6 +1246,10 @@ impl FieldBuffer {
         let previous = self.projection_prefix.last().copied().unwrap_or(0);
         self.push_cell(cell.clone());
         *self.projection_prefix.last_mut().expect("placed cell") = previous + scalars;
+        if !self.has_replayable_projection(self.cells.len() - 1) {
+            self.first_uncompact_slot
+                .get_or_insert(self.cells.len() - 1);
+        }
     }
 
     pub(super) fn truncate_raw_slot_proof(&mut self, end: usize) {
@@ -1298,4 +1389,75 @@ fn device_advance_before_word_end(field: &FieldBuffer, interval: Range<usize>) -
     // term_fill() may admit a separately drawn prefix on the new line.
     // A marker before an ordinary word only arms that word's own end.
     marker && device_graph
+}
+
+#[cfg(test)]
+thread_local! {
+    static PREFIX_COPY_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+    static FORCE_FULL_REPLAY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+mod active_prefix_cost {
+    use super::{FORCE_FULL_REPLAY, PREFIX_COPY_WORK};
+    use std::path::Path;
+
+    fn lower(source: &str, full: bool) -> (serde_json::Value, (usize, usize)) {
+        PREFIX_COPY_WORK.with(|work| work.set((0, 0)));
+        let state = FORCE_FULL_REPLAY.with(|force| force.replace(full));
+        let parsed = crate::parse_roff_bytes(Path::new("prefix.1"), source.as_bytes());
+        FORCE_FULL_REPLAY.with(|force| force.set(state));
+        (
+            serde_json::to_value(parsed.unwrap()).unwrap(),
+            PREFIX_COPY_WORK.with(std::cell::Cell::get),
+        )
+    }
+
+    const HEAD: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd native word replay\n.Sh DESCRIPTION\n";
+    const WORDS: &str = ".No Q\\z\n.Ap\n.No A\n";
+
+    #[test]
+    fn tight_run_in_prefix_copy_work_is_bounded_per_word() {
+        for repeat in [24usize, 96, 384] {
+            let source = format!(
+                "{HEAD}.ft I\n.Bl -inset\n.It Xo\n{}.Xc\n\\h'|0n'X\n.El\n",
+                WORDS.repeat(repeat),
+            );
+            let (product, (total, max)) = lower(&source, false);
+            let (reference, (old, largest)) = lower(&source, true);
+            assert_eq!(product, reference, "complete IR differs at {repeat} groups");
+            eprintln!(
+                "{repeat} groups: {old} → {total} copied slots, largest import {largest} → {max}"
+            );
+            assert!(total > 0 && max <= 1024);
+            assert!(
+                total <= 52 * repeat + 1024,
+                "{repeat}: {total}, largest {max}"
+            );
+        }
+    }
+
+    #[test]
+    fn compact_head_retains_native_origin_through_body_and_control_owners() {
+        for (format, head) in [
+            ("I", ".No Q\\z\n.Ap\n.No A\n"),
+            ("R", ".No \"Q\\z \"\n.Ap\n.No R\n"),
+            ("BI", ".No Q\\z\n.Ap\n.No \"\\&R\"\n"),
+        ] {
+            for body in [
+                "",
+                ".No Y\n",
+                "\\h'|0n'X\n",
+                "\\h'|3n'X\n",
+                "\\h'-2n'X\n",
+                ".br\n.No Y\n",
+            ] {
+                let source = format!(
+                    "{HEAD}.ft {format}\n.Bl -inset\n.It Xo\n{}.Xc\n{body}.El\n",
+                    head.repeat(12),
+                );
+                assert_eq!(lower(&source, false).0, lower(&source, true).0, "{source}");
+            }
+        }
+    }
 }

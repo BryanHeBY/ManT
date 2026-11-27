@@ -238,6 +238,7 @@ pub(in crate::mandoc::inline) enum FieldProjectionOwner {
 #[derive(Clone, Debug, Default)]
 pub(in crate::mandoc::inline) struct FieldBuffer {
     cells: Vec<FieldCell>,
+    first_uncompact_slot: Option<usize>,
     device_tail: Option<Box<super::native_slots::DeviceTail>>,
     // Earlier cells can stand for layout-equivalent rather than byte-exact
     // native input. A styled append can keep old paint evidence without

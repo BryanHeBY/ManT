@@ -871,7 +871,7 @@ fn can_publish_retained_advances(
         || context.slot_entry.domain != ReplayDomain::Filled
         || context.zero_advance.is_armed()
         || context.zero_advance.has_annotation_output_owner()
-        || seed.prefix_start != 0
+        || seed.prefix_origin.0 != 0
         || !seed.editable_pass
         || seed.placement.slots.backafter()
         || !has_retained_advance_entry(context, seed)

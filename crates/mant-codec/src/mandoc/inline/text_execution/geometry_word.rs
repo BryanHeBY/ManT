@@ -4,8 +4,8 @@ use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecutio
 use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldProjectionOwner, FieldWrite},
     native_slots::{
-        CursorReposition, EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass,
-        SlotEntry,
+        CursorReposition, EntryCursor, NativeSlots, PrefixImport, PriorSlotEdit, ReplayDomain,
+        ReplayPass, SlotEntry,
     },
 };
 use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
@@ -742,7 +742,7 @@ fn tight_run_in_word_can_replay(
         && !text.is_empty()
         && text.bytes().all(|byte| byte.is_ascii_graphic())
         && entry.prefix.as_ref().is_some_and(|prefix| {
-            prefix.start == 0
+            (prefix.start == 0 || prefix.import == PrefixImport::RunInTail)
                 && prefix.cursor_retreat == 0
                 && prefix.backafter == context.zero_advance.is_armed()
                 && (prefix.backafter && !prefix.backbefore
@@ -1048,7 +1048,7 @@ struct GeometrySeed<'a> {
     placement: Placement<'a>,
     replace_tail: usize,
     replayed_entry: bool,
-    prefix_start: usize,
+    prefix_origin: (usize, PrefixImport),
     earlier: usize,
     prior_pending: Option<PriorPendingSlot>,
     advance_marker: Option<usize>,
@@ -1132,7 +1132,7 @@ impl GeometrySeed<'_> {
             }
             Self {
                 placement,
-                prefix_start: prefix.start,
+                prefix_origin: (prefix.start, prefix.import),
                 earlier,
                 prior_pending: PriorPendingSlot::at_entry(
                     prefix.pending_cell,
@@ -1153,7 +1153,7 @@ impl GeometrySeed<'_> {
                 placement,
                 replace_tail,
                 replayed_entry: automatic > 0,
-                prefix_start: 0,
+                prefix_origin: (0, PrefixImport::Regular),
                 earlier: 0,
                 prior_pending: None,
                 advance_marker: None,
@@ -1203,7 +1203,7 @@ impl GeometrySeed<'_> {
                 placement,
                 replace_tail,
                 replayed_entry,
-                prefix_start: 0,
+                prefix_origin: (0, PrefixImport::Regular),
                 earlier: 0,
                 prior_pending: None,
                 advance_marker: None,
@@ -1295,7 +1295,7 @@ pub(in crate::mandoc::inline) fn replay_run_in_word(
         placement,
         replace_tail: 0,
         replayed_entry: false,
-        prefix_start: prefix.start,
+        prefix_origin: (prefix.start, prefix.import),
         earlier,
         prior_pending: PriorPendingSlot::at_entry(prefix.pending_cell, zero_advance),
         advance_marker: None,
@@ -1534,7 +1534,7 @@ fn retains_word_cursor(
 ) -> bool {
     let slots = &seed.placement.slots;
     slots.cursor_before_end()
-        && (seed.prefix_start > 0
+        && (seed.prefix_origin.0 > 0
             // An initial control-only word can leave the cursor before
             // a marker. The next word must be able to overwrite it.
             || !entry.cursor.has_input()
@@ -1566,7 +1566,7 @@ fn retains_word_cursor(
 fn covers_field_start(seed: &GeometrySeed<'_>, entry: EntryCursor) -> bool {
     // An exact prefix starting at col zero and a fresh field both own
     // their origin. Missing prefix evidence with prior input stays opaque.
-    seed.prefix_start == 0
+    seed.prefix_origin.0 == 0
         && (seed.earlier != 0
             || !entry.has_input() && seed.placement.slots.extent_and_retreat().0 <= seed.slot_limit)
 }

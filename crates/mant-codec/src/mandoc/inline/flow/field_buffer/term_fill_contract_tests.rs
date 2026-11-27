@@ -1090,6 +1090,7 @@ fn begin_word_writes_handles_placed_retreat_fallback_and_latches_proved_rejectio
             cursor_retreat: 1,
             backbefore: false,
             duplicates: Vec::new(),
+            preserve_edit_origin: false,
             editable_marker: false,
         },
     ]);
@@ -1140,6 +1141,7 @@ fn begin_word_writes_handles_placed_retreat_fallback_and_latches_proved_rejectio
             cursor_retreat: 2,
             backbefore: false,
             duplicates: Vec::new(),
+            preserve_edit_origin: false,
             editable_marker: false,
         },
     ]);

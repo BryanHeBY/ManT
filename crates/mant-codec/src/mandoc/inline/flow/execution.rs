@@ -97,6 +97,7 @@ fn retained_run_in_writes(
         cursor_retreat: 0,
         backbefore: false,
         duplicates: Vec::new(),
+        preserve_edit_origin: false,
         editable_marker: false,
     });
     if slots.has_backline() {
@@ -967,6 +968,7 @@ impl super::InlineExecutionState {
         capture_prefix: bool,
         extend: PrefixExtension,
         leading_retreat: bool,
+        append_only: bool,
     ) -> super::native_slots::SlotEntry {
         let (input, anchors) = self.word_input();
         let boundary = self
@@ -1058,15 +1060,15 @@ impl super::InlineExecutionState {
                 || filled_line_domain && input.has_replayable_trailing_advance()
                 || extend)
                 .then(|| {
-                    let mut prefix = input.field_prefix(
-                        automatic_blanks,
-                        kept_blanks,
+                    let mut prefix = input.word_replay_prefix(
+                        (automatic_blanks, kept_blanks),
                         leading_retreat
                             || armed_run_in_word
                             || leading_marker_extend
                             || continuing_run_in
                             || input.has_retained_word_cursor()
                             || filled_line_domain && input.awaits_flush(),
+                        append_only && domain == ReplayDomain::DefinitionLine,
                     )?;
                     retain_projected_advances(&mut prefix, input, anchors);
                     Some(prefix)

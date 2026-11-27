@@ -278,6 +278,7 @@ impl FieldBuffer {
     pub(super) fn native_flush_scan(&self) -> Self {
         Self {
             cells: self.cells.clone(),
+            first_uncompact_slot: self.first_uncompact_slot,
             device_tail: None,
             raw_slot_fence: 0,
             raw_edit_fence: 0,

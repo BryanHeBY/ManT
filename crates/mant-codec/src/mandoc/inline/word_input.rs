@@ -334,7 +334,20 @@ impl super::InlineExecutionState {
         } else {
             PrefixExtension::None
         };
-        self.native_slot_entry(capture_prefix || pending, extend, has_cursor_reposition)
+        let short_graphs = |event: &RoffInlineEvent| {
+            matches!(event, RoffInlineEvent::Text(text)
+                if !text.is_empty() && text.len() <= 8 && text.bytes().all(|ch| ch.is_ascii_graphic()))
+        };
+        let append_only = match events {
+            [text] | [text, RoffInlineEvent::ZeroAdvance] => short_graphs(text),
+            _ => false,
+        };
+        self.native_slot_entry(
+            capture_prefix || pending,
+            extend,
+            has_cursor_reposition,
+            append_only,
+        )
     }
 
     pub(in crate::mandoc) fn horizontal_line_width_units(&self, source: &str) -> usize {
