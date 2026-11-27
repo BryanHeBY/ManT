@@ -23,10 +23,15 @@ use super::super::{NativeWordAnchor, field_buffer::FieldBuffer};
 pub(in crate::mandoc::inline::flow) struct PlainInputUnit {
     pub(in crate::mandoc::inline::flow) buffer: FieldBuffer,
     pub(in crate::mandoc::inline::flow) anchors: Vec<NativeWordAnchor>,
+    pub(in crate::mandoc::inline::flow) owner_replay_dirty: bool,
     pub(in crate::mandoc::inline::flow) output_start: usize,
 }
 
 impl PlainInputUnit {
+    pub(super) fn into_parts(self) -> (FieldBuffer, Vec<NativeWordAnchor>, usize) {
+        (self.buffer, self.anchors, self.output_start)
+    }
+
     /// Establish a fresh output interval before the first word writes cells.
     pub(in crate::mandoc::inline::flow) fn begin_output_at(&mut self, start: usize) {
         if self.buffer.is_empty() && self.anchors.is_empty() {
@@ -39,6 +44,7 @@ impl PlainInputUnit {
     pub(in crate::mandoc::inline::flow) fn take_input(
         &mut self,
     ) -> (FieldBuffer, Vec<NativeWordAnchor>) {
+        self.owner_replay_dirty = false;
         (
             std::mem::take(&mut self.buffer),
             std::mem::take(&mut self.anchors),
@@ -48,6 +54,7 @@ impl PlainInputUnit {
     /// Output indices cannot cross owners; the native cells and tab origin can.
     pub(in crate::mandoc::inline::flow) fn detach_output_owner(&mut self) {
         self.anchors.clear();
+        self.owner_replay_dirty = false;
         self.output_start = 0;
     }
 
@@ -55,6 +62,7 @@ impl PlainInputUnit {
     pub(in crate::mandoc::inline::flow) fn clear_input_at(&mut self, start: usize) {
         self.buffer.clear();
         self.anchors.clear();
+        self.owner_replay_dirty = false;
         self.output_start = start;
     }
 

@@ -515,7 +515,7 @@ impl InlineBuilder {
         }
         if let Some(state) = &mut self.execution.definition {
             state.field_buffer.clear();
-            state.field_word_anchors.clear();
+            state.clear_word_anchors();
             state.deferred_head_projection = None;
             state.run_in_continuation = false;
         }
@@ -635,7 +635,7 @@ impl InlineBuilder {
         // return accepted layout and text to this already detached owner.
         let output = self.drain_ir_nodes_with_native_owners(deferred_head);
         if !deferred_head && let Some(field) = &mut state.definition_field {
-            field.state.field_word_anchors.clear();
+            field.state.clear_word_anchors();
         }
         // The plain flush unit carries across the scope return like the
         // preserved field's cells, but its IR anchors and output interval

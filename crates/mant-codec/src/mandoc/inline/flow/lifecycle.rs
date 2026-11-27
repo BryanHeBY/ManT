@@ -194,7 +194,7 @@ impl InlineExecutionState {
             // pre_SY established its offset until the actual BODY post, not
             // until literal_mode_boundary returned (man_term.c:861-885).
             if let Some(field) = &mut self.definition {
-                field.field_word_anchors.clear();
+                field.clear_word_anchors();
                 field.field_buffer.detach_projection_owner();
                 field.row.retire_row_origin();
             }

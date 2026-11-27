@@ -2,6 +2,7 @@
 
 use super::super::super::super::field_buffer::{FieldCell, RewoundGlyph};
 use super::super::super::super::{ProjectedNativeGap, WordProjectionPolicy};
+use super::super::repeated_owners::neutral_key;
 use super::{FieldBuffer, FieldWrite, Inline, NativeWordAnchor, earlier_word_after_cell};
 use crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection;
 use crate::mandoc::inline::flow::output::{INTERNAL_FIELD_WORD, NAVIGATION_WORD};
@@ -188,6 +189,10 @@ impl PrefixEdits {
             });
             anchors.push(resumed);
         }
+    }
+
+    pub(super) fn changed_owner_receipts(&self) -> bool {
+        self.gaps.changed_owner_keys || !self.moved.is_empty()
     }
 
     pub(super) fn first_incoming(&self) -> Option<usize> {
@@ -551,6 +556,7 @@ fn word_start_after_overlay(positions: &[Option<usize>], start: usize, first: us
 
 #[derive(Default)]
 struct GapEdits {
+    changed_owner_keys: bool,
     remove: BTreeMap<String, GapRemoval>,
     relocate: BTreeMap<usize, GapLanding>,
     retained_before_incoming: Option<usize>,
@@ -590,6 +596,7 @@ fn rebase_earlier_words(
     let mut gaps = GapEdits::default();
     let incoming_start = word_start_after_overlay(positions, start, first_incoming);
     for (index, owner) in earlier.iter_mut().enumerate().skip(first_touched) {
+        let previous_key = neutral_key(owner);
         if let Some(old) = owner.projected_gap_cell()
             && let Some(offset) = old
                 .checked_sub(start)
@@ -626,6 +633,7 @@ fn rebase_earlier_words(
             owner.start = owner.start.min(position);
             owner.content = owner.content.min(position);
         }
+        gaps.changed_owner_keys |= previous_key != neutral_key(owner);
     }
     gaps
 }

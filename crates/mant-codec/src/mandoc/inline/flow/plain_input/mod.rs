@@ -248,6 +248,7 @@ fn retire_plain_paint(
         buffer,
         anchors,
         output_start,
+        ..
     } = unit;
     record_fresh_plain_paint_origins(execution, buffer, passes, inherited, authorless_definition);
     if let Some(operands) = operands {
@@ -345,11 +346,7 @@ impl InlineBuilder {
             authorless_definition,
             operands,
         );
-        let PlainInputUnit {
-            mut buffer,
-            anchors,
-            output_start,
-        } = unit;
+        let (mut buffer, anchors, output_start) = unit.into_parts();
         if let Some(handoff) = &mut handoff {
             handoff.note_projection_start(output_start);
         }
@@ -470,6 +467,7 @@ impl InlineBuilder {
             let definition = execution.definition.as_mut().expect("session");
             let buffer = std::mem::take(&mut definition.field_buffer);
             let anchors = std::mem::take(&mut definition.field_word_anchors);
+            definition.owner_replay_dirty = false;
             if buffer.is_empty() {
                 Self::clear_authorless_definition_at(execution, nodes);
                 return None;
@@ -487,6 +485,7 @@ impl InlineBuilder {
                 buffer,
                 anchors,
                 output_start: execution.plain_input.output_start.min(nodes.len()),
+                owner_replay_dirty: false,
             },
         ))
     }
@@ -533,7 +532,7 @@ impl InlineBuilder {
         if let Some(definition) = &mut execution.definition {
             definition.field_buffer.clear();
             definition.field_buffer.set_tab_offset(0);
-            definition.field_word_anchors.clear();
+            definition.clear_word_anchors();
         }
         execution.plain_input.clear_input_at(nodes.len());
     }

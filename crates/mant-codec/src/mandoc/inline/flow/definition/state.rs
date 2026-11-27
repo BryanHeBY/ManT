@@ -127,6 +127,8 @@ pub(in crate::mandoc::inline::flow) struct DefinitionFieldState {
     /// Native word start, stable private owner marker, and content start.
     /// Markers retain ownership through style/link wrapping and compaction.
     pub(in crate::mandoc::inline::flow) field_word_anchors: Vec<super::super::NativeWordAnchor>,
+    /// Actual replay can join neutral runs or append repeated owner ids.
+    pub(in crate::mandoc::inline::flow) owner_replay_dirty: bool,
     /// Omitted scalar ranges removed when a flush projects acceptance before
     /// constructing its `NativeFieldDevice` (for example `.mc` no-break flushes).
     pub(in crate::mandoc::inline::flow) omitted_scalars:
@@ -371,6 +373,13 @@ impl InlineBuilder {
     }
 }
 
+impl DefinitionFieldState {
+    pub(in crate::mandoc::inline::flow) fn clear_word_anchors(&mut self) {
+        self.field_word_anchors.clear();
+        self.owner_replay_dirty = false;
+    }
+}
+
 impl InlineExecutionState {
     pub(in crate::mandoc::inline::flow) fn ensure_definition_state(
         &mut self,
@@ -383,10 +392,12 @@ impl InlineExecutionState {
         // inspects lastcol. Pending BACKBEFORE/BACKAFTER stays in the same
         // execution state until that real flush consumes it.
         if self.definition.is_none() {
+            let owner_replay_dirty = self.plain_input.owner_replay_dirty;
             let (field_buffer, field_word_anchors) = self.plain_input.take_input();
             self.definition = Some(DefinitionFieldState {
                 field_buffer,
                 field_word_anchors,
+                owner_replay_dirty,
                 ..DefinitionFieldState::default()
             });
             if !self

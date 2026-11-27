@@ -272,7 +272,7 @@ impl InlineBuilder {
             let definition = self.definition_state_mut();
             if definition.field_buffer.only_ignorable_remainder(false) {
                 definition.field_buffer.clear();
-                definition.field_word_anchors.clear();
+                definition.clear_word_anchors();
                 definition.omitted_scalars.clear();
             }
             // Restore the one separator that was waiting for the next real

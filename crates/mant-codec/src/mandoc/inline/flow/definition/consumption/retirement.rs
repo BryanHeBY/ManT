@@ -143,7 +143,7 @@ impl InlineBuilder {
             }
             state.field_buffer.clear_consumed_field();
             state.no_pad = false;
-            state.field_word_anchors.clear();
+            state.clear_word_anchors();
             state.omitted_scalars.clear();
         }
     }

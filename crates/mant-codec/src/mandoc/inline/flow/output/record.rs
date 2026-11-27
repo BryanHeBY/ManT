@@ -368,6 +368,7 @@ impl InlineBuilder {
             &entry,
         ));
         entry.append_owner_intervals(&mut definition.field_word_anchors);
+        definition.owner_replay_dirty |= entry.changed_owner_receipts();
         observe_definition_word(definition, incoming, separator);
         let mut projection = self.record_authored_native_passes(
             incoming,
@@ -408,9 +409,12 @@ impl InlineBuilder {
             if definition.field_buffer.projection_owner() == FieldProjectionOwner::Detached
                 && definition.run_in_continuation
                 && definition.deferred_head_projection.is_some()
-                && self.execution.native_owner_serial.is_multiple_of(16)
             {
-                repeated_owners::compact_neutral_copies(anchors);
+                repeated_owners::compact_at_checkpoint(
+                    anchors,
+                    &mut definition.owner_replay_dirty,
+                    self.execution.native_owner_serial,
+                );
             }
         }
     }
@@ -478,6 +482,7 @@ impl InlineBuilder {
                 &entry,
             ));
         entry.append_owner_intervals(&mut self.execution.plain_input.anchors);
+        self.execution.plain_input.owner_replay_dirty |= entry.changed_owner_receipts();
         // The plain unit is a BRNEVER-shaped degenerate field (term.c:134,
         // 143-144): responsive reflow owns width, so passes only ever end
         // at authored markers and never at a device-width guess.

@@ -199,6 +199,10 @@ impl ExecutedWordEntry {
         &self.prefix.moved
     }
 
+    pub(super) fn changed_owner_receipts(&self) -> bool {
+        self.prefix.changed_owner_receipts()
+    }
+
     pub(super) fn append_owner_intervals(&self, anchors: &mut Vec<NativeWordAnchor>) {
         self.prefix.append_owner_intervals(anchors);
     }

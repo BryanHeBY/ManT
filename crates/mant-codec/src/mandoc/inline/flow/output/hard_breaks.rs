@@ -411,7 +411,7 @@ impl InlineBuilder {
             definition.hang_row.endline();
             definition.field_buffer.clear();
             definition.field_buffer.set_tab_offset(0);
-            definition.field_word_anchors.clear();
+            definition.clear_word_anchors();
         }
         if self.execution.definition.is_none() {
             self.execution.detached_device_row = None;
