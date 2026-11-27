@@ -16,14 +16,7 @@ pub(super) fn report_navigation(markdown: &str) -> (Vec<AnchorMarker<'_>>, HashS
     if candidates.is_empty() && links.is_empty() {
         return (candidates, HashSet::new());
     }
-    let document = parse_fragment(
-        Document::fragment_sink(),
-        ParseOpts::default(),
-        QualName::new(None, ns!(html), local_name!("div")),
-        Vec::new(),
-        true,
-    )
-    .one(html);
+    let document = parse_report(html);
     let (live, links, host_ids) = observe_document(&document, &probe, &candidates, &links);
     let markers = candidates
         .into_iter()
@@ -35,29 +28,78 @@ pub(super) fn report_navigation(markdown: &str) -> (Vec<AnchorMarker<'_>>, HashS
     (markers, links)
 }
 
+fn parse_report(html: String) -> Document {
+    parse_fragment(
+        Document::fragment_sink(),
+        ParseOpts::default(),
+        QualName::new(None, ns!(html), local_name!("div")),
+        Vec::new(),
+        true,
+    )
+    .one(html)
+}
+
+const PROBE_PREFIX: &str = "data-mant-report-probe-";
+
+fn observed_probe_ids(input: &str) -> impl Iterator<Item = usize> {
+    input.match_indices(PROBE_PREFIX).filter_map(|(start, _)| {
+        let value = &input[start + PROBE_PREFIX.len()..];
+        let digits = value
+            .as_bytes()
+            .iter()
+            .take(20)
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        value[digits..]
+            .starts_with("-end")
+            .then(|| value[..digits].parse().ok())
+            .flatten()
+    })
+}
+
 fn probe_attribute(markdown: &str) -> String {
-    const BASE: &str = "data-mant-report-probe-";
     let folded = markdown.to_ascii_lowercase();
-    let used: HashSet<usize> = folded
-        .match_indices(BASE)
-        .filter_map(|(start, _)| {
-            let value = &folded[start + BASE.len()..];
-            let digits = value
-                .as_bytes()
-                .iter()
-                .take(20)
-                .take_while(|b| b.is_ascii_digit())
-                .count();
-            value[digits..]
-                .starts_with("-end")
-                .then(|| value[..digits].parse().ok())
-                .flatten()
-        })
-        .collect();
+    let mut used: HashSet<usize> = observed_probe_ids(&folded).collect();
+    // Attribute names are never entity decoded, but a host's href may be.
+    // Check those decoded attributes before using any synthetic link receipt.
+    if markdown.contains('&') {
+        let mut plain_html = String::new();
+        pulldown_cmark::html::push_html(
+            &mut plain_html,
+            Parser::new_ext(markdown, Options::ENABLE_MATH),
+        );
+        let document = parse_report(plain_html);
+        let mut stack = vec![document.root()];
+        while let Some(node) = stack.pop() {
+            if node.has_name("a")
+                && let Some(href) = node.attr("href")
+            {
+                used.extend(observed_probe_ids(&href));
+            }
+            stack.extend(node.children_it(false));
+        }
+    }
     let id = (0..=used.len())
         .find(|id| !used.contains(id))
         .expect("one more candidate than used probe IDs");
-    format!("{BASE}{id}-end")
+    format!("{PROBE_PREFIX}{id}-end")
+}
+
+fn scoped_id(id: &str) -> bool {
+    let Some((source, encoded)) = id
+        .strip_prefix("mant-report-")
+        .and_then(|id| id.split_once('-'))
+    else {
+        return false;
+    };
+    !source.is_empty()
+        && (source == "0" || !source.starts_with('0'))
+        && source.bytes().all(|b| b.is_ascii_digit())
+        && source.parse::<usize>().is_ok()
+        && encoded.len().is_multiple_of(2)
+        && encoded
+            .bytes()
+            .all(|b| b.is_ascii_digit() || matches!(b, b'a'..=b'f'))
 }
 
 fn render_probes<'a>(
@@ -76,7 +118,7 @@ fn render_probes<'a>(
                 dest_url,
                 title,
                 id,
-            }) if dest_url.starts_with('#') => {
+            }) if dest_url.strip_prefix('#').is_some_and(scoped_id) => {
                 let receipt = format!("#{probe}-link-{}", links.len());
                 links.push(dest_url[1..].to_owned());
                 Event::Start(Tag::Link {
@@ -116,7 +158,9 @@ fn mark_raw<'a>(
     let mut copied = 0;
     for (offset, _) in value.match_indices(PREFIX) {
         let start = start + offset;
-        let Some(anchor) = marker_at(&markdown[start..], start, PREFIX, SUFFIX) else {
+        let Some(anchor) = marker_at(&markdown[start..], start, PREFIX, SUFFIX)
+            .filter(|anchor| scoped_id(anchor.id))
+        else {
             continue;
         };
         let end = offset + PREFIX.len() + anchor.id.len() + 1;
@@ -156,7 +200,7 @@ fn observe_document(
                 });
             if let Some(index) = index {
                 live[index] = true;
-            } else {
+            } else if scoped_id(&id) {
                 // Host IDs are not ours to rewrite, and ambiguous links
                 // must not take the reader to an unrelated element.
                 host_ids.insert(id.to_string());

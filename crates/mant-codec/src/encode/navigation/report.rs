@@ -11,7 +11,8 @@ mod html;
 /// pass. This accounts for output decisions such as fenced carriers, inline
 /// fallback and repeated supports without indexing omitted source content.
 /// The generated ID namespace is reserved for scoped fragments; host HTML
-/// using the same ID does not authorize an ambiguous local link.
+/// using the same ID on a different element does not authorize an ambiguous
+/// local link. Host markup must not imitate the exact generated empty span.
 #[must_use]
 pub fn render_scoped_report_page(render: impl Fn(Option<&HashSet<String>>) -> String) -> String {
     let page = render(None);
@@ -83,13 +84,16 @@ mod tests {
 
     #[test]
     fn accepted_markers_deduplicate_raw_html_and_keep_literal_lookalikes() {
-        let marker = r#"<span id="scope-id"></span>"#;
+        let marker = r#"<span id="mant-report-0-61"></span>"#;
         let markdown = format!(
-            "> <br />\n> {marker}{marker}\n\n> [jump](#scope-id) `{marker}`\n\n> ```\n> {marker}\n> ```"
+            "> <br />\n> {marker}{marker}\n\n> [jump](#mant-report-0-61) `{marker}`\n\n> ```\n> {marker}\n> ```"
         );
         let navigation = PageNavigation::scan(&markdown);
         assert!(navigation.complete);
-        assert_eq!(navigation.anchors, HashSet::from(["scope-id".into()]));
+        assert_eq!(
+            navigation.anchors,
+            HashSet::from(["mant-report-0-61".into()])
+        );
         assert_eq!(navigation.duplicates.len(), 1);
         let markdown = navigation.unique(markdown);
         assert!(markdown.contains(&format!("{marker}<span></span>")));
@@ -193,6 +197,44 @@ mod tests {
             format!("{host}\n\n{marker}\n\n{jump}")
         });
         assert_eq!(markdown, format!("{host}\n\n{marker}\n\njump"));
+    }
+
+    #[test]
+    fn host_navigation_and_html_are_not_scoped_or_deduplicated() {
+        const HOST: &str = r#"<div id="contents">Contents</div>
+
+[Contents](#contents)
+
+<span id="details"></span><span id="details"></span>"#;
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        let markdown = format!("{HOST}\n\n{MARKER}{MARKER}\n\n[jump](#mant-report-0-61)");
+        assert_eq!(
+            render_scoped_report_page(|anchors| {
+                assert!(anchors.is_none());
+                markdown.clone()
+            }),
+            format!("{HOST}\n\n{MARKER}<span></span>\n\n[jump](#mant-report-0-61)")
+        );
+    }
+
+    #[test]
+    fn decoded_host_href_cannot_stand_in_for_a_markdown_link_receipt() {
+        const HOST: &str = r#"<a href="&#35;data-mant-report-probe&#45;0-end-link-0">host</a>
+
+<template>
+
+[decoy](#mant-report-0-62)
+
+</template>"#;
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        let markdown = format!("{HOST}\n\n{MARKER}\n\n[jump](#mant-report-0-61)");
+        assert_eq!(
+            render_scoped_report_page(|anchors| {
+                assert!(anchors.is_none());
+                markdown.clone()
+            }),
+            markdown
+        );
     }
 
     #[test]
