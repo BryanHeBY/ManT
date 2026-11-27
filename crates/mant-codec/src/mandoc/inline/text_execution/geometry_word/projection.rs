@@ -286,15 +286,17 @@ impl<'a> PlacedWord<'a> {
         // state (`term.c:903-929`): clear consumed BACKAFTER, and when a
         // generated U+00A0 armed BACKBEFORE, keep its slot as `pending_cell`
         // so the following BODY word can replay `can_replay_projected_prior_slot`.
-        zero_advance.take_armed();
         if let Some(slot) = self.pending_slot {
             self.writes.push(FieldWrite::KeepPlacedRetreat {
                 from_end: self.slots.len() - slot,
             });
             zero_advance.note_projected_pending_glyph();
-        } else if self.armed {
-            zero_advance.inherit_armed(true);
-            self.writes.push(FieldWrite::ArmBackafter);
+        } else {
+            zero_advance.take_armed();
+            if self.armed {
+                zero_advance.inherit_armed(true);
+                self.writes.push(FieldWrite::ArmBackafter);
+            }
         }
         self.writes
     }

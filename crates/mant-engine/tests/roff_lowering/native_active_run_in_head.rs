@@ -93,3 +93,62 @@ fn the_marker_still_breaks_before_body_text_without_a_rewind() {
         assert_eq!(description_rows(&load(&source)), ["A", "B C"], "{source}");
     }
 }
+
+fn combined_inset(head: &str, body: &str) -> String {
+    source("inset", head, body).replace(".Sh DESCRIPTION\n", ".Sh DESCRIPTION\n.ft BI\n")
+}
+
+#[test]
+fn a_generated_separator_carries_its_backstep_into_the_live_body() {
+    // encode() buffers the ordinary SP without consuming BACKAFTER.
+    // BODY pre's generated U+00A0 consumes it in encode1(), leaving
+    // BACKBEFORE for B. A later term_word() can still rewind before the
+    // marker (term.c:659–660, 678–718, 903–969; mdoc_term.c:757–772).
+    let body = "B\n.No \"\\h'|0n'C\" No D\n";
+    for (head, first_row) in [
+        (r#"No "J\fIA\fP\p\z ""#, "C_DA"),
+        (r#"Em "J\fIA\fP\p\z ""#, "DA"),
+        (r#"Sy "J\fIA\fP\p\z ""#, "DA"),
+    ] {
+        let source = combined_inset(head, body);
+        assert_eq!(
+            description_rows(&load(&source)),
+            [first_row, "B"],
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn other_body_words_keep_the_separator_backstep_editable() {
+    // An empty .No can add an automatic SP and a raw text node can
+    // execute HORIZ before BODY post flushes the field (term.c:573–582,
+    // 678–718; mdoc_term.c:939–945).
+    let body = "B\n.No \"\"\n\\h'|0n'C D\n";
+    for (head, row) in [
+        (r#"No "J\fIA\fP\p\z ""#, "C B"),
+        (r#"Em "J\fIA\fP\p\z ""#, "CAB"),
+        (r#"Sy "J\fIA\fP\p\z ""#, "CAB"),
+    ] {
+        let source = combined_inset(head, body);
+        assert_eq!(description_rows(&load(&source)), [row], "{source}");
+    }
+}
+
+#[test]
+fn generated_separator_controls_keep_their_accepted_rows() {
+    let without_arm = combined_inset(r#"No "J\fIA\fP\p ""#, "B\n.No \"\\h'|0n'C\" No D\n");
+    assert_eq!(
+        description_rows(&load(&without_arm)),
+        ["C_DA", "B"],
+        "{without_arm}"
+    );
+
+    // A real .br retires the field before the later rewind.
+    let flushed = combined_inset(r#"No "J\fIA\fP\p\z ""#, "B\n.br\n.No \"\\h'|0n'C\" No D\n");
+    assert_eq!(
+        description_rows(&load(&flushed)),
+        ["JA", "B", "C D"],
+        "{flushed}"
+    );
+}

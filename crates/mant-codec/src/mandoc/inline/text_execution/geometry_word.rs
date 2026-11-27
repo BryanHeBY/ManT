@@ -138,6 +138,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                     && can_replay_relative_retreat(events, context, has_zero_advance)
                 || has_armed_overlap
                 || tight_word_can_carry_glyph(events, context)
+                || word_can_consume_projected_blank(events, context)
                 || replayable_device_tail(context, edits, !events.is_empty()))
 }
 
@@ -632,6 +633,32 @@ fn can_place_pending(context: &TextExecutionContext<'_>) -> bool {
                 prefix.cells.get(cell),
                 Some((FieldCell::Graph { text: '\u{a0}', width: 1 }, _))
             )
+}
+
+fn word_can_consume_projected_blank(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    // encode1() consumes the generated NBSP's BACKBEFORE even for a
+    // plain text operand (term.c:903-929). Keep the resulting backline
+    // and decoration addressable to later words in the same field.
+    let [RoffInlineEvent::Text(text)] = events else {
+        return false;
+    };
+    context.zero_advance.can_replay_projected_prior_slot()
+        && context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.pass == ReplayPass::Editable
+                && prefix
+                    .raw_slot_count()
+                    .saturating_add(text.len().saturating_mul(5))
+                    .saturating_add(1)
+                    <= prefix.slot_limit
+        })
+        && text
+            .bytes()
+            .all(|byte| byte == b' ' || byte.is_ascii_graphic())
+        && text.bytes().any(|byte| byte.is_ascii_graphic())
 }
 
 fn tight_word_can_carry_glyph(
