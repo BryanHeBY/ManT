@@ -683,17 +683,7 @@ impl<'a> Scanner<'a> {
                         .len_utf8();
                 }
             }
-            // An authored slash outside a complete joined Pa can separate
-            // two Fl receipts even when both are adjacent. The slash itself
-            // is not part of the path argument.
-            if separator
-                && character == '/'
-                && self.view.independent_slash(self.cursor)
-                && self.view.native_option_starts(following)
-                && self.attached_path_ends(self.cursor)
-            {
-                self.finish_argument();
-                self.cursor = following;
+            if separator && character == '/' && self.finish_at_owned_slash(following) {
                 return;
             }
             // term_word() may change fonts within one native TEXT operand.
@@ -796,23 +786,48 @@ impl<'a> Scanner<'a> {
         );
     }
 
-    fn attached_path_ends(&self, offset: usize) -> bool {
-        #[cfg(feature = "roff")]
-        return self.argument_start.as_ref().is_some_and(|argument| {
-            argument.attached_to_name
-                && self
-                    .view
-                    .operand(argument.bytes.start)
-                    .is_some_and(|operand| {
-                        operand.bytes == (argument.bytes.start..offset)
-                            && matches!(operand.role, NativeOperandRole::PathOperand(_))
-                    })
-        });
-        #[cfg(not(feature = "roff"))]
-        {
-            let _ = offset;
-            false
+    fn finish_at_owned_slash(&mut self, following: usize) -> bool {
+        if !self.view.independent_slash(self.cursor) || !self.view.native_option_starts(following) {
+            return false;
         }
+        let Some(name) = self.names.last() else {
+            return false;
+        };
+        if !name
+            .parts
+            .first()
+            .is_some_and(|part| self.view.native_option_starts(part.start))
+        {
+            return false;
+        }
+
+        // Boundary recognition preserves independently authored short
+        // names even if a left operand was repainted or split across owners.
+        // Only complete source receipts can certify the exact composite.
+        #[cfg(feature = "roff")]
+        if let Some(argument) = &self.argument_start {
+            self.form_evidence.reject_if(
+                self.view
+                    .operands_in(argument.bytes.start..self.cursor)
+                    .any(|operand| {
+                        matches!(
+                            operand.role,
+                            NativeOperandRole::IncompletePlaceholder
+                                | NativeOperandRole::ClippedValue
+                                | NativeOperandRole::ReferenceText(_)
+                        )
+                    })
+                    || argument.attached_to_name
+                        && self.view.native_argument_starts(argument.bytes.start)
+                        && !name
+                            .parts
+                            .iter()
+                            .all(|part| self.view.permits_option_spelling(part.clone(), false)),
+            );
+        }
+        self.finish_argument();
+        self.cursor = following;
+        true
     }
 
     // A separator at the start of a distinct literal operand can end the

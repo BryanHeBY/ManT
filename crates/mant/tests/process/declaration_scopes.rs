@@ -1091,3 +1091,64 @@ fn complete_owned_slash_separates_an_attached_native_path() {
         );
     }
 }
+
+#[test]
+fn authored_slash_bounds_the_complete_preceding_argument_list() {
+    // CVS consumes the blank on a harmless rewind, but the next column
+    // in Ar seed belongs to the argument and cannot certify the form.
+    for (head, form, names) in [
+        (
+            "Fl a Ar mode Ns Li / Ns Fl v Ns Li tls",
+            "-a mode/-vtls",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ar mode No "\h'-1n'/" Fl v Ns Li tls"#,
+            "-a mode/ -vtls",
+            ["-a", "-v"],
+        ),
+        (
+            r#"Fl a Ar mode Ns No "\h'-1u'/" Fl v Ns Li tls"#,
+            "-a mode/ -vtls",
+            ["-a", "-v"],
+        ),
+        (
+            "Fl v Ns Li tls Ar see Ns No / Fl a Ar mode",
+            "-vtls see/ -a mode",
+            ["-v", "-a"],
+        ),
+        (
+            "Fl v Ns Pa a/b Ns Li / Ns Fl a Ar mode",
+            "-va/b/-a mode",
+            ["-v", "-a"],
+        ),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &names, &[]);
+    }
+    for (head, form, names) in [
+        (
+            r#"Fl v Ns Li tls Ar seed No "\h'-2n'/" Fl a Ar mode"#,
+            "-vtls see/ -a mode",
+            ["-v", "-a"],
+        ),
+        (
+            "Fl v Ns No a Ns Pa /b Ns Li / Ns Fl a Ar mode",
+            "-va/b/-a mode",
+            ["-va", "-a"],
+        ),
+    ] {
+        assert_attached_display(head, form);
+        assert_eq!(
+            explain_attached_tail(head, form).counts.direct_entry.total,
+            0
+        );
+        for name in names {
+            assert_eq!(
+                explain_attached_tail(head, name).counts.direct_entry.total,
+                1,
+                "{head}: {name}"
+            );
+        }
+    }
+}
