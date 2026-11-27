@@ -1638,3 +1638,47 @@ fn inset_body_writes_can_replace_an_open_head_cell() {
         }
     }
 }
+
+#[test]
+fn decorated_links_leave_the_preceding_filled_word_editable() {
+    // The paired tty annotations and styled ink extend the live field.
+    // The absolute return overwrites A at native slot 1, not the link.
+    for (a, b, c) in [
+        ('A', 'B', 'C'),
+        ('a', 'b', 'c'),
+        ('1', '2', '3'),
+        ('é', 'ø', 'ß'),
+    ] {
+        for style in ["No", "Em", "Sy"] {
+            for (motion, expected) in [
+                ("", format!("j{a} {b}k {c}")),
+                (r"\h'|1n'", format!("j{c} {b}k")),
+            ] {
+                let body = format!(
+                    ".No j{a}\n.{style} \"\\X'tty: link https://a.test'{b}k\\X'tty: link'\" No \"{motion}{c}\""
+                );
+                let source = format!("{REPLAY_HEADER}{body}\n");
+                let mut content = json_string_roundtrip(
+                    &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+                );
+                for _ in 0..3 {
+                    let rendered = mant_render::render_query_man(&content);
+                    assert_eq!(
+                        description_rows(&rendered, &source),
+                        [expected.as_str()],
+                        "{body}"
+                    );
+                    let mut labels = Labels::default();
+                    labels.visit_document(content.document.as_ref().unwrap());
+                    assert_eq!(
+                        labels.0,
+                        [("https://a.test".into(), format!("{b}k"))],
+                        "{body}"
+                    );
+                    let markdown = mant_codec::encode::render_markdown(&content);
+                    content = mant_loader::load_markdown_text(&markdown, None).unwrap();
+                }
+            }
+        }
+    }
+}

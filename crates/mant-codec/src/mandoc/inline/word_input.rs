@@ -286,6 +286,13 @@ impl super::InlineExecutionState {
             )),
             Some(RoffInlineEvent::LineBreak)
         );
+        // The annotation escape writes a zero-width native slot, while its
+        // styled label can expand into multiple raw bytes (term.c:620-638,
+        // 911-925). Import the proved prefix before placing the label so
+        // a later absolute HORIZ can still address the earlier word.
+        let annotated = events
+            .iter()
+            .any(|event| matches!(event, RoffInlineEvent::Link(Some(_))));
         let extend = if leading_marker {
             PrefixExtension::LeadingMarker
         } else if events.iter().any(|event| {
@@ -295,7 +302,7 @@ impl super::InlineExecutionState {
             )
         }) {
             PrefixExtension::Word
-        } else if has_positive_motion {
+        } else if has_positive_motion || annotated {
             PrefixExtension::FilledWord
         } else {
             PrefixExtension::None
