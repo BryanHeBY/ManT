@@ -238,6 +238,79 @@ mod tests {
     }
 
     #[test]
+    fn rendered_link_receipts_cannot_be_borrowed_from_host_hrefs() {
+        const INERT: &str = "<template>\n\n[decoy](#mant-report-0-62)\n\n</template>";
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        const HOST_DEST: &str = "#data-mant-report-probe-0-end-link-0";
+        for host in [
+            r"[host](#data\-mant-report-probe-0-end-link-0)",
+            "[host][ref]\n\n[ref]: <&#35;data-mant-report-probe-0-end-link-0>",
+            r##"<a data-mant-report-probe-0-end=l0 href="#data-mant-report-probe-0-end-link-0">host</a>"##,
+            r#"<a DATA-MANT-REPORT-PROBE-0-END=l0 href="&#35;data-mant-report-probe-0-end-link-0">host</a>"#,
+        ] {
+            let markdown = format!("{host}\n\n{INERT}\n\n{MARKER}\n\n[jump](#mant-report-0-61)");
+            let (_, links) = html::report_navigation(&markdown);
+            assert_eq!(links, HashSet::from(["mant-report-0-61".to_owned()]));
+            let out = render_scoped_report_page(|scope| {
+                assert!(scope.is_none(), "{host}");
+                markdown.clone()
+            });
+            assert_eq!(out, markdown, "{host}");
+            // Host source is byte-identical; its normalized Markdown
+            // destination remains external to the generated report namespace.
+            if host.starts_with('[') {
+                assert!(Parser::new(&out).any(|event| matches!(
+                    event,
+                    Event::Start(pulldown_cmark::Tag::Link { dest_url, .. }) if dest_url.as_ref() == HOST_DEST
+                )));
+            }
+        }
+    }
+
+    #[test]
+    fn at_report_keeps_reachable_jump_under_equivalent_host_markdown() {
+        // AT frozen report DOM matrix: host spelling × inert context ×
+        // link syntax × unrelated ampersand. Every case has one real jump.
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        for host in [
+            "#data-mant-report-probe-0-end-link-0",
+            r"#data\-mant-report-probe-0-end-link-0",
+            r"#data-mant\-report-probe-0-end-link-0",
+            r"\#data\-mant-report-probe-0-end-link-0",
+            "#data&#45;mant-report-probe-0-end-link-0",
+            "#d&#97;ta-mant-report-probe-0-end-link-0",
+            "#contents",
+            r"#data\-mant-report-probe-0-end-link-1",
+        ] {
+            for hidden in [
+                "<template>\n\n[decoy](#mant-report-0-62)\n\n</template>",
+                "<template><div>\n\n[decoy](#mant-report-0-62)\n\n</div></template>",
+                "`[decoy](#mant-report-0-62)`",
+                "ordinary paragraph",
+            ] {
+                for host_link in [
+                    format!("[host]({host})"),
+                    format!("[host][ref]\n\n[ref]: {host}"),
+                    format!("[host](<{host}>)"),
+                ] {
+                    for extra in ["", "\n\nA & B"] {
+                        let page = format!(
+                            "{host_link}\n\n{hidden}{extra}\n\n{MARKER}\n\n[jump](#mant-report-0-61)"
+                        );
+                        assert_eq!(
+                            render_scoped_report_page(|anchors| {
+                                assert!(anchors.is_none(), "{page}");
+                                page.clone()
+                            }),
+                            page
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn fenced_closing_spelling_cannot_steal_a_visible_scoped_target() {
         let marker = r#"<span id="mant-report-0-61"></span>"#;
         let markdown = format!(

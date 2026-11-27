@@ -1,8 +1,8 @@
 //! Map literal source markers and Markdown links to the live report HTML tree.
 use crate::encode::anchors::{AnchorMarker, marker_at};
 use html5ever::{ParseOpts, QualName, local_name, ns, parse_fragment, tendril::TendrilSink};
-use pulldown_cmark::{Event, Options, Parser, Tag};
-use std::{collections::HashSet, fmt::Write as _};
+use pulldown_cmark::{Event, Options, Parser, Tag, TagEnd};
+use std::{cell::Cell, collections::HashSet, fmt, fmt::Write as _, ops::Range};
 
 mod tree;
 use tree::{Node, ReportTree};
@@ -11,10 +11,11 @@ const PREFIX: &str = "<span id=\"";
 const SUFFIX: &str = "\"></span>";
 
 pub(super) fn report_navigation(markdown: &str) -> (Vec<AnchorMarker<'_>>, HashSet<String>) {
-    // These temporary attributes allow the HTML tree to identify the exact
-    // candidate occurrence. They are never used to render the returned page.
-    let probe = probe_attribute(markdown);
-    let (html, candidates, links) = render_probes(markdown, &probe);
+    if !has_candidates(markdown) {
+        return (Vec::new(), HashSet::new());
+    }
+
+    let (html, candidates, links, probe) = render_probes(markdown);
     if candidates.is_empty() && links.is_empty() {
         return (candidates, HashSet::new());
     }
@@ -59,26 +60,12 @@ fn observed_probe_ids(input: &str) -> impl Iterator<Item = usize> {
     })
 }
 
-fn probe_attribute(markdown: &str) -> String {
-    let folded = markdown.to_ascii_lowercase();
-    let mut used: HashSet<usize> = observed_probe_ids(&folded).collect();
-    // Attribute names are never entity decoded, but a host's href may be.
-    // Check those decoded attributes before using any synthetic link receipt.
-    if markdown.contains('&') {
-        let mut plain_html = String::new();
-        pulldown_cmark::html::push_html(
-            &mut plain_html,
-            Parser::new_ext(markdown, Options::ENABLE_MATH),
-        );
-        let document = parse_report(plain_html);
-        for node in ReportTree::elements(&document) {
-            if node.has_name("a")
-                && let Some(href) = node.attr("href")
-            {
-                used.extend(observed_probe_ids(href));
-            }
-        }
-    }
+fn probe_attribute(html: &str) -> String {
+    // HTML tokenization folds ASCII case in attribute names but does not
+    // decode character references there. Reserve names over the final
+    // serialized input, where Markdown escapes have already been resolved.
+    let folded = html.to_ascii_lowercase();
+    let used: HashSet<_> = observed_probe_ids(&folded).collect();
     let id = (0..=used.len())
         .find(|id| !used.contains(id))
         .expect("one more candidate than used probe IDs");
@@ -102,81 +89,122 @@ fn scoped_id(id: &str) -> bool {
             .all(|b| b.is_ascii_digit() || matches!(b, b'a'..=b'f'))
 }
 
-fn render_probes<'a>(
-    markdown: &'a str,
-    probe: &str,
-) -> (String, Vec<AnchorMarker<'a>>, Vec<String>) {
-    let mut anchors = Vec::new();
-    let mut links = Vec::new();
-    let events = Parser::new_ext(markdown, Options::ENABLE_MATH).into_offset_iter();
-    let mut html = String::new();
-    pulldown_cmark::html::push_html(
-        &mut html,
-        events.map(|(event, range)| match event {
-            Event::Start(Tag::Link {
-                link_type,
-                dest_url,
-                title,
-                id,
-            }) if dest_url.strip_prefix('#').is_some_and(scoped_id) => {
-                let receipt = format!("#{probe}-link-{}", links.len());
-                links.push(dest_url[1..].to_owned());
-                Event::Start(Tag::Link {
-                    link_type,
-                    dest_url: receipt.into(),
-                    title,
-                    id,
-                })
-            }
-            Event::Html(ref value) | Event::InlineHtml(ref value)
-                if value.as_ref() == &markdown[range.clone()] =>
-            {
-                let Some(value) = mark_raw(markdown, range.start, value, probe, &mut anchors)
-                else {
-                    return event;
-                };
-                if matches!(event, Event::Html(_)) {
-                    Event::Html(value.into())
-                } else {
-                    Event::InlineHtml(value.into())
-                }
-            }
-            _ => event,
-        }),
-    );
-    (html, anchors, links)
+fn markdown_events(markdown: &str) -> impl Iterator<Item = (Event<'_>, Range<usize>)> {
+    Parser::new_ext(markdown, Options::ENABLE_MATH).into_offset_iter()
 }
 
-fn mark_raw<'a>(
+fn raw_markers<'a, 'v>(
     markdown: &'a str,
     start: usize,
-    value: &str,
-    probe: &str,
-    anchors: &mut Vec<AnchorMarker<'a>>,
-) -> Option<String> {
-    let mut output = String::new();
-    let mut copied = 0;
-    for (offset, _) in value.match_indices(PREFIX) {
-        let start = start + offset;
-        let Some(anchor) = marker_at(&markdown[start..], start, PREFIX, SUFFIX)
-            .filter(|anchor| scoped_id(anchor.id))
-        else {
-            continue;
-        };
+    value: &'v str,
+) -> impl Iterator<Item = (usize, AnchorMarker<'a>)> + use<'a, 'v> {
+    value.match_indices(PREFIX).filter_map(move |(offset, _)| {
+        let position = start + offset;
+        let anchor = marker_at(&markdown[position..], position, PREFIX, SUFFIX)
+            .filter(|anchor| scoped_id(anchor.id))?;
         let end = offset + PREFIX.len() + anchor.id.len() + 1;
-        if end >= value.len() {
-            continue;
+        (end < value.len()).then_some((end, anchor))
+    })
+}
+
+fn scoped_link(url: &str) -> bool {
+    url.strip_prefix('#').is_some_and(scoped_id)
+}
+
+fn has_candidates(markdown: &str) -> bool {
+    // A generated marker is literal. A CommonMark link with a fragment
+    // destination (even an escaped or reference destination) needs '[';
+    // fragment-only URLs are not autolinks.
+    if !markdown.contains(PREFIX) && !markdown.contains('[') {
+        return false;
+    }
+
+    let mut image_depth = 0;
+    markdown_events(markdown).any(|(event, range)| match event {
+        Event::Start(Tag::Image { .. }) => {
+            image_depth += 1;
+            false
         }
-        output.push_str(&value[copied..end]);
-        write!(output, " {probe}={}", anchors.len()).expect("write to String");
-        copied = end;
-        anchors.push(anchor);
+        Event::End(TagEnd::Image) => {
+            image_depth -= 1;
+            false
+        }
+        Event::Start(Tag::Link { dest_url, .. }) => image_depth == 0 && scoped_link(&dest_url),
+        Event::Html(value) | Event::InlineHtml(value)
+            if image_depth == 0 && value.as_ref() == &markdown[range.clone()] =>
+        {
+            raw_markers(markdown, range.start, &value).next().is_some()
+        }
+        _ => false,
+    })
+}
+
+/// Record offsets in the real serializer instead of rewriting Markdown Link
+/// events (which also occur inside image alt text). The HTML proof gets the
+/// same tags and hrefs, with an extra private attribute only on candidate tags.
+struct HtmlOutput<'a> {
+    html: String,
+    written: &'a Cell<usize>,
+}
+
+impl fmt::Write for HtmlOutput<'_> {
+    fn write_str(&mut self, value: &str) -> fmt::Result {
+        self.html.push_str(value);
+        self.written.set(self.html.len());
+        Ok(())
     }
-    if copied == 0 {
-        return None;
+}
+
+fn render_probes(markdown: &str) -> (String, Vec<AnchorMarker<'_>>, Vec<String>, String) {
+    let mut anchors = Vec::new();
+    let mut links = Vec::new();
+    let mut insertions = Vec::new();
+    let mut pending_link = None;
+    let mut image_depth = 0;
+    let written = Cell::new(0);
+    let mut output = HtmlOutput {
+        html: String::new(),
+        written: &written,
+    };
+    let events = markdown_events(markdown).map(|(event, range)| {
+        if let Some(index) = pending_link.take() {
+            // pulldown emits a complete '<a ...>' for this Start event.
+            insertions.push((written.get() - 1, 'l', index));
+        }
+        match &event {
+            Event::Start(Tag::Image { .. }) => image_depth += 1,
+            Event::End(TagEnd::Image) => image_depth -= 1,
+            Event::Start(Tag::Link { dest_url, .. })
+                if image_depth == 0 && scoped_link(dest_url) =>
+            {
+                pending_link = Some(links.len());
+                links.push(dest_url[1..].to_owned());
+            }
+            Event::Html(value) | Event::InlineHtml(value)
+                if image_depth == 0 && value.as_ref() == &markdown[range.clone()] =>
+            {
+                for (offset, anchor) in raw_markers(markdown, range.start, value) {
+                    insertions.push((written.get() + offset, 'a', anchors.len()));
+                    anchors.push(anchor);
+                }
+            }
+            _ => {}
+        }
+        event
+    });
+    pulldown_cmark::html::write_html_fmt(&mut output, events).expect("write to String");
+
+    let probe = probe_attribute(&output.html);
+    let mut html = String::with_capacity(output.html.len());
+    let mut copied = 0;
+    for (offset, kind, index) in insertions {
+        debug_assert_eq!(output.html.as_bytes()[offset], b'>');
+        html.push_str(&output.html[copied..offset]);
+        write!(html, " {probe}={kind}{index}").expect("write to String");
+        copied = offset;
     }
-    output.push_str(&value[copied..]);
-    Some(output)
+    html.push_str(&output.html[copied..]);
+    (html, anchors, links, probe)
 }
 
 fn observe_document(
@@ -188,12 +216,11 @@ fn observe_document(
     let mut live = vec![false; anchors.len()];
     let mut live_links = HashSet::new();
     let mut host_ids = HashSet::new();
-    let link_prefix = format!("#{probe}-link-");
     for node in ReportTree::elements(document) {
         if let Some(id) = node.attr("id") {
             let index = node
                 .attr(probe)
-                .and_then(|attr| attr.parse::<usize>().ok())
+                .and_then(|attr| attr.strip_prefix('a')?.parse::<usize>().ok())
                 .filter(|&index| {
                     node.has_name("span") && anchors.get(index).is_some_and(|a| a.id == id)
                 });
@@ -207,9 +234,12 @@ fn observe_document(
         }
         if node.has_name("a")
             && let Some(link) = node
-                .attr("href")
-                .and_then(|attr| attr.strip_prefix(&link_prefix)?.parse::<usize>().ok())
+                .attr(probe)
+                .and_then(|attr| attr.strip_prefix('l')?.parse::<usize>().ok())
                 .and_then(|index| links.get(index))
+                .filter(|link| {
+                    node.attr("href").and_then(|href| href.strip_prefix('#')) == Some(link)
+                })
         {
             live_links.insert(link.clone());
         }
@@ -220,6 +250,48 @@ fn observe_document(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn candidate_gate_compares_parsed_scoped_links_and_literal_visible_markers() {
+        const MARKER: &str = r#"<span id="mant-report-0-61"></span>"#;
+        for source in [
+            "ordinary A & B".to_owned(),
+            "[external](https://a.test/?x=1&y=2)".to_owned(),
+            format!("[unrelated](#contents) `{MARKER}`"),
+            format!("~~~html\n{MARKER}\n~~~"),
+            "![alt [not a jump](#mant-report-0-61)](pic.png)".to_owned(),
+        ] {
+            assert!(!has_candidates(&source), "{source}");
+            let (markers, links) = report_navigation(&source);
+            assert!(markers.is_empty() && links.is_empty(), "{source}");
+        }
+
+        for source in [
+            MARKER,
+            "[jump](#mant-report-0-61)",
+            "[jump](<&#35;mant&#45;report-0-61>)",
+            "[jump][target]\n\n[target]: <#mant\\-report-0-61>",
+        ] {
+            assert!(has_candidates(source), "{source}");
+        }
+    }
+
+    #[test]
+    fn proof_preserves_serialized_href_and_image_alt_as_written() {
+        const ID: &str = "mant-report-0-61";
+        let markdown = format!("![before [inner](#{ID}) after](pic.png) [jump](#{ID} \"Title\")");
+        let mut expected = String::new();
+        pulldown_cmark::html::push_html(
+            &mut expected,
+            markdown_events(&markdown).map(|(event, _)| event),
+        );
+        let (html, anchors, links, probe) = render_probes(&markdown);
+        assert!(anchors.is_empty());
+        assert_eq!(links, [ID]);
+        assert_eq!(html.replace(&format!(" {probe}=l0"), ""), expected);
+        let (_, links, _) = observe_document(&parse_report(html), &probe, &anchors, &links);
+        assert_eq!(links, HashSet::from([ID.into()]));
+    }
 
     #[test]
     fn fragment_observes_fostered_and_reparented_elements_but_not_template_contents() {
