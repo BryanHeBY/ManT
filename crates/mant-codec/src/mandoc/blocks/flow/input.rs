@@ -432,7 +432,7 @@ impl BlockState {
     }
 
     /// Keep a completed, invisible no-fill BODY row when its continued
-    /// source word is followed by an explicit break. NODE_LINE already
+    /// source word is followed by an explicit break. `NODE_LINE` already
     /// closed HEAD; a distinct completed literal receipt must survive the
     /// initial-code-row reading exception (mdoc_term.c:314-317, term.c:475-481).
     pub(in crate::mandoc::blocks) fn preserve_completed_continued_body_row(&mut self) {
