@@ -207,6 +207,12 @@ impl PrefixEdits {
                 .any(|&(position, _, _)| position == cell)
     }
 
+    pub(super) fn clipped_ink_owners(&self) -> impl Iterator<Item = usize> + '_ {
+        self.edits.iter().filter_map(|edit| {
+            (edit.relocation.is_none() && !edit.glyph.scalar.is_whitespace()).then_some(edit.owner)
+        })
+    }
+
     pub(super) fn project(
         &mut self,
         nodes: &mut [Inline],

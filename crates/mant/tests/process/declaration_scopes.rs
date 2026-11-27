@@ -904,6 +904,33 @@ fn an_attached_li_equals_uses_complete_assignment_provenance() {
 }
 
 #[test]
+fn compound_separator_cannot_certify_a_clipped_preceding_atom() {
+    let clipped = r#"Fl v Ns Li "tls\h'-2n'" No / Fl a Ar mode"#;
+    let authored = r#"Fl v Ns Li "tl\h'-1n'" No / Fl a Ar mode"#;
+    let shown = "-vtl/ -a mode";
+    assert_attached_display(clipped, shown);
+    assert_attached_display(authored, shown);
+    assert_eq!(
+        explain_attached_tail(clipped, shown)
+            .counts
+            .direct_entry
+            .total,
+        0
+    );
+    for query in ["-v", "-a"] {
+        assert_eq!(
+            explain_attached_tail(clipped, query)
+                .counts
+                .direct_entry
+                .total,
+            1,
+            "source flag remains independently addressable: {query}"
+        );
+    }
+    check_declaration(authored, shown, &["-v", "-a"], &["-vtl"]);
+}
+
+#[test]
 fn attached_value_rewind_requires_actual_ink_loss() {
     // CVS keeps the old lastcol on rewind. Filling motion padding and
     // a retreat that is never followed by paint do not replace any glyph.

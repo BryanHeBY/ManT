@@ -57,7 +57,9 @@ impl Clone for DeferredHeadProjection {
 }
 
 impl DeferredHeadProjection {
-    pub(super) fn operands(&self) -> Option<Rc<RefCell<super::super::HeadOperandCapture>>> {
+    pub(in crate::mandoc::inline::flow) fn operands(
+        &self,
+    ) -> Option<Rc<RefCell<super::super::HeadOperandCapture>>> {
         self.0.borrow().operands.clone()
     }
 

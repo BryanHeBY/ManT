@@ -1,7 +1,10 @@
 //! Native word input, rewind execution and field-row observations.
 
-use super::super::super::NativeWordAnchor;
+use std::{cell::RefCell, rc::Rc};
+
+use super::super::super::definition::head_presentation::DeferredHeadProjection;
 use super::super::super::field_buffer::{EntryRewind, FieldBuffer, FieldWrite, WordWriteReceipt};
+use super::super::super::{HeadOperandCapture, NativeWordAnchor};
 use super::super::source_blanks::{remove_rewound_glyph, remove_rewound_source_blanks};
 use super::{
     Inline, PendingBoundary, SeparatorDisposition, WordPassProjection, WordProjectionPolicy,
@@ -95,16 +98,45 @@ impl ExecutedWordEntry {
         self.prefix.transfer_positioning_slots(buffer);
     }
 
+    pub(super) fn clipped_ink_owners<'a>(
+        &'a self,
+        earlier: &'a [NativeWordAnchor],
+    ) -> impl Iterator<Item = &'a str> {
+        let rewind = match &self.rewind {
+            EntryRewind::Executed {
+                overwritten_glyphs, ..
+            } => overwritten_glyphs.as_slice(),
+            _ => &[],
+        };
+        self.prefix
+            .clipped_ink_owners()
+            .chain(rewind.iter().filter_map(|glyph| {
+                (!glyph.scalar.is_whitespace())
+                    .then_some(earlier_word_after_cell(earlier, glyph.cell))
+                    .and_then(|index| index.checked_sub(1))
+            }))
+            .map(|index| earlier[index].owner.as_str())
+    }
+
     pub(super) fn project_rewind(
         &mut self,
         nodes: &mut [Inline],
         incoming: &mut Vec<Inline>,
         owner: &str,
         earlier: &[super::super::super::NativeWordAnchor],
-        head: Option<
-            &crate::mandoc::inline::flow::definition::head_presentation::DeferredHeadProjection,
-        >,
+        head: Option<&DeferredHeadProjection>,
+        capture: Option<&Rc<RefCell<HeadOperandCapture>>>,
     ) {
+        // Entry replay can retire an earlier glyph before term_fill sees
+        // either owner. Use the same write map as the reading projection.
+        if let Some(capture) = capture
+            .cloned()
+            .or_else(|| head.and_then(DeferredHeadProjection::operands))
+        {
+            capture
+                .borrow_mut()
+                .record_rewound_ink(self.clipped_ink_owners(earlier), owner);
+        }
         self.prefix.project(nodes, incoming, owner, earlier, head);
         remove_rewound_source_blanks(incoming, owner, &self.receipt.consumed_motion_padding);
         let EntryRewind::Executed {

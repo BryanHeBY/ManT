@@ -84,6 +84,20 @@ impl HeadOperandCapture {
         }
     }
 
+    pub(super) fn record_rewound_ink<'a>(
+        &mut self,
+        clipped: impl Iterator<Item = &'a str>,
+        writer: &str,
+    ) {
+        self.mark_clipped_operands(
+            clipped
+                .filter_map(|owner| owner.strip_prefix(super::INTERNAL_FIELD_WORD)?.parse().ok()),
+            writer
+                .strip_prefix(super::INTERNAL_FIELD_WORD)
+                .and_then(|serial| serial.parse().ok()),
+        );
+    }
+
     pub(super) fn record_accepted_covers(
         &mut self,
         buffer: &super::field_buffer::FieldBuffer,
@@ -192,6 +206,7 @@ impl HeadOperandCapture {
                     | NativeOperandRole::Environment { .. }
                     | NativeOperandRole::LiteralValue
                     | NativeOperandRole::SymbolicText
+                    | NativeOperandRole::PathOperand(_)
                     | NativeOperandRole::LiteralContinuation(_)
                     | NativeOperandRole::Command
                     | NativeOperandRole::ProgramName(_)

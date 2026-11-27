@@ -341,6 +341,7 @@ impl InlineBuilder {
             &anchor_ir_start,
             &definition.field_word_anchors,
             definition.deferred_head_projection.as_ref(),
+            self.head_operand_capture.as_ref(),
         );
         let native_word_start = entry.word_start(native_word_start);
         let receipt = &entry.receipt;
@@ -451,6 +452,7 @@ impl InlineBuilder {
             &anchor_ir_start,
             &self.execution.plain_input.anchors,
             None,
+            self.head_operand_capture.as_ref(),
         );
         entry.transfer_positioning_slots(&mut self.execution.plain_input.buffer);
         let native_word_start = entry.word_start(native_word_start);
