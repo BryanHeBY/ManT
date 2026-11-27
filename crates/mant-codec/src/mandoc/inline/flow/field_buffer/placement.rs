@@ -279,6 +279,18 @@ impl FieldBuffer {
             && self.projection_length(0, self.cells.len()) > 0
     }
 
+    pub(in crate::mandoc::inline::flow) const fn projection_owner(
+        &self,
+    ) -> super::FieldProjectionOwner {
+        self.projection_owner
+    }
+
+    pub(in crate::mandoc::inline::flow) fn can_replay_armed_run_in_head(&self) -> bool {
+        self.projection_owner == super::FieldProjectionOwner::RunInHead
+            && self.backafter_armed
+            && self.has_bounded_run_in_projection()
+    }
+
     /// BODY pre appends at lastcol after HEAD has cleared both backtracking
     /// flags. The marked field is still live, so a later BODY word can
     /// write before the generated U+00A0 (term.c:659, 678–718, 903–929).

@@ -1005,9 +1005,15 @@ impl super::InlineExecutionState {
         let continuing_run_in = self.definition.as_ref().is_some_and(|state| {
             state.run_in_continuation && state.deferred_head_projection.is_some()
         });
+        // BACKAFTER has not yet created a pending glyph, but the next
+        // tight encode1() still appends to the live HEAD (term.c:903–929).
+        let armed_run_in_word = matches!(extend, PrefixExtension::DirectText)
+            && tight
+            && domain == ReplayDomain::DefinitionLine
+            && input.can_replay_armed_run_in_head();
         let leading_marker_extend = matches!(extend, PrefixExtension::LeadingMarker);
         let extend = match extend {
-            PrefixExtension::None => false,
+            PrefixExtension::None | PrefixExtension::DirectText => false,
             PrefixExtension::Word => {
                 !input.has_pending_break_markers()
                     || input.word_scan_deferred()
@@ -1031,6 +1037,7 @@ impl super::InlineExecutionState {
                 EntryCursor::NeedsReplay
             },
             domain,
+            projection_owner: input.projection_owner(),
             automatic_blanks,
             kept_blanks,
             trailing_tab_reference: input.has_live_tab_reference(),
@@ -1045,6 +1052,7 @@ impl super::InlineExecutionState {
             },
             device_tail,
             prefix: (capture_prefix
+                || armed_run_in_word
                 || live_edit
                 || leading_retreat && !input.has_entry_retreat()
                 || filled_line_domain && input.has_replayable_trailing_advance()
@@ -1054,6 +1062,7 @@ impl super::InlineExecutionState {
                         automatic_blanks,
                         kept_blanks,
                         leading_retreat
+                            || armed_run_in_word
                             || leading_marker_extend
                             || continuing_run_in
                             || input.has_retained_word_cursor()

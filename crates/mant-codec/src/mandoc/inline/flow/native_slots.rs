@@ -200,6 +200,7 @@ pub(in crate::mandoc::inline) enum CursorReposition {
 #[derive(Default)]
 pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) domain: ReplayDomain,
+    pub(in crate::mandoc::inline) projection_owner: super::field_buffer::FieldProjectionOwner,
     pub(in crate::mandoc::inline) cursor: EntryCursor,
     pub(in crate::mandoc::inline) automatic_blanks: usize,
     pub(in crate::mandoc::inline) kept_blanks: bool,
@@ -219,6 +220,7 @@ pub(in crate::mandoc::inline) struct MotionEffect {
 #[derive(Clone, Copy)]
 pub(in crate::mandoc::inline) enum PrefixExtension {
     None,
+    DirectText,
     Word,
     FilledWord,
     LeadingMarker,

@@ -207,15 +207,68 @@ fn generated_ap_preserves_native_decoration_and_the_following_glyph() {
         ),
     ] {
         let source = before_definition(control, head, body);
-        let content = load(&source);
-        assert_eq!(description_rows(&content), expected, "{source}");
-        let markdown = mant_codec::encode::render_markdown(&content);
-        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
-        let rows = description_rows(&readback);
-        let rows: Vec<_> = rows
-            .iter()
-            .map(|row| row.strip_prefix("• ").unwrap_or(row))
-            .collect();
-        assert_eq!(rows, expected, "{source}\n{markdown}");
+        assert_reading_rows(&source, expected);
     }
+}
+
+#[test]
+fn generated_ap_consumes_the_live_zero_advance_before_body_motion() {
+    // termp_ap_pre() writes in the current font. Each filled NODE_LINE can
+    // append TABREF before the next word consumes BACKBEFORE, changing which
+    // raw slots a subsequent BODY motion overwrites (mdoc_term.c:314–323,
+    // 1836–1842 and term.c:678–718, 873–878, 903–929).
+    let head = r"J\z Ap No A";
+    let wrapped = "Xo\n.No J\\z\n.Ap\n.No A\n.Xc";
+    let rewind = "\\h'|0n'C\n";
+    let flush = format!(".br\n{rewind}");
+    for font in ["R", "B", "I", "BI"] {
+        let control = format!(".ft {font}\n");
+        for (head, body, expected) in [
+            (head, rewind, &["CA"][..]),
+            (wrapped, rewind, &[if font == "R" { "CA" } else { "A" }]),
+            (head, flush.as_str(), &["JA", "C"]),
+            (head, "C\n", &["JA C"]),
+            (r"Q\z Ap Em YZ", rewind, &["CYZ"]),
+        ] {
+            assert_reading_rows(&before_definition(&control, head, body), expected);
+        }
+    }
+}
+
+#[test]
+fn generated_ap_keeps_the_exact_slots_for_later_writes() {
+    // encode() leaves authored blanks in the buffer, and bufferc() writes
+    // NBRZW and the word-end marker without consuming BACKBEFORE.
+    // HORIZ addresses the resulting raw buffer (term.c:621–622, 659–661,
+    // 678–718, 860–872, 903–969).
+    let origin = "\\h'|0n'C\n";
+    let head = r#"No "J\z" Ap No A"#;
+    for (font, head, body, row) in [
+        ("I", head, "\\h'|3n'C\n", "JC"),
+        ("I", head, "\\h'-5n'C\n", "JC"),
+        ("I", r#"No "J\z" Ap Ap No A"#, origin, "C'A"),
+        ("I", r#"No "J\z " Ap No A"#, "\\h'|1n'C\n", "JCA"),
+        ("I", r#"No "J\z " Ap No "\&A""#, origin, "A"),
+        ("I", "Xo\n.No J\\z\n.Ap No A\n.Xc", origin, "A"),
+        ("BI", r#"No "J\z" Ap No "A\p ""#, "\\h'|3n'C\n", "JC"),
+    ] {
+        assert_reading_rows(
+            &before_definition(&format!(".ft {font}\n"), head, body),
+            &[row],
+        );
+    }
+}
+
+fn assert_reading_rows(source: &str, expected: &[&str]) {
+    let content = load(source);
+    assert_eq!(description_rows(&content), expected, "{source}");
+
+    let markdown = mant_codec::encode::render_markdown(&content);
+    let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+    let rows = description_rows(&readback);
+    let rows: Vec<_> = rows
+        .iter()
+        .map(|row| row.strip_prefix("• ").unwrap_or(row))
+        .collect();
+    assert_eq!(rows, expected, "{source}\n{markdown}");
 }

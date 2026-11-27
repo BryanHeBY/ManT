@@ -329,6 +329,8 @@ impl super::InlineExecutionState {
             PrefixExtension::Word
         } else if has_positive_motion || annotated {
             PrefixExtension::FilledWord
+        } else if matches!(events, [RoffInlineEvent::Text(_)]) {
+            PrefixExtension::DirectText
         } else {
             PrefixExtension::None
         };

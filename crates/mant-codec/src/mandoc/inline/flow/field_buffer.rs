@@ -228,7 +228,7 @@ impl WriteCursor {
 /// The unflushed input field of `term.c::term_flushln()`, kept across the
 /// words of one native field.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-enum FieldProjectionOwner {
+pub(in crate::mandoc::inline) enum FieldProjectionOwner {
     #[default]
     Active,
     RunInHead,

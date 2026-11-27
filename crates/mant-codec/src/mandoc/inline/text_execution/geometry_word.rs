@@ -2,7 +2,7 @@
 
 use super::{Font, FontState, RoffInlineEvent, TextExecutionContext, WordExecution};
 use crate::mandoc::inline::flow::{
-    field_buffer::{FieldCell, FieldWrite},
+    field_buffer::{FieldCell, FieldProjectionOwner, FieldWrite},
     native_slots::{
         CursorReposition, EntryCursor, NativeSlots, PriorSlotEdit, ReplayDomain, ReplayPass,
         SlotEntry,
@@ -138,6 +138,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                     && can_replay_relative_retreat(events, context, has_zero_advance)
                 || has_armed_overlap
                 || tight_word_can_carry_glyph(events, context)
+                || tight_run_in_word_can_replay(events, context)
                 || marker_then_graph_can_replay(events, context)
                 || word_can_consume_projected_blank(events, context)
                 || replayable_device_tail(context, edits, !events.is_empty()))
@@ -718,6 +719,39 @@ fn tight_word_can_carry_glyph(
         })
         && events.iter().all(|event| {
             matches!(event, RoffInlineEvent::Text(value) if value.chars().all(|ch| ch.is_ascii_alphanumeric()))
+        })
+}
+
+/// A tight word uses the existing cursor and BACK flags. In particular,
+/// `termp_ap_pre()` calls `term_word()` in the current font, and `encode1()`
+/// decorates the glyph before moving BACKAFTER to BACKBEFORE. A subsequent
+/// filled source line can append TABREF without settling either flag
+/// (`mdoc_term.c:314–323`, 1836–1842 and `term.c:873–878`, 903–929).
+fn tight_run_in_word_can_replay(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    let [RoffInlineEvent::Text(text)] = events else {
+        return false;
+    };
+    let entry = &context.slot_entry;
+    entry.projection_owner == FieldProjectionOwner::RunInHead
+        && entry.domain == ReplayDomain::DefinitionLine
+        && entry.automatic_blanks == 0
+        && !context.zero_advance.has_annotation_output_owner()
+        && !text.is_empty()
+        && text.bytes().all(|byte| byte.is_ascii_graphic())
+        && entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.cursor_retreat == 0
+                && prefix.backafter == context.zero_advance.is_armed()
+                && (prefix.backafter && !prefix.backbefore
+                    || prefix.backbefore && context.zero_advance.can_project_prior_slot())
+                && prefix
+                    .raw_slot_count()
+                    .saturating_add(text.len().saturating_mul(5))
+                    .saturating_add(usize::from(prefix.backbefore))
+                    <= prefix.slot_limit
         })
 }
 
