@@ -252,3 +252,25 @@ fn inset_run_in_separator_reads_at_its_accepted_position() {
         },
     );
 }
+
+#[test]
+fn inset_absolute_body_replays_a_decorated_combining_head() {
+    // term.c::encode1() writes underscore and backspace for every codepoint
+    // above 127 even when its display width is zero. mdoc_term.c::termp_it_pre()
+    // writes the inset separator before ESCAPE_HORIZ revisits column zero.
+    for suffix in ["", "\\p "] {
+        let source = format!(
+            ".Dd November 26, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd observer\n.Sh DESCRIPTION\n.Bl -inset\n.It No \"\\fIa\u{301}\\fP{suffix}\"\n\\h'|0n'e\u{301} i\u{301}\n.El\n.Sh ENDTEST\nDone.\n"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, &source);
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|row| row.trim())
+            .filter(|row| !row.is_empty())
+            .collect();
+        assert_eq!(rows, ["e\u{301}ai\u{301}\u{301}"], "{source}\n{rendered}");
+    }
+}

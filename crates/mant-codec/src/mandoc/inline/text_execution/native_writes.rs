@@ -18,7 +18,7 @@ impl AppendedFonts {
     pub(super) fn record(&mut self, writes: &[FieldWrite], font: super::Font) -> bool {
         for write in writes {
             match write {
-                FieldWrite::Cell(cell) if decorates_single_column(cell) => {
+                FieldWrite::Cell(cell) if decorates_at_most_one_column(cell) => {
                     if self.pending {
                         return false;
                     }
@@ -147,7 +147,7 @@ pub(in crate::mandoc::inline) fn retain_pending_run_in_head(
     }
 }
 
-/// Prove a final single-column decorated run (`encode1()`, `term.c:900-925`).
+/// Prove a final bounded-width decorated run (`encode1()`, `term.c:900-925`).
 /// Buffered `ESCAPE_SKIPCHAR` / `ESCAPE_NOSPACE` / zero-width `ESCAPE_HORIZ`
 /// (`term.c:662-682, 773-775`) and font/break controls (`term.c:640-661, 800`)
 /// do not alter that decoration until a real cursor retreat executes.
@@ -156,7 +156,7 @@ pub(super) fn proved_decorated_tail(
     writes: &[crate::mandoc::inline::flow::field_buffer::FieldWrite],
     font: super::Font,
 ) -> Option<(usize, super::Font)> {
-    // A styled append proves the raw copies in its final one-column run.
+    // A styled append proves the raw copies in its final bounded-width run.
     // `term_word()` can buffer marker and BACKAFTER controls before
     // that run. They do not change the decoration written by encode1.
     // Actual cursor edits require the full placement path.
@@ -194,7 +194,7 @@ pub(super) fn proved_decorated_tail(
         match write {
             FieldWrite::CancelBackafter => canceled = true,
             FieldWrite::ArmBackafter if canceled => {}
-            FieldWrite::Cell(cell) if decorates_single_column(cell) => {
+            FieldWrite::Cell(cell) if decorates_at_most_one_column(cell) => {
                 canceled = false;
                 count += 1;
             }
@@ -219,12 +219,13 @@ pub(super) fn writes_decorated_graph(writes: &[FieldWrite], font: super::Font) -
         })
 }
 
-fn decorates_single_column(cell: &FieldCell) -> bool {
+fn decorates_at_most_one_column(cell: &FieldCell) -> bool {
     // term.c::encode1() uses the current font for ASCII graphs and
-    // codepoints above 127. The measured UTF-8 width bounds the row edit.
+    // codepoints above 127, including zero-width combining marks. The
+    // UTF-8 width bounds the row edit, not the raw encoded slot count.
     matches!(
         cell,
-        FieldCell::Graph { text, width: 1 } if uses_native_font(*text)
+        FieldCell::Graph { text, width: 0..=1 } if uses_native_font(*text)
     )
 }
 
@@ -329,5 +330,19 @@ pub(in crate::mandoc::inline) fn record_native_event(
             FieldWrite::append_literal(writes, "<>");
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod decorated_append_tests {
+    use super::*;
+
+    #[test]
+    fn decorated_marks_keep_slots_without_admitting_wide_graphs() {
+        for (text, width, proved) in [('a', 1, true), ('\u{301}', 0, true), ('中', 2, false)] {
+            let writes = [FieldWrite::Cell(FieldCell::Graph { text, width })];
+            let mut append = AppendedFonts::default();
+            assert_eq!(append.record(&writes, super::super::Font::Emphasis), proved);
+        }
     }
 }
