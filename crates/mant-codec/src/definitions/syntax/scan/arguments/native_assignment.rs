@@ -364,12 +364,14 @@ impl AssignmentSyntax {
             }
             Role::Command => self.literal(value, scoped_literal(scopes.last())),
             Role::LiteralValue => self.literal(value, Literal::Explicit),
-            Role::Literal | Role::LiteralContinuation(_) | Role::Description => {
-                self.literal(value, Literal::Unmarked)
-            }
+            // Punctuation protected from alias splitting is still the
+            // author's literal text when proving an assignment value.
+            Role::Literal
+            | Role::LiteralContinuation(_)
+            | Role::LiteralPunctuation
+            | Role::Description => self.literal(value, Literal::Unmarked),
             Role::Argument
             | Role::LiteralDelimiter { .. }
-            | Role::LiteralPunctuation
             | Role::PipeDelimiter(_)
             | Role::SearchSign
             | Role::SearchOpen { .. }

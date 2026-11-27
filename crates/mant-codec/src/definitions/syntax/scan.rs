@@ -470,7 +470,9 @@ impl<'a> Scanner<'a> {
         let foreign_tail = native
             && self.current().is_some_and(|ch| !ch.is_whitespace())
             && self.view.independent_option_suffix(self.cursor);
-        self.unproved_form |= foreign_tail;
+        // A separately executed Pa is an attached path argument, while
+        // other independent suffixes do not prove a complete option form.
+        self.unproved_form |= foreign_tail && !self.view.native_argument_starts(self.cursor);
         if begins_argument || foreign_tail {
             self.begin_argument();
         }

@@ -2,7 +2,7 @@
 
 use crate::process_support::run_text_input;
 use mant_ir::{Block, inline_plain_text};
-use mant_protocol::{EvidenceClass, ExplanationContent, QueryExplanation};
+use mant_protocol::{EvidenceBasis, EvidenceClass, ExplanationContent, QueryExplanation};
 
 const HEADER: &str = ".Dd November 19, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd sample\n.Sh OPTIONS\n.Bl -tag -width Ds\n";
 
@@ -217,4 +217,235 @@ fn check(head: &str, form: &str, names: &[&str]) {
             }
         }
     }
+}
+
+#[test]
+fn independent_separators_and_attached_paths_keep_both_names_and_forms() {
+    // in_line() closes Li/Sy before the next Fl; termp_fl_pre supplies
+    // the dash, and mdoc_html.c keeps Pa and Ar outside the flag.
+    for role in ["No", "Li", "Sy"] {
+        for (separator, printed) in [("/", "/"), (r"\&,", ","), (r"\&|", "|")] {
+            check_declaration(
+                &format!("Fl x {role} {separator} Fl Fl long"),
+                &format!("-x {printed} --long"),
+                &["-x", "--long"],
+                &["--fake"],
+            );
+        }
+        for value in [
+            "data / --fake",
+            "/ --fake",
+            "data , --fake",
+            "data | --fake",
+        ] {
+            check_declaration(
+                &format!(r#"Fl x Ar file {role} "{value}""#),
+                &format!("-x file {value}"),
+                &["-x"],
+                &["--fake"],
+            );
+        }
+    }
+    for role in ["Pa", "Ar"] {
+        check_declaration(
+            &format!("Fl x Ar file No / Fl y Ns {role} path"),
+            "-x file / -ypath",
+            &["-x", "-y"],
+            &["--fake"],
+        );
+    }
+}
+
+#[test]
+fn quoted_native_assignment_retains_the_complete_indexed_form() {
+    // Qq/Dq print their quotes around the complete No or Li TEXT child.
+    for (head, form) in [
+        (r#"Fl x Ns = Ns Qq No "dir/ name""#, "-x=\"dir/ name\""),
+        (r#"Fl x Ns = Ns Dq No "dir/ name""#, "-x=“dir/ name”"),
+        (r#"Fl x Ns = Ns Qq Li "dir/ name""#, "-x=\"dir/ name\""),
+    ] {
+        check_declaration(head, form, &["-x"], &["--fake"]);
+    }
+}
+
+fn check_declaration(head: &str, form: &str, names: &[&str], absent: &[&str]) {
+    let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
+    let mut owner_path = None;
+    for query in names
+        .iter()
+        .copied()
+        .chain([form])
+        .chain(absent.iter().copied())
+    {
+        let flag = format!("--explain={query}");
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "json",
+                "--compact",
+                &flag,
+            ],
+            &source,
+        );
+        assert!(output.status.success(), "{head}: {query}");
+        let reply: QueryExplanation = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            reply.counts.direct_entry.total,
+            u32::from(!absent.contains(&query)),
+            "{head}: {query}"
+        );
+        if absent.contains(&query) {
+            continue;
+        }
+        let evidence = reply
+            .evidence
+            .iter()
+            .find(|e| e.class == EvidenceClass::DirectEntry)
+            .unwrap();
+        let path = evidence.outline.path().to_string();
+        assert_eq!(owner_path.get_or_insert(path.clone()), &path, "{head}");
+        assert_eq!(evidence.source.unwrap().line, 9, "{head}");
+        assert!(
+            evidence.bases.iter().any(|basis| match basis {
+                EvidenceBasis::Name { matches } if query != form => matches
+                    .iter()
+                    .any(|m| m.name == query && !m.occurrences.is_empty()),
+                EvidenceBasis::Form { matches } if query == form => matches
+                    .iter()
+                    .any(|m| m.text == form && !m.occurrences.is_empty()),
+                _ => false,
+            }),
+            "missing matching basis: {head}: {query}"
+        );
+        let entry = evidence.entry.as_ref().unwrap();
+        assert_eq!(entry.names, names, "{head}");
+        assert_eq!(
+            entry
+                .forms
+                .iter()
+                .map(|f| inline_plain_text(f))
+                .collect::<Vec<_>>(),
+            [form],
+            "{head}"
+        );
+        let Some(ExplanationContent::Entry { block }) = &evidence.content else {
+            panic!("missing owner: {head}")
+        };
+        let Block::DefinitionList { items, .. } = block else {
+            panic!("wrong owner: {head}")
+        };
+        assert_eq!(inline_plain_text(&items[0].terms[0]), form, "{head}");
+        let [Block::Paragraph { children, .. }] = items[0].description.as_slice() else {
+            panic!("missing body: {head}")
+        };
+        assert_eq!(inline_plain_text(children), "Owner proof.", "{head}");
+        check_positions(evidence, block, form, names, query, head);
+    }
+    check_node(&source, &owner_path.unwrap(), form, head);
+}
+
+fn check_node(source: &str, path: &str, form: &str, head: &str) {
+    let node_flag = format!("--node={path}");
+    let output = run_text_input(
+        &[
+            "--input",
+            "-",
+            "--input-format",
+            "roff",
+            "--format",
+            "json",
+            "--compact",
+            &node_flag,
+        ],
+        source,
+    );
+    assert!(output.status.success(), "{head}");
+    let reply: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let block: Block = serde_json::from_value(reply["selections"][0]["entry"].clone()).unwrap();
+    let Block::DefinitionList { items, .. } = block else {
+        panic!("wrong node: {head}")
+    };
+    assert_eq!(inline_plain_text(&items[0].terms[0]), form, "{head}");
+    let [Block::Paragraph { children, .. }] = items[0].description.as_slice() else {
+        panic!("missing node body: {head}")
+    };
+    assert_eq!(inline_plain_text(children), "Owner proof.", "{head}");
+}
+
+fn check_positions(
+    evidence: &mant_protocol::ExplanationEvidence,
+    block: &Block,
+    form: &str,
+    names: &[&str],
+    query: &str,
+    head: &str,
+) {
+    let entry = evidence.entry.as_ref().unwrap();
+    for basis in &evidence.bases {
+        match basis {
+            EvidenceBasis::Name { matches } if query != form => {
+                for matched in matches.iter().filter(|matched| matched.name == query) {
+                    let binding = entry
+                        .name_bindings
+                        .iter()
+                        .find(|binding| names[binding.name_index as usize] == query)
+                        .unwrap();
+                    assert_eq!(matched.occurrences, binding.occurrences, "{head}: {query}");
+                }
+            }
+            EvidenceBasis::Form { matches } if query == form => {
+                for matched in matches.iter().filter(|matched| matched.text == form) {
+                    for occurrence in &matched.occurrences {
+                        check_occurrence(occurrence, block, form, form, head);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    assert_eq!(entry.name_bindings.len(), names.len(), "{head}");
+    for binding in &entry.name_bindings {
+        let name = names[binding.name_index as usize];
+        assert!(!binding.occurrences.is_empty(), "{head}: {name}");
+        for occurrence in &binding.occurrences {
+            check_occurrence(occurrence, block, form, name, head);
+        }
+    }
+}
+
+fn check_occurrence(
+    occurrence: &mant_protocol::ExplanationOccurrence,
+    block: &Block,
+    form: &str,
+    expected: &str,
+    head: &str,
+) {
+    let form_text: String = occurrence
+        .forms
+        .iter()
+        .flat_map(|range| {
+            assert_eq!(range.form_index, 0);
+            form.chars()
+                .skip(range.start_char as usize)
+                .take((range.end_char - range.start_char) as usize)
+        })
+        .collect();
+    let content_text: String = occurrence
+        .content
+        .iter()
+        .map(|range| {
+            let text = range.resolve(block).unwrap().safe_text();
+            let chars = range.char_range();
+            text.chars()
+                .skip(chars.start)
+                .take(chars.len())
+                .collect::<String>()
+        })
+        .collect();
+    assert_eq!(form_text, expected, "{head}");
+    assert_eq!(content_text, expected, "{head}");
 }

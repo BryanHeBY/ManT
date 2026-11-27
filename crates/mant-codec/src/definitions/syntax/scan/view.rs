@@ -204,9 +204,13 @@ impl<'a> HeadView<'a> {
         self.operand(offset)
             .is_some_and(|operand| match operand.role {
                 #[cfg(feature = "roff")]
-                NativeOperandRole::LiteralPunctuation
-                | NativeOperandRole::LiteralValue
-                | NativeOperandRole::SymbolicText => true,
+                NativeOperandRole::LiteralPunctuation => true,
+                #[cfg(feature = "roff")]
+                NativeOperandRole::LiteralValue | NativeOperandRole::SymbolicText => {
+                    // A whole punctuation operand can separate declarations;
+                    // punctuation within a value remains part of that value.
+                    !matches!(self.text[operand.bytes.clone()].trim(), "," | "|" | "/")
+                }
                 #[cfg(feature = "roff")]
                 NativeOperandRole::Argument => {
                     // A separator scalar replayed inside a quoted native
@@ -238,7 +242,10 @@ impl<'a> HeadView<'a> {
         #[cfg(feature = "roff")]
         return self.operand(offset).is_some_and(|operand| {
             operand.bytes.start == offset
-                && matches!(operand.role, NativeOperandRole::Placeholder { .. })
+                && matches!(
+                    operand.role,
+                    NativeOperandRole::Placeholder { .. } | NativeOperandRole::PathOperand(_)
+                )
         });
         #[cfg(not(feature = "roff"))]
         {
