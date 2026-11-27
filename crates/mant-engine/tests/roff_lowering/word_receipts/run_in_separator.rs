@@ -338,3 +338,31 @@ fn tight_diagnostic_head_keeps_its_proved_prefix_until_body_rewind() {
         assert_eq!(rows, expected, "{source}\n{rendered}");
     }
 }
+
+#[test]
+fn trailing_zero_width_cells_keep_the_pending_body_graph_addressable() {
+    // After the generated inset separator, B consumes BACKBEFORE in
+    // term.c::encode1(). ESCAPE_IGNORE then appends ASCII_NBRZW with
+    // bufferc(), which must not fence off the field before the next HORIZ.
+    let cases: &[(&str, &[&str])] = &[
+        ("B", &["C B"]),
+        (r"B\&", &["C B"]),
+        (r"B\&\&", &["C B"]),
+        ("B\\&\n.br", &["JA", "B", "C D"]),
+    ];
+    for &(consumer, expected) in cases {
+        let source = format!(
+            ".Dd November 26, 2026\n.Dt FIELDPROBE 1\n.Os\n.Sh NAME\n.Nm fieldprobe\n.Nd compare active fields\n.Sh DESCRIPTION\n.ft BI\n.Bl -inset\n.It No \"J\\fIA\\fP\\p\\z \"\n{consumer}\n\\h'|0n'C D\n.El\n.Sh ENDTEST\nDone.\n"
+        );
+        let content =
+            json_string_roundtrip(&mant_loader::load_roff_bytes(source.as_bytes()).unwrap());
+        let rendered = mant_render::render_query_man(&content);
+        let rows = description_rows(&rendered, &source);
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|row| row.trim())
+            .filter(|row| !row.is_empty())
+            .collect();
+        assert_eq!(rows, expected, "{source}\n{rendered}");
+    }
+}

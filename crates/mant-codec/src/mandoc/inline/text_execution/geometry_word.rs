@@ -671,9 +671,18 @@ fn word_can_consume_projected_blank(
     // encode1() consumes the generated NBSP's BACKBEFORE even for a
     // plain text operand (term.c:903-929). Keep the resulting backline
     // and decoration addressable to later words in the same field.
-    let [RoffInlineEvent::Text(text)] = events else {
+    let [RoffInlineEvent::Text(text), tail @ ..] = events else {
         return false;
     };
+    // ESCAPE_IGNORE appends one ASCII_NBRZW using bufferc(), without
+    // consuming either back flag (term.c:799–801, 860–873). Admit it
+    // only after the graph word has performed the proved retreat.
+    if !tail
+        .iter()
+        .all(|event| matches!(event, RoffInlineEvent::ZeroWidthGlyph))
+    {
+        return false;
+    }
     context.zero_advance.can_replay_projected_prior_slot()
         && context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
             prefix.start == 0
@@ -681,6 +690,7 @@ fn word_can_consume_projected_blank(
                 && prefix
                     .raw_slot_count()
                     .saturating_add(text.len().saturating_mul(5))
+                    .saturating_add(tail.len())
                     .saturating_add(1)
                     <= prefix.slot_limit
         })
