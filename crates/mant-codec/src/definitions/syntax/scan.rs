@@ -774,6 +774,11 @@ impl<'a> Scanner<'a> {
                 self.separator = None;
             }
         }
+        self.observe_argument_glyph(character, parameter);
+        self.cursor = next_offset;
+    }
+
+    fn observe_argument_glyph(&mut self, character: char, parameter: bool) {
         let top_level = self.lexical.is_top_level();
         let complete_group = self.observe_argument_character(character);
         if complete_group {
@@ -789,7 +794,6 @@ impl<'a> Scanner<'a> {
             },
             parameter,
         );
-        self.cursor = next_offset;
     }
 
     fn attached_path_ends(&self, offset: usize) -> bool {
