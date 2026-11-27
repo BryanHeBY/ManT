@@ -1036,3 +1036,58 @@ fn an_independently_authored_slash_can_touch_a_complete_path() {
         0
     );
 }
+
+#[test]
+fn complete_owned_slash_separates_an_attached_native_path() {
+    // CVS handles the quoted characters in term_word(): the microscopic
+    // move rounds to zero columns and the one-column move consumes the
+    // preceding blank, not the Pa ink. termp_li_pre styles its own word.
+    for (head, form) in [
+        (
+            r#"Fl v Ns Pa a/b Ns No "\h'-1u'/" Fl a Ar mode"#,
+            "-va/b/ -a mode",
+        ),
+        (
+            r#"Fl v Ns Pa a/b No "\h'-1n'/" Fl a Ar mode"#,
+            "-va/b/ -a mode",
+        ),
+        ("Fl v Ns Pa a/b Ns Li / Ns Fl a Ar mode", "-va/b/-a mode"),
+        (
+            r#"Fl v Ns Pa a/b Ns No "\h'-1u'/" Ns Fl a Ar mode"#,
+            "-va/b/-a mode",
+        ),
+        (
+            r#"Fl v Ns Pa a/b Ns Li "\h'-1u'/" Ns Fl a Ar mode"#,
+            "-va/b/-a mode",
+        ),
+    ] {
+        assert_attached_display(head, form);
+        check_declaration(head, form, &["-v", "-a"], &["-va/b"]);
+    }
+
+    for (head, form) in [
+        (
+            r#"Fl v Ns Pa a/b No "\h'-2n'/" Fl a Ar mode"#,
+            "-va// -a mode",
+        ),
+        (
+            "Fl v Ns Pa a Ns No /b Ns Li / Ns Fl a Ar mode",
+            "-va/b/-a mode",
+        ),
+        (
+            r#"Fl v Ns Pa a/b Ns Li "x\h'-1n'/" Ns Fl a Ar mode"#,
+            "-va/b/-a mode",
+        ),
+        (
+            r#"Fl v Ns Pa a/b Ns No "x\h'-1n'/" Ns Fl a Ar mode"#,
+            "-va/b/-a mode",
+        ),
+    ] {
+        assert_attached_display(head, form);
+        assert_eq!(
+            explain_attached_tail(head, form).counts.direct_entry.total,
+            0,
+            "{head}"
+        );
+    }
+}

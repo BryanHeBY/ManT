@@ -230,8 +230,12 @@ impl<'a> HeadView<'a> {
     pub(super) fn independent_slash(&self, offset: usize) -> bool {
         #[cfg(feature = "roff")]
         return self.operand(offset).is_some_and(|operand| {
-            matches!(operand.role, NativeOperandRole::LiteralContinuation(_))
-                && self.text[operand.bytes.clone()].trim() == "/"
+            // No supplies a continuation; Li supplies a literal value.
+            // Both must still own the entire surviving slash spelling.
+            matches!(
+                operand.role,
+                NativeOperandRole::LiteralContinuation(_) | NativeOperandRole::LiteralValue
+            ) && self.text[operand.bytes.clone()].trim() == "/"
         });
         #[cfg(not(feature = "roff"))]
         {

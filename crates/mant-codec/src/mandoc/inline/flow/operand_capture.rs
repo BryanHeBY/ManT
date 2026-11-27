@@ -452,10 +452,14 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
     // CVS term_word() writes a zero-width cell for the ESCAPE_IGNORE
     // produced by roff_escape.c for color and point-size escapes. Those
     // cells and font controls do not change one No operand's spelling.
+    // ESCAPE_HORIZ changes the cursor or inserts padding, not authored ink.
+    // This only identifies separator candidates: accepted word receipts
+    // still determine the visible spelling and invalidate covered ink.
     decoded.events.iter().flat_map(|event| match event {
         RoffInlineEvent::Font(_)
         | RoffInlineEvent::PreviousFont
         | RoffInlineEvent::ZeroWidthGlyph
+        | RoffInlineEvent::HorizontalMotion { .. }
         | RoffInlineEvent::Presentation {
             kind: PresentationKind::Color | PresentationKind::PointSize,
             ..
