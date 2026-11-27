@@ -326,7 +326,14 @@ fn execute_inline_macro_handler(
         name if controls::operand_control(name).is_some() => {}
         Some(Mdoc(MdocMacro::Ap)) => {
             builder.tighten_next_boundary();
-            builder.append_text("'");
+            if builder.run_in_head_word_proof.is_some() {
+                // termp_ap_pre() writes a real word in the inherited font
+                // (mdoc_term.c:1836-1842). Its decoration remains part of
+                // the live HEAD buffer a later BODY can address.
+                super::word_input::append_normalized_word(builder, "'");
+            } else {
+                builder.append_text("'");
+            }
             builder.tighten_next_boundary();
         }
         _ => scopes::append(builder, node, default_name),

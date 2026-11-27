@@ -141,12 +141,60 @@ fn appends_marked_ink_to_scoped_tab_field(
             }))
 }
 
+/// The paragraph marker and trailing authored SP are real native slots;
+/// neither can commit a styled HEAD until `term_fill()` sees the BODY bytes
+/// (term.c:659-661, 281-306). Retain the full decorated prefix for a later
+/// absolute motion, without accepting a partial or unbounded field.
+fn retains_styled_definition_marker_tail(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+    fresh: bool,
+) -> bool {
+    let entry = &context.slot_entry;
+    if entry.domain != ReplayDomain::DefinitionLine
+        || !decorated_word(events, context.font.current)
+        || context.zero_advance.is_armed()
+        || context.zero_advance.has_annotation_output_owner()
+    {
+        return false;
+    }
+    let [
+        RoffInlineEvent::Text(ink),
+        RoffInlineEvent::LineBreak,
+        RoffInlineEvent::Text(blanks),
+    ] = events
+    else {
+        return false;
+    };
+    if ink.is_empty()
+        || !ink.bytes().all(|byte| byte.is_ascii_graphic())
+        || blanks.is_empty()
+        || !blanks.bytes().all(|byte| byte == b' ')
+    {
+        return false;
+    }
+    let incoming = ink.len().saturating_mul(5).saturating_add(1 + blanks.len());
+    let cap = crate::mandoc::inline::flow::field_buffer::MAX_EDITABLE_APPEND_CELLS;
+    if fresh {
+        incoming <= cap
+    } else {
+        entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.cursor_retreat == 0
+                && !prefix.backbefore
+                && !prefix.backafter
+                && prefix.raw_slot_count().saturating_add(incoming) <= cap
+        })
+    }
+}
+
 fn awaits_bounded_marker_flush(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
     fresh: bool,
 ) -> bool {
     appends_marked_advance(events, context)
+        || retains_styled_definition_marker_tail(events, context, fresh)
         || appends_marked_ink_to_scoped_tab_field(events, context)
         || retreats_within_marked_append(events, context)
         || marked_operands::bounded_literal_control_append(events, context)

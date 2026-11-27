@@ -168,3 +168,54 @@ fn a_marked_successor_replays_both_live_retreats() {
         assert_eq!(painted, "CZ", "{source}");
     }
 }
+
+fn before_definition(control: &str, head: &str, body: &str) -> String {
+    source("inset", head, body).replacen(".Bl -inset\n", &format!("{control}.Bl -inset\n"), 1)
+}
+
+#[test]
+fn inherited_head_font_leaves_a_marker_and_trailing_space_editable() {
+    // mandoc receives the decorated A then LF/SP; BODY's absolute HORIZ
+    // still addresses those bytes. R and BI previously reached this same
+    // native result; B and I must not commit A before the rewind.
+    for font in ["R", "B", "I", "BI"] {
+        let control = format!(".ft {font}\n");
+        let head = r#""A\p ""#;
+        let open = before_definition(&control, head, "\\h'|0n'C\n");
+        assert_eq!(description_rows(&load(&open)), ["C"], "{open}");
+        let closed = before_definition(&control, head, ".br\n\\h'|0n'C\n");
+        assert_eq!(description_rows(&load(&closed)), ["A", "", "C"], "{closed}");
+    }
+}
+
+#[test]
+fn generated_ap_preserves_native_decoration_and_the_following_glyph() {
+    // A styled apostrophe occupies raw native slots, just like authored
+    // glyphs. A rewind into the preceding J must not erase the apostrophe
+    // or the following A in JSON or either public reading projection.
+    for (control, head, body, expected) in [
+        (".ft I\n", "No J Ap No A", "\\h'|0n'C\n", &["C'A"][..]),
+        (".ft I\n", "No J Ap No AK", "\\h'|0n'C\n", &["C'AK"]),
+        (".ft I\n", "No J Ap No A", ".br\n\\h'|0n'C\n", &["J'A", "C"]),
+        (".ft I\n", "No J Op A", "\\h'|0n'C\n", &["[A]"]),
+        (".ft I\n", "No J Pq A", "\\h'|0n'C\n", &["(A)"]),
+        (
+            ".Sm off\n.ft BI\n",
+            r#"No J Ap No "A\p ""#,
+            "\\h'|0n'C D\n",
+            &["C'D"],
+        ),
+    ] {
+        let source = before_definition(control, head, body);
+        let content = load(&source);
+        assert_eq!(description_rows(&content), expected, "{source}");
+        let markdown = mant_codec::encode::render_markdown(&content);
+        let readback = mant_loader::load_markdown_text(&markdown, None).unwrap();
+        let rows = description_rows(&readback);
+        let rows: Vec<_> = rows
+            .iter()
+            .map(|row| row.strip_prefix("• ").unwrap_or(row))
+            .collect();
+        assert_eq!(rows, expected, "{source}\n{markdown}");
+    }
+}
