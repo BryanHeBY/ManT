@@ -152,3 +152,19 @@ fn generated_separator_controls_keep_their_accepted_rows() {
         "{flushed}"
     );
 }
+
+#[test]
+fn a_marked_successor_replays_both_live_retreats() {
+    // The devices differ on wrapping, but on both the Z consumes the
+    // preceding write position and the former J does not survive.
+    let head = r#"Em "C\p J" No "\h'-5n'\z""#;
+    for marker in [r"\p\z", r"\p\p\z"] {
+        let source = source("inset", head, &format!(".No \"{marker}\" Ns No \"\\pZ\"\n"));
+        let painted: String = description_rows(&load(&source))
+            .iter()
+            .flat_map(|row| row.chars())
+            .filter(|ch| !ch.is_whitespace())
+            .collect();
+        assert_eq!(painted, "CZ", "{source}");
+    }
+}

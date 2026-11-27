@@ -138,6 +138,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                     && can_replay_relative_retreat(events, context, has_zero_advance)
                 || has_armed_overlap
                 || tight_word_can_carry_glyph(events, context)
+                || marker_then_graph_can_replay(events, context)
                 || word_can_consume_projected_blank(events, context)
                 || replayable_device_tail(context, edits, !events.is_empty()))
 }
@@ -206,6 +207,33 @@ fn decorated_word(events: &[RoffInlineEvent], entry_font: RoffFont) -> bool {
         )
 }
 
+/// An incoming marker is a write without a retreat; the following graph
+/// consumes BACKBEFORE and turns the live BACKAFTER into the next retreat.
+/// Replay only with the exact pending slot and a bounded native field.
+fn marker_then_graph_can_replay(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    let [RoffInlineEvent::LineBreak, RoffInlineEvent::Text(text)] = events else {
+        return false;
+    };
+    is_filled_line_domain(context.slot_entry.domain)
+        && context.zero_advance.can_replay_projected_prior_slot()
+        && !text.is_empty()
+        && text.bytes().all(|byte| byte.is_ascii_graphic())
+        && context.slot_entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.backbefore
+                && prefix.backafter
+                && prefix.pending_cell.is_some()
+                && prefix
+                    .raw_slot_count()
+                    .saturating_add(text.len().saturating_mul(5))
+                    .saturating_add(1)
+                    <= prefix.slot_limit
+        })
+}
+
 fn can_place_word(
     events: &[RoffInlineEvent],
     context: &TextExecutionContext<'_>,
@@ -222,6 +250,7 @@ fn can_place_word(
         && context.zero_advance.is_armed()
         && context.zero_advance.has_buffered_glyph()
         && !controls.cancels_arm()
+        && !marker_then_graph_can_replay(events, context)
         && !(context
             .slot_entry
             .prefix
