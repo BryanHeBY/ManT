@@ -287,7 +287,7 @@ impl BlockState {
     /// The native request can close a row whose glyphs belong to HEAD.
     /// Its BODY owner consumes that same row once, before another word
     /// writes cells; request dispatch must not bypass this ownership seam.
-    pub(super) fn settle_definition_line_boundary(&mut self) {
+    pub(in crate::mandoc::blocks) fn settle_definition_line_boundary(&mut self) {
         if self.formatter.definition_head_row_pending() && self.consume_active_invisible_head_row()
         {
             self.formatter.consume_definition_head_row();

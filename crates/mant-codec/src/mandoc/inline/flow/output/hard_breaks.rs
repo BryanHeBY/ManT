@@ -161,8 +161,20 @@ impl InlineBuilder {
         // its request alive across the boundary (term.c:836-838), so it
         // still settles through the ordinary flush.
         self.flush_zero_advance();
+        // An unmodeled rewind has no independent pass proving an empty
+        // device row. If the HEAD is still detached, its synthetic tail
+        // closes that pending row; the block owner already represents it.
+        let unproved_head_close = self.external_head_row_pending
+            && unprinted_field_tail
+            && captured.is_some_and(|field| {
+                matches!(
+                    field.receipt,
+                    super::super::field_buffer::FlushReceipt::UnmodeledRewind
+                )
+            });
         self.external_head_row_pending = false;
-        let completed_unprinted_row = !closes_preceding_printed_row
+        let completed_unprinted_row = !unproved_head_close
+            && !closes_preceding_printed_row
             && (plain_flush.rejected()
                 || unprinted_field_tail
                 || plain_flush.closes_unprinted_row()

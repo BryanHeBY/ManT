@@ -96,3 +96,35 @@ fn public_json_places_the_generated_inset_blank_after_the_body_break() {
     assert!(matches!(children.first(), Some(Inline::LineBreak {})));
     assert_eq!(inline_plain_text(children), "\n tail text");
 }
+
+#[test]
+fn rejected_unmodeled_tail_does_not_reopen_its_detached_head_row() {
+    // Pristine -Tascii and -Tutf8 both close the detached C D row at br,
+    // without any new empty row before Y. The fallback has no accepted
+    // native loop row independent of the existing HEAD projection.
+    let source = r#".Bl -inset
+.It Em "\X'tty: link https://k.test'C\X'tty: link' D\p" Sy "\h'-6n'\&"
+.No "\p"
+.br
+.No "\h'-1n'Y"
+.El
+"#;
+    assert_eq!(rows(source), ["C D", "Y"]);
+}
+
+#[test]
+fn paragraph_spacing_keeps_an_independent_accepted_blank_before_its_own_row() {
+    // term_fill ends the authored HEAD pass; term_flushln's tail closes
+    // the already-open empty row; term_vspace then emits a separate row.
+    // The two controls differ in native flag side effects, not blank count.
+    for request in [".Pp", ".sp 1"] {
+        let source = format!(".Bl -inset\n.It \"A\\p \\p \"\n{request}\nC\n.El\n");
+        assert_eq!(rows(&source), ["A", "", "", "C"], "{source}");
+        let source = format!(".Bl -inset\n.It A\n{request}\nC\n.El\n");
+        assert_eq!(rows(&source), ["A", "", "C"], "{source}");
+    }
+    assert_eq!(
+        rows(".Bl -inset\n.It \"A\\p \\p \"\n.br\nC\n.El\n"),
+        ["A", "", "C"]
+    );
+}

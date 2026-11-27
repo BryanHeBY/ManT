@@ -75,8 +75,11 @@ impl super::BlockLowerer<'_, '_> {
             return false;
         }
         // termp_pp_pre() calls term_vspace(), beginning with term_newln.
-        // Consume the live field before either output owner is drained.
-        self.state.finish_native_structural_row();
+        // Settle the detached HEAD on that close, independently of any
+        // completed empty pass that the paragraph owner still must deliver.
+        if self.state.finish_native_structural_row() {
+            self.state.settle_definition_line_boundary();
+        }
         self.state.flush_preformatted();
         let lines = self.state.resolve_vertical_space(1);
         self.state
