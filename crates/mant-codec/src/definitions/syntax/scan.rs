@@ -166,7 +166,29 @@ struct Scanner<'a> {
     admission: OwnerAdmission,
     separator: Option<usize>,
     placeholder: Placeholder,
-    unproved_form: bool,
+    form_evidence: FormEvidence,
+}
+
+#[derive(Default, PartialEq, Eq)]
+enum FormEvidence {
+    #[default]
+    Proved,
+    AttachedPath,
+    Unproved,
+}
+
+impl FormEvidence {
+    fn reject_if(&mut self, reject: bool) {
+        if reject {
+            *self = Self::Unproved;
+        }
+    }
+
+    fn attach_path(&mut self) {
+        if *self == Self::Proved {
+            *self = Self::AttachedPath;
+        }
+    }
 }
 
 struct Argument {
@@ -191,7 +213,7 @@ impl<'a> Scanner<'a> {
             admission: OwnerAdmission::Proved,
             separator: None,
             placeholder: Placeholder::default(),
-            unproved_form: false,
+            form_evidence: FormEvidence::default(),
         }
     }
 
@@ -250,7 +272,12 @@ impl<'a> Scanner<'a> {
             #[cfg(test)]
             complete,
             inferred_complete: complete && self.admission == OwnerAdmission::Proved,
-            unproved_form: self.unproved_form,
+            // A tight Pa may be an argument in a larger form, but a whole
+            // label indistinguishable from one flag cannot prove that flag.
+            unproved_form: self.form_evidence == FormEvidence::Unproved
+                || self.form_evidence == FormEvidence::AttachedPath
+                    && super::options::option_prefix(self.view.text.trim())
+                        == Some(self.view.text.trim()),
             limit: None,
         }
     }
@@ -368,6 +395,9 @@ impl<'a> Scanner<'a> {
                 next.is_whitespace()
                     || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
                     || native && self.view.native_argument_starts(end)
+                    // Consume the independent Fl even if its joined suffix
+                    // cannot prove the complete form.
+                    || native && self.view.independent_option_suffix(end)
                     || next == '/'
                         && native
                         && self.view.independent_slash(end)
@@ -399,7 +429,7 @@ impl<'a> Scanner<'a> {
                 .view
                 .permits_option_spelling(start..start + name.len(), true)
             {
-                self.unproved_form = true;
+                self.form_evidence = FormEvidence::Unproved;
                 return false;
             }
             self.accept_name(name, native, start + name.len() < end);
@@ -407,11 +437,13 @@ impl<'a> Scanner<'a> {
         }
         #[cfg(feature = "roff")]
         {
-            self.unproved_form |= native
-                && self
-                    .view
-                    .operand(end)
-                    .is_some_and(|operand| operand.role == NativeOperandRole::ClippedOption);
+            self.form_evidence.reject_if(
+                native
+                    && self
+                        .view
+                        .operand(end)
+                        .is_some_and(|operand| operand.role == NativeOperandRole::ClippedOption),
+            );
         }
         let pattern_end = self.view.text[start..]
             .find(|c: char| !matches!(c, '-' | '#'))
@@ -472,7 +504,13 @@ impl<'a> Scanner<'a> {
             && self.view.independent_option_suffix(self.cursor);
         // A separately executed Pa is an attached path argument, while
         // other independent suffixes do not prove a complete option form.
-        self.unproved_form |= foreign_tail && !self.view.native_argument_starts(self.cursor);
+        if foreign_tail {
+            if self.view.native_argument_starts(self.cursor) {
+                self.form_evidence.attach_path();
+            } else {
+                self.form_evidence = FormEvidence::Unproved;
+            }
+        }
         if begins_argument || foreign_tail {
             self.begin_argument();
         }
@@ -543,7 +581,8 @@ impl<'a> Scanner<'a> {
                 .is_some_and(|part| self.view.explicit_option(part.start))
                 && argument.attached_to_name
             {
-                self.unproved_form |= !arguments::proves_native_assignment(self.view, &argument);
+                self.form_evidence
+                    .reject_if(!arguments::proves_native_assignment(self.view, &argument));
             }
             self.arguments.push(argument);
         }

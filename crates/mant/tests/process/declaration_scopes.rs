@@ -257,6 +257,58 @@ fn independent_separators_and_attached_paths_keep_both_names_and_forms() {
 }
 
 #[test]
+fn attached_path_needs_a_distinct_form_to_allow_exact_lookup() {
+    // CVS mdoc_macro.c::in_line closes Fl before Pa; termp_ns_pre only
+    // suppresses the intervening space. Neither Pa spelling extends Fl;
+    // termp_xr_pre emits the manual name and section as separate words.
+    for (head, form) in [
+        ("Fl k Ar src No / Fl q Ns Pa leaf", "-k src / -qleaf"),
+        ("Fl q Ns Pa leaf No / Fl k Ar src", "-qleaf / -k src"),
+    ] {
+        let names = if head.starts_with("Fl k") {
+            ["-k", "-q"]
+        } else {
+            ["-q", "-k"]
+        };
+        check_declaration(head, form, &names, &["-qleaf", "-kleaf"]);
+    }
+    check_declaration("Fl q Pa files", "-q files", &["-q"], &["-qfiles"]);
+    check_declaration("Fl q Ns Ar files", "-qfiles", &["-q"], &["-qfile"]);
+
+    for (head, query, expected) in [
+        ("Fl q Ns Pa files", "-q", 1),
+        ("Fl q Ns Pa files", "-qfiles", 0),
+        ("Fl q Ns Pa leaf No / Fl k Ns Xr printf 3", "-k", 1),
+        ("Fl q Ns Pa leaf No / Fl k Ns Xr printf 3", "-qleaf", 0),
+        (
+            "Fl q Ns Pa leaf No / Fl k Ns Xr printf 3",
+            "-qleaf / -kprintf(3)",
+            0,
+        ),
+        ("Fl q Ns Pa leaf No / Fl k Ns Xr printf 3", "-kprintf", 0),
+    ] {
+        let source = format!("{HEADER}.It {head}\nOwner proof.\n.El\n");
+        let flag = format!("--explain={query}");
+        let output = run_text_input(
+            &[
+                "--input",
+                "-",
+                "--input-format",
+                "roff",
+                "--format",
+                "json",
+                "--compact",
+                &flag,
+            ],
+            &source,
+        );
+        assert!(output.status.success(), "{head}: {query}");
+        let reply: QueryExplanation = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(reply.counts.direct_entry.total, expected, "{head}: {query}");
+    }
+}
+
+#[test]
 fn quoted_native_assignment_retains_the_complete_indexed_form() {
     // Qq/Dq print their quotes around the complete No or Li TEXT child.
     for (head, form) in [
