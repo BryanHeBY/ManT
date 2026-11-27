@@ -798,3 +798,95 @@ fn split_run_in_keeps_independent_invisible_body_rows() {
         );
     }
 }
+
+#[test]
+fn initial_fill_request_closes_only_the_live_generated_body_row() {
+    // The pinned CVS ASCII and UTF-8 devices agree on these physical
+    // rows. NODE_LINE can close HEAD before BODY pre writes its generated
+    // blank, but the mode transition may close the live BODY row only once.
+    let split = ".It Xo No \"\\&\"\n.Xc";
+    for (case, head, tail, expected) in [
+        ("first fi", split, ".fi\n", &["L", "", "", "R"][..]),
+        (
+            "filled visible follower",
+            split,
+            ".fi\nY\n",
+            &["L", "", "", "Y", "R"][..],
+        ),
+        ("no request", split, "", &["L", "", "", "R"][..]),
+        ("repeat fi", split, ".fi\n.fi\n", &["L", "", "", "R"][..]),
+        (
+            "reset and break",
+            split,
+            ".fi\n.nf\n.br\n",
+            &["L", "", "", "R"][..],
+        ),
+        (
+            "styled head",
+            ".It Xo No \"\\fI\\&\"\n.Xc",
+            ".fi\n",
+            &["L", "", "", "R"][..],
+        ),
+        (
+            "ordinary head",
+            ".It No \"\\&\"",
+            ".fi\n",
+            &["L", "", "R"][..],
+        ),
+        (
+            "same source line",
+            ".It Xo No \"\\&\" Xc",
+            ".fi\n",
+            &["L", "", "R"][..],
+        ),
+        (
+            "continued head",
+            ".It Xo No \"\\&\\c\"\n.Xc",
+            ".fi\n",
+            &["L", "", "R"][..],
+        ),
+        (
+            "visible head",
+            ".It Xo No A\n.Xc",
+            ".fi\n",
+            &["L", "A", "", "R"][..],
+        ),
+        (
+            "empty head",
+            ".It Xo No \"\"\n.Xc",
+            ".fi\n",
+            &["L", "", "R"][..],
+        ),
+    ] {
+        let input = format!("L\n.nf\n.Bl -inset -compact\n{head}\n{tail}.El\n.fi\nR\n");
+        assert_eq!(
+            description_rows(&input)
+                .iter()
+                .map(|row| row.trim())
+                .collect::<Vec<_>>(),
+            expected,
+            "{case}"
+        );
+        if case == "first fi" {
+            let doc = mant_loader::load_roff_bytes(source(&input).as_bytes())
+                .expect("lower definition")
+                .document
+                .expect("definition document");
+            let [_, mant_ir::Block::DefinitionList { items, .. }, _] =
+                doc.sections[1].blocks.as_slice()
+            else {
+                panic!("expected the source's definition between the two sentinels");
+            };
+            assert!(
+                matches!(
+                    items[0].description.as_slice(),
+                    [mant_ir::Block::VerticalSpace { lines: 1, .. },
+                     mant_ir::Block::Preformatted { children, .. }]
+                        if matches!(children.as_slice(), [mant_ir::Inline::Text { value }] if value == " ")
+                ),
+                "distinct physical HEAD and BODY rows: {:?}",
+                items[0].description
+            );
+        }
+    }
+}

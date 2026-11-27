@@ -162,6 +162,13 @@ impl BlockState {
     /// consumes the original owner first; only a still-live destination
     /// change transfers the complete vector and its native anchor ranges.
     pub(in crate::mandoc::blocks) fn adopt_inline_output_owner(&mut self) {
+        self.adopt_inline_output_owner_in_source_mode(self.formatter.no_fill);
+    }
+
+    pub(in crate::mandoc::blocks) fn adopt_inline_output_owner_in_source_mode(
+        &mut self,
+        no_fill: bool,
+    ) {
         if self.inline_output_role == InlineOutputRole::Declaration
             && !self.uses_literal_output()
             && self.paragraph.is_empty()
@@ -169,7 +176,7 @@ impl BlockState {
         {
             let (nodes, source) = self.literal.take_active_output();
             self.paragraph.adopt_active_output(nodes, source);
-        } else if self.inline_output_is_literal(self.formatter.no_fill)
+        } else if self.inline_output_is_literal(no_fill)
             && self.formatter.execution.has_native_definition_field()
             && self.literal.is_empty()
             && !self.paragraph.is_empty()
