@@ -712,3 +712,64 @@ fn body_entry_stays_local_in_filled_and_nested_run_in_definitions() {
         );
     }
 }
+
+#[test]
+fn split_run_in_keeps_independent_invisible_body_rows() {
+    // Expected rows match pinned CVS mandoc ASCII and UTF-8. Source-line
+    // entry can close the HEAD before an invisible BODY word forms its own
+    // row. Requests, another source line and the BODY post can close it.
+    for (case, head, body, expected) in [
+        (
+            "request",
+            ".It Xo No A\n.Xc",
+            ".No \"\\&\\c\"\n.br\nY",
+            &["L", "A", "", "", "Y", "R"][..],
+        ),
+        (
+            "next source line",
+            ".It Xo No A\n.Xc",
+            ".No \"\\&\"\nY",
+            &["L", "A", "", "", "Y", "R"][..],
+        ),
+        (
+            "body post",
+            ".It Xo No A\n.Xc",
+            ".No \"\\&\"",
+            &["L", "A", "", "", "R"][..],
+        ),
+        (
+            "continued head",
+            ".It Xo No \"A\\c\"\n.Xc",
+            ".No \"\\&\\c\"\n.br\nY",
+            &["L", "A", "", "Y", "R"][..],
+        ),
+        (
+            "ordinary shared head",
+            ".It No A",
+            ".No \"\\&\\c\"\n.br\nY",
+            &["L", "A", "", "Y", "R"][..],
+        ),
+        (
+            "same-line extension",
+            ".It Xo No A Xc",
+            ".No \"\\&\\c\"\n.br\nY",
+            &["L", "A", "", "Y", "R"][..],
+        ),
+        (
+            "visible body",
+            ".It Xo No A\n.Xc",
+            ".No X\n.br\nY",
+            &["L", "A", "", "X", "Y", "R"][..],
+        ),
+    ] {
+        let input = format!("L\n.nf\n.Bl -inset -compact\n{head}\n{body}\n.El\n.fi\nR\n");
+        assert_eq!(
+            description_rows(&input)
+                .iter()
+                .map(|row| row.trim())
+                .collect::<Vec<_>>(),
+            expected,
+            "{case}"
+        );
+    }
+}

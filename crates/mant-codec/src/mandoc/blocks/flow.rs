@@ -303,6 +303,11 @@ impl BlockState {
                         began_source_line
                     });
             if began_source_line {
+                // This BODY entry ran the native source-line gate before
+                // the generated separator. Preserve the pending HEAD close
+                // before settlement so later invisible BODY rows remain
+                // independent of the term's projection.
+                self.formatter.note_definition_head_source_close();
                 if self.formatter.definition_head_row_pending()
                     && self
                         .paragraph
