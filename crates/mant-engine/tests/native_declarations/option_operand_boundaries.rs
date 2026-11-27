@@ -448,3 +448,208 @@ fn assert_environment(head: &str, visible: &str, names: &[&str], complete: bool)
         );
     }
 }
+
+const CONTROLLED_HEADER: &str = ".Dd November 26, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd declaration probe\n.Sh OPTIONS\n.Bl -tag -width Ds\n";
+
+fn controlled_fixture<'a>(rows: impl IntoIterator<Item = (&'a str, &'a str)>) -> String {
+    use std::fmt::Write;
+    let mut source = CONTROLLED_HEADER.to_owned();
+    for (label, head) in rows {
+        writeln!(source, ".It {head}\n{label} owner.").unwrap();
+    }
+    source.push_str(".El\n");
+    source
+}
+
+fn assert_controlled_owners(
+    content: &mant_ir::ResolvedContent,
+    spelling: &str,
+    rows: &[(bool, &str, &str)],
+    is_name: bool,
+) {
+    let items = definitions(content.document.as_ref().unwrap());
+    assert_eq!(items.len(), rows.len());
+    let answer = explain(content, spelling);
+    let count = rows.iter().filter(|(direct, _, _)| *direct).count();
+    assert_eq!(answer.counts.direct_entry.total as usize, count, "{rows:?}");
+    if count != 0 {
+        assert!(
+            explanation_ranges::assert_ranges(&answer, spelling) > 0,
+            "{rows:?}"
+        );
+    }
+    let direct = answer
+        .evidence
+        .iter()
+        .filter(|hit| hit.class == EvidenceClass::DirectEntry)
+        .collect::<Vec<_>>();
+    assert_eq!(direct.len(), count);
+    for (index, (item, &(expected, label, head))) in items.iter().zip(rows).enumerate() {
+        assert_eq!(inline_plain_text(&item.terms[0]), head, "{rows:?}");
+        let path = format!("2/e{}", index + 1);
+        let hit = direct.iter().find(|hit| hit.outline.node.path() == path);
+        assert_eq!(hit.is_some(), expected, "{label} at {path}: {rows:?}");
+        if let Some(hit) = hit {
+            assert_eq!(hit.source, item.source, "{path}");
+            assert!(
+                hit.bases.iter().any(|basis| {
+                    if is_name {
+                        matches!(basis, EvidenceBasis::Name { .. })
+                    } else {
+                        matches!(basis, EvidenceBasis::Form { .. })
+                    }
+                }),
+                "{path}: {rows:?}"
+            );
+        }
+        let excerpt =
+            mant_query::select_excerpt(content, &[ContentSelector::path(path.as_str())]).unwrap();
+        let body = mant_render::render_excerpt_text(&excerpt);
+        assert!(body.contains(&format!("{label} owner.")), "{path}: {body}");
+        assert_eq!(body.matches(" owner.").count(), 1, "{path}: {body}");
+    }
+}
+
+#[test]
+fn native_break_controls_preserve_separate_option_owners_without_certifying_literal_ink() {
+    // CVS term_word/term_fill/term_field: \c suppresses following space only
+    // at the end of the word here; \p breaks at its end. Neither can turn
+    // the other ink in one No/Li operand into a separately executed Fl.
+    for separator in [',', '|', '/'] {
+        for control in [r"\c", r"\p"] {
+            let separate = format!(
+                "-a file {separator}{}--fake",
+                if control == r"\p" { "\n" } else { "" }
+            );
+            let literal = format!(
+                "-a file {separator}{}--fake",
+                if control == r"\p" { "\n" } else { " " }
+            );
+            let mut cases = [
+                (
+                    true,
+                    "real",
+                    format!(r#"Fl a Ar file Li "{separator}{control}" Fl Fl fake"#),
+                    separate.as_str(),
+                ),
+                (
+                    true,
+                    "real-No",
+                    format!(r#"Fl a Ar file No "{separator}{control}" Fl Fl fake"#),
+                    separate.as_str(),
+                ),
+                (
+                    false,
+                    "text",
+                    format!(r#"Fl a Ar file No "{separator}{control} --fake""#),
+                    literal.as_str(),
+                ),
+                (
+                    false,
+                    "text-Li",
+                    format!(r#"Fl a Ar file Li "{separator}{control} --fake""#),
+                    literal.as_str(),
+                ),
+            ];
+            for _ in 0..2 {
+                let source = controlled_fixture(
+                    cases
+                        .iter()
+                        .map(|(_, label, head, _)| (*label, head.as_str())),
+                );
+                let rows = cases
+                    .iter()
+                    .map(|(name, label, _, visible)| (*name, *label, *visible))
+                    .collect::<Vec<_>>();
+                assert_controlled_owners(&load(&source), "--fake", &rows, true);
+                cases.reverse();
+            }
+        }
+    }
+    for (label, head) in [
+        ("same", r#"Fl a Ar file No "/\: --fake""#),
+        ("word-prefix", r#"Fl a Ar file No "\:/ --fake""#),
+    ] {
+        let content = load(&controlled_fixture([(label, head)]));
+        assert_controlled_owners(
+            &content,
+            "--fake",
+            &[(false, label, "-a file / --fake")],
+            true,
+        );
+    }
+}
+
+#[test]
+fn native_break_controls_keep_only_complete_owned_field_operators() {
+    // term_word stores \: as ASCII_BREAK and \c in the spacing state,
+    // without authored ink. The independent Pa and Fl still own their
+    // fields; matching visible spelling is not proof for a clipped writer.
+    for (spelling, mut cases) in [
+        (
+            "-a user@host / -v",
+            [
+                (true, "intact", "Fl a Ar user Ns No @ Ns Pa host No / Fl v"),
+                (
+                    true,
+                    "break",
+                    r#"Fl a Ar user Ns No "\:@" Ns Pa host No / Fl v"#,
+                ),
+            ],
+        ),
+        (
+            "-a user=host / -v",
+            [
+                (true, "intact", "Fl a Ar user Ns No = Ns Pa host No / Fl v"),
+                (
+                    true,
+                    "cont",
+                    r#"Fl a Ar user Ns No "\c=" Ns Pa host No / Fl v"#,
+                ),
+            ],
+        ),
+    ] {
+        for _ in 0..2 {
+            let content = load(&controlled_fixture(
+                cases.map(|(_, label, head)| (label, head)),
+            ));
+            assert_controlled_owners(
+                &content,
+                spelling,
+                &cases.map(|(direct, label, _)| (direct, label, spelling)),
+                false,
+            );
+            cases.reverse();
+        }
+    }
+    let mut cases = [
+        (
+            true,
+            "typed",
+            r#"Fl a Ar user Ns Li "\:@" Ns Pa host No / Fl v"#,
+        ),
+        (
+            true,
+            "break",
+            r#"Fl a Ar user Ns No "\:@" Ns Pa host No / Fl v"#,
+        ),
+        (
+            false,
+            "clipped",
+            r#"Fl a Ar user Ns No Q Ns No "\h'-1n'@" Ns Pa host No / Fl v"#,
+        ),
+    ];
+    let spelling = "-a user@host / -v";
+    for _ in 0..2 {
+        let content = load(&controlled_fixture(
+            cases.map(|(_, label, head)| (label, head)),
+        ));
+        assert_controlled_owners(
+            &content,
+            spelling,
+            &cases.map(|(direct, label, _)| (direct, label, spelling)),
+            false,
+        );
+        cases.reverse();
+    }
+}

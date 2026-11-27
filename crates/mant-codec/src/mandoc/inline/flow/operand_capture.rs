@@ -495,12 +495,19 @@ fn literal_declaration_chars(decoded: &DecodedText) -> impl Iterator<Item = char
     // produced by roff_escape.c for color and point-size escapes. Those
     // cells and font controls do not change one No operand's spelling.
     // ESCAPE_HORIZ changes the cursor or inserts padding, not authored ink.
-    // This only identifies separator candidates: accepted word receipts
-    // still determine the visible spelling and invalidate covered ink.
+    // term_word records `\c` as spacing state and `\:`/`\p` as break
+    // controls. term_fill can break after a word for `\p`, but term_field
+    // does not emit ink or a blank for either break marker. Keep the source
+    // operand's authored punctuation adjacent to any actual authored blank.
+    // This only identifies candidates: execution retains the controls, and
+    // accepted word receipts still determine spelling and invalidate covered ink.
     decoded.events.iter().flat_map(|event| match event {
         RoffInlineEvent::Font(_)
         | RoffInlineEvent::PreviousFont
         | RoffInlineEvent::ZeroWidthGlyph
+        | RoffInlineEvent::NoSpace
+        | RoffInlineEvent::Breakpoint
+        | RoffInlineEvent::LineBreak
         | RoffInlineEvent::HorizontalMotion { .. }
         | RoffInlineEvent::Presentation {
             kind: PresentationKind::Color | PresentationKind::PointSize,
