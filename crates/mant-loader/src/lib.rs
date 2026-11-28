@@ -20,7 +20,7 @@ pub use catalog::{
 pub use executable::{ExecutableLookup, find_host_executable};
 pub use loading::{
     DocumentLoader, LoadError, LoadPolicy, LoadSpec, MAX_MARKDOWN_BYTES, ManualLoadError,
-    load_markdown_text, validate_load_spec,
+    ResolvedWithLinkLayout, load_markdown_text, validate_load_spec,
 };
 #[cfg(feature = "roff")]
 pub use loading::{load_roff_bytes, load_roff_bytes_with_link_layout};

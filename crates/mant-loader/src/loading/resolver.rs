@@ -61,6 +61,20 @@ impl DocumentLoader {
         load_with(spec, policy, self)
     }
 
+    /// Load once and pair the immutable result with source-native link membership.
+    ///
+    /// # Errors
+    /// Returns the same selection, access, or parse errors as ordinary loading.
+    pub fn load_with_link_layout(
+        &self,
+        spec: LoadSpec<'_>,
+        policy: LoadPolicy,
+    ) -> Result<super::ResolvedWithLinkLayout, LoadError> {
+        let mut layout = mant_ir::LinkLayout::default();
+        let content = super::input::load_impl(spec, policy, self, Some(&mut layout))?;
+        Ok(super::ResolvedWithLinkLayout::new(content, layout))
+    }
+
     /// Filter the same registered-document and manual snapshots used by
     /// [`Self::load`].
     ///
@@ -219,6 +233,24 @@ impl LoadHost for DocumentLoader {
             let _ = path;
             Err(LoadError::NativeBackendUnavailable { tldr_topic: None }.to_string())
         }
+    }
+
+    #[cfg(feature = "roff")]
+    fn parse_manual_with_layout(
+        &self,
+        page: &ManualPage,
+    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+        crate::manual_input::parse_manual_page_with_link_layout(page)
+            .map_err(|error| error.to_string())
+    }
+
+    #[cfg(feature = "roff")]
+    fn parse_manual_input_with_layout(
+        &self,
+        path: &Path,
+    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+        crate::manual_input::parse_manual_source_with_link_layout(path)
+            .map_err(|error| error.to_string())
     }
 
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String> {

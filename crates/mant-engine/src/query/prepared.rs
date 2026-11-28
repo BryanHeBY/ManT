@@ -43,6 +43,20 @@ impl<'request> PreparedQueryRequest<'request> {
         resolver.resolve_validated(self.request, self.policy)
     }
 
+    /// Resolve once and retain native link membership for an interactive full read.
+    ///
+    /// # Errors
+    /// Returns a source-loading failure.
+    pub fn resolve_with_link_layout(
+        &self,
+        resolver: &DocumentResolver,
+    ) -> Result<mant_loader::ResolvedWithLinkLayout, QueryError> {
+        resolver
+            .loader()
+            .load_with_link_layout(super::adapter::load_spec(&self.request.input), self.policy)
+            .map_err(QueryError::Load)
+    }
+
     /// Execute the shared complete-request pipeline against an explicit snapshot.
     ///
     /// # Errors

@@ -128,6 +128,20 @@ pub(super) trait LoadHost {
     fn locate_manual(&self, request: &ManualRequest) -> Result<ManualPage, String>;
     fn parse_manual(&self, page: &ManualPage) -> Result<Document, String>;
     fn parse_manual_input(&self, path: &Path) -> Result<Document, String>;
+    fn parse_manual_with_layout(
+        &self,
+        page: &ManualPage,
+    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+        self.parse_manual(page)
+            .map(|doc| (doc, mant_ir::LinkLayout::default()))
+    }
+    fn parse_manual_input_with_layout(
+        &self,
+        path: &Path,
+    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+        self.parse_manual_input(path)
+            .map(|doc| (doc, mant_ir::LinkLayout::default()))
+    }
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
 }

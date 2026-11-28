@@ -13,6 +13,7 @@ pub(super) fn query_named_document(
     requested_manual_section: Option<&str>,
     policy: LoadPolicy,
     host: &dyn LoadHost,
+    layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<ResolvedContent, LoadError> {
     query_named_with_mode(
         name,
@@ -21,6 +22,7 @@ pub(super) fn query_named_document(
         policy,
         host,
         ManualLookupMode::Compatible,
+        layout,
     )
 }
 
@@ -31,6 +33,7 @@ fn query_named_with_mode(
     policy: LoadPolicy,
     host: &dyn LoadHost,
     lookup_mode: ManualLookupMode,
+    layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<ResolvedContent, LoadError> {
     let name = name.trim();
     if name.is_empty() {
@@ -40,7 +43,7 @@ fn query_named_with_mode(
         if requested_source.is_some() || requested_manual_section.is_some() {
             return Err(LoadError::ConflictingSourceSelectors);
         }
-        return query_catalog_address(name, &address, policy, host);
+        return query_catalog_address(name, &address, policy, host, layout);
     }
     let section = requested_manual_section.map(str::trim);
     if section.is_some_and(|section| !crate::is_manual_section(section)) {
@@ -93,8 +96,15 @@ fn query_named_with_mode(
         return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
     }
     let manual = if host.native_available() {
-        load_manual(name, &candidates, section.as_deref(), lookup_mode, host)
-            .map_err(LoadError::Manual)
+        load_manual(
+            name,
+            &candidates,
+            section.as_deref(),
+            lookup_mode,
+            host,
+            layout,
+        )
+        .map_err(LoadError::Manual)
     } else {
         Err(LoadError::NativeBackendUnavailable { tldr_topic: None })
     };
@@ -136,6 +146,7 @@ fn query_catalog_address(
     address: &DocumentAddress,
     policy: LoadPolicy,
     host: &dyn LoadHost,
+    layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<ResolvedContent, LoadError> {
     match address {
         DocumentAddress::Markdown { .. } if policy == LoadPolicy::TldrOnly => {
@@ -175,6 +186,7 @@ fn query_catalog_address(
             policy,
             host,
             ManualLookupMode::Exact,
+            layout,
         ),
     }
 }
@@ -351,6 +363,7 @@ fn load_manual(
     section: Option<&str>,
     lookup_mode: ManualLookupMode,
     host: &dyn LoadHost,
+    layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<LoadedManual, ManualLoadError> {
     let mut first_locate_error = None;
     let mut located = None;
@@ -384,12 +397,16 @@ fn load_manual(
         name: page.name.clone(),
         manual_section: page.section.clone(),
     };
-    let mut document = host
-        .parse_manual(&page)
-        .map_err(|detail| ManualLoadError::Parse {
-            name: requested_name.to_owned(),
-            detail,
-        })?;
+    let (mut document, native_layout) = if layout.is_some() {
+        host.parse_manual_with_layout(&page)
+            .map(|(doc, native)| (doc, Some(native)))
+    } else {
+        host.parse_manual(&page).map(|doc| (doc, None))
+    }
+    .map_err(|detail| ManualLoadError::Parse {
+        name: requested_name.to_owned(),
+        detail,
+    })?;
     if document.sections.is_empty() && document.blocks.is_empty() {
         let diagnostics = document
             .diagnostics
@@ -410,5 +427,8 @@ fn load_manual(
     // Missing source metadata must describe the selected page, not a broader
     // query such as `1` which may have resolved to an installed `1p` page.
     document.meta.manual_section.get_or_insert(page.section);
+    if let (Some(layout), Some(native)) = (layout, native_layout) {
+        *layout = native;
+    }
     Ok(LoadedManual { document, address })
 }

@@ -13,14 +13,23 @@ pub(super) fn load_with(
     policy: LoadPolicy,
     host: &dyn LoadHost,
 ) -> Result<ResolvedContent, LoadError> {
+    load_impl(spec, policy, host, None)
+}
+
+pub(super) fn load_impl(
+    spec: LoadSpec<'_>,
+    policy: LoadPolicy,
+    host: &dyn LoadHost,
+    layout: Option<&mut mant_ir::LinkLayout>,
+) -> Result<ResolvedContent, LoadError> {
     super::validate_load_spec(spec, policy)?;
     match spec {
         LoadSpec::Document {
             selector,
             source,
             manual_section,
-        } => query_named_document(selector, source, manual_section, policy, host),
-        LoadSpec::File { path, format } => query_input_file(path, format, policy, host),
+        } => query_named_document(selector, source, manual_section, policy, host, layout),
+        LoadSpec::File { path, format } => query_input_file(path, format, policy, host, layout),
     }
 }
 
@@ -29,6 +38,7 @@ fn query_input_file(
     format: InputFormat,
     policy: LoadPolicy,
     host: &dyn LoadHost,
+    layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
     if path.is_empty() {
@@ -51,7 +61,18 @@ fn query_input_file(
             if !host.native_available() {
                 return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
             }
-            let document = host.parse_manual_input(Path::new(path)).map_err(|detail| {
+            let input = Path::new(path);
+            let document = match layout {
+                Some(layout) => {
+                    host.parse_manual_input_with_layout(input)
+                        .map(|(document, native)| {
+                            *layout = native;
+                            document
+                        })
+                }
+                None => host.parse_manual_input(input),
+            }
+            .map_err(|detail| {
                 LoadError::Manual(ManualLoadError::Parse {
                     name: path.to_owned(),
                     detail,
@@ -197,8 +218,12 @@ pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
 #[cfg(feature = "roff")]
 pub fn load_roff_bytes_with_link_layout(
     source: &[u8],
-) -> Result<(ResolvedContent, mant_ir::LinkLayout), LoadError> {
-    load_bounded_roff(source, mant_codec::parse_roff_bytes_with_link_layout)
+) -> Result<super::ResolvedWithLinkLayout, LoadError> {
+    load_bounded_roff(
+        source,
+        crate::manual_input::parse_manual_bytes_with_link_layout,
+    )
+    .map(|(content, layout)| super::ResolvedWithLinkLayout::new(content, layout))
 }
 
 #[cfg(feature = "roff")]

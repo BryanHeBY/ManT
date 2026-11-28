@@ -6,7 +6,7 @@ mod source;
 use crate::ManualPage;
 use libmandoc_rs::ParseReport;
 use mant_codec::{parse_roff_bytes, parse_roff_bytes_with_report, redirect_target};
-use mant_ir::Document;
+use mant_ir::{Document, LinkLayout};
 use source::{load_manual_source, resolve_manual_redirects};
 use std::path::Path;
 
@@ -77,12 +77,43 @@ fn reject_standalone_redirect(path: &Path, source: &[u8]) -> Result<(), ManualEr
 ///
 /// Returns [`ManualError`] when the source cannot be opened, decoded, or parsed.
 pub fn parse_manual_page(page: &ManualPage) -> Result<Document, ManualError> {
+    parse_manual_page_with(page, |path, bytes| {
+        parse_roff_bytes(path, bytes).map(|doc| (doc, ()))
+    })
+    .map(|(doc, ())| doc)
+}
+
+pub(crate) fn parse_manual_source_with_link_layout(
+    path: &Path,
+) -> Result<(Document, LinkLayout), ManualError> {
+    let loaded = load_manual_source(path)?;
+    parse_manual_bytes_with_link_layout(path, &loaded.source)
+}
+
+pub(crate) fn parse_manual_bytes_with_link_layout(
+    path: &Path,
+    source: &[u8],
+) -> Result<(Document, LinkLayout), ManualError> {
+    reject_standalone_redirect(path, source)?;
+    mant_codec::parse_roff_bytes_with_link_layout(path, source).map_err(ManualError::from)
+}
+
+pub(crate) fn parse_manual_page_with_link_layout(
+    page: &ManualPage,
+) -> Result<(Document, LinkLayout), ManualError> {
+    parse_manual_page_with(page, mant_codec::parse_roff_bytes_with_link_layout)
+}
+
+fn parse_manual_page_with<T>(
+    page: &ManualPage,
+    parse: impl FnOnce(&Path, &[u8]) -> Result<(Document, T), libmandoc_rs::ParseError>,
+) -> Result<(Document, T), ManualError> {
     let resolved = resolve_manual_redirects(page)?;
-    let mut document = parse_roff_bytes(&page.path, &resolved.source)?;
+    let (mut document, extra) = parse(&page.path, &resolved.source)?;
     if let Some(alias_target) = resolved.alias_target {
         document.meta.alias_target = Some(alias_target);
     }
-    Ok(document)
+    Ok((document, extra))
 }
 
 #[cfg(test)]

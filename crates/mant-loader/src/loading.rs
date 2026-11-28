@@ -17,6 +17,8 @@ use std::{
 mod error;
 mod input;
 mod named;
+mod paired;
+pub use paired::ResolvedWithLinkLayout;
 mod resolver;
 mod spec;
 #[cfg(test)]
