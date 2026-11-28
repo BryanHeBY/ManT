@@ -296,29 +296,7 @@ fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
             assert_eq!(app.session.document.label(), "printf");
             terminal.draw(|frame| app.draw(frame)).unwrap();
             if step == 0 {
-                app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
-                assert!(app.take_open_request().is_none());
-                assert_eq!(app.navigation.history_lengths(), (0, 1));
-                app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
-                // Addressed forward navigation still asks the host. A failed
-                // reload neither advances the history cursor nor changes source.
-                assert!(app.service_pending_with_native_links(
-                    &mut crate::ReaderServices::default(),
-                    |_| Err("forward unavailable".into()),
-                ));
-                assert_eq!(app.navigation.history_lengths(), (0, 1));
-                assert!(std::sync::Arc::ptr_eq(
-                    &app.session.current_bundle,
-                    &original
-                ));
-                app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
-                assert!(app.service_pending_with_native_links(
-                    &mut crate::ReaderServices::default(),
-                    |_| Ok(addressed.clone()),
-                ));
-                assert_eq!(app.session.document.label(), "printf");
-                app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
-                assert!(app.take_open_request().is_none());
+                verify_native_history_reloads(&mut app, &original, &addressed);
             } else {
                 let native_tab = app
                     .geometry
@@ -338,4 +316,37 @@ fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
             }
         }
     }
+}
+
+#[cfg(feature = "native-link-layout")]
+fn verify_native_history_reloads(
+    app: &mut App,
+    original: &std::sync::Arc<mant_ir::ResolvedContent>,
+    addressed: &mant_loader::ResolvedWithLinkLayout,
+) {
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+    assert!(app.take_open_request().is_none());
+    assert_eq!(app.navigation.history_lengths(), (0, 1));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+    // Addressed forward navigation still asks the host. A failed
+    // reload neither advances the history cursor nor changes source.
+    assert!(
+        app.service_pending_with_native_links(&mut crate::ReaderServices::default(), |_| Err(
+            "forward unavailable".into()
+        ),)
+    );
+    assert_eq!(app.navigation.history_lengths(), (0, 1));
+    assert!(std::sync::Arc::ptr_eq(
+        &app.session.current_bundle,
+        &original
+    ));
+    app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+    assert!(
+        app.service_pending_with_native_links(&mut crate::ReaderServices::default(), |_| Ok(
+            addressed.clone()
+        ),)
+    );
+    assert_eq!(app.session.document.label(), "printf");
+    app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+    assert!(app.take_open_request().is_none());
 }
