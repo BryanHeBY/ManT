@@ -160,7 +160,7 @@ impl WordPassProjection {
                     return None;
                 }
                 // A graphless term_word can advance over a preserved blank
-                // after retreat and leave its own NBRZW next to it. The next
+                // after retreat and leave NBRZW or only its line TABREF. The next
                 // real graph prints that older blank and its new entry SP
                 // together (term.c:573–589, 860–872, 389–427).
                 let gap = buffer.retained_motion_gap(
@@ -171,7 +171,10 @@ impl WordPassProjection {
                 (gap.marker < word_start
                     && matches!(
                         buffer.cells().get(gap.marker..gap.marker + 2),
-                        Some([FieldCell::DrawnSpaces(1), FieldCell::ZeroWidthGraph])
+                        Some([
+                            FieldCell::DrawnSpaces(1),
+                            FieldCell::ZeroWidthGraph | FieldCell::TabReference
+                        ])
                     )
                     && buffer.projection_length(gap.marker, gap.marker + 1) == 0)
                     .then_some(gap)

@@ -504,8 +504,9 @@ fn cursor_only_word_does_not_resurrect_a_covered_enclosure_mark() {
 #[test]
 fn a_graphless_word_preserves_the_live_gap_after_a_positioned_include() {
     // term.c::bufferc() preserves the blank at the live write head.
-    // A following NBRZW term_word advances over it; the next glyph
-    // prints both that retained blank and its own automatic separator.
+    // A graphless term_word advances over it. A plain empty operand
+    // has only its line TABREF, while NBRZW stores another zero-width
+    // cell. The next glyph prints the retained blank and its own entry SP.
     let prefix = r#".Dd November 27, 2026
 .Dt GLYPHS 1
 .Os
@@ -518,8 +519,9 @@ Y
 .No "\h'|0n'R"
 .In "\zX"
 "#;
-    let cases: [(&str, &[&str]); 5] = [
+    let cases: [(&str, &[&str]); 6] = [
         (".No \"\\&\"\nEND", &["RE<>  END"]),
+        (".No \"\"\nEND", &["RE<>  END"]),
         ("END", &["RE<> END"]),
         (".No \"\\h'|0n'U\"\nEND", &["UEEND>"]),
         (".br\n.No \"\\h'|0n'U\"\nEND", &["RE<>", "U END"]),
