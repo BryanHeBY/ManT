@@ -233,7 +233,7 @@ fn missing_page_fragment_does_not_modify_history() {
 fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
     // AU members/history.json: source-bound Z and U overwrite the cursor,
     // while the physically surviving old Y was never authored by Lk.
-    const INPUT: &str = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.Xr printf 3\n.Sh NEXT\nDone.\n";
+    const INPUT: &str = ".Dd November 28, 2026\n.Dt MEMBER 1\n.Os\n.Sh NAME\n.Nm member\n.Nd source membership\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.Xr printf 3\n.Sh ENDTEST\nDone.\n";
     let initial = mant_loader::load_roff_bytes_with_link_layout(INPUT.as_bytes()).unwrap();
     let original = initial.content_arc();
     assert_eq!(initial.receipts().len(), 1);
@@ -244,7 +244,10 @@ fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
         let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
         for step in [0, 1, 2] {
             terminal.draw(|frame| app.draw(frame)).unwrap();
-            assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+            assert!(std::sync::Arc::ptr_eq(
+                &app.session.current_bundle,
+                &original
+            ));
             let rendered = &app.session.rendered_cache[&app.geometry.content.width];
             let labels = rendered.search("ZYU");
             let [label] = labels.as_slice() else {
@@ -273,7 +276,10 @@ fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
                     &mut crate::ReaderServices::default(),
                     |_| Err("unavailable".into()),
                 ));
-                assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+                assert!(std::sync::Arc::ptr_eq(
+                    &app.session.current_bundle,
+                    &original
+                ));
                 assert_eq!(app.navigation.history_lengths(), (0, 0));
                 assert_eq!(app.navigation.active_tab(), 0);
                 click_document_cell(&mut app, next.start_column, next.row);
@@ -301,7 +307,10 @@ fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
                     |_| Err("forward unavailable".into()),
                 ));
                 assert_eq!(app.navigation.history_lengths(), (0, 1));
-                assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+                assert!(std::sync::Arc::ptr_eq(
+                    &app.session.current_bundle,
+                    &original
+                ));
                 app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
                 assert!(app.service_pending_with_native_links(
                     &mut crate::ReaderServices::default(),
