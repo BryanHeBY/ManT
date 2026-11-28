@@ -1,0 +1,137 @@
+//! Opaque decoded link annotations and their presentation handoff.
+use mant_ir::{
+    Document, DocumentAddress, LinkLayout, LinkLayoutReceipt, ResolvedContent, TldrDocument,
+};
+use std::sync::Arc;
+
+/// The immutable document that produced its native link receipts.
+///
+/// Only the codec's native decoder can attach nonempty facts. The caller may
+/// supply catalog metadata but never a different document for these facts.
+#[derive(Debug)]
+pub struct DecodedLinkDocument {
+    document: Document,
+    layout: LinkLayout,
+}
+
+impl DecodedLinkDocument {
+    #[cfg(feature = "roff")]
+    pub(crate) const fn from_decode(document: Document, layout: LinkLayout) -> Self {
+        Self { document, layout }
+    }
+
+    /// Wrap an ordinary document, with no native link facts.
+    #[must_use]
+    pub fn from_plain(document: Document) -> Self {
+        Self {
+            document,
+            layout: LinkLayout::default(),
+        }
+    }
+
+    /// Borrow the exact decoded model.
+    #[must_use]
+    pub const fn document(&self) -> &Document {
+        &self.document
+    }
+
+    /// Drop native link facts and keep the document alone.
+    #[must_use]
+    pub fn into_document(self) -> Document {
+        self.document
+    }
+
+    /// Supply the selected manual section when the source did not declare one.
+    pub fn use_manual_section_if_missing(&mut self, section: String) {
+        self.document.meta.manual_section.get_or_insert(section);
+    }
+
+    /// Apply alias metadata from bounded manual source selection.
+    pub fn set_alias_target(&mut self, target: String) {
+        self.document.meta.alias_target = Some(target);
+    }
+
+    /// Resolve the exact owned document with caller-supplied catalog metadata.
+    #[must_use]
+    pub fn into_resolved(
+        self,
+        label: String,
+        address: Option<DocumentAddress>,
+        tldr: Option<TldrDocument>,
+    ) -> SourceBoundLinkLayout {
+        SourceBoundLinkLayout {
+            content: Arc::new(ResolvedContent {
+                label,
+                address,
+                document: Some(self.document),
+                tldr,
+            }),
+            layout: self.layout,
+        }
+    }
+}
+
+/// One immutable resolved snapshot and the native link facts derived from it.
+///
+/// Borrowed presentation facts cannot be transplanted into another snapshot,
+/// even if its link target, location and typed children are identical.
+///
+/// ```compile_fail
+/// use mant_codec::SourceBoundLinkLayout;
+/// use mant_ir::{ContentLocation, LinkLayout};
+/// fn rebind(a: &SourceBoundLinkLayout, b: &SourceBoundLinkLayout, other: ContentLocation) {
+///     let mut receipt = b.receipts()[0].clone();
+///     receipt.origin = other;
+///     let raw = LinkLayout { receipts: vec![receipt] };
+///     let _ = SourceBoundLinkLayout { content: a.content_arc(), layout: raw };
+/// }
+/// ```
+///
+/// ```compile_fail
+/// use mant_codec::{DecodedLinkDocument, SourceBoundLinkLayout};
+/// use mant_ir::LinkLayout;
+/// fn rebind(a: &SourceBoundLinkLayout, b: &SourceBoundLinkLayout) {
+///     let raw = LinkLayout { receipts: b.receipts().to_vec() };
+///     let _ = DecodedLinkDocument::from_decode(a.content().document.clone().unwrap(), raw);
+/// }
+/// ```
+#[derive(Clone, Debug)]
+pub struct SourceBoundLinkLayout {
+    content: Arc<ResolvedContent>,
+    layout: LinkLayout,
+}
+
+impl SourceBoundLinkLayout {
+    /// Use an ordinary resolution without attaching any native link facts.
+    #[must_use]
+    pub fn without_native_links(content: ResolvedContent) -> Self {
+        Self {
+            content: Arc::new(content),
+            layout: LinkLayout::default(),
+        }
+    }
+
+    /// The exact content from which these facts were derived.
+    #[must_use]
+    pub fn content(&self) -> &ResolvedContent {
+        &self.content
+    }
+
+    /// Share the exact resolution without rebuilding its document.
+    #[must_use]
+    pub fn content_arc(&self) -> Arc<ResolvedContent> {
+        Arc::clone(&self.content)
+    }
+
+    /// Presentation facts are valid only for the exact decoded allocation.
+    #[must_use]
+    pub fn receipts_for(&self, content: &Arc<ResolvedContent>) -> Option<&[LinkLayoutReceipt]> {
+        Arc::ptr_eq(&self.content, content).then_some(self.layout.receipts.as_slice())
+    }
+
+    /// Borrow source facts for this resolved snapshot.
+    #[must_use]
+    pub fn receipts(&self) -> &[LinkLayoutReceipt] {
+        &self.layout.receipts
+    }
+}

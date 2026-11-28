@@ -90,11 +90,11 @@ pub fn parse_plain_manual_report(
 pub fn parse_plain_manual_with_link_layout(
     path: &Path,
     source: &[u8],
-) -> Result<(Document, mant_ir::LinkLayout), ParseError> {
+) -> Result<crate::DecodedLinkDocument, ParseError> {
     let mut layout = mant_ir::LinkLayout::default();
     let (document, _) =
         parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle, Some(&mut layout))?;
-    Ok((document, layout))
+    Ok(crate::DecodedLinkDocument::from_decode(document, layout))
 }
 
 #[derive(Clone, Copy)]

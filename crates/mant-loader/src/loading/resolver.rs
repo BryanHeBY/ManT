@@ -70,9 +70,9 @@ impl DocumentLoader {
         spec: LoadSpec<'_>,
         policy: LoadPolicy,
     ) -> Result<super::ResolvedWithLinkLayout, LoadError> {
-        let mut layout = mant_ir::LinkLayout::default();
+        let mut layout = None;
         let content = super::input::load_impl(spec, policy, self, Some(&mut layout))?;
-        Ok(super::paired::pair(content, layout))
+        Ok(super::paired::finish(content, layout))
     }
 
     /// Filter the same registered-document and manual snapshots used by
@@ -239,7 +239,7 @@ impl LoadHost for DocumentLoader {
     fn parse_manual_with_layout(
         &self,
         page: &ManualPage,
-    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+    ) -> Result<mant_codec::DecodedLinkDocument, String> {
         crate::manual_input::parse_manual_page_with_link_layout(page)
             .map_err(|error| error.to_string())
     }
@@ -248,7 +248,7 @@ impl LoadHost for DocumentLoader {
     fn parse_manual_input_with_layout(
         &self,
         path: &Path,
-    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+    ) -> Result<mant_codec::DecodedLinkDocument, String> {
         crate::manual_input::parse_manual_source_with_link_layout(path)
             .map_err(|error| error.to_string())
     }
@@ -340,6 +340,21 @@ mod tests {
             direct_pair.content(),
             direct_pair.content_arc().as_ref()
         ));
+
+        let independent = loader
+            .load_with_link_layout(direct, LoadPolicy::Combined)
+            .unwrap();
+        assert_eq!(independent.content(), direct_pair.content());
+        assert_eq!(independent.receipts(), direct_pair.receipts());
+        assert!(
+            direct_pair
+                .receipts_for(&independent.content_arc())
+                .is_none()
+        );
+        let fallback = super::super::ResolvedWithLinkLayout::without_native_links(
+            independent.content().clone(),
+        );
+        assert!(fallback.receipts().is_empty());
 
         fs::write(&file, format!("{HEADER}{clean}")).unwrap();
         let replaced = loader

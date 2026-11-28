@@ -131,16 +131,16 @@ pub(super) trait LoadHost {
     fn parse_manual_with_layout(
         &self,
         page: &ManualPage,
-    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+    ) -> Result<mant_codec::DecodedLinkDocument, String> {
         self.parse_manual(page)
-            .map(|doc| (doc, mant_ir::LinkLayout::default()))
+            .map(mant_codec::DecodedLinkDocument::from_plain)
     }
     fn parse_manual_input_with_layout(
         &self,
         path: &Path,
-    ) -> Result<(Document, mant_ir::LinkLayout), String> {
+    ) -> Result<mant_codec::DecodedLinkDocument, String> {
         self.parse_manual_input(path)
-            .map(|doc| (doc, mant_ir::LinkLayout::default()))
+            .map(mant_codec::DecodedLinkDocument::from_plain)
     }
     fn read_tldr(&self, name: &str) -> Result<Option<TldrDocument>, String>;
     fn read_markdown(&self, path: &Path) -> Result<String, String>;
@@ -163,7 +163,7 @@ pub(super) struct RegisteredSelectionGroup {
 }
 
 pub(super) struct LoadedManual {
-    pub(super) document: Document,
+    pub(super) document: Option<Document>,
     pub(super) address: DocumentAddress,
 }
 

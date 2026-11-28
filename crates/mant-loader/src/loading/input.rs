@@ -20,7 +20,7 @@ pub(super) fn load_impl(
     spec: LoadSpec<'_>,
     policy: LoadPolicy,
     host: &dyn LoadHost,
-    layout: Option<&mut mant_ir::LinkLayout>,
+    layout: Option<&mut Option<mant_codec::DecodedLinkDocument>>,
 ) -> Result<ResolvedContent, LoadError> {
     super::validate_load_spec(spec, policy)?;
     match spec {
@@ -38,7 +38,7 @@ fn query_input_file(
     format: InputFormat,
     policy: LoadPolicy,
     host: &dyn LoadHost,
-    layout: Option<&mut mant_ir::LinkLayout>,
+    layout: Option<&mut Option<mant_codec::DecodedLinkDocument>>,
 ) -> Result<ResolvedContent, LoadError> {
     let path = requested_path.trim();
     if path.is_empty() {
@@ -62,15 +62,11 @@ fn query_input_file(
                 return Err(LoadError::NativeBackendUnavailable { tldr_topic: None });
             }
             let input = Path::new(path);
-            let document = match layout {
-                Some(layout) => {
-                    host.parse_manual_input_with_layout(input)
-                        .map(|(document, native)| {
-                            *layout = native;
-                            document
-                        })
-                }
-                None => host.parse_manual_input(input),
+            let decoded = if layout.is_some() {
+                host.parse_manual_input_with_layout(input)
+            } else {
+                host.parse_manual_input(input)
+                    .map(mant_codec::DecodedLinkDocument::from_plain)
             }
             .map_err(|detail| {
                 LoadError::Manual(ManualLoadError::Parse {
@@ -78,6 +74,7 @@ fn query_input_file(
                     detail,
                 })
             })?;
+            let document = decoded.document();
             if document.sections.is_empty() && document.blocks.is_empty() {
                 return Err(LoadError::NoReadableContent {
                     name: path.to_owned(),
@@ -90,10 +87,16 @@ fn query_input_file(
                 .cloned()
                 .or_else(|| document.meta.title.clone())
                 .unwrap_or_else(|| input_file_label(path));
+            let document = if let Some(layout) = layout {
+                *layout = Some(decoded);
+                None
+            } else {
+                Some(decoded.into_document())
+            };
             Ok(ResolvedContent {
                 label,
                 address: None,
-                document: Some(document),
+                document,
                 tldr: None,
             })
         }
@@ -206,9 +209,14 @@ pub fn load_markdown_text(
 #[cfg(feature = "roff")]
 pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
     load_bounded_roff(source, |path, source| {
-        parse_manual_bytes(path, source).map(|doc| (doc, ()))
+        parse_manual_bytes(path, source).map(mant_codec::DecodedLinkDocument::from_plain)
     })
-    .map(|(resolved, ())| resolved)
+    .map(|(label, decoded)| ResolvedContent {
+        label,
+        address: None,
+        document: Some(decoded.into_document()),
+        tldr: None,
+    })
 }
 
 /// Parse one bounded roff stream and retain optional native link membership
@@ -223,14 +231,14 @@ pub fn load_roff_bytes_with_link_layout(
         source,
         crate::manual_input::parse_manual_bytes_with_link_layout,
     )
-    .map(|(content, layout)| super::paired::pair(content, layout))
+    .map(|(label, decoded)| decoded.into_resolved(label, None, None))
 }
 
 #[cfg(feature = "roff")]
-fn load_bounded_roff<T, E: ToString>(
+fn load_bounded_roff<E: ToString>(
     source: &[u8],
-    parse: impl FnOnce(&Path, &[u8]) -> Result<(mant_ir::Document, T), E>,
-) -> Result<(ResolvedContent, T), LoadError> {
+    parse: impl FnOnce(&Path, &[u8]) -> Result<mant_codec::DecodedLinkDocument, E>,
+) -> Result<(String, mant_codec::DecodedLinkDocument), LoadError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
         return Err(LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
@@ -240,12 +248,13 @@ fn load_bounded_roff<T, E: ToString>(
             ),
         }));
     }
-    let (document, extra) = parse(Path::new("stdin"), source).map_err(|error| {
+    let decoded = parse(Path::new("stdin"), source).map_err(|error| {
         LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
             detail: error.to_string(),
         })
     })?;
+    let document = decoded.document();
     if document.sections.is_empty() && document.blocks.is_empty() {
         return Err(LoadError::NoReadableContent {
             name: "stdin".to_owned(),
@@ -258,13 +267,5 @@ fn load_bounded_roff<T, E: ToString>(
         .cloned()
         .or_else(|| document.meta.title.clone())
         .unwrap_or_else(|| "stdin".to_owned());
-    Ok((
-        ResolvedContent {
-            address: None,
-            label,
-            document: Some(document),
-            tldr: None,
-        },
-        extra,
-    ))
+    Ok((label, decoded))
 }

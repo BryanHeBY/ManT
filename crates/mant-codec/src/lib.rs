@@ -12,12 +12,14 @@ mod markdown;
 pub mod markdown_mapping;
 /// Bounded MathML Core and restricted LaTeX encoding of resolved formula IR.
 pub mod math;
+mod native_link_snapshot;
 mod producer_identity;
 mod text_safety;
 mod tldr;
 
 pub use mant_ir::ResolvedContent;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
+pub use native_link_snapshot::{DecodedLinkDocument, SourceBoundLinkLayout};
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
 #[cfg(feature = "roff")]

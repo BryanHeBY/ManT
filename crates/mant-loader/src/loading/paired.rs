@@ -1,9 +1,17 @@
-//! Shared immutable source snapshot and its native link facts.
-pub use mant_ir::SourceBoundLinkLayout as ResolvedWithLinkLayout;
+//! Immutable source snapshot and its optional native facts.
+pub use mant_codec::SourceBoundLinkLayout as ResolvedWithLinkLayout;
 
-pub(super) fn pair(
-    content: mant_ir::ResolvedContent,
-    layout: mant_ir::LinkLayout,
+/// Keep the decoded document in its own carrier until final metadata is known.
+pub(super) fn finish(
+    loaded: ResolvedContent,
+    native: Option<mant_codec::DecodedLinkDocument>,
 ) -> ResolvedWithLinkLayout {
-    ResolvedWithLinkLayout::from_producer(std::sync::Arc::new(content), layout)
+    if let Some(native) = native {
+        debug_assert!(loaded.document.is_none());
+        native.into_resolved(loaded.label, loaded.address, loaded.tldr)
+    } else {
+        ResolvedWithLinkLayout::without_native_links(loaded)
+    }
 }
+
+use mant_ir::ResolvedContent;

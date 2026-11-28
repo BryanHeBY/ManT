@@ -8,6 +8,7 @@ mod presentation;
 pub mod table_border;
 mod tldr;
 
+pub use mant_codec::SourceBoundLinkLayout;
 pub use output::*;
 pub use presentation::*;
 pub use tldr::{TldrLine, TldrRole, TldrSpan, layout_tldr};

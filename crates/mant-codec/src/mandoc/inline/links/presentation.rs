@@ -512,7 +512,7 @@ mod tests {
                 source.as_bytes(),
             )
             .unwrap()
-            .0
+            .into_document()
         });
         let mut links = Links::default();
         links.visit_document(&document);
@@ -581,17 +581,19 @@ mod tests {
 
     fn assert_public_layout(source: &str, json: &str) {
         use std::path::Path;
-        let (paired, layout) = crate::mandoc::parse_plain_manual_with_link_layout(
+        let decoded = crate::mandoc::parse_plain_manual_with_link_layout(
             Path::new("split.1"),
             source.as_bytes(),
         )
         .unwrap();
+        let layout = decoded.into_resolved("split".to_owned(), None, None);
+        let paired = layout.content().document.as_ref().unwrap();
         assert_eq!(
             serde_json::to_string(&paired).unwrap(),
             json,
             "default wire unchanged"
         );
-        let [receipt] = layout.receipts.as_slice() else {
+        let [receipt] = layout.receipts() else {
             panic!("{layout:?}");
         };
         assert_eq!(receipt.members, [0..1, 2..3]);
@@ -607,7 +609,7 @@ mod tests {
         );
         let mut matching_paths = Vec::new();
         let scan = mant_ir::scan_navigation_scope_with_budget(
-            &paired,
+            paired,
             mant_ir::ReferenceScope::Document,
             &mut mant_ir::ReferenceWorkBudget::new(mant_ir::ReferenceScanLimits::default()),
             mant_ir::NavigationScanOptions::default(),

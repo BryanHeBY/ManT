@@ -283,7 +283,7 @@ impl App {
     #[cfg(feature = "native-link-layout")]
     #[must_use]
     pub fn from_native_snapshot(
-        snapshot: &mant_ir::SourceBoundLinkLayout,
+        snapshot: &mant_render::SourceBoundLinkLayout,
         catalog: DocumentCatalog,
     ) -> Self {
         let document = DocumentView::with_native_links(snapshot);
@@ -393,7 +393,7 @@ impl App {
     #[cfg(feature = "native-link-layout")]
     pub(crate) fn complete_open_native(
         &mut self,
-        snapshot: &mant_ir::SourceBoundLinkLayout,
+        snapshot: &mant_render::SourceBoundLinkLayout,
         request: NavigationRequest,
     ) {
         let view = DocumentView::with_native_links(snapshot);
