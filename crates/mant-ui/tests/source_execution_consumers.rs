@@ -485,7 +485,7 @@ fn compact_diag_blank_body_gets_its_own_layout_row() {
             if body.contains("BODYINK") {
                 assert_eq!(position(buffer, "BODYINK").1, head + 1, "{width}");
             } else {
-                for column in 1..width + 1 {
+                for column in 1..=width {
                     assert_eq!(
                         buffer[(column, head + 1)].symbol(),
                         " ",
