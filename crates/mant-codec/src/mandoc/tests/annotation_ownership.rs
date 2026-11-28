@@ -626,3 +626,58 @@ fn active_targets_and_true_row_retirement_preserve_navigation_projection() {
         "must exercise registered moves"
     );
 }
+
+#[test]
+fn contiguous_bare_uri_excludes_relocated_old_suffix_without_changing_disjoint_labels() {
+    let head = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n.No HEAD\n";
+    for (source, expected, reading) in [
+        (
+            "Y\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n",
+            &["ZYU"][..],
+            "HRAZYU:https://z.testEND",
+        ),
+        (
+            "YABCDEFGHIJKLMNOPQRSTUVW\n.No \"\\h'|0n'R\"\n.Lk https://z.test\nEND\n",
+            &["https://z.test"][..],
+            "REhttps://z.testJENDNOPQRSTUVW",
+        ),
+        (
+            "Y\n.Lk https://z.test Z U\nEND\n",
+            &["Z U"][..],
+            "HEADYZU:https://z.testEND",
+        ),
+        (
+            "Y\n.Lk https://z.test Z U\n.br\n.Lk https://z.test V W\nEND\n",
+            &["Z U", "V W"][..],
+            "HEADYZU:https://z.testVW:https://z.testEND",
+        ),
+    ] {
+        let page = format!("{head}{source}.Sh ENDTEST\nDone.\n");
+        let document =
+            parse_manual_bytes(std::path::Path::new("glyphs.1"), page.as_bytes()).unwrap();
+        let section = document
+            .sections
+            .iter()
+            .find(|section| mant_ir::inline_plain_text(&section.heading.content) == "DESCRIPTION")
+            .unwrap();
+        let mut links = Links::default();
+        links.visit_section(section);
+        let labels: Vec<_> = links.0.iter().map(|(target, children)| {
+            assert!(matches!(target, mant_ir::LinkTarget::External { uri } if uri == "https://z.test"));
+            mant_ir::inline_plain_text(children)
+        }).collect();
+        assert_eq!(labels, expected, "{source}: {section:?}");
+        let document_text = projected_document_text(&document);
+        let visible: String = document_text
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
+        assert!(visible.contains(reading), "{source}: {document_text}");
+        let wire = serde_json::to_string(&document).unwrap();
+        assert_public_wire(&wire, &serde_json::Value::from(source));
+        assert_eq!(
+            serde_json::from_str::<mant_ir::Document>(&wire).unwrap(),
+            document
+        );
+    }
+}

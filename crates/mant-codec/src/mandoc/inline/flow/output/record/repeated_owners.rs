@@ -213,6 +213,7 @@ mod tests {
             owner: owner.to_owned(),
             content: coordinate,
             may_relocate_navigation_target: false,
+            writer_epoch: 0,
             projected_device_padding: 0,
             projected_field_prefix: false,
             projected_gap: ProjectedNativeGap::default(),

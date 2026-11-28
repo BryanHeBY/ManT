@@ -419,3 +419,35 @@ fn generated_link_colon_keeps_old_ink_outside_the_actual_click_area() {
         check_copy(&mut app, cells, visible, "generated link colon");
     }
 }
+
+#[test]
+fn bare_link_only_clicks_its_contiguous_native_uri_after_roundtrip() {
+    let source = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n.No HEAD\nYABCDEFGHIJKLMNOPQRSTUVW\n.No \"\\h'|0n'R\"\n.Lk https://z.test\nEND\n.Sh ENDTEST\nDone.\n";
+    let uri = "https://z.test";
+    let visible = "REhttps://z.testJENDNOPQRSTUVW";
+    let content = json_roundtrip::json_string_roundtrip(
+        &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+    );
+    for width in [28, 40, 78] {
+        let mut app = App::new(&content);
+        let mut terminal = Terminal::new(TestBackend::new(width, 16)).unwrap();
+        terminal.draw(|frame| app.draw(frame)).unwrap();
+        let positions = wrapped_positions(terminal.backend().buffer(), visible);
+        let [cells] = positions.as_slice() else {
+            panic!("{width}: {positions:?}\n{}", terminal.backend());
+        };
+        for (offset, &(column, row)) in cells.iter().enumerate() {
+            reader_actions::click(&mut app, column, row);
+            assert_eq!(
+                reader_actions::opened_targets(&mut app),
+                if (2..2 + uri.len()).contains(&offset) {
+                    vec![uri]
+                } else {
+                    vec![]
+                },
+                "actual width {width}, body column {offset}",
+            );
+        }
+        check_copy(&mut app, cells, visible, "bare URI after rewind");
+    }
+}

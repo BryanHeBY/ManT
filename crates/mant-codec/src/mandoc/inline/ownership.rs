@@ -53,6 +53,7 @@ pub(in crate::mandoc) struct OutputMembership {
     pub(super) epoch: u64,
     pub(super) root: u64,
     pub(super) enclosing: Option<u64>,
+    pub(super) contiguous_native_receiver: bool,
 }
 
 pub(super) fn delayed_origin(epoch: u64, children: Vec<Inline>) -> Inline {
@@ -78,6 +79,81 @@ fn origin(node: &Inline) -> Option<u64> {
     (uri == title)
         .then(|| uri.strip_prefix(ORIGIN)?.parse().ok())
         .flatten()
+}
+
+const NATIVE_RELOCATED_ORIGIN: &str = "\0mant:native-relocated-origin:";
+
+pub(in crate::mandoc::inline) fn native_relocated_origin(
+    epoch: u64,
+    children: Vec<Inline>,
+) -> Inline {
+    let marker = format!("{NATIVE_RELOCATED_ORIGIN}{epoch}");
+    Inline::Link {
+        target: LinkTarget::External {
+            uri: marker.clone(),
+        },
+        title: Some(marker),
+        children,
+    }
+}
+
+fn relocate_origin(node: &Inline) -> Option<u64> {
+    let Inline::Link {
+        target: LinkTarget::External { uri },
+        title: Some(title),
+        ..
+    } = node
+    else {
+        return None;
+    };
+    (uri == title)
+        .then(|| uri.strip_prefix(NATIVE_RELOCATED_ORIGIN)?.parse().ok())
+        .flatten()
+}
+
+/// Refuse to change wrappers if the original receiver has live glyphs
+/// on both sides of a surviving old writer.
+fn prove_single_native_run(nodes: &[Inline], epoch: u64) -> bool {
+    #[derive(Default)]
+    struct Proof {
+        owned: bool,
+        foreign: bool,
+        intervening: bool,
+    }
+
+    fn observe(nodes: &[Inline], epoch: u64, proof: &mut Proof) {
+        for node in nodes {
+            if relocate_origin(node).is_some_and(|old| old < epoch) {
+                if proof.owned {
+                    proof.foreign = true;
+                }
+                continue;
+            }
+            if origin(node).is_some_and(|old| old < epoch) {
+                continue;
+            }
+            match node {
+                Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
+                Inline::Text { value }
+                | Inline::Code { value }
+                | Inline::Equation { value, .. } => {
+                    if !value.is_empty() {
+                        proof.owned = true;
+                        proof.intervening |= proof.foreign;
+                    }
+                }
+                Inline::Link { children, .. }
+                | Inline::Strong { children }
+                | Inline::Emphasis { children } => {
+                    observe(children, epoch, proof);
+                }
+            }
+        }
+    }
+
+    let mut proof = Proof::default();
+    observe(nodes, epoch, &mut proof);
+    proof.owned && !proof.intervening
 }
 pub(in crate::mandoc) fn is_delayed_origin(node: &Inline) -> bool {
     origin(node).is_some()
@@ -136,7 +212,9 @@ impl OutputMembership {
         mut map: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) -> Vec<Inline> {
         let mut parts = Vec::new();
-        self.partition(nodes, &mut parts);
+        let native_cut =
+            self.contiguous_native_receiver && prove_single_native_run(&nodes, self.epoch);
+        self.partition(nodes, &mut parts, native_cut);
         let mut output = Vec::new();
         let mut mapped = false;
         for part in parts {
@@ -156,13 +234,14 @@ impl OutputMembership {
         output
     }
 
-    fn partition(self, nodes: Vec<Inline>, parts: &mut Vec<Part>) {
+    fn partition(self, nodes: Vec<Inline>, parts: &mut Vec<Part>, native_cut: bool) {
         for node in nodes {
-            if let Some(epoch) = origin(&node) {
+            let relocated_epoch = relocate_origin(&node);
+            if let Some(epoch) = origin(&node).or(relocated_epoch) {
                 let Inline::Link { children, .. } = node else {
                     unreachable!()
                 };
-                if epoch < self.epoch {
+                if epoch < self.epoch && (relocated_epoch.is_none() || native_cut) {
                     let nodes = if self.enclosing.is_some_and(|parent| epoch < parent) {
                         vec![delayed_origin(epoch, children)]
                     } else {
@@ -170,24 +249,26 @@ impl OutputMembership {
                     };
                     add(parts, false, nodes);
                 } else {
-                    self.partition(children, parts);
+                    self.partition(children, parts, native_cut);
                 }
                 continue;
             }
             match node {
                 Inline::Strong { children } => {
-                    self.partition_wrapper(children, parts, |children| Inline::Strong { children });
+                    self.partition_wrapper(children, parts, native_cut, |children| {
+                        Inline::Strong { children }
+                    });
                 }
                 Inline::Emphasis { children } => {
-                    self.partition_wrapper(children, parts, |children| Inline::Emphasis {
-                        children,
+                    self.partition_wrapper(children, parts, native_cut, |children| {
+                        Inline::Emphasis { children }
                     });
                 }
                 Inline::Link {
                     target,
                     title,
                     children,
-                } => self.partition_wrapper(children, parts, |children| Inline::Link {
+                } => self.partition_wrapper(children, parts, native_cut, |children| Inline::Link {
                     target: target.clone(),
                     title: title.clone(),
                     children,
@@ -200,6 +281,7 @@ impl OutputMembership {
         self,
         children: Vec<Inline>,
         parts: &mut Vec<Part>,
+        native_cut: bool,
         wrap: impl Fn(Vec<Inline>) -> Inline,
     ) {
         if children.is_empty() {
@@ -207,7 +289,7 @@ impl OutputMembership {
             return;
         }
         let mut nested = Vec::new();
-        self.partition(children, &mut nested);
+        self.partition(children, &mut nested, native_cut);
         for part in nested {
             if part.own {
                 add(parts, true, vec![wrap(part.nodes)]);
@@ -241,6 +323,7 @@ mod tests {
             root: 0,
             epoch: 4,
             enclosing: None,
+            contiguous_native_receiver: false,
         };
         let result = receipt.map_owned(
             vec![
@@ -284,6 +367,7 @@ mod tests {
             root: 0,
             epoch: 2,
             enclosing: None,
+            contiguous_native_receiver: false,
         }
         .map_owned(vec![new], |nodes| nodes);
         assert_eq!(
@@ -303,6 +387,7 @@ mod tests {
             root: 0,
             epoch: 4,
             enclosing: Some(2),
+            contiguous_native_receiver: false,
         }
         .map_owned(
             vec![
@@ -319,7 +404,8 @@ mod tests {
             OutputMembership {
                 root: 0,
                 epoch: 2,
-                enclosing: None
+                enclosing: None,
+                contiguous_native_receiver: false,
             }
             .map_owned(result, |nodes| code(&nodes)),
             vec![
@@ -344,7 +430,8 @@ mod tests {
             OutputMembership {
                 root: 0,
                 epoch: 2,
-                enclosing: None
+                enclosing: None,
+                contiguous_native_receiver: false,
             }
             .map_owned(vec![forged], |nodes| code(&nodes)),
             vec![Inline::Code {

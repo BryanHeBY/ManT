@@ -18,13 +18,15 @@ impl InlineBuilder {
         marker: &str,
         wrap: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) {
-        if let Some(start) = self
-            .nodes
-            .iter()
-            .rposition(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == marker))
-        {
+        if let Some(start) = self.output_scope_start(marker) {
             self.wrap_output_from(start, wrap);
         }
+    }
+
+    fn output_scope_start(&self, marker: &str) -> Option<usize> {
+        self.nodes
+            .iter()
+            .rposition(|node| matches!(node, Inline::Anchor { id, .. } if id.as_str() == marker))
     }
 
     /// Only macros that select a font establish this scope. Transparent
@@ -158,10 +160,28 @@ impl InlineBuilder {
         append(self);
         self.pending_output_scope_prefixes
             .retain(|pending| pending != &content);
-        let membership = self.execution.zero_advance.end_output_owner();
+        let mut membership = self.execution.zero_advance.end_output_owner();
+        let Some(start) = self.output_scope_start(&scope) else {
+            return (false, membership);
+        };
+        if membership.contiguous_native_receiver
+            && self.execution.definition.is_some()
+            && self
+                .execution
+                .author_execution
+                .as_ref()
+                .is_some_and(|author| {
+                    start < author.field_output_start
+                        && author.field_output_start < self.nodes.len()
+                })
+        {
+            // The scope will be split across separate accepted/pending
+            // wrappers. Do not infer complete membership from either half.
+            membership.contiguous_native_receiver = false;
+        }
         let mut started = false;
         let mut annotated = false;
-        self.wrap_output_scope(&scope, |children| {
+        self.wrap_output_from(start, |children| {
             membership.map_owned(children, |children| {
                 if started {
                     if !has_annotation_member(&children) && !retain_empty {

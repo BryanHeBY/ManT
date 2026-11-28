@@ -12,9 +12,16 @@ use super::{
 
 mod live_prefix;
 
+#[derive(Clone, Copy)]
+pub(super) struct NativeWriterMembership {
+    pub(super) epoch: u64,
+    pub(super) may_relocate_navigation_target: bool,
+    pub(super) receiver: Option<u64>,
+}
+
 pub(super) struct ExecutedWordEntry {
     pub(super) receipt: WordWriteReceipt,
-    pub(super) may_relocate_navigation_target: bool,
+    pub(super) writer_membership: NativeWriterMembership,
     rewind: EntryRewind,
     prefix: live_prefix::PrefixEdits,
     placed_entry_blanks: Option<usize>,
@@ -26,7 +33,7 @@ impl ExecutedWordEntry {
     pub(super) fn execute(
         buffer: &mut FieldBuffer,
         mut writes: Vec<FieldWrite>,
-        (start, separator, may_relocate_navigation_target): (usize, usize, bool),
+        (start, separator, writer_membership): (usize, usize, NativeWriterMembership),
         earlier: &mut [NativeWordAnchor],
     ) -> Self {
         let prefix = live_prefix::PrefixEdits::prepare(buffer, &writes, earlier);
@@ -86,7 +93,7 @@ impl ExecutedWordEntry {
         }
         Self {
             receipt,
-            may_relocate_navigation_target,
+            writer_membership,
             rewind,
             prefix,
             placed_entry_blanks,
@@ -138,7 +145,13 @@ impl ExecutedWordEntry {
                 .borrow_mut()
                 .record_rewound_ink(self.clipped_ink_owners(earlier), owner);
         }
-        self.prefix.project(nodes, incoming, owner, earlier, head);
+        self.prefix.project(
+            nodes,
+            incoming,
+            owner,
+            earlier,
+            (head, self.writer_membership.receiver),
+        );
         remove_rewound_source_blanks(incoming, owner, &self.receipt.consumed_motion_padding);
         let EntryRewind::Executed {
             ref traversed_source_blanks,
@@ -239,7 +252,7 @@ pub(super) struct RecordedWordInput {
     pub(super) native_boundary: PendingBoundary,
     pub(super) sentence: bool,
     pub(super) projected_keep: bool,
-    pub(super) may_relocate_navigation_target: bool,
+    pub(super) writer_membership: NativeWriterMembership,
     pub(super) projection: WordProjectionPolicy,
 }
 
@@ -260,10 +273,15 @@ impl RecordedWordInput {
         if may_relocate_navigation_target {
             execution.navigation_target_word = None;
         }
+        let (epoch, receiver) = execution.zero_advance.native_writer_membership();
         Self {
             native_writes,
+            writer_membership: NativeWriterMembership {
+                epoch,
+                may_relocate_navigation_target,
+                receiver,
+            },
             native_boundary,
-            may_relocate_navigation_target,
             sentence: std::mem::take(&mut execution.native_word_sentence),
             projected_keep: std::mem::take(&mut execution.projected_keep_separator),
             projection,

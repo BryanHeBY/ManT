@@ -65,6 +65,8 @@ pub(in crate::mandoc::inline) struct NativeWordAnchor {
     /// A private word-target receipt was published for this source word.
     /// A cut may remove that marker, but an unmarked owner cannot move it.
     may_relocate_navigation_target: bool,
+    /// Original semantic writer, carried through relocated native intervals.
+    writer_epoch: u64,
     content: usize,
     projected_device_padding: usize,
     /// The word's generated field prefix was written before its content

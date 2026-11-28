@@ -10,6 +10,7 @@ pub(super) struct MembershipState {
     pub(super) active_links: Vec<(u64, mant_ir::LinkTarget)>,
     pub(super) output_epoch: u64,
     pub(super) authored_member_epoch: u64,
+    contiguous_native_receiver: Option<u64>,
 }
 
 impl MembershipState {
@@ -20,6 +21,7 @@ impl MembershipState {
             authored_member_epoch: 0,
             semantic_root: 0,
             active_links: Vec::new(),
+            contiguous_native_receiver: None,
         }
     }
 }
@@ -118,6 +120,7 @@ impl ZeroAdvanceState {
                         epoch,
                         root,
                         enclosing: None,
+                        contiguous_native_receiver: false,
                     },
                     &annotation,
                     true,
@@ -157,11 +160,36 @@ impl ZeroAdvanceState {
         self.membership
             .active_links
             .retain(|(owner, _)| *owner != epoch);
+        let contiguous_native_receiver = self.membership.contiguous_native_receiver == Some(epoch);
+        if contiguous_native_receiver {
+            self.membership.contiguous_native_receiver = None;
+        }
         OutputMembership {
             epoch,
             root,
             enclosing: self.membership.output_owners.last().map(|scope| scope.0),
+            contiguous_native_receiver,
         }
+    }
+
+    /// Capture the original writer's semantic position and the innermost
+    /// owner that could otherwise claim another writer's relocated glyph.
+    pub(in crate::mandoc::inline) fn native_writer_membership(&self) -> (u64, Option<u64>) {
+        (
+            self.membership.output_epoch,
+            self.membership.contiguous_native_receiver.filter(|&epoch| {
+                self.membership
+                    .output_owners
+                    .last()
+                    .is_some_and(|scope| scope.0 == epoch)
+            }),
+        )
+    }
+
+    /// The caller is a single bare URI word inside its active annotation.
+    pub(in crate::mandoc::inline) fn mark_contiguous_native_receiver(&mut self) {
+        self.membership.contiguous_native_receiver =
+            self.membership.output_owners.last().map(|scope| scope.0);
     }
 
     /// Wrapped source labels have their own reading projection.
@@ -435,6 +463,7 @@ mod preview_tests {
             epoch: 3,
             root: 7,
             enclosing: Some(2),
+            contiguous_native_receiver: false,
         };
         for pending in [
             Pending::Absent,

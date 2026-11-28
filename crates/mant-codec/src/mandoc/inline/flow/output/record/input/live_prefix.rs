@@ -44,6 +44,7 @@ struct RelocatedGlyph {
     glyph: Inline,
     starts_word: bool,
     may_relocate_navigation_target: bool,
+    foreign_epoch: Option<u64>,
 }
 
 impl PrefixEdits {
@@ -225,7 +226,7 @@ impl PrefixEdits {
         incoming: &mut Vec<Inline>,
         incoming_owner: &str,
         earlier: &[NativeWordAnchor],
-        head: Option<&DeferredHeadProjection>,
+        (head, receiver): (Option<&DeferredHeadProjection>, Option<u64>),
     ) {
         // Suffix-relative offsets of later drops survive earlier removals.
         let mut relocated = std::collections::BTreeMap::new();
@@ -277,6 +278,9 @@ impl PrefixEdits {
                         owner: projection_owner,
                         glyph: projection,
                         starts_word,
+                        foreign_epoch: receiver
+                            .filter(|&epoch| earlier[*owner_index].writer_epoch < epoch)
+                            .map(|_| earlier[*owner_index].writer_epoch),
                         may_relocate_navigation_target: earlier[*owner_index]
                             .may_relocate_navigation_target,
                     },
@@ -377,6 +381,7 @@ impl PrefixEdits {
                 glyph,
                 starts_word,
                 may_relocate_navigation_target,
+                foreign_epoch,
             }) = relocated.remove(&slot)
             {
                 // HORIZ can place another macro's ink before this word
@@ -397,8 +402,17 @@ impl PrefixEdits {
                 {
                     incoming.extend(target);
                 }
-                incoming.push(Inline::anchor(owner));
-                incoming.push(glyph);
+                let source = Inline::anchor(owner);
+                if let Some(epoch) = foreign_epoch {
+                    // Slot relocation reorders presentation, not semantic
+                    // authorship. Split the newer scope on the old payload.
+                    incoming.push(crate::mandoc::inline::ownership::native_relocated_origin(
+                        epoch,
+                        vec![source, glyph],
+                    ));
+                } else {
+                    incoming.extend([source, glyph]);
+                }
                 incoming.push(Inline::anchor(incoming_owner));
             }
         }

@@ -26,6 +26,12 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     // the generated colon and the visible URI word.
     let address = link_identity_text(first.text.as_deref().unwrap_or_default());
     let absent_target = address.is_empty();
+    // Resolve eligibility against the authored URI before replacing the
+    // destination with a private annotation-pool key.
+    let literal_uri = first.text.as_deref() == Some(address.as_str())
+        && address
+            .bytes()
+            .all(|byte| byte.is_ascii_graphic() && byte != b'\\');
     let owner = builder
         .zero_advance
         .new_annotation(source_link_target(address, false))
@@ -43,7 +49,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     let label = &children[1..label_end];
     builder.with_native_operand_role(NativeOperandRole::ReferenceText(None), |builder| {
         if label.is_empty() {
-            append_link_target_or_text(builder, first, &address, default_name);
+            append_link_target_or_text(builder, first, &address, default_name, literal_uri);
         } else {
             // termp_lk_pre() executes the label, colon and URI before
             // authored trailing delimiters. Treat their punctuation as
@@ -142,6 +148,7 @@ fn append_link_target_or_text(
     node: &Node,
     address: &str,
     default_name: Option<&str>,
+    literal_uri: bool,
 ) {
     if address.is_empty() {
         // A malformed or control-only target must degrade to ordinary source
@@ -150,6 +157,9 @@ fn append_link_target_or_text(
         append_isolated_inline_node(builder, node, default_name);
     } else {
         append_external_link(builder, address, false, |builder| {
+            if literal_uri {
+                builder.zero_advance.mark_contiguous_native_receiver();
+            }
             append_isolated_inline_node(builder, node, default_name);
         });
     }
