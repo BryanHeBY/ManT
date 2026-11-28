@@ -66,9 +66,14 @@ impl LinkMembers {
             };
             // The paired loader supplies this position. An unrecognized
             // origin/target cannot disable a different source link.
-            if !matches!(target, LinkTarget::External { uri } if mant_ir::is_valid_external_uri(uri))
-                || target != &receipt.target
-            {
+            let supported_target = match target {
+                LinkTarget::External { uri } => mant_ir::is_valid_external_uri(uri),
+                LinkTarget::Email { .. } => {
+                    super::inline::local_link_target(target, None).is_some()
+                }
+                _ => false,
+            };
+            if !supported_target || target != &receipt.target {
                 supported = false;
                 continue;
             }

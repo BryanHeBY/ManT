@@ -440,6 +440,11 @@ const AU_MIXED_LINK: &str = ".No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test 
 
 #[cfg(feature = "native-link-layout")]
 fn au_native_hits(app: &mut App, text: &str, index: usize, expected: [bool; 3]) {
+    native_member_hits(app, text, index, expected, "https://z.test");
+}
+
+#[cfg(feature = "native-link-layout")]
+fn native_member_hits(app: &mut App, text: &str, index: usize, expected: [bool; 3], uri: &str) {
     let width = app.geometry.content.width;
     let group = &app.session.rendered_cache[&width].search(text)[index];
     assert_eq!(
@@ -455,7 +460,7 @@ fn au_native_hits(app: &mut App, text: &str, index: usize, expected: [bool; 3]) 
             app.take_external_request()
                 .as_ref()
                 .map(crate::ExternalUri::as_str),
-            linked.then_some("https://z.test"),
+            linked.then_some(uri),
             "width {width}, label {text}[{index}] offset {offset}"
         );
     }
@@ -561,6 +566,34 @@ fn native_link_au_independent_prior_link_does_not_take_the_new_owners_receipt() 
             let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
             terminal.draw(|frame| app.draw(frame)).unwrap();
             au_native_hits(&mut app, &format!("Z{old}U"), 0, [true, false, true]);
+        }
+    }
+}
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_link_av_mailto_uses_the_same_owned_cells_as_https() {
+    // Frozen AV oracle: termp_lk_pre paints ZYU (old Y between two owned
+    // characters), while mdoc_lk_pre writes only Z U inside the HTML link.
+    for (authored, opened) in [
+        ("mailto:a@z.test", "mailto:a@z.test"),
+        ("MAILTO:a@z.test", "mailto:a@z.test"),
+        ("mailto:a@z.test?subject=hi", "mailto:a@z.test?subject=hi"),
+    ] {
+        let part = AU_MIXED_LINK.replace("https://z.test", authored);
+        let source = format!(
+            "{AU_MEMBER_HEADER}{part}.br\n.Mt plain@y.test\n.br\n.Xr printf 3\n.Sh ENDTEST\nDone.\n"
+        );
+        let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+        let [receipt] = snapshot.receipts() else {
+            panic!("{authored}: expected one link membership");
+        };
+        assert_eq!(receipt.members, [0..1, 2..3]);
+        for width in [60, 80, 140] {
+            let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
+            let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            native_member_hits(&mut app, "ZYU", 0, [true, false, true], opened);
         }
     }
 }
