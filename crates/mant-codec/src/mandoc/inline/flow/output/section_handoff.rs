@@ -131,13 +131,15 @@ impl SectionHandoff {
                     .then_some(SharedRow::UnprintedTail)
             };
         }
+        let shared_filled_padding = shared_padding && !self.previous_literal;
         if self.previous_empty_passes > 0
-            && !shared_padding
+            && !shared_filled_padding
             && self.has_surviving_previous_glyph(buffer, pass, covered)
         {
             // Earlier empty rows are now interior; their inline breaks
-            // already represent them. HEAD's own ink, including a seam
-            // where it borrows only fixed old padding, cannot do this.
+            // already represent them. An open filled tail that lends only
+            // fixed padding has no old reading row to carry the breaks.
+            // A literal tail already represents its closed rows inline.
             self.previous_empty_passes = 0;
         }
         if closes_previous && !printed_row {
