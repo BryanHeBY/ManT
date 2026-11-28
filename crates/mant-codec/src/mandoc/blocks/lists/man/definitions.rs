@@ -622,6 +622,8 @@ mod tests {
 
     #[test]
     fn native_tq_preserves_the_first_tags_settled_external_gap() {
+        use std::fmt::Write as _;
+
         // AX pinned CVS ASCII and UTF-8: prior IP/TP, optional real br,
         // and successive TQ heads share POST without adding alias gaps.
         for (prior, control, pd, aliases, expected) in [
@@ -634,7 +636,6 @@ mod tests {
         ] {
             let mut source =
                 format!(".TH AX 1\n.SH DESCRIPTION\n.PD {pd}\n{prior}{control}.TP 6n\n.B BETA\n");
-            use std::fmt::Write as _;
             for index in 0..aliases {
                 writeln!(source, ".TQ\n.I GAMMA{index}").unwrap();
             }
