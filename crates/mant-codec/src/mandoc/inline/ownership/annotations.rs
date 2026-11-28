@@ -71,6 +71,7 @@ pub(in crate::mandoc) struct AnnotationPool(Rc<RefCell<Destinations>>);
 #[derive(Debug, Default)]
 struct Destinations {
     deferred: bool,
+    capture_link_layout: bool,
     next: usize,
     source_candidates: usize,
     targets: HashMap<String, Destination>,
@@ -298,6 +299,10 @@ impl AnnotationPool {
         *first = first.or(source);
     }
 
+    pub(in crate::mandoc) fn capture_link_layout(&self, capture: bool) {
+        self.0.borrow_mut().capture_link_layout = capture;
+    }
+
     pub(in crate::mandoc) fn finish(
         &self,
         blocks: &mut [Block],
@@ -413,7 +418,7 @@ impl AnnotationPool {
             if let Inline::Link {
                 target: LinkTarget::External { uri },
                 children,
-                ..
+                title,
             } = &mut node
                 && self.0.borrow().targets.contains_key(uri)
             {
@@ -466,7 +471,13 @@ impl AnnotationPool {
                     });
                     output.push(Inline::Link {
                         target,
-                        title: None,
+                        title: if destinations.capture_link_layout && foreign.is_none() {
+                            title
+                                .take()
+                                .filter(|title| crate::mandoc::link_layout::is_marker(title))
+                        } else {
+                            None
+                        },
                         children: std::mem::take(children),
                     });
                 } else {

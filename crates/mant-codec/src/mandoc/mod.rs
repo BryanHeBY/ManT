@@ -10,6 +10,7 @@ mod escape_coverage;
 mod formatter;
 pub(crate) mod inline;
 mod layout;
+mod link_layout;
 pub use layout::roff_vertical_space_lines;
 mod literal_reading;
 mod navigation;
@@ -79,7 +80,21 @@ pub fn parse_plain_manual_report(
     path: &Path,
     source: &[u8],
 ) -> Result<(Document, ParseReport), ParseError> {
-    parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle)
+    parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle, None)
+}
+
+/// Decode plain roff and derive native link membership for the same snapshot.
+/// The returned document keeps exactly the legacy serialization.
+/// # Errors
+/// Returns the same bounded native parse errors as the plain decoder.
+pub fn parse_plain_manual_with_link_layout(
+    path: &Path,
+    source: &[u8],
+) -> Result<(Document, mant_ir::LinkLayout), ParseError> {
+    let mut layout = mant_ir::LinkLayout::default();
+    let (document, _) =
+        parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle, Some(&mut layout))?;
+    Ok((document, layout))
 }
 
 #[derive(Clone, Copy)]
@@ -93,7 +108,7 @@ enum InitialCodeRow {
 // Public codec entry points always select the documented reading projection.
 #[cfg(test)]
 pub(crate) fn parse_native_manual(path: &Path, source: &[u8]) -> Result<Document, ParseError> {
-    parse_with_reading_policy(path, source, InitialCodeRow::RetainExecuted)
+    parse_with_reading_policy(path, source, InitialCodeRow::RetainExecuted, None)
         .map(|(document, _)| document)
 }
 
@@ -101,6 +116,7 @@ fn parse_with_reading_policy(
     path: &Path,
     source: &[u8],
     initial_code_row: InitialCodeRow,
+    link_layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Result<(Document, ParseReport), ParseError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
@@ -109,8 +125,13 @@ fn parse_with_reading_policy(
     })
     .parse_bytes(path, source.as_ref())?;
     let source_text = String::from_utf8_lossy(source.as_ref());
-    let mut document =
-        lower_mandoc_document_with_source(path, &report, Some(&source_text), initial_code_row);
+    let mut document = lower_mandoc_document_with_source(
+        path,
+        &report,
+        Some(&source_text),
+        initial_code_row,
+        link_layout,
+    );
     if masked_controls > 0 {
         document.diagnostics.insert(
             0,
@@ -129,7 +150,7 @@ fn parse_with_reading_policy(
 /// Convert a completed low-level parse into the stable document contract.
 #[must_use]
 pub fn lower_mandoc_document(path: &Path, report: &ParseReport) -> Document {
-    lower_mandoc_document_with_source(path, report, None, InitialCodeRow::OmitSingle)
+    lower_mandoc_document_with_source(path, report, None, InitialCodeRow::OmitSingle, None)
 }
 
 fn lower_mandoc_document_with_source(
@@ -137,9 +158,13 @@ fn lower_mandoc_document_with_source(
     report: &ParseReport,
     source: Option<&str>,
     initial_code_row: InitialCodeRow,
+    link_layout: Option<&mut mant_ir::LinkLayout>,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);
+    context
+        .annotations
+        .capture_link_layout(link_layout.is_some());
     let target_plan =
         targets::NativeTargetPlan::build(&parsed.root, &mut context.authored_section_targets);
     let explicit_targets = target_plan.explicit();
@@ -225,6 +250,9 @@ fn lower_mandoc_document_with_source(
     };
     equation_wire::bound_wire_structure(&mut document);
     owner_layout::bound_layout_hints(&mut document);
+    if let Some(layout) = link_layout {
+        *layout = link_layout::seal(&mut document);
+    }
     document.diagnostics.extend(validate_document(&document));
     document
 }

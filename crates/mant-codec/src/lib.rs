@@ -31,5 +31,6 @@ pub use mandoc::{
 #[cfg(feature = "roff")]
 pub use mandoc::{
     RedirectSyntaxError, lower_mandoc_document, parse_plain_manual as parse_roff_bytes,
-    parse_plain_manual_report as parse_roff_bytes_with_report, redirect_target,
+    parse_plain_manual_report as parse_roff_bytes_with_report,
+    parse_plain_manual_with_link_layout as parse_roff_bytes_with_link_layout, redirect_target,
 };

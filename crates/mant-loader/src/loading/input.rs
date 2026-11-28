@@ -184,6 +184,28 @@ pub fn load_markdown_text(
 /// Returns a native parse error or an empty-document error.
 #[cfg(feature = "roff")]
 pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
+    load_bounded_roff(source, |path, source| {
+        parse_manual_bytes(path, source).map(|doc| (doc, ()))
+    })
+    .map(|(resolved, ())| resolved)
+}
+
+/// Parse one bounded roff stream and retain optional native link membership
+/// paired with that exact legacy document snapshot.
+/// # Errors
+/// Returns the same limits or parse errors as ordinary bounded roff loading.
+#[cfg(feature = "roff")]
+pub fn load_roff_bytes_with_link_layout(
+    source: &[u8],
+) -> Result<(ResolvedContent, mant_ir::LinkLayout), LoadError> {
+    load_bounded_roff(source, mant_codec::parse_roff_bytes_with_link_layout)
+}
+
+#[cfg(feature = "roff")]
+fn load_bounded_roff<T, E: ToString>(
+    source: &[u8],
+    parse: impl FnOnce(&Path, &[u8]) -> Result<(mant_ir::Document, T), E>,
+) -> Result<(ResolvedContent, T), LoadError> {
     if u64::try_from(source.len()).unwrap_or(u64::MAX) > crate::MAX_MANUAL_BYTES {
         return Err(LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
@@ -193,7 +215,7 @@ pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
             ),
         }));
     }
-    let document = parse_manual_bytes(Path::new("stdin"), source).map_err(|error| {
+    let (document, extra) = parse(Path::new("stdin"), source).map_err(|error| {
         LoadError::Manual(ManualLoadError::Parse {
             name: "stdin".to_owned(),
             detail: error.to_string(),
@@ -211,10 +233,13 @@ pub fn load_roff_bytes(source: &[u8]) -> Result<ResolvedContent, LoadError> {
         .cloned()
         .or_else(|| document.meta.title.clone())
         .unwrap_or_else(|| "stdin".to_owned());
-    Ok(ResolvedContent {
-        address: None,
-        label,
-        document: Some(document),
-        tldr: None,
-    })
+    Ok((
+        ResolvedContent {
+            address: None,
+            label,
+            document: Some(document),
+            tldr: None,
+        },
+        extra,
+    ))
 }

@@ -23,9 +23,9 @@ mod spec;
 mod tests;
 pub use error::{LoadError, ManualLoadError};
 pub use input::load_markdown_text;
-#[cfg(feature = "roff")]
-pub use input::load_roff_bytes;
 use input::load_with;
+#[cfg(feature = "roff")]
+pub use input::{load_roff_bytes, load_roff_bytes_with_link_layout};
 use named::query_named_document;
 pub use resolver::DocumentLoader;
 #[cfg(test)]

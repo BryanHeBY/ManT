@@ -18,12 +18,12 @@ pub use catalog::{
     PreparedCatalogQuery, discover_documents, list_available_documents, query_available_documents,
 };
 pub use executable::{ExecutableLookup, find_host_executable};
-#[cfg(feature = "roff")]
-pub use loading::load_roff_bytes;
 pub use loading::{
     DocumentLoader, LoadError, LoadPolicy, LoadSpec, MAX_MARKDOWN_BYTES, ManualLoadError,
     load_markdown_text, validate_load_spec,
 };
+#[cfg(feature = "roff")]
+pub use loading::{load_roff_bytes, load_roff_bytes_with_link_layout};
 pub use mant_ir::{ResolvedContent, is_manual_section};
 pub use manual::{is_command_manual_section, parenthesized_manual_reference};
 #[cfg(feature = "roff")]

@@ -36,6 +36,18 @@ impl AcceptedDescription {
         self.cursor = 0;
     }
 
+    pub(super) fn authored_members(&self) -> Vec<Range<usize>> {
+        if self.fragment != 1 || self.preceding.is_empty() {
+            return Vec::new();
+        }
+        self.preceding
+            .iter()
+            .chain(&self.tail)
+            .filter(|run| run.writer == PhysicalWriter::Authored)
+            .map(|run| run.scalars.clone())
+            .collect()
+    }
+
     pub(super) fn record(&mut self, writer: PhysicalWriter, count: usize) {
         if count == 0 {
             return;

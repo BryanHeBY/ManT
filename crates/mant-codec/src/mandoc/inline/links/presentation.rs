@@ -292,7 +292,21 @@ fn resolve_parts(
                     {
                         output.extend(children);
                     } else {
-                        bind_accepted_link(&mut output, children, address, owner, part, bound);
+                        let title = labels.get(&owner).and_then(|label| {
+                            crate::mandoc::link_layout::marker(
+                                owner,
+                                &children,
+                                &label.description.authored_members(),
+                            )
+                        });
+                        bind_accepted_link(
+                            &mut output,
+                            children,
+                            (address, title),
+                            owner,
+                            part,
+                            bound,
+                        );
                     }
                 }
                 Part::Uri if !label && !address.is_empty() => {
@@ -305,7 +319,14 @@ fn resolve_parts(
                     {
                         output.extend(children);
                     } else {
-                        bind_accepted_link(&mut output, children, address, owner, part, bound);
+                        bind_accepted_link(
+                            &mut output,
+                            children,
+                            (address, None),
+                            owner,
+                            part,
+                            bound,
+                        );
                     }
                 }
                 _ => output.extend(children),
@@ -320,7 +341,7 @@ fn resolve_parts(
 fn bind_accepted_link(
     output: &mut Vec<Inline>,
     children: Vec<Inline>,
-    address: String,
+    (address, title): (String, Option<String>),
     owner: AnnotationKey,
     part: Part,
     bound: &mut HashSet<(AnnotationKey, Part)>,
@@ -329,7 +350,7 @@ fn bind_accepted_link(
         bound.insert((owner, part));
         output.push(Inline::Link {
             target: LinkTarget::External { uri: address },
-            title: None,
+            title,
             children,
         });
     } else {
@@ -531,5 +552,49 @@ mod tests {
         assert_eq!(leaves[2], (PhysicalWriter::Authored, "U".into()));
         let json = serde_json::to_string(&document).unwrap();
         assert!(!json.contains("lk-described-foreign"), "{json}");
+        let (paired, layout) = crate::mandoc::parse_plain_manual_with_link_layout(
+            Path::new("split.1"),
+            source.as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(
+            serde_json::to_string(&paired).unwrap(),
+            json,
+            "default wire unchanged"
+        );
+        let [receipt] = layout.receipts.as_slice() else {
+            panic!("{layout:?}");
+        };
+        assert_eq!(receipt.members, [0..1, 2..3]);
+        assert_eq!(
+            mant_ir::inline_plain_text(&receipt.expected_children),
+            "ZYU"
+        );
+        assert_eq!(
+            receipt.target,
+            LinkTarget::External {
+                uri: "https://z.test".into()
+            }
+        );
+        let mut matching_paths = Vec::new();
+        let scan = mant_ir::scan_navigation_scope_with_budget(
+            &paired,
+            mant_ir::ReferenceScope::Document,
+            &mut mant_ir::ReferenceWorkBudget::new(mant_ir::ReferenceScanLimits::default()),
+            mant_ir::NavigationScanOptions::default(),
+            |event, _| {
+                if let mant_ir::NavigationEvent::Link(link) = event
+                    && *link.target == receipt.target
+                {
+                    matching_paths.push(link.location.to_owned().unwrap());
+                }
+                std::ops::ControlFlow::Continue(())
+            },
+        );
+        assert!(scan.complete());
+        assert_eq!(matching_paths.len(), 2);
+        assert_eq!(receipt.origin, matching_paths[0]);
+        assert_ne!(receipt.origin, matching_paths[1]);
+        eprintln!("final sidecar: {receipt:?}");
     }
 }
