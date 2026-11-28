@@ -64,3 +64,25 @@ fn a_deferred_tab_keeps_its_spelling_only_in_the_projected_literal() {
     assert!(matches!(doc.sections[1].blocks.as_slice(),
         [Block::Paragraph { children, .. }] if inline_text(children) == "ALPHA\n\nBETA"));
 }
+
+#[test]
+fn subsection_borrows_fixed_padding_without_consuming_an_already_closed_blank() {
+    // AX frozen source 4a4bf91c: both native devices retain a device
+    // blank row between ALPHA and padded NEXT. Only the open tail
+    // padding is shared with NEXT; it does not hide the completed row.
+    let source = format!("{MAN}ALPHA\\p \\p\\& \\0\n.SS NEXT\nAFTERMARK\n.SH ENDTEST\nFINISH\n");
+    let doc = lower(&source);
+    let first = &doc.sections[1];
+    assert!(
+        matches!(first.blocks.as_slice(),
+        [Block::Paragraph { children, .. }, Block::VerticalSpace { lines: 1, .. }]
+        if inline_text(children) == "ALPHA"),
+        "{:#?}",
+        first.blocks
+    );
+    let next = &first.children[0];
+    assert_eq!(inline_text(&next.heading.content).trim_start(), "NEXT");
+    assert_eq!(next.spacing_before_lines, 0);
+    assert!(matches!(next.blocks.as_slice(),
+        [Block::Paragraph { children, .. }] if inline_text(children) == "AFTERMARK"));
+}

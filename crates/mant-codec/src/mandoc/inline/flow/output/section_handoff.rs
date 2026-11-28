@@ -132,10 +132,12 @@ impl SectionHandoff {
             };
         }
         if self.previous_empty_passes > 0
+            && !shared_padding
             && self.has_surviving_previous_glyph(buffer, pass, covered)
         {
             // Earlier empty rows are now interior; their inline breaks
-            // already represent them. HEAD's own glyphs cannot do this.
+            // already represent them. HEAD's own ink, including a seam
+            // where it borrows only fixed old padding, cannot do this.
             self.previous_empty_passes = 0;
         }
         if closes_previous && !printed_row {
