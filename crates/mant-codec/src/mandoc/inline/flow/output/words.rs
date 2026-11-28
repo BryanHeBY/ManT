@@ -210,11 +210,6 @@ impl InlineBuilder {
         }
     }
 
-    /// Probe the current native input, not a macro name or its projection.
-    pub(in crate::mandoc) fn has_retreated_word_cursor(&self) -> bool {
-        self.execution.word_input().0.has_retained_word_cursor()
-    }
-
     /// Consume a generated HEAD field whose visible marker belongs to the
     /// `ListKind` owner. Keep delayed glyphs from earlier source, but retire
     /// the marker's own origin/padding and line receipts after its real post.

@@ -11,6 +11,10 @@ fn first_item(node: &Node) -> Option<&Node> {
 }
 
 fn body_rows(rendered: &str) -> Vec<String> {
+    section_rows(rendered, "DESCRIPTION", "NEXT")
+}
+
+fn section_rows(rendered: &str, section: &str, next_section: &str) -> Vec<String> {
     let mut projected = String::with_capacity(rendered.len());
     for character in rendered.chars() {
         match character {
@@ -22,8 +26,8 @@ fn body_rows(rendered: &str) -> Vec<String> {
         }
     }
     let rows = projected.lines().map(str::trim).collect::<Vec<_>>();
-    let start = rows.iter().position(|row| *row == "DESCRIPTION").unwrap() + 1;
-    let end = rows.iter().position(|row| *row == "NEXT").unwrap();
+    let start = rows.iter().position(|row| *row == section).unwrap() + 1;
+    let end = rows.iter().position(|row| *row == next_section).unwrap();
     rows[start..end]
         .iter()
         .map(|row| (*row).to_owned())
@@ -411,5 +415,58 @@ fn include_delimiters_follow_their_independent_device_write_heads() {
             actual.pop();
         }
         assert_eq!(actual, [expected], "{source}");
+    }
+}
+
+#[test]
+fn include_uses_native_font_and_write_head_for_every_operand_spelling() {
+    // CVS mdoc_term.c::termp_in_pre opens in the entry font, then
+    // print_mdoc_node unwinds that operand scope before termp_in_post.
+    // ASCII and UTF-8 agree on these full visible rows, including neighbors.
+    const HEADER: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd exercise bounded output\n";
+    let before_include = ".No HEAD\nABC\n.No \"\\h'|0n'R\"\n";
+    let mut cases = [
+        (".In \"x\"", "RE<x>BEND"),
+        (".In \"\\N'120'\"", "RE<x>BEND"),
+        (".In \"\\[u0078]\"", "RE<x>BEND"),
+        (".In \"x y\"", "RE<xAy> END"),
+        (".In \"x\\&\"", "RE<x>CEND"),
+        (".In \"\\fRx\\fP\"", "RE<x> END"),
+    ]
+    .map(|(operand, expected)| {
+        (
+            "DESCRIPTION",
+            format!("{before_include}{operand}\nEND"),
+            vec![expected],
+        )
+    })
+    .to_vec();
+    cases.extend([
+        (
+            "DESCRIPTION",
+            ".ft I\n.No HEAD\n.Tg t\nABC\n.In \"\\h'|0n'Z\"\n.No UU\nEND".into(),
+            vec!["Z> UUAEN<"],
+        ),
+        (
+            "DESCRIPTION",
+            ".ft BI\n.No HEAD\n.No \"\\zR\"\n.Ap\n.In x\n.No \"\\h'|0n'U\"\nEND".into(),
+            vec!["UEEND<x>"],
+        ),
+        (
+            "DESCRIPTION",
+            ".No HEAD\nABC\n.In x\nEND".into(),
+            vec!["HEAD ABC <x> END"],
+        ),
+        ("SYNOPSIS", ".In x".into(), vec!["#include <x>"]),
+        ("SYNOPSIS", ".No Prefix In x".into(), vec!["Prefix", "<x>"]),
+    ]);
+    for (section, body, expected) in cases {
+        let source = format!("{HEADER}.Sh {section}\n{body}\n.Sh ENDTEST\nDone.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = section_rows(&mant_render::render_query_man(&query), section, "ENDTEST");
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, expected, "{source}");
     }
 }

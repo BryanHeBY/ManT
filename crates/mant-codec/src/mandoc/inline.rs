@@ -187,52 +187,33 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     if let Some(anchor) = navigation_anchor(node) {
         builder.append(vec![anchor]);
     }
-    let replay = builder.has_retreated_word_cursor();
     let pretty_line = node.flags.synopsis_pretty && node.flags.line_start;
-    // The simple prose case has a provable native opening in the entry
-    // font: CVS writes "<" before selecting underline for the operand.
-    // Keep the existing conservative writer for complex projected
-    // operands or pre-existing decoration while those raw slots lack proof.
-    let regular_opening = replay
-        && !node.flags.synopsis_pretty
-        && builder.font.current == Font::Regular
-        && matches!(children, [child] if child.decoder_text().is_some_and(|text|
-            !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_graphic() && byte != b'\\')));
-    let operand_font = if pretty_line {
-        Font::Strong
-    } else {
-        Font::Emphasis
-    };
-    let saved = (!regular_opening).then(|| builder.font.push_scope(operand_font));
-    // Cut delayed glyphs from preceding source out of the code span.
-    // Keep the accepted ranges of "<", the operand and ">" separate
-    // until native retirement. Flattening them now would discard those
-    // word markers before a later blank can trigger range filtering.
+    // termp_in_pre emits the ordinary opening before entering the
+    // operand's UNDER scope. Only a pretty synopsis line opens in BOLD.
+    let pre_font = pretty_line.then(|| builder.font.push_scope(Font::Strong));
     let scope = builder.begin_output_checkpoint();
     builder.zero_advance.begin_output_owner();
-    let append_delimiter = |builder: &mut InlineBuilder, word, replay| {
-        if replay {
-            append_normalized_word(builder, word);
-        } else {
-            builder.append_text(word);
-        }
-    };
     if pretty_line {
-        // termp_in_pre()1552-1558 writes two separate words, "#include"
-        // and "<". The latter's automatic separator is its own native cell.
-        append_delimiter(builder, "#include", replay);
+        append_normalized_word(builder, "#include");
     }
-    append_delimiter(builder, "<", replay);
-    let saved = saved.unwrap_or_else(|| builder.font.push_scope(operand_font));
+    append_normalized_word(builder, "<");
+    let saved = pre_font.unwrap_or_else(|| builder.font.push_scope(Font::Emphasis));
     builder.tighten_next_boundary();
     append_inline_nodes(builder, children, default_name);
-    if node.flags.synopsis_pretty {
-        builder.font.select(Font::Strong);
-    }
+
+    // print_mdoc_node restores the entry depth before termp_in_post.
+    // The synopsis close has its own temporary BOLD font and both
+    // forms execute the closing word at the operand's current write head.
     builder.font.pop_scope(saved);
+    let post_font = node
+        .flags
+        .synopsis_pretty
+        .then(|| builder.font.push_scope(Font::Strong));
     builder.tighten_next_boundary();
-    // The operand may have moved the cursor after the pre call.
-    append_delimiter(builder, ">", replay || builder.has_retreated_word_cursor());
+    append_normalized_word(builder, ">");
+    if let Some(saved) = post_font {
+        builder.font.pop_scope(saved);
+    }
     let membership = builder.zero_advance.end_output_owner();
     builder
         .zero_advance
