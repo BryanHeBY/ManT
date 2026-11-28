@@ -688,6 +688,13 @@ fn contiguous_bare_uri_excludes_relocated_old_suffix_without_changing_disjoint_l
             &["https://z.test"][..],
             "REhttps://z.testJENDNOPQRSTUVW",
         ),
+        // CVS mdoc_term.c::termp_lk_pre executes the target in term_word;
+        // term.c changes font without buffering a cell for this escape.
+        (
+            "YABCDEFGHIJKLMNOPQRSTUVW\n.No \"\\h'|0n'R\"\n.Lk https://z.test\\fR\nEND\n",
+            &["https://z.test"][..],
+            "REhttps://z.testJENDNOPQRSTUVW",
+        ),
         (
             "Y\n.Lk https://z.test Z U\nEND\n",
             &["Z U"][..],

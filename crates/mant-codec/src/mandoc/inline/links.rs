@@ -28,10 +28,10 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
     let absent_target = address.is_empty();
     // Resolve eligibility against the authored URI before replacing the
     // destination with a private annotation-pool key.
-    let literal_uri = first.text.as_deref() == Some(address.as_str())
-        && address
-            .bytes()
-            .all(|byte| byte.is_ascii_graphic() && byte != b'\\');
+    let literal_uri = first
+        .text
+        .as_deref()
+        .is_some_and(|source| contiguous_uri_spelling(source, &address));
     let owner = builder
         .zero_advance
         .new_annotation(source_link_target(address, false))
@@ -81,6 +81,45 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
         }
     });
     append_inline_nodes(builder, &children[label_end..], default_name);
+}
+
+/// A Roman font selection changes formatter state but writes no terminal
+/// cell (CVS term.c::term_word). Recognize only that complete escape here;
+/// other escapes may move, overstrike, or otherwise alter writer ownership.
+fn contiguous_uri_spelling(source: &str, address: &str) -> bool {
+    let mut bytes = source.as_bytes().iter().copied();
+    let mut expected = address.bytes();
+    while let Some(byte) = bytes.next() {
+        if byte == b'\\' {
+            if bytes.next() != Some(b'f') || bytes.next() != Some(b'R') {
+                return false;
+            }
+        } else if !byte.is_ascii_graphic() || expected.next() != Some(byte) {
+            return false;
+        }
+    }
+    expected.next().is_none()
+}
+
+#[cfg(test)]
+mod contiguous_uri_tests {
+    use super::contiguous_uri_spelling;
+
+    #[test]
+    fn only_literal_graphics_and_complete_roman_font_escape_qualify() {
+        let uri = "https://z.test";
+        for source in [uri, r"https://z.test\fR", r"https://z.\fRtest"] {
+            assert!(contiguous_uri_spelling(source, uri), "{source}");
+        }
+        for source in [
+            r"https://z.test\f",
+            r"https://z.test\zJ",
+            r"https://z.test\h'1n'",
+            r"https://z.test\fX",
+        ] {
+            assert!(!contiguous_uri_spelling(source, uri), "{source}");
+        }
+    }
 }
 
 /// CVS `termp_lk_pre()` font-pops after the label, selects NOSPACE, then
