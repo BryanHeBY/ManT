@@ -137,7 +137,7 @@ pub(super) fn applies(events: &[RoffInlineEvent], context: &TextExecutionContext
                 || relative_retreat
                     && can_replay_relative_retreat(events, context, has_zero_advance)
                 || has_armed_overlap
-                || tight_word_can_carry_glyph(events, context)
+                || word_can_carry_native_backtracking(events, context)
                 || tight_run_in_word_can_replay(events, context)
                 || marker_then_graph_can_replay(events, context)
                 || word_can_consume_projected_blank(events, context)
@@ -699,6 +699,47 @@ fn word_can_consume_projected_blank(
             .bytes()
             .all(|byte| byte == b' ' || byte.is_ascii_graphic())
         && text.bytes().any(|byte| byte.is_ascii_graphic())
+}
+
+fn word_can_carry_native_backtracking(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    tight_word_can_carry_glyph(events, context)
+        || literal_word_can_carry_native_backtracking(events, context)
+}
+
+/// A short literal `term_word` can settle a live BACK flag even when an
+/// enclosing reading wrapper has already published its pending glyph.
+fn literal_word_can_carry_native_backtracking(
+    events: &[RoffInlineEvent],
+    context: &TextExecutionContext<'_>,
+) -> bool {
+    let [RoffInlineEvent::Text(text)] = events else {
+        return false;
+    };
+    let entry = &context.slot_entry;
+    matches!(
+        entry.domain,
+        ReplayDomain::Filled | ReplayDomain::DefinitionLine
+    ) && !text.is_empty()
+        && text.len() <= 8
+        && text.bytes().all(|byte| byte.is_ascii_graphic())
+        && entry.prefix.as_ref().is_some_and(|prefix| {
+            prefix.start == 0
+                && prefix.cursor_retreat == 0
+                && (prefix.backbefore || prefix.backafter)
+                // A source TABREF changes neither BACK flag; other tail
+                // controls need their existing accepted-spacing path.
+                && matches!(prefix.cells.iter().rev()
+                    .find(|(cell, _)| !matches!(cell, FieldCell::TabReference)),
+                    Some((FieldCell::Graph { width: 1, .. }, _)))
+                && prefix
+                    .raw_slot_count()
+                    .saturating_add(text.len().saturating_mul(5))
+                    .saturating_add(1)
+                    <= prefix.slot_limit
+        })
 }
 
 fn tight_word_can_carry_glyph(

@@ -15,6 +15,22 @@ use libmandoc_rs::{
     ManMacro, RoffMacro,
 };
 
+/// A direct word may need the raw suffix while BACKAFTER has not yet
+/// created a pending glyph, or after the earlier glyph was projected.
+fn replay_direct_word(
+    input: &super::field_buffer::FieldBuffer,
+    extend: PrefixExtension,
+    domain: ReplayDomain,
+    tight: bool,
+    append_only: bool,
+) -> bool {
+    matches!(extend, PrefixExtension::DirectText)
+        && (tight && domain == ReplayDomain::DefinitionLine && input.can_replay_armed_run_in_head()
+            || append_only
+                && matches!(domain, ReplayDomain::Filled | ReplayDomain::DefinitionLine)
+                && (input.has_entry_retreat() || input.has_backafter_armed()))
+}
+
 fn retain_projected_advances(
     prefix: &mut FieldPrefix,
     input: &FieldBuffer,
@@ -1022,12 +1038,8 @@ impl super::InlineExecutionState {
         let continuing_run_in = self.definition.as_ref().is_some_and(|state| {
             state.run_in_continuation && state.deferred_head_projection.is_some()
         });
-        // BACKAFTER has not yet created a pending glyph, but the next
-        // tight encode1() still appends to the live HEAD (term.c:903–929).
-        let armed_run_in_word = matches!(extend, PrefixExtension::DirectText)
-            && tight
-            && domain == ReplayDomain::DefinitionLine
-            && input.can_replay_armed_run_in_head();
+        let replay_backtracking_word =
+            replay_direct_word(input, extend, domain, tight, append_only);
         let leading_marker_extend = matches!(extend, PrefixExtension::LeadingMarker);
         let extend = match extend {
             PrefixExtension::None | PrefixExtension::DirectText => false,
@@ -1069,7 +1081,7 @@ impl super::InlineExecutionState {
             },
             device_tail,
             prefix: (capture_prefix
-                || armed_run_in_word
+                || replay_backtracking_word
                 || live_edit
                 || leading_retreat && !input.has_entry_retreat()
                 || filled_line_domain && input.has_replayable_trailing_advance()
@@ -1078,7 +1090,7 @@ impl super::InlineExecutionState {
                     let mut prefix = input.word_replay_prefix(
                         (automatic_blanks, kept_blanks),
                         leading_retreat
-                            || armed_run_in_word
+                            || replay_backtracking_word
                             || leading_marker_extend
                             || continuing_run_in
                             || input.has_retained_word_cursor()
