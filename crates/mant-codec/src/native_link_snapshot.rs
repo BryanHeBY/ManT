@@ -118,21 +118,18 @@ impl DecodedLinkDocument {
 ///
 /// ```compile_fail
 /// use mant_codec::SourceBoundLinkLayout;
-/// use mant_ir::{ContentLocation, LinkLayout};
-/// fn rebind(a: &SourceBoundLinkLayout, b: &SourceBoundLinkLayout, other: ContentLocation) {
-///     let mut receipt = b.receipts()[0].clone();
-///     receipt.origin = other;
-///     let raw = LinkLayout { receipts: vec![receipt] };
-///     let _ = SourceBoundLinkLayout { content: a.content_arc(), layout: raw };
+/// fn rebind(a: &SourceBoundLinkLayout, b: &SourceBoundLinkLayout) {
+///     let layout = b.layout_for(&b.content_arc()).unwrap().clone();
+///     // Genuine native data still cannot be attached to another allocation.
+///     let _ = SourceBoundLinkLayout { content: a.content_arc(), layout };
 /// }
 /// ```
 ///
 /// ```compile_fail
 /// use mant_codec::{DecodedLinkDocument, SourceBoundLinkLayout};
-/// use mant_ir::LinkLayout;
 /// fn rebind(a: &SourceBoundLinkLayout, b: &SourceBoundLinkLayout) {
-///     let raw = LinkLayout { receipts: b.receipts().to_vec() };
-///     let _ = DecodedLinkDocument::from_decode(a.content().document.clone().unwrap(), raw);
+///     let layout = b.layout_for(&b.content_arc()).unwrap().clone();
+///     let _ = DecodedLinkDocument::from_decode(a.content().document.clone().unwrap(), layout);
 /// }
 /// ```
 #[derive(Clone, Debug)]
