@@ -51,6 +51,7 @@ fn bounded_label(nodes: &[Inline]) -> Option<String> {
                     continue;
                 }
                 Inline::LineBreak {} => "\n",
+                Inline::Anchor { id, .. } if id.as_str().len() <= MAX_LABEL => continue,
                 Inline::Anchor { .. } | Inline::Equation { .. } | Inline::Link { .. } => {
                     return None;
                 }
