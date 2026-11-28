@@ -122,11 +122,14 @@ fn append_roff_word(builder: &mut InlineBuilder, source: &str, origin: WordSourc
         builder.claim_inline_word_targets(&execution.output);
     }
 
+    let occupies_motion_cell = execution.output.is_empty()
+        && builder.has_unprojected_no_fill_motion(&execution.native_writes);
     builder.native_word_writes = Some(execution.native_writes);
     // A visited empty source TEXT takes the vertical path before reaching
     // here. roff_term_pre_ce() executes its empty TEXT as a direct term_word:
     // its NODE_LINE is a grouping delimiter, not an occupied cell.
-    let occupies_literal_row = !execution.output.is_empty()
+    let occupies_literal_row = occupies_motion_cell
+        || !execution.output.is_empty()
         || builder.zero_advance.has_buffered_glyph()
         || events.iter().any(|event| {
             matches!(

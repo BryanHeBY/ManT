@@ -311,3 +311,24 @@ fn literal_row_sources_keep_all_entered_and_retired_boundary_positions() {
     }
     assert_eq!(cases_run, 84);
 }
+
+#[test]
+fn motion_only_literal_rows_use_written_device_cells_not_readable_whitespace() {
+    for header in [MAN_HEADER, MDOC_HEADER] {
+        for (motion, rows) in [
+            (r"\h'|1n'", "LEFT\n\nRIGHT"),
+            // The existing relative-motion path projects its explicit
+            // whitespace; absolute positioning adds no new reading glyph.
+            (r"\h'1n'", "LEFT\n \nRIGHT"),
+            (r"\h'|1n'\h'|0n'", "LEFT\n\nRIGHT"),
+            (r"\h'|0n'\h'|1n'", "LEFT\n\nRIGHT"),
+            (r"\h'|0n'", "LEFT\nRIGHT"),
+            (r"\h'0n'", "LEFT\nRIGHT"),
+            (r"\z\h'|1n'", "LEFT\nRIGHT"),
+        ] {
+            let body = format!("LEFT\n{motion}\nRIGHT\n");
+            assert_eq!(literal_text(header, &body), rows, "{header:?} {motion:?}");
+        }
+        assert_eq!(literal_text(header, "LEFT\n\\h'|1n'\n"), "LEFT\n");
+    }
+}

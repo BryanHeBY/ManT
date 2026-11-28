@@ -115,6 +115,27 @@ impl NoFillInlineState {
     }
 }
 
+impl InlineBuilder {
+    /// Resolved `HORIZ` can buffer `ASCII_NBRSP` without publishing text.
+    /// No-fill closes that occupied row, not merely a nonzero raw target.
+    pub(in crate::mandoc::inline) fn has_unprojected_no_fill_motion(
+        &self,
+        writes: &[super::field_buffer::FieldWrite],
+    ) -> bool {
+        use super::field_buffer::{FieldCell, FieldWrite};
+        self.execution.no_fill_word_active
+            && writes.iter().any(|write| {
+                matches!(
+                    write,
+                    FieldWrite::Placed {
+                        cell: FieldCell::FixedDrawingAdvance(1..),
+                        scalars: 0,
+                    }
+                )
+            })
+    }
+}
+
 impl InlineExecutionState {
     /// A physical row resets word geometry while preserving document registers.
     /// Output-segment drains and Rust function returns do not call this method.
