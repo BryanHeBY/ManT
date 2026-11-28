@@ -101,27 +101,6 @@ fn contiguous_uri_spelling(source: &str, address: &str) -> bool {
     expected.next().is_none()
 }
 
-#[cfg(test)]
-mod contiguous_uri_tests {
-    use super::contiguous_uri_spelling;
-
-    #[test]
-    fn only_literal_graphics_and_complete_roman_font_escape_qualify() {
-        let uri = "https://z.test";
-        for source in [uri, r"https://z.test\fR", r"https://z.\fRtest"] {
-            assert!(contiguous_uri_spelling(source, uri), "{source}");
-        }
-        for source in [
-            r"https://z.test\f",
-            r"https://z.test\zJ",
-            r"https://z.test\h'1n'",
-            r"https://z.test\fX",
-        ] {
-            assert!(!contiguous_uri_spelling(source, uri), "{source}");
-        }
-    }
-}
-
 /// CVS `termp_lk_pre()` font-pops after the label, selects NOSPACE, then
 /// executes the colon and URI. Annotation never starts another word or
 /// settles a pending glyph merely to decide its typed label.
@@ -426,5 +405,26 @@ fn append_man_link_body(
             builder.hard_break();
         }
         append_isolated_inline_node(builder, child, name);
+    }
+}
+
+#[cfg(test)]
+mod contiguous_uri_tests {
+    use super::contiguous_uri_spelling;
+
+    #[test]
+    fn only_literal_graphics_and_complete_roman_font_escape_qualify() {
+        let uri = "https://z.test";
+        for source in [uri, r"https://z.test\fR", r"https://z.\fRtest"] {
+            assert!(contiguous_uri_spelling(source, uri), "{source}");
+        }
+        for source in [
+            r"https://z.test\f",
+            r"https://z.test\zJ",
+            r"https://z.test\h'1n'",
+            r"https://z.test\fX",
+        ] {
+            assert!(!contiguous_uri_spelling(source, uri), "{source}");
+        }
     }
 }
