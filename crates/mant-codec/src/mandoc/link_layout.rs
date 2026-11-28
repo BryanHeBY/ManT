@@ -101,17 +101,6 @@ pub(super) fn seal(document: &mut Document) -> LinkLayout {
             ControlFlow::Continue(())
         },
     );
-    struct Remove;
-    impl VisitMut for Remove {
-        fn visit_inline_mut(&mut self, inline: &mut Inline) {
-            if let Inline::Link { title, .. } = inline
-                && title.as_deref().is_some_and(is_marker)
-            {
-                *title = None;
-            }
-            visit::walk_inline_mut(self, inline);
-        }
-    }
     Remove.visit_document_mut(document);
     if !report.complete() {
         receipts.clear();
@@ -124,4 +113,16 @@ pub(super) fn seal(document: &mut Document) -> LinkLayout {
         receipts.clear();
     }
     LinkLayout { receipts }
+}
+
+struct Remove;
+impl VisitMut for Remove {
+    fn visit_inline_mut(&mut self, inline: &mut Inline) {
+        if let Inline::Link { title, .. } = inline
+            && title.as_deref().is_some_and(is_marker)
+        {
+            *title = None;
+        }
+        visit::walk_inline_mut(self, inline);
+    }
 }

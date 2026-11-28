@@ -15,9 +15,9 @@ pub(super) struct PhysicalRun {
     pub(super) writer: PhysicalWriter,
 }
 
-/// The enclosing map is keyed by source AnnotationKey, never by the URI.
+/// The enclosing map is keyed by source occurrence, never by the URI.
 /// Coordinates are local to original surviving description fragments after
-/// native paint, before releasing existing legacy Inline::Link wrappers.
+/// native paint, before releasing existing legacy link wrappers.
 /// No run spans a physical fragment/cut. This is local publication evidence,
 /// not a globally addressable span: a cut may disable the native receiver,
 /// so absence of an Earlier run is not proof that an arbitrary fragment can

@@ -465,9 +465,27 @@ mod tests {
         // Public validators reject its NUL independently of this detection.
     }
 
+    use mant_ir::visit::{self, Visit};
+
+    #[derive(Default)]
+    struct Links(Vec<String>);
+    impl<'a> Visit<'a> for Links {
+        fn visit_inline(&mut self, inline: &'a Inline) {
+            if let Inline::Link {
+                target: LinkTarget::External { uri },
+                children,
+                ..
+            } = inline
+                && uri == "https://z.test"
+            {
+                self.0.push(mant_ir::inline_plain_text(children));
+            }
+            visit::walk_inline(self, inline);
+        }
+    }
+
     #[test]
     fn described_link_retains_physical_runs_while_legacy_projection_stays_unchanged() {
-        use mant_ir::visit::{self, Visit};
         use std::path::Path;
 
         // Frozen AT split.1. CVS termp_lk_pre executes Z, U, ':' and URI
@@ -479,22 +497,6 @@ mod tests {
         let (document, trace) = description_runs::capture(|| {
             crate::mandoc::parse_plain_manual(Path::new("split.1"), source.as_bytes()).unwrap()
         });
-        #[derive(Default)]
-        struct Links(Vec<String>);
-        impl<'a> Visit<'a> for Links {
-            fn visit_inline(&mut self, inline: &'a Inline) {
-                if let Inline::Link {
-                    target: LinkTarget::External { uri },
-                    children,
-                    ..
-                } = inline
-                    && uri == "https://z.test"
-                {
-                    self.0.push(mant_ir::inline_plain_text(children));
-                }
-                visit::walk_inline(self, inline);
-            }
-        }
         let mut links = Links::default();
         links.visit_document(&document);
         assert_eq!(links.0.len(), 2);
@@ -552,6 +554,11 @@ mod tests {
         assert_eq!(leaves[2], (PhysicalWriter::Authored, "U".into()));
         let json = serde_json::to_string(&document).unwrap();
         assert!(!json.contains("lk-described-foreign"), "{json}");
+        assert_public_layout(&source, &json);
+    }
+
+    fn assert_public_layout(source: &str, json: &str) {
+        use std::path::Path;
         let (paired, layout) = crate::mandoc::parse_plain_manual_with_link_layout(
             Path::new("split.1"),
             source.as_bytes(),
