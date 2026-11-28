@@ -84,7 +84,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
 }
 
 /// A Roman font selection changes formatter state but writes no terminal
-/// cell (CVS term.c::term_word). Recognize only that complete escape here;
+/// cell (CVS `term.c::term_word`). Recognize only that complete escape here;
 /// other escapes may move, overstrike, or otherwise alter writer ownership.
 fn contiguous_uri_spelling(source: &str, address: &str) -> bool {
     let mut bytes = source.as_bytes().iter().copied();

@@ -333,25 +333,13 @@ impl super::InlineBuilder {
                     })
                 })
                 .or_else(|| {
-                    // mdoc_macro.c::in_line can allocate an empty Fl when
-                    // the argument is closing punctuation, then execute
-                    // its following TEXT as a separate native word.
-                    let node = text?.0;
-                    (capture
-                        .option_dash
-                        .is_some_and(|dash| dash.wrapping_add(1) == serial)
-                        && node.flags.delimiter_close
-                        && matches!(node.decoder_text(), Some("," | "." | ";" | ":" | "?" | "!")))
-                    .then_some(NativeOperandRole::OptionPunctuation)
-                })
-                .or_else(|| {
-                    // in_line() closes Fl before these sibling delimiters.
-                    // They also belong to the lexical option alphabet.
-                    let node = text?.0;
-                    (capture.has_option
-                        && node.flags.delimiter_close
-                        && matches!(node.decoder_text(), Some("?" | "." | r"\.")))
-                    .then_some(NativeOperandRole::OptionClosingPunctuation)
+                    option_punctuation_role(
+                        text?.0,
+                        capture
+                            .option_dash
+                            .is_some_and(|dash| dash.wrapping_add(1) == serial),
+                        capture.has_option,
+                    )
                 })
                 .or_else(|| {
                     let role = capture.operand_role?;
@@ -488,6 +476,26 @@ impl super::InlineBuilder {
             capture.borrow_mut().enclosures.pop();
         }
     }
+}
+
+fn option_punctuation_role(
+    node: &Node,
+    adjacent_empty_dash: bool,
+    has_option: bool,
+) -> Option<NativeOperandRole> {
+    if !node.flags.delimiter_close {
+        return None;
+    }
+    let spelling = node.decoder_text();
+    // CVS can allocate an empty Fl, then execute its closing punctuation as
+    // a separate native word. Preserve its priority over sibling delimiters.
+    if adjacent_empty_dash && matches!(spelling, Some("," | "." | ";" | ":" | "?" | "!")) {
+        return Some(NativeOperandRole::OptionPunctuation);
+    }
+    // A completed Fl excludes sibling closing punctuation, even when the
+    // spelling belongs to the lexical option alphabet.
+    (has_option && matches!(spelling, Some("?" | "." | r"\.")))
+        .then_some(NativeOperandRole::OptionClosingPunctuation)
 }
 
 fn literal_delimiter(node: &Node) -> Option<char> {
