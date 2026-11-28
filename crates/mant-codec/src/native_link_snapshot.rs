@@ -12,6 +12,7 @@ pub struct NativeLinkLayout {
     pub(crate) receipts: Vec<LinkLayoutReceipt>,
     pub(crate) restrictions: Vec<NativeLinkRestriction>,
     pub(crate) restrict_unidentified: bool,
+    pub(crate) restrict_unidentified_email: bool,
 }
 
 impl NativeLinkLayout {
@@ -27,11 +28,18 @@ impl NativeLinkLayout {
         &self.restrictions
     }
 
-    /// Unidentified external links may be mixed. Proven memberships are
-    /// still usable and unrelated non-external navigation is unaffected.
+    /// Unidentified External links may be mixed. Proven memberships are
+    /// still usable; unknown Email links have a separate restriction.
     #[must_use]
     pub const fn restrict_unidentified(&self) -> bool {
         self.restrict_unidentified
+    }
+
+    /// Unidentified Email links may be mixed. Exact memberships and links
+    /// of a different target type are unaffected by this restriction.
+    #[must_use]
+    pub const fn restrict_unidentified_email(&self) -> bool {
+        self.restrict_unidentified_email
     }
 }
 

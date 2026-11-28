@@ -8,6 +8,7 @@ use std::{collections::HashMap, ops::Range};
 pub(super) struct LinkMembers {
     membership: HashMap<usize, Vec<Range<usize>>>,
     restrict_unidentified: bool,
+    restrict_unidentified_email: bool,
 }
 
 impl LinkMembers {
@@ -21,6 +22,7 @@ impl LinkMembers {
         };
         let (mut members, _) = Self::collect(document, layout.receipts());
         members.restrict_unidentified |= layout.restrict_unidentified();
+        members.restrict_unidentified_email |= layout.restrict_unidentified_email();
         for restriction in layout.restrictions() {
             let Some(target) = document
                 .and_then(|doc| restriction.origin.resolve_link(doc))
@@ -31,7 +33,11 @@ impl LinkMembers {
             else {
                 // SourceBoundLinkLayout cannot name another document; a
                 // failed structural check cannot be interpreted as Whole.
-                members.restrict_unidentified = true;
+                if matches!(restriction.target, LinkTarget::Email { .. }) {
+                    members.restrict_unidentified_email = true;
+                } else {
+                    members.restrict_unidentified = true;
+                }
                 continue;
             };
             members
@@ -112,6 +118,7 @@ impl LinkMembers {
             Self {
                 membership: ranges,
                 restrict_unidentified: receipts.len() > 1000,
+                restrict_unidentified_email: receipts.len() > 1000,
             },
             supported,
         )
@@ -121,6 +128,7 @@ impl LinkMembers {
         MemberCursor {
             membership: &self.membership,
             restrict_unidentified: self.restrict_unidentified,
+            restrict_unidentified_email: self.restrict_unidentified_email,
             positions: HashMap::new(),
         }
     }
@@ -198,6 +206,7 @@ fn whole_members(text: &str, members: &[Range<usize>]) -> bool {
 pub(super) struct MemberCursor<'a> {
     membership: &'a HashMap<usize, Vec<Range<usize>>>,
     restrict_unidentified: bool,
+    restrict_unidentified_email: bool,
     positions: HashMap<usize, (usize, usize)>,
 }
 
@@ -212,8 +221,11 @@ impl MemberCursor<'_> {
             let address = std::ptr::from_ref(target).addr();
             Some((address, target, self.membership.get(&address)?))
         }) else {
-            let restricted =
-                self.restrict_unidentified && matches!(target, Some(LinkTarget::External { .. }));
+            let restricted = match target {
+                Some(LinkTarget::External { .. }) => self.restrict_unidentified,
+                Some(LinkTarget::Email { .. }) => self.restrict_unidentified_email,
+                _ => false,
+            };
             emit(if restricted { None } else { target }, text);
             return;
         };

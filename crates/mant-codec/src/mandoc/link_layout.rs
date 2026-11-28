@@ -5,7 +5,7 @@ use std::{
 };
 
 use mant_ir::{
-    Document, Inline, LinkLayoutReceipt, NavigationEvent, NavigationScanOptions,
+    Document, Inline, LinkLayoutReceipt, LinkTarget, NavigationEvent, NavigationScanOptions,
     ReferenceScanLimits, ReferenceScope, ReferenceWorkBudget, scan_navigation_scope_with_budget,
     visit::{self, VisitMut},
 };
@@ -124,7 +124,6 @@ fn decode(title: &str, children: &[Inline]) -> Option<(u32, Vec<Range<usize>>)> 
 
 pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
     let mut layout = NativeLinkLayout::default();
-    let mut unidentified = false;
     let mut budget = ReferenceWorkBudget::new(ReferenceScanLimits::default());
     let _ = scan_navigation_scope_with_budget(
         document,
@@ -145,7 +144,6 @@ pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
                 && is_marker(title)
             {
                 let Some(origin) = link.location.to_owned() else {
-                    unidentified = true;
                     return ControlFlow::Continue(());
                 };
                 if layout.receipts.len() < MAX_RECEIPTS
@@ -170,7 +168,15 @@ pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
             ControlFlow::Continue(())
         },
     );
-    let located = layout.receipts.len() + layout.restrictions.len();
+    let mut located = MarkedTargets::default();
+    for target in layout.receipts.iter().map(|receipt| &receipt.target).chain(
+        layout
+            .restrictions
+            .iter()
+            .map(|restriction| &restriction.target),
+    ) {
+        located.count(target);
+    }
 
     // Existing cleanup visits the entire document. During that same walk,
     // count matches only for the bounded proven prefix. Later or restricted
@@ -183,10 +189,11 @@ pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
         .collect();
     let mut cleanup = Remove {
         occurrences: &mut occurrences,
-        marker_count: 0,
+        markers: MarkedTargets::default(),
     };
     cleanup.visit_document_mut(document);
-    layout.restrict_unidentified = unidentified || cleanup.marker_count != located;
+    layout.restrict_unidentified = cleanup.markers.external != located.external;
+    layout.restrict_unidentified_email = cleanup.markers.email != located.email;
     layout.receipts.retain(|receipt| {
         if occurrences.get(&receipt.occurrence) == Some(&1) {
             return true;
@@ -196,6 +203,8 @@ pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
                 origin: receipt.origin.clone(),
                 target: receipt.target.clone(),
             });
+        } else if matches!(receipt.target, LinkTarget::Email { .. }) {
+            layout.restrict_unidentified_email = true;
         } else {
             layout.restrict_unidentified = true;
         }
@@ -204,17 +213,35 @@ pub(super) fn seal(document: &mut Document) -> NativeLinkLayout {
     layout
 }
 
+#[derive(Default)]
+struct MarkedTargets {
+    external: usize,
+    email: usize,
+}
+
+impl MarkedTargets {
+    fn count(&mut self, target: &LinkTarget) {
+        if matches!(target, LinkTarget::Email { .. }) {
+            self.email += 1;
+        } else {
+            // Native author markers currently cover only outbound targets.
+            // Keep the existing generic fallback for other marker types.
+            self.external += 1;
+        }
+    }
+}
+
 struct Remove<'a> {
     occurrences: &'a mut HashMap<u32, u8>,
-    marker_count: usize,
+    markers: MarkedTargets,
 }
 
 impl VisitMut for Remove<'_> {
     fn visit_inline_mut(&mut self, inline: &mut Inline) {
-        if let Inline::Link { title, .. } = inline
+        if let Inline::Link { target, title, .. } = inline
             && let Some(marker) = title.as_deref().filter(|title| is_marker(title))
         {
-            self.marker_count += 1;
+            self.markers.count(target);
             if let Some(count) = occurrence(marker).and_then(|key| self.occurrences.get_mut(&key)) {
                 *count = count.saturating_add(1);
             }

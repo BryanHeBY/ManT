@@ -597,3 +597,61 @@ fn native_link_av_mailto_uses_the_same_owned_cells_as_https() {
         }
     }
 }
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_link_av_unlocated_mixed_target_restricts_only_its_target_type() {
+    // Pinned termp_lk_pre paints tail X Y V on one physical line;
+    // mdoc_lk_pre confirms the link authored X and V, never old ink Y.
+    for (count, tail_uri, blocked) in [
+        (1280, "mailto:a@z.test", [false, false]),
+        (1281, "mailto:a@z.test", [false, true]),
+        (1281, "https://z.test", [true, false]),
+    ] {
+        let middle = format!("{AU_MIXED_LINK}.br\n").repeat(count - 1);
+        let tail = AU_MIXED_LINK
+            .replace("https://z.test", tail_uri)
+            .replace(" Z U", " X V");
+        let source = format!(
+            "{AU_MEMBER_HEADER}.Mt plain@y.test\n.br\n.Lk https://plain.test DOCUMENT\n.br\n{middle}{tail}.br\n.Xr printf 3\n.Sh ENDTEST\nDone.\n"
+        );
+        let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+        let pair = snapshot.content_arc();
+        let layout = snapshot.layout_for(&pair).unwrap();
+        assert_eq!(layout.receipts().len(), 256);
+        assert_eq!(layout.restrictions().len(), 1024);
+        assert_eq!(
+            [
+                layout.restrict_unidentified(),
+                layout.restrict_unidentified_email()
+            ],
+            blocked,
+            "tail {count}: {tail_uri}",
+        );
+        for width in [60, 80, 140] {
+            let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
+            let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let content_width = app.geometry.content.width;
+            for (text, uri, restricted) in [
+                ("DOCUMENT", "https://plain.test", blocked[0]),
+                ("plain@y.test", "mailto:plain@y.test", blocked[1]),
+            ] {
+                let region = &app.session.rendered_cache[&content_width].search(text)[0];
+                click_document_cell(&mut app, region.start_column, region.row);
+                assert_eq!(
+                    app.take_external_request()
+                        .as_ref()
+                        .map(crate::ExternalUri::as_str),
+                    (!restricted).then_some(uri),
+                    "independent {text}: tail {count} {tail_uri} width {width}",
+                );
+            }
+            au_native_hits(&mut app, "ZYU", 0, [true, false, true]);
+            app.session.content_scroll =
+                app.session.rendered_cache[&content_width].search("XYV")[0].row;
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            native_member_hits(&mut app, "XYV", 0, [false; 3], tail_uri);
+        }
+    }
+}
