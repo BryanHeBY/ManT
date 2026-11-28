@@ -541,3 +541,86 @@ Y
         assert_eq!(actual, expected, "{source}");
     }
 }
+
+#[test]
+fn man_optional_brackets_execute_at_the_live_native_write_head() {
+    // CVS man_term.c::pre_OP calls term_word for each bracket; term.c
+    // keeps earlier raw bytes until they are overwritten or a real flush.
+    let cases: [(&str, &[&str]); 3] = [
+        ("\\h'|0n'R\n", &["RB[-a ZZ] END"]),
+        ("\\h'|0n'R\n.br\n", &["RBCD", "[-a ZZ] END"]),
+        ("", &["ABCD [-a ZZ] END"]),
+    ];
+    for (prefix, expected) in cases {
+        let source = format!(
+            ".TH TEST 1\n.SH NAME\ntest \\- probe\n.SH DESCRIPTION\n\
+             ABCD\n{prefix}.OP -a ZZ\nEND\n.SH NEXT\nDone.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = body_rows(&mant_render::render_query_man(&query));
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, expected, "{source}");
+    }
+}
+
+#[test]
+fn generated_include_uses_the_line_prefix_after_zero_width_input() {
+    // CVS term.c::bufferc saves NBRZW without clearing BACKAFTER;
+    // termp_in_pre and termp_in_post encode at that same live line.
+    let cases: [(&str, &[&str]); 2] = [
+        (".ft I\n.No \"Q\\z\\&\"\n.In x\n\\h'|0n'U", &["U x>"]),
+        (
+            ".ft I\n.No \"Q\\z\\&\"\n.br\n.In x\n\\h'|0n'U",
+            &["Q", "Ux>"],
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!(
+            ".Dd January 1, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
+             .Sh DESCRIPTION\n{body}\n.Sh NEXT\nDone.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = body_rows(&mant_render::render_query_man(&query));
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, expected, "{source}");
+    }
+}
+
+#[test]
+fn generated_include_does_not_hide_a_real_overwrite_of_the_diagnostic_head() {
+    // In both pinned devices the last END writes at the earlier live
+    // cursor and consumes H's surviving decorated slot; no term remains.
+    const PREFIX: &str = ".Dd January 1, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
+                          .Sh DESCRIPTION\n.Bl -diag -compact\n.It H\n.No \"\\zR\"\n.In x\n\
+                          .No \"\\h'|0n'U\"\n";
+    for (tail, expected) in [("END\n", "ENDR<x>"), ("", "H  R<x>")] {
+        let source = format!("{PREFIX}{tail}.El\n.Sh NEXT\nDone.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = body_rows(&mant_render::render_query_man(&query));
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, [expected], "{source}");
+        if tail.is_empty() {
+            continue;
+        }
+        let explained = mant_query::explain_query(
+            &query,
+            &mant_protocol::ExplanationQuery {
+                entry: "H".into(),
+                options: mant_protocol::ExplanationOptions::default(),
+            },
+        )
+        .unwrap();
+        assert!(
+            !explained
+                .evidence
+                .iter()
+                .any(|e| e.class == mant_protocol::EvidenceClass::DirectEntry)
+        );
+    }
+}

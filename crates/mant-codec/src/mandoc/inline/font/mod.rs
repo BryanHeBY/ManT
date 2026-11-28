@@ -73,7 +73,7 @@ pub(super) fn lower_man_font_scope(
         // CVS man_term.c::pre_OP() emits both brackets with term_word().
         // Keep them in the caller's formatter stream so pending `\z`/`\p`
         // state crosses authored operands and generated punctuation in order.
-        output.append_text("[");
+        super::append_normalized_word(output, "[");
         output.tighten_next_boundary();
         output.enter_keep_words();
         // post_OP() diagnoses excess arguments but leaves the AST intact.
@@ -107,7 +107,7 @@ pub(super) fn lower_man_font_scope(
         output.font.select(Font::Regular);
         output.exit_keep_words();
         output.tighten_next_boundary();
-        output.append_text("]");
+        super::append_normalized_word(output, "]");
         output.font.select(Font::Regular);
         return;
     }

@@ -208,9 +208,18 @@ pub(in crate::mandoc::inline) enum CursorReposition {
     RelativeRetreat,
 }
 
+/// Whether a scoped field still shares a detached HEAD's native line.
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+pub(in crate::mandoc::inline) enum ScopedLineReplay {
+    #[default]
+    Unavailable,
+    Detached,
+}
+
 #[derive(Default)]
 pub(in crate::mandoc) struct SlotEntry {
     pub(in crate::mandoc::inline) domain: ReplayDomain,
+    pub(in crate::mandoc::inline) scoped_line_replay: ScopedLineReplay,
     pub(in crate::mandoc::inline) projection_owner: super::field_buffer::FieldProjectionOwner,
     pub(in crate::mandoc::inline) cursor: EntryCursor,
     pub(in crate::mandoc::inline) automatic_blanks: usize,

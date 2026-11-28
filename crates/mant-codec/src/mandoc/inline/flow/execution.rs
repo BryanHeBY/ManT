@@ -2,7 +2,9 @@ use super::definition::PendingFieldGapOrigin;
 use super::field_buffer::{
     DeferredSourceBlank, FieldBuffer, FieldCell, FieldWrite, RunInWordSlots,
 };
-use super::native_slots::{EntryCursor, FieldPrefix, PrefixExtension, ReplayDomain};
+use super::native_slots::{
+    EntryCursor, FieldPrefix, PrefixExtension, ReplayDomain, ScopedLineReplay,
+};
 use super::{
     AuthorBreakEffect, AuthorExecution, FormatterColumn, Inline, InlineBuilder,
     InlineExecutionState, KeepPhase, NativeWordSpacing, PendingBoundary, PreservedInlineState,
@@ -22,13 +24,11 @@ fn replay_direct_word(
     extend: PrefixExtension,
     domain: ReplayDomain,
     tight: bool,
-    append_only: bool,
+    append_line: bool,
 ) -> bool {
     matches!(extend, PrefixExtension::DirectText)
         && (tight && domain == ReplayDomain::DefinitionLine && input.can_replay_armed_run_in_head()
-            || append_only
-                && matches!(domain, ReplayDomain::Filled | ReplayDomain::DefinitionLine)
-                && (input.has_entry_retreat() || input.has_backafter_armed()))
+            || append_line && (input.has_entry_retreat() || input.has_backafter_armed()))
 }
 
 fn retain_projected_advances(
@@ -1015,31 +1015,20 @@ impl super::InlineExecutionState {
             || device_tail
                 .as_ref()
                 .is_some_and(super::native_slots::DeviceTail::has_retreated);
-        let domain = if self.table_cell.is_some() {
-            ReplayDomain::Scoped
-        } else if self.no_fill_word_active {
-            if self.uses_definition_word_buffer() {
-                ReplayDomain::LiteralDefinitionLine
-            } else {
-                ReplayDomain::Scoped
-            }
-        } else if self.definition.is_none() {
-            ReplayDomain::Filled
-        } else if self
-            .author_execution
-            .is_some_and(|author| author.break_effect == AuthorBreakEffect::Line)
-        {
-            ReplayDomain::DefinitionLine
-        } else {
-            ReplayDomain::Scoped
-        };
+        let domain = self.native_replay_domain();
         let filled_line_domain =
             matches!(domain, ReplayDomain::Filled | ReplayDomain::DefinitionLine);
         let continuing_run_in = self.definition.as_ref().is_some_and(|state| {
             state.run_in_continuation && state.deferred_head_projection.is_some()
         });
-        let replay_backtracking_word =
-            replay_direct_word(input, extend, domain, tight, append_only);
+        let scoped_line_replay = self.scoped_line_replay(domain, input);
+        let replay_backtracking_word = replay_direct_word(
+            input,
+            extend,
+            domain,
+            tight,
+            append_only && (filled_line_domain || scoped_line_replay == ScopedLineReplay::Detached),
+        );
         let leading_marker_extend = matches!(extend, PrefixExtension::LeadingMarker);
         let extend = match extend {
             PrefixExtension::None | PrefixExtension::DirectText => false,
@@ -1066,6 +1055,7 @@ impl super::InlineExecutionState {
                 EntryCursor::NeedsReplay
             },
             domain,
+            scoped_line_replay,
             projection_owner: input.projection_owner(),
             automatic_blanks,
             kept_blanks,
@@ -1101,6 +1091,52 @@ impl super::InlineExecutionState {
                     Some(prefix)
                 })
                 .flatten(),
+        }
+    }
+
+    fn native_replay_domain(&self) -> ReplayDomain {
+        if self.table_cell.is_some() {
+            ReplayDomain::Scoped
+        } else if self.no_fill_word_active {
+            if self.uses_definition_word_buffer() {
+                ReplayDomain::LiteralDefinitionLine
+            } else {
+                ReplayDomain::Scoped
+            }
+        } else if self.definition.is_none() {
+            ReplayDomain::Filled
+        } else if self
+            .author_execution
+            .is_some_and(|author| author.break_effect == AuthorBreakEffect::Line)
+        {
+            ReplayDomain::DefinitionLine
+        } else {
+            ReplayDomain::Scoped
+        }
+    }
+
+    fn scoped_line_replay(&self, domain: ReplayDomain, input: &FieldBuffer) -> ScopedLineReplay {
+        // After the diagnostic HEAD is detached, its page-width input
+        // is still live for BODY (mdoc_term.c:827-831, 843-855). Unlike a
+        // finite HEAD, only the reading owner moved: replay may address
+        // its proved slots without reopening any earlier output pass.
+        if domain == ReplayDomain::Scoped
+            && self.table_cell.is_none()
+            && !self.no_fill_word_active
+            && input.projection_owner() == super::field_buffer::FieldProjectionOwner::Detached
+            && self.author_execution.is_some_and(|author| {
+                matches!(
+                    author.break_effect,
+                    AuthorBreakEffect::Field {
+                        field_width_columns: u16::MAX,
+                        ..
+                    }
+                )
+            })
+        {
+            ScopedLineReplay::Detached
+        } else {
+            ScopedLineReplay::Unavailable
         }
     }
 

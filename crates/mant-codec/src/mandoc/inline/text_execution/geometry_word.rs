@@ -5,7 +5,7 @@ use crate::mandoc::inline::flow::{
     field_buffer::{FieldCell, FieldProjectionOwner, FieldWrite},
     native_slots::{
         CursorReposition, EntryCursor, NativeSlots, PrefixImport, PriorSlotEdit, ReplayDomain,
-        ReplayPass, SlotEntry,
+        ReplayPass, ScopedLineReplay, SlotEntry,
     },
 };
 use crate::mandoc::roff_escape::{GlyphInput, PresentationKind, RoffFont};
@@ -719,10 +719,8 @@ fn literal_word_can_carry_native_backtracking(
         return false;
     };
     let entry = &context.slot_entry;
-    matches!(
-        entry.domain,
-        ReplayDomain::Filled | ReplayDomain::DefinitionLine
-    ) && !text.is_empty()
+    (is_filled_line_domain(entry.domain) || entry.scoped_line_replay == ScopedLineReplay::Detached)
+        && !text.is_empty()
         && text.len() <= 8
         && text.bytes().all(|byte| byte.is_ascii_graphic())
         && entry.prefix.as_ref().is_some_and(|prefix| {
@@ -736,10 +734,11 @@ fn literal_word_can_carry_native_backtracking(
                     && context.zero_advance.has_buffered_glyph())
                 && prefix.cursor_retreat == 0
                 && (prefix.backbefore || prefix.backafter)
-                // A source TABREF changes neither BACK flag; other tail
-                // controls need their existing accepted-spacing path.
+                // TABREF and NBRZW write raw slots but preserve both BACK
+                // flags (term.c:799-801,860-878). Other controls still
+                // need their existing accepted-spacing path.
                 && matches!(prefix.cells.iter().rev()
-                    .find(|(cell, _)| !matches!(cell, FieldCell::TabReference)),
+                    .find(|(cell, _)| !matches!(cell, FieldCell::TabReference | FieldCell::ZeroWidthGraph)),
                     Some((FieldCell::Graph { width: 1, .. }, _)))
                 && prefix
                     .raw_slot_count()
