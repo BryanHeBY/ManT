@@ -338,7 +338,7 @@ fn verify_native_history_reloads(
     assert_eq!(app.navigation.history_lengths(), (0, 1));
     assert!(std::sync::Arc::ptr_eq(
         &app.session.current_bundle,
-        &original
+        original
     ));
     app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
     assert!(
