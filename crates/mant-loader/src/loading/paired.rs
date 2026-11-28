@@ -1,49 +1,9 @@
-//! Paired native output cannot be assembled or rebound by consumers.
-use mant_ir::{LinkLayout, ResolvedContent};
-use std::sync::Arc;
+//! Shared immutable source snapshot and its native link facts.
+pub use mant_ir::SourceBoundLinkLayout as ResolvedWithLinkLayout;
 
-/// One immutable resolved snapshot and the native link facts derived from it.
-///
-/// Consumers cannot transplant facts from another resolved snapshot:
-///
-/// ```compile_fail
-/// # use mant_loader::ResolvedWithLinkLayout;
-/// fn splice(a: &ResolvedWithLinkLayout, b: &ResolvedWithLinkLayout) {
-///     let _ = ResolvedWithLinkLayout {
-///         content: a.content_arc(),
-///         layout: b.layout().clone(),
-///     };
-/// }
-/// ```
-#[derive(Clone, Debug)]
-pub struct ResolvedWithLinkLayout {
-    content: Arc<ResolvedContent>,
-    layout: LinkLayout,
-}
-
-impl ResolvedWithLinkLayout {
-    pub(super) fn new(content: ResolvedContent, layout: LinkLayout) -> Self {
-        Self {
-            content: Arc::new(content),
-            layout,
-        }
-    }
-
-    /// The exact content from which these facts were derived.
-    #[must_use]
-    pub fn content(&self) -> &ResolvedContent {
-        &self.content
-    }
-
-    /// Share the exact content snapshot without reloading or rebuilding it.
-    #[must_use]
-    pub fn content_arc(&self) -> Arc<ResolvedContent> {
-        Arc::clone(&self.content)
-    }
-
-    /// Native facts for this snapshot; empty for other sources.
-    #[must_use]
-    pub const fn layout(&self) -> &LinkLayout {
-        &self.layout
-    }
+pub(super) fn pair(
+    content: mant_ir::ResolvedContent,
+    layout: mant_ir::LinkLayout,
+) -> ResolvedWithLinkLayout {
+    ResolvedWithLinkLayout::from_producer(std::sync::Arc::new(content), layout)
 }

@@ -353,7 +353,7 @@ fn native_snapshot_routes_mouse_only_to_authored_same_label_occurrences() {
     // but was independently authored and wholly owns its visible glyphs.
     let source = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.No OTHER\n.Lk https://z.test ZYU\n.Sh NEXT\nDone.\n";
     let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
-    assert_eq!(snapshot.layout().receipts.len(), 1);
+    assert_eq!(snapshot.receipts().len(), 1);
     let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
     let mut terminal = Terminal::new(TestBackend::new(80, 25)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
@@ -384,7 +384,7 @@ fn unrepresentable_native_members_leave_initial_and_follow_on_reader_open() {
     let initial = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
     let follow_on = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
     assert_eq!(
-        initial.layout().receipts.len(),
+        initial.receipts().len(),
         1,
         "native proof includes the unsupported split"
     );

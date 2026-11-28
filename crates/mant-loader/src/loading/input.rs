@@ -223,7 +223,7 @@ pub fn load_roff_bytes_with_link_layout(
         source,
         crate::manual_input::parse_manual_bytes_with_link_layout,
     )
-    .map(|(content, layout)| super::ResolvedWithLinkLayout::new(content, layout))
+    .map(|(content, layout)| super::paired::pair(content, layout))
 }
 
 #[cfg(feature = "roff")]

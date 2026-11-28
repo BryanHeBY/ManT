@@ -12,12 +12,12 @@ fn native_layout_activates_disjoint_members_without_changing_legacy_payload() {
     let legacy = mant_loader::load_roff_bytes(SRC.as_bytes()).unwrap();
     let snapshot = mant_loader::load_roff_bytes_with_link_layout(SRC.as_bytes()).unwrap();
     let bundle = snapshot.content();
-    let layout = snapshot.layout();
+    let layout = snapshot.receipts();
     assert_eq!(
         serde_json::to_vec(&mant_protocol::QueryBundle::from(&legacy)).unwrap(),
         serde_json::to_vec(&mant_protocol::QueryBundle::from(bundle)).unwrap(),
     );
-    let [receipt] = layout.receipts.as_slice() else {
+    let [receipt] = layout else {
         panic!("one split authored link");
     };
     assert_eq!(receipt.members, [0..1, 2..3]);
@@ -52,22 +52,22 @@ fn native_layout_activates_disjoint_members_without_changing_legacy_payload() {
     assert_ne!(occurrences[0], occurrences[1]);
     let opt_in = DocumentView::with_native_links(&snapshot);
     assert_rendered_members(&DocumentView::new(&legacy), &opt_in);
-    let mut stale = layout.clone();
-    stale.receipts[0].target = mant_ir::LinkTarget::External {
+    let mut stale = layout.to_vec();
+    stale[0].target = mant_ir::LinkTarget::External {
         uri: "https://different.test".into(),
     };
     assert!(
         crate::document::link_members::LinkMembers::validate(bundle.document.as_ref(), &stale)
             .is_none()
     );
-    stale = layout.clone();
-    stale.receipts.push(stale.receipts[0].clone());
+    stale = layout.to_vec();
+    stale.push(stale[0].clone());
     assert!(
         crate::document::link_members::LinkMembers::validate(bundle.document.as_ref(), &stale)
             .is_none()
     );
-    stale = layout.clone();
-    stale.receipts[0].members = vec![0..2, 1..3];
+    stale = layout.to_vec();
+    stale[0].members = vec![0..2, 1..3];
     assert!(
         crate::document::link_members::LinkMembers::validate(bundle.document.as_ref(), &stale)
             .is_none()
@@ -158,7 +158,7 @@ fn native_authored_member_crosses_visual_wrap_and_keeps_its_combining_glyph() {
     );
     let word = "U\u{301}abcdefghijklmnopqrstuvwxyzABCDEFGHIJ";
     let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
-    let [receipt] = snapshot.layout().receipts.as_slice() else {
+    let [receipt] = snapshot.receipts() else {
         panic!("one long native authored link");
     };
     assert_eq!(receipt.members, [0..1, 2..2 + word.chars().count()]);
@@ -210,8 +210,8 @@ fn native_authored_member_crosses_visual_wrap_and_keeps_its_combining_glyph() {
 
     // The accent occupies its base character's whole glyph. Even an in-range
     // scalar starting at the accent cannot give that glyph a new link owner.
-    let mut invalid = snapshot.layout().clone();
-    invalid.receipts[0].members[1].start += 1;
+    let mut invalid = snapshot.receipts().to_vec();
+    invalid[0].members[1].start += 1;
     assert!(
         crate::document::link_members::LinkMembers::validate(
             snapshot.content().document.as_ref(),

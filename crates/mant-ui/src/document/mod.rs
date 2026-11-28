@@ -248,11 +248,13 @@ impl DocumentView {
     /// Unrepresentable matched links retain their text, not their old hits.
     #[cfg(feature = "native-link-layout")]
     #[must_use]
-    pub fn with_native_links(snapshot: &mant_loader::ResolvedWithLinkLayout) -> Self {
-        let bundle = snapshot.content();
-        let members =
-            link_members::LinkMembers::from_layout(bundle.document.as_ref(), snapshot.layout());
-        Self::build(bundle, members)
+    pub fn with_native_links(snapshot: &mant_ir::SourceBoundLinkLayout) -> Self {
+        let bundle = snapshot.content_arc();
+        let members = link_members::LinkMembers::from_layout(
+            bundle.document.as_ref(),
+            snapshot.receipts_for(&bundle).unwrap_or_default(),
+        );
+        Self::build(&bundle, members)
     }
 
     fn build(bundle: &ResolvedContent, members: link_members::LinkMembers) -> Self {

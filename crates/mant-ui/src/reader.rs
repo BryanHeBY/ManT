@@ -55,7 +55,7 @@ impl App {
     pub fn service_pending_with_native_links(
         &mut self,
         services: &mut ReaderServices<'_>,
-        mut open: impl FnMut(&DocumentOpenTarget) -> Result<mant_loader::ResolvedWithLinkLayout, String>,
+        mut open: impl FnMut(&DocumentOpenTarget) -> Result<mant_ir::SourceBoundLinkLayout, String>,
     ) -> bool {
         self.service_pending_using(services, |app, _| {
             let Some(request) = app.take_open_request() else {

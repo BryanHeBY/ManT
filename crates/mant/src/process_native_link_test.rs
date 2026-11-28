@@ -47,7 +47,7 @@ fn native_interactive_file_selector_delivers_opaque_click_regions() {
         .native
         .expect("normal roff+tui feature selects one paired decode");
     assert!(Arc::ptr_eq(&prepared.scope[0], &snapshot.content_arc()));
-    assert_eq!(snapshot.layout().receipts.len(), 1);
+    assert_eq!(snapshot.receipts().len(), 1);
 
     let mut app =
         mant_ui::App::from_native_snapshot(&snapshot, mant_protocol::DocumentCatalog::default());

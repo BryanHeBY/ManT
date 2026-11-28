@@ -72,7 +72,7 @@ impl DocumentLoader {
     ) -> Result<super::ResolvedWithLinkLayout, LoadError> {
         let mut layout = mant_ir::LinkLayout::default();
         let content = super::input::load_impl(spec, policy, self, Some(&mut layout))?;
-        Ok(super::ResolvedWithLinkLayout::new(content, layout))
+        Ok(super::paired::pair(content, layout))
     }
 
     /// Filter the same registered-document and manual snapshots used by
@@ -333,9 +333,9 @@ mod tests {
         let indexed_pair = loader
             .load_with_link_layout(named, LoadPolicy::ManualOnly)
             .unwrap();
-        assert_eq!(direct_pair.layout().receipts.len(), 1);
-        assert_eq!(indexed_pair.layout(), direct_pair.layout());
-        assert_eq!(direct_pair.layout().receipts[0].members, [0..1, 2..3]);
+        assert_eq!(direct_pair.receipts().len(), 1);
+        assert_eq!(indexed_pair.receipts(), direct_pair.receipts());
+        assert_eq!(direct_pair.receipts()[0].members, [0..1, 2..3]);
         assert!(std::ptr::eq(
             direct_pair.content(),
             direct_pair.content_arc().as_ref()
@@ -345,9 +345,18 @@ mod tests {
         let replaced = loader
             .load_with_link_layout(direct, LoadPolicy::Combined)
             .unwrap();
-        assert!(replaced.layout().receipts.is_empty(), "{replaced:?}");
+        assert!(replaced.receipts().is_empty(), "{replaced:?}");
+        let exact = direct_pair.content_arc();
+        assert_eq!(
+            direct_pair.receipts_for(&exact),
+            Some(direct_pair.receipts())
+        );
+        let equal_value = std::sync::Arc::new(direct_pair.content().clone());
+        assert_eq!(exact, equal_value);
+        assert!(direct_pair.receipts_for(&equal_value).is_none());
+        assert!(direct_pair.receipts_for(&replaced.content_arc()).is_none());
         assert!(!std::ptr::eq(replaced.content(), direct_pair.content()));
-        assert_eq!(direct_pair.layout().receipts[0].members, [0..1, 2..3]);
+        assert_eq!(direct_pair.receipts()[0].members, [0..1, 2..3]);
         fs::remove_file(&file).unwrap();
         fs::remove_dir(&man1).unwrap();
         fs::remove_dir(&root).unwrap();

@@ -1,7 +1,7 @@
 //! Render-only membership for one validated legacy link occurrence.
 use mant_ir::LinkTarget;
 #[cfg(feature = "native-link-layout")]
-use mant_ir::{Document, Inline, LinkLayout};
+use mant_ir::{Document, Inline, LinkLayoutReceipt};
 use std::{collections::HashMap, ops::Range};
 
 #[derive(Default)]
@@ -9,23 +9,26 @@ pub(super) struct LinkMembers(HashMap<usize, Vec<Range<usize>>>);
 
 impl LinkMembers {
     #[cfg(feature = "native-link-layout")]
-    pub(super) fn from_layout(document: Option<&Document>, layout: &LinkLayout) -> Self {
-        Self::collect(document, layout).0
+    pub(super) fn from_layout(document: Option<&Document>, receipts: &[LinkLayoutReceipt]) -> Self {
+        Self::collect(document, receipts).0
     }
 
     #[cfg(all(test, feature = "native-link-layout"))]
-    pub(super) fn validate(document: Option<&Document>, layout: &LinkLayout) -> Option<Self> {
-        let (members, accepted) = Self::collect(document, layout);
+    pub(super) fn validate(
+        document: Option<&Document>,
+        receipts: &[LinkLayoutReceipt],
+    ) -> Option<Self> {
+        let (members, accepted) = Self::collect(document, receipts);
         accepted.then_some(members)
     }
 
     #[cfg(feature = "native-link-layout")]
-    fn collect(document: Option<&Document>, layout: &LinkLayout) -> (Self, bool) {
+    fn collect(document: Option<&Document>, receipts: &[LinkLayoutReceipt]) -> (Self, bool) {
         let mut ranges: HashMap<usize, Vec<Range<usize>>> = HashMap::new();
         let mut occurrences = HashMap::new();
         let mut budget = 1024 * 1024;
-        let mut supported = layout.receipts.len() <= 1000;
-        for receipt in layout.receipts.iter().take(1000) {
+        let mut supported = receipts.len() <= 1000;
+        for receipt in receipts.iter().take(1000) {
             let Some(Inline::Link {
                 target, children, ..
             }) = document.and_then(|document| receipt.origin.resolve_link(document))

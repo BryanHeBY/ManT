@@ -14,11 +14,10 @@ categories = ["command-line-utilities", "text-processing"]
 include = ["/Cargo.toml", "/LICENSE", "/README.md", "/src/**"]
 
 [features]
-native-link-layout = ["dep:mant-loader"]
+native-link-layout = []
 
 [dependencies]
 crossterm.workspace = true
-mant-loader = { path = "../mant-loader", version = "^0.15.0", default-features = false, optional = true }
 mant-ir = { path = "../mant-ir", version = "^0.14.1" }
 mant-protocol = { path = "../mant-protocol", version = "^0.14.0" }
 mant-render = { path = "../mant-render", version = "^0.15.0" }
