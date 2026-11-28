@@ -434,7 +434,7 @@ fn bare_link_only_clicks_its_contiguous_native_uri_after_roundtrip() {
         );
         let markdown = mant_codec::encode::render_markdown(&content);
         assert!(
-            markdown.contains(r"[https\://z.test](https://z.test)J"),
+            markdown.contains("RE<https://z.test>JENDNOPQRSTUVW"),
             "{escape:?}: {markdown}"
         );
         for width in [28, 40, 78] {
