@@ -5,7 +5,9 @@ use mant_ir::{
     Block, DefinitionItem, EntryInlineRoot, EntryKind, EntryOwner, Inline, LinkTarget,
     ParameterKind, ResolvedContent, inline_plain_text,
 };
-use mant_protocol::{EvidenceClass, ExplanationOptions, ExplanationQuery};
+use mant_protocol::{
+    EvidenceBasis, EvidenceClass, ExplanationOptions, ExplanationQuery, QueryExplanation,
+};
 
 const MDOC: &str =
     ".Dd November 10, 2026\n.Dt CHECK 1\n.Os\n.Sh NAME\n.Nm check\n.Nd audit\n.Sh FIRST\n";
@@ -35,19 +37,19 @@ fn item(content: &ResolvedContent) -> &DefinitionItem {
     item
 }
 
-fn direct_entries(content: &ResolvedContent, name: &str) -> usize {
+fn explain(content: &ResolvedContent, query: &str) -> QueryExplanation {
     mant_query::explain_query(
         content,
         &ExplanationQuery {
-            entry: name.into(),
+            entry: query.into(),
             options: ExplanationOptions::default(),
         },
     )
     .unwrap()
-    .evidence
-    .iter()
-    .filter(|entry| entry.class == EvidenceClass::DirectEntry)
-    .count()
+}
+
+fn direct_entries(content: &ResolvedContent, name: &str) -> u32 {
+    explain(content, name).counts.direct_entry.total
 }
 
 fn assert_bindings(content: &ResolvedContent, expected: &[&str]) {
@@ -153,19 +155,60 @@ fn native_closing_punctuation_stays_outside_option_bindings() {
     // CVS mdoc_macro.c::in_line closes Fl before a separate delimiter;
     // an attached question mark stays in the Fl word. An empty Fl still
     // generates the dash of its punctuation flag (mdoc_term.c::termp_fl_pre).
-    for (head, form, names, absent) in [
-        ("Fl a ?", "-a?", &["-a"][..], "-a?"),
-        ("Fl a .", "-a.", &["-a"][..], "-a."),
-        (r"Fl a \.", "-a.", &["-a"][..], "-a."),
-        ("Fl a ? .", "-a?.", &["-a"][..], "-a?"),
-        ("Fl a ? , Fl b", "-a?, -b", &["-a", "-b"][..], "-a?"),
-        ("Fl a?", "-a?", &["-a?"][..], "-a"),
-        ("Fl ?", "-?", &["-?"][..], "-"),
-        ("Fl ? .", "-?.", &["-?"][..], "-?."),
+    for (head, form, names) in [
+        ("Fl a ?", "-a?", &["-a"][..]),
+        ("Fl a .", "-a.", &["-a"][..]),
+        (r"Fl a \.", "-a.", &["-a"][..]),
+        ("Fl a ? .", "-a?.", &["-a"][..]),
+        ("Fl a ? , Fl b", "-a?, -b", &["-a", "-b"][..]),
+        ("Fl a?", "-a?", &["-a?"][..]),
+        ("Fl ?", "-?", &["-?"][..]),
+        ("Fl ? .", "-?.", &["-?"][..]),
     ] {
         let content = lowered(head, "Description.");
         assert_eq!(inline_plain_text(&item(&content).terms[0].content), form);
         assert_bindings(&content, names);
-        assert_eq!(direct_entries(&content, absent), 0, "{head}");
+
+        // Explanation treats a complete displayed form as direct evidence
+        // independently of its name bindings.
+        for query in [
+            "-", "-a", "-a?", "-a.", "-a?.", "-a?, -b", "-b", "-?", "-?.",
+        ] {
+            let response = explain(&content, query);
+            let exact_name = names.contains(&query);
+            let exact_form = query == form;
+            assert_eq!(
+                response.counts.direct_entry.total,
+                u32::from(exact_name || exact_form),
+                "{head}: {query}"
+            );
+            let mut name_matches = Vec::new();
+            let mut form_matches = Vec::new();
+            for evidence in &response.evidence {
+                for basis in &evidence.bases {
+                    match basis {
+                        EvidenceBasis::Name { matches } => {
+                            assert_eq!(evidence.class, EvidenceClass::DirectEntry);
+                            name_matches.extend(matches.iter().map(|m| m.name.as_str()));
+                        }
+                        EvidenceBasis::Form { matches } => {
+                            assert_eq!(evidence.class, EvidenceClass::DirectEntry);
+                            form_matches.extend(matches.iter().map(|m| m.text.as_str()));
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            assert_eq!(
+                name_matches,
+                exact_name.then_some(query).as_slice(),
+                "{head}: {query}"
+            );
+            assert_eq!(
+                form_matches,
+                exact_form.then_some(query).as_slice(),
+                "{head}: {query}"
+            );
+        }
     }
 }
