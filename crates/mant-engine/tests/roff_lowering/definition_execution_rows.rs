@@ -880,13 +880,62 @@ fn initial_fill_request_closes_only_the_live_generated_body_row() {
             assert!(
                 matches!(
                     items[0].description.as_slice(),
-                    [mant_ir::Block::VerticalSpace { lines: 1, .. },
-                     mant_ir::Block::Preformatted { children, .. }]
-                        if matches!(children.as_slice(), [mant_ir::Inline::Text { value }] if value == " ")
+                    [
+                        mant_ir::Block::VerticalSpace { lines: 1, .. },
+                        mant_ir::Block::VerticalSpace { lines: 1, .. }
+                    ]
                 ),
                 "distinct physical HEAD and BODY rows: {:?}",
                 items[0].description
             );
         }
+    }
+}
+
+#[test]
+fn fill_transition_does_not_consume_a_later_authored_invisible_body_word() {
+    // Both pinned CVS devices and lint agree on these complete compact
+    // scopes, with neighboring no-follower and printed-follower cases
+    // in the preceding gate. A post-mode word lives in a different cell
+    // from the generated setup word the mode request just closed.
+    for (case, style, head, source, expected) in [
+        (
+            "split head filled invisible",
+            "inset",
+            ".It Xo No \"\\&\"\n.Xc",
+            ".fi\n.No \"\\&\"",
+            &["L", "", "", "", "R"][..],
+        ),
+        (
+            "ordinary head filled invisible",
+            "inset",
+            ".It No \"\\&\"",
+            ".fi\n.No \"\\&\"",
+            &["L", "", "", "R"][..],
+        ),
+        (
+            "same-line head restored no-fill invisible",
+            "inset",
+            ".It Xo No \"\\&\" Xc",
+            ".fi\n.nf\n.No \"\\&\"",
+            &["L", "", "", "R"][..],
+        ),
+        (
+            "diagnostic field restored no-fill with ink",
+            "diag",
+            ".It No \"\\&\"",
+            ".fi\n.nf\nY",
+            &["L", "No", "Y", "R"][..],
+        ),
+    ] {
+        let input = format!("L\n.nf\n.Bl -{style} -compact\n{head}\n{source}\n.El\n.fi\nR\n");
+        assert_eq!(
+            description_rows(&input)
+                .iter()
+                .map(|row| row.trim())
+                .collect::<Vec<_>>(),
+            expected,
+            "{case}"
+        );
     }
 }

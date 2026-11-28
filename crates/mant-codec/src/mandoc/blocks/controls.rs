@@ -174,12 +174,6 @@ fn execute_block_control(
     match request {
         BlockControl::ParagraphDistance => update_paragraph_distance(node, paragraph_distance),
         BlockControl::LiteralBoundary => {
-            // BODY pre can have written its generated word against the
-            // paragraph vector before any authored literal word arrives.
-            // Move the already active output to the request's old mode
-            // before borrowing it for term_newln; never close a different
-            // owner and then replay that same row during paragraph drain.
-            state.adopt_inline_output_owner_in_source_mode(node.flags.no_fill);
             // fi/nf dispatch directly to pre_br. man_term.c::pre_literal
             // applies the same BRIND conversion while a direct HP parent
             // still has a finite first field, including before its first
@@ -190,7 +184,7 @@ fn execute_block_control(
             ) || sequence == SourceSequence::ManHanging
                 && state.formatter.execution.has_initial_man_hanging_field();
             if pre_break {
-                state.pre_break_request_in_source_mode(node.flags.no_fill);
+                state.pre_break_mode_boundary(node.flags.no_fill);
             } else {
                 // man_term.c::pre_literal calls term_newln directly.
                 state.finish_native_line_in_source_mode(node.flags.no_fill);

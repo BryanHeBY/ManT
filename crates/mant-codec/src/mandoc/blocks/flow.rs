@@ -31,6 +31,14 @@ pub(in crate::mandoc::blocks) enum InlineOutputRole {
     Declaration,
 }
 
+/// A mode request closed the run-in setup row in its actual output owner.
+/// A graphless word written after this receipt can own a separate row.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum RunInModeRow {
+    Pending,
+    Closed,
+}
+
 pub(super) struct BlockState {
     pub(super) output: Vec<Block>,
     pub(super) formatter: crate::mandoc::formatter::FormatterState,
@@ -53,6 +61,7 @@ pub(super) struct BlockState {
     // to its cell. Transparent structures relocate this owner position;
     // later accepted graph reopens the tail.
     closed_output_tail: Option<ClosedOutputTail>,
+    run_in_mode_row: RunInModeRow,
     pending_targets: targets::PendingTargets,
     // A paragraph pre request can finish its BODY with a live text row. Its
     // leading distance belongs to the next emitted block, not a Rust return.
@@ -254,6 +263,7 @@ impl BlockState {
             closes_previous_column: false,
             single_line_display_owner: false,
             closed_output_tail: None,
+            run_in_mode_row: RunInModeRow::Pending,
             pending_targets: targets::PendingTargets::new(),
             pending_spacing: None,
             indent_columns,

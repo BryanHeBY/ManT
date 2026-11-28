@@ -427,6 +427,7 @@ impl InlineBuilder {
         &mut self,
         origin: CompletedRowOrigin,
         follows_head_source_close: bool,
+        closed_mode_row: bool,
     ) {
         if self
             .execution
@@ -435,7 +436,8 @@ impl InlineBuilder {
             .is_some_and(|state| state.run_in_continuation)
         {
             self.finish_run_in_field_row_with_body_gap(
-                origin == CompletedRowOrigin::LiteralText && follows_head_source_close,
+                closed_mode_row
+                    || origin == CompletedRowOrigin::LiteralText && follows_head_source_close,
             );
         } else {
             self.execute_native_newline_with_origin(origin);

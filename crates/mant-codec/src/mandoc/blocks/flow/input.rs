@@ -1,5 +1,5 @@
 //! Execute filled and literal source input against their existing flow owners.
-use super::{BlockState, InlineBuilder, InlineOutputRole, row::RowOwner};
+use super::{BlockState, InlineBuilder, InlineOutputRole, RunInModeRow, row::RowOwner};
 use crate::mandoc::inline::CompletedRowOrigin;
 use mant_ir::{Block, Inline};
 
@@ -162,13 +162,6 @@ impl BlockState {
     /// consumes the original owner first; only a still-live destination
     /// change transfers the complete vector and its native anchor ranges.
     pub(in crate::mandoc::blocks) fn adopt_inline_output_owner(&mut self) {
-        self.adopt_inline_output_owner_in_source_mode(self.formatter.no_fill);
-    }
-
-    pub(in crate::mandoc::blocks) fn adopt_inline_output_owner_in_source_mode(
-        &mut self,
-        no_fill: bool,
-    ) {
         if self.inline_output_role == InlineOutputRole::Declaration
             && !self.uses_literal_output()
             && self.paragraph.is_empty()
@@ -176,7 +169,7 @@ impl BlockState {
         {
             let (nodes, source) = self.literal.take_active_output();
             self.paragraph.adopt_active_output(nodes, source);
-        } else if self.inline_output_is_literal(no_fill)
+        } else if self.inline_output_is_literal(self.formatter.no_fill)
             && self.formatter.execution.has_native_definition_field()
             && self.literal.is_empty()
             && !self.paragraph.is_empty()
@@ -471,16 +464,36 @@ impl BlockState {
         }
     }
 
-    /// fi/nf have selected the next output mode in the block driver, but
-    /// their `pre_br` still consumes the request node's original source owner.
+    /// A fill-mode request consumes the already active projection. Leaving
+    /// no-fill does not enter a literal word node and must not borrow a
+    /// fresh literal vector if BODY pre still owns the paragraph vector.
+    pub(in crate::mandoc::blocks) fn pre_break_mode_boundary(&mut self, no_fill: bool) {
+        if no_fill
+            && self.formatter.execution.has_native_definition_field()
+            && !self.paragraph.is_empty()
+            && self.literal.is_empty()
+        {
+            if self.pre_break_with_owner(RowOwner::Paragraph, CompletedRowOrigin::Layout) {
+                self.run_in_mode_row = RunInModeRow::Closed;
+            }
+        } else {
+            self.pre_break_request_in_source_mode(no_fill);
+        }
+    }
+
     pub(in crate::mandoc::blocks) fn pre_break_request_in_source_mode(&mut self, no_fill: bool) {
+        let _ = self.pre_break_with_owner(
+            self.row_owner(no_fill),
+            CompletedRowOrigin::for_source_mode(no_fill),
+        );
+    }
+
+    fn pre_break_with_owner(&mut self, owner: RowOwner, origin: CompletedRowOrigin) -> bool {
         self.note_relocated_body_ink_before_boundary();
         self.formatter.note_definition_boundary();
-        let close = |builder: &mut InlineBuilder| {
-            builder.control_line_break_with_origin(CompletedRowOrigin::for_source_mode(no_fill));
-        };
-        let owner = self.row_owner(no_fill);
-        self.with_row_builder(owner, close);
+        let closed = self.with_row_builder(owner, |builder| {
+            builder.control_line_break_with_origin(origin)
+        });
         if owner == RowOwner::Paragraph
             && let Some(origin) = self.hanging_origin
             && self.formatter.execution.has_open_native_device_row()
@@ -499,6 +512,7 @@ impl BlockState {
         }
         self.formatter.retire_no_fill_row_projection();
         self.settle_definition_line_boundary();
+        closed
     }
 
     pub(in crate::mandoc::blocks) fn no_break_formatter_flush(&mut self) {

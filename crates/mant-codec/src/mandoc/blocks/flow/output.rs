@@ -441,8 +441,9 @@ impl BlockState {
                 crate::mandoc::inline::CompletedRowOrigin::Layout
             };
             let follows_head = self.formatter.definition_body_follows_head_source_close();
+            let closed_mode_row = self.run_in_mode_row == super::RunInModeRow::Closed;
             self.with_active_output_builder(|builder| {
-                builder.finish_mdoc_item_body(origin, follows_head);
+                builder.finish_mdoc_item_body(origin, follows_head, closed_mode_row);
             });
             self.formatter.retire_no_fill_row_projection();
         } else if row_boundary == super::super::FormatterRowBoundary::Settle {
