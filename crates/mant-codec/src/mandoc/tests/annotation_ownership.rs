@@ -67,6 +67,53 @@ fn empty_destination_marker_uses_the_same_overstrike_as_other_glyphs() {
     assert!(projected_document_text(&document).contains("> AFTER <https://one.test> TAIL"));
 }
 
+#[test]
+fn rewritten_link_retains_both_accepted_glyphs_without_claiming_foreign_paint() {
+    let header = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh DESCRIPTION\n";
+    for (body, labels) in [
+        // Both native devices keep AW. The later write leaves an empty
+        // text node between the accepted receipts for A and W.
+        (
+            ".Lk https://a.test AW\n.No \"\\h'|1n'R\"\n.No Z\n",
+            &["AW"][..],
+        ),
+        (".Lk https://a.test AW\n.No \"\\h'|1n'R\"\n", &["AW"][..]),
+        (".Lk https://a.test AW\n.br\n.No W .\n", &["AW"][..]),
+        (
+            ".Lk https://a.test AW\n.br\n.Lk https://a.test SECOND\n",
+            &["AW", "SECOND"][..],
+        ),
+    ] {
+        let source = format!("{header}{body}");
+        let document =
+            parse_manual_bytes(std::path::Path::new("probe.1"), source.as_bytes()).unwrap();
+        let section = &document.sections[0];
+        let mut links = Links::default();
+        links.visit_section(section);
+        assert_eq!(links.0.len(), labels.len(), "{body}");
+        for ((target, children), label) in links.0.iter().zip(labels) {
+            assert!(
+                matches!(target, mant_ir::LinkTarget::External { uri } if uri == "https://a.test")
+            );
+            // Neither generated address/punctuation nor same-spelled ink
+            // after a true break is a member of the first occurrence.
+            assert_eq!(
+                mant_ir::inline_plain_text(children).as_str(),
+                *label,
+                "{body}"
+            );
+        }
+        assert!(projected_document_text(&document).contains("AW: https://a.test"));
+        assert!(
+            !document
+                .diagnostics
+                .iter()
+                .any(|item| { item.code.as_deref() == Some("manual.annotation-coverage") }),
+            "{body}"
+        );
+    }
+}
+
 fn styled_scalars(nodes: &[Inline], inherited: u8, output: &mut Vec<(char, u8)>) {
     for node in nodes {
         match node {

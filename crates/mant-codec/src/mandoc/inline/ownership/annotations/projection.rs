@@ -48,7 +48,8 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
     let mut output: Vec<Inline> = Vec::with_capacity(lifted.len());
     let mut between = Vec::new();
     for node in lifted {
-        if matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. }) || is_empty_style(&node)
+        if matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. })
+            || is_empty_text_or_style(&node)
         {
             between.push(node);
             continue;
@@ -79,16 +80,14 @@ pub(super) fn coalesce(nodes: &mut Vec<Inline>) {
     *nodes = output;
 }
 
-fn is_empty_style(node: &Inline) -> bool {
-    // A covered glyph can leave a style around empty text. Only that
-    // paint-free shape can join the fragments: a space, anchor, break, or
-    // separately owned link inside a shell still belongs at its position.
+fn is_empty_text_or_style(node: &Inline) -> bool {
+    // Covered paint can leave a bare empty Text or an empty style shell,
+    // neither of which cuts two accepted receipts of one occurrence.
+    // A literal space or NBSP still occupies a real position.
     match node {
+        Inline::Text { value } => value.is_empty(),
         Inline::Strong { children } | Inline::Emphasis { children } => {
-            children.iter().all(|child| match child {
-                Inline::Text { value } => value.is_empty(),
-                child => is_empty_style(child),
-            })
+            children.iter().all(is_empty_text_or_style)
         }
         _ => false,
     }
@@ -312,6 +311,62 @@ fn a_style_shell_with_an_author_anchor_or_visible_space_keeps_its_boundary() {
         coalesce(&mut nodes);
         assert_eq!(nodes, expected);
     }
+}
+
+#[cfg(test)]
+#[test]
+fn only_empty_text_is_transparent_between_same_occurrence_receipts() {
+    let text = |value: &str| Inline::Text {
+        value: value.into(),
+    };
+    let fragment = |key, value| Inline::Link {
+        target: LinkTarget::External {
+            uri: super::markers::target_key(key),
+        },
+        title: None,
+        children: vec![text(value)],
+    };
+    for empty in [
+        text(""),
+        Inline::Strong {
+            children: vec![Inline::Emphasis {
+                children: vec![text("")],
+            }],
+        },
+    ] {
+        let mut nodes = vec![fragment(0, "A"), empty, fragment(0, "W")];
+        coalesce(&mut nodes);
+        let [Inline::Link { children, .. }] = nodes.as_slice() else {
+            panic!("expected one complete annotation: {nodes:?}")
+        };
+        assert_eq!(mant_ir::inline_plain_text(children), "AW");
+    }
+
+    for separator in [
+        text(" "),
+        text("\u{a0}"),
+        text("."),
+        text("Y"),
+        fragment(1, "U"),
+    ] {
+        let nodes = vec![fragment(0, "A"), separator, fragment(0, "W")];
+        let mut actual = nodes.clone();
+        coalesce(&mut actual);
+        assert_eq!(actual, nodes);
+    }
+
+    // Two occurrence keys can have a common address after publication:
+    // preserve independent identity and the real break even amid empty text.
+    let nodes = vec![
+        fragment(0, "A"),
+        text(""),
+        Inline::line_break(),
+        text(""),
+        fragment(1, "W"),
+    ];
+    let mut actual = nodes.clone();
+    coalesce(&mut actual);
+    assert_eq!(actual, nodes);
 }
 
 #[cfg(test)]

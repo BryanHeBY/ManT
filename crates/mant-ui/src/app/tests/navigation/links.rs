@@ -346,6 +346,57 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
     }
 }
 
+#[test]
+fn rewritten_link_clicks_both_glyphs_but_not_formatter_punctuation() {
+    // Frozen AX's two terminal devices keep AW. The real mouse path must
+    // follow the original destination for both cells, not the adjacent colon.
+    let source = b".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd annotation\n.Sh DESCRIPTION\n.Lk https://a.test AW\n.No \"\\h'|1n'R\"\n.No Z\n.br\n.No FOREIGN\n";
+    let bundle = mant_loader::load_roff_bytes(source).unwrap();
+    #[cfg(feature = "native-link-layout")]
+    let native = mant_loader::load_roff_bytes_with_link_layout(source).unwrap();
+    for viewport in [60, 80, 140] {
+        let readers = [App::new(&bundle)];
+        #[cfg(feature = "native-link-layout")]
+        let readers = readers.into_iter().chain([App::from_native_snapshot(
+            &native,
+            DocumentCatalog::default(),
+        )]);
+        for mut app in readers {
+            let mut terminal = Terminal::new(TestBackend::new(viewport, 25)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            let width = app.geometry.content.width;
+            let rendered = &app.session.rendered_cache[&width];
+            let spans = rendered.search("AW:");
+            let [span] = spans.as_slice() else {
+                panic!("expected one visible AW: at {width} columns");
+            };
+            assert_eq!(span.end_column - span.start_column, 3);
+            let row = span.row;
+            let start = span.start_column;
+            let copied = rendered.selected_text(RenderedSelection {
+                anchor: TextPosition { row, column: start },
+                focus: TextPosition {
+                    row,
+                    column: start + 2,
+                },
+            });
+            assert_eq!(copied, "AW:");
+            for (offset, expected) in [Some("https://a.test"), Some("https://a.test"), None]
+                .into_iter()
+                .enumerate()
+            {
+                click_document_cell(&mut app, start + offset, row);
+                assert_eq!(
+                    app.take_external_request()
+                        .as_ref()
+                        .map(crate::ExternalUri::as_str),
+                    expected
+                );
+            }
+        }
+    }
+}
+
 #[cfg(feature = "native-link-layout")]
 #[test]
 fn native_snapshot_routes_mouse_only_to_authored_same_label_occurrences() {
