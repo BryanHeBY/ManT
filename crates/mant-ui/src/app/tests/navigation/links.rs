@@ -549,7 +549,7 @@ fn native_link_au_independent_prior_link_does_not_take_the_new_owners_receipt() 
         let layout = snapshot.layout_for(&pair).unwrap();
         assert_eq!(layout.receipts().len(), 1, "{old}: {layout:?}");
         assert_eq!(layout.receipts()[0].members, [0..1, 2..3]);
-        assert!(layout.restrictions().is_empty());
+        assert_eq!(layout.restrictions(), []);
         assert_eq!(
             pair.document,
             mant_loader::load_roff_bytes(source.as_bytes())
