@@ -139,7 +139,7 @@ impl WordPassProjection {
         word_start: usize,
         entry: &ExecutedWordEntry,
         keep: bool,
-        plain_output: bool,
+        (plain_output, preceding_empty_word): (bool, bool),
     ) {
         // The earlier \h cell is already in the live word buffer. Reuse
         // the virtual space projection when the new word would print it.
@@ -149,10 +149,34 @@ impl WordPassProjection {
         } else {
             word_start
         };
-        if let Some(ink) = entry.incoming_ink()
-            && let Some(gap) = buffer.retained_motion_gap(ink, word_start, plain_output)
-            && gap.width >= self.native_separator
-        {
+        let gap = entry
+            .incoming_ink()
+            .and_then(|ink| buffer.retained_motion_gap(ink, word_start, plain_output))
+            .or_else(|| {
+                use super::super::field_buffer::FieldCell;
+
+                if !plain_output || replayed || !preceding_empty_word || self.native_separator == 0
+                {
+                    return None;
+                }
+                // A graphless term_word can advance over a preserved blank
+                // after retreat and leave its own NBRZW next to it. The next
+                // real graph prints that older blank and its new entry SP
+                // together (term.c:573–589, 860–872, 389–427).
+                let gap = buffer.retained_motion_gap(
+                    entry.receipt.first_content_cell,
+                    word_start,
+                    plain_output,
+                )?;
+                (gap.marker < word_start
+                    && matches!(
+                        buffer.cells().get(gap.marker..gap.marker + 2),
+                        Some([FieldCell::DrawnSpaces(1), FieldCell::ZeroWidthGraph])
+                    )
+                    && buffer.projection_length(gap.marker, gap.marker + 1) == 0)
+                    .then_some(gap)
+            });
+        if let Some(gap) = gap.filter(|gap| gap.width >= self.native_separator) {
             if plain_output
                 && replayed
                 && gap.previous_graph >= entry.receipt.first_content_cell
@@ -398,7 +422,7 @@ impl InlineBuilder {
             native_word_start,
             &entry,
             projected_keep,
-            false,
+            (false, false),
         );
         self.align_last_definition_separator(
             &projection,
@@ -530,7 +554,7 @@ impl InlineBuilder {
             native_word_start,
             &entry,
             projected_keep,
-            true,
+            (true, self.execution.empty_word),
         );
         result.align_separator_owners(
             &mut unit.anchors,

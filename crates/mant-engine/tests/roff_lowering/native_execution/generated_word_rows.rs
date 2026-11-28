@@ -500,3 +500,42 @@ fn cursor_only_word_does_not_resurrect_a_covered_enclosure_mark() {
         assert_eq!(rows, ["A", row], "{wrapper:?} {tail:?}");
     }
 }
+
+#[test]
+fn a_graphless_word_preserves_the_live_gap_after_a_positioned_include() {
+    // term.c::bufferc() preserves the blank at the live write head.
+    // A following NBRZW term_word advances over it; the next glyph
+    // prints both that retained blank and its own automatic separator.
+    let prefix = r#".Dd November 27, 2026
+.Dt GLYPHS 1
+.Os
+.Sh NAME
+.Nm glyphs
+.Nd small roff inputs
+.Sh DESCRIPTION
+.No HEAD
+Y
+.No "\h'|0n'R"
+.In "\zX"
+"#;
+    let cases: [(&str, &[&str]); 5] = [
+        (".No \"\\&\"\nEND", &["RE<>  END"]),
+        ("END", &["RE<> END"]),
+        (".No \"\\h'|0n'U\"\nEND", &["UEEND>"]),
+        (".br\n.No \"\\h'|0n'U\"\nEND", &["RE<>", "U END"]),
+        (".Ap No T\nEND", &["RE<>'T END"]),
+    ];
+    for (tail, expected) in cases {
+        let source = format!("{prefix}{tail}\n.Sh ENDTEST\nDone.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = section_rows(
+            &mant_render::render_query_man(&query),
+            "DESCRIPTION",
+            "ENDTEST",
+        );
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, expected, "{source}");
+    }
+}
