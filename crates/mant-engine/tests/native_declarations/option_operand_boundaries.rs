@@ -781,6 +781,70 @@ fn complete_ignored_arguments_preserve_alias_and_field_owners() {
 }
 
 #[test]
+fn opaque_rewind_inside_no_cannot_nominate_a_new_alias() {
+    // AU: CVS term.c:678-718,799-801 executes forward/ignored/backward
+    // operations in one word. The two devices retain the same apparent
+    // label with or without the distinct Fl; only the native source roles
+    // establish whether the alias was declared. Preserve the body reading
+    // even when the source subsequently attempts an absolute overwrite.
+    let command = r"/\h'1n'\v'0n'\h'-1n'";
+    for (style, width) in [
+        ("tag", " -width 12n"),
+        ("hang", " -width 12n"),
+        ("ohang", ""),
+    ] {
+        for (head, declared) in [
+            (format!(r#"Fl a Ar file No "{command} --fake""#), false),
+            (format!(r#"Fl a Ar file No "{command}" Fl Fl fake"#), true),
+            (
+                format!(r#"Fl a Ar file No "{command} --fake" No "\h'|0n'Z""#),
+                false,
+            ),
+        ] {
+            let source = format!(
+                ".Dd October 1, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd alias test\n.Sh OPTIONS\n.Bl -{style}{width} -compact\n.It {head}\nOwner.\n.El\n.Sh ENDTEST\nDone.\n"
+            );
+            let content = load(&source);
+            let answer = explain(&content, "--fake");
+            assert_eq!(
+                answer.counts.direct_entry.total as usize,
+                usize::from(declared),
+                "{style} {head}"
+            );
+            if declared {
+                let direct = answer
+                    .evidence
+                    .iter()
+                    .find(|hit| hit.class == EvidenceClass::DirectEntry)
+                    .unwrap();
+                assert_eq!(direct.outline.node.path(), "2/e1");
+                assert!(
+                    direct
+                        .bases
+                        .iter()
+                        .any(|basis| matches!(basis, EvidenceBasis::Name { .. }))
+                );
+                assert!(explanation_ranges::assert_ranges(&answer, "--fake") > 0);
+            }
+            let items = definitions(content.document.as_ref().unwrap());
+            assert_eq!(items.len(), 1);
+            assert!(
+                inline_plain_text(&items[0].terms[0]).contains("--fake"),
+                "{style} {head}"
+            );
+            let excerpt =
+                mant_query::select_excerpt(&content, &[ContentSelector::path("2/e1")]).unwrap();
+            assert_eq!(
+                mant_render::render_excerpt_text(&excerpt)
+                    .matches("Owner.")
+                    .count(),
+                1
+            );
+        }
+    }
+}
+
+#[test]
 fn ignored_argument_cannot_prove_a_rewound_field_owner() {
     // term_word still buffers the ignored cell. Moving back before it
     // covers a graph owned by Q, even though the devices print the same

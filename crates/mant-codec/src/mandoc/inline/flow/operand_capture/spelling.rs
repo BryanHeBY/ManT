@@ -72,8 +72,13 @@ pub(super) fn literal_declaration_role(decoded: &DecodedText) -> Option<NativeOp
     }
     // Keep only separator-like slashes opaque. A tight path such as
     // /var/log is still an ordinary literal in a complete assignment.
+    // An opaque execution event can prevent a positive spelling proof,
+    // but cannot turn the following text in the same source operand into
+    // an independent declaration. In this negative check only, keep an
+    // authored slash adjacent to its following authored blank across it.
     let mut slash = false;
     literal_declaration_chars(decoded)
+        .filter(|&character| character != '\0')
         .any(|character| {
             let looks_like_separator =
                 matches!(character, ',' | '|') || slash && character.is_whitespace();
