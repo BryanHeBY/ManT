@@ -717,6 +717,101 @@ fn ignored_motion_preserves_literal_alias_ownership_and_complete_fields() {
 }
 
 #[test]
+fn complete_ignored_arguments_preserve_alias_and_field_owners() {
+    // roff_escape.c:224-230,249-260 assigns these complete forms ESCAPE_IGNORE.
+    // Both CVS terminal devices agree on the visible labels. Whole source
+    // owners, not the matching display, distinguish an independent Fl and
+    // determine whether a one-token operator can join its neighboring field.
+    for control in [
+        r"\D'l 0 0'",
+        r"\X'other'",
+        r"\X'tty: link'",
+        r"\X'tty: link https://example.test'\X'tty: link'",
+        r"\kX",
+        r"\b'x'",
+        r"\Z'x'",
+        r"\R'x 0'",
+        r"\FX",
+        r"\YX",
+    ] {
+        let mut cases = [
+            (
+                "Independent",
+                format!(r#"Fl a Ar file No "/{control}" Fl Fl fake"#),
+                true,
+            ),
+            (
+                "Inside",
+                format!(r#"Fl a Ar file No "/{control} --fake""#),
+                false,
+            ),
+        ];
+        for _ in 0..2 {
+            let input =
+                controlled_fixture(cases.iter().map(|(label, head, _)| (*label, head.as_str())));
+            let expected = cases
+                .each_ref()
+                .map(|(label, _, direct)| (*direct, *label, "-a file / --fake"));
+            assert_controlled_owners(&load(&input), "--fake", &expected, true);
+            cases.reverse();
+        }
+        for operator in ['@', '='] {
+            let whole = format!("-a user{operator}host / -v");
+            let mut cases = [
+                (
+                    "Decorated",
+                    format!(r#"Fl a Ar user Ns No "{control}{operator}" Ns Pa host No / Fl v"#),
+                ),
+                (
+                    "Plain",
+                    format!(r#"Fl a Ar user Ns No "{operator}" Ns Pa host No / Fl v"#),
+                ),
+            ];
+            for _ in 0..2 {
+                let input =
+                    controlled_fixture(cases.iter().map(|(label, head)| (*label, head.as_str())));
+                let expected = cases
+                    .each_ref()
+                    .map(|(label, _)| (true, *label, whole.as_str()));
+                assert_controlled_owners(&load(&input), &whole, &expected, false);
+                cases.reverse();
+            }
+        }
+    }
+}
+
+#[test]
+fn ignored_argument_cannot_prove_a_rewound_field_owner() {
+    // term_word still buffers the ignored cell. Moving back before it
+    // covers a graph owned by Q, even though the devices print the same
+    // heading as the intact control.
+    let whole = "-a user@host / -v";
+    for control in [r"\kX", r"\D'l 0 0'", r"\X'tty: link'"] {
+        let mut cases = [
+            (
+                "Intact",
+                format!(r#"Fl a Ar user Ns No "{control}@" Ns Pa host No / Fl v"#),
+                true,
+            ),
+            (
+                "Clipped",
+                format!(r#"Fl a Ar user Ns No Q Ns No "\h'-1n'{control}@" Ns Pa host No / Fl v"#),
+                false,
+            ),
+        ];
+        for _ in 0..2 {
+            let input =
+                controlled_fixture(cases.iter().map(|(label, head, _)| (*label, head.as_str())));
+            let expected = cases
+                .each_ref()
+                .map(|(label, _, direct)| (*direct, *label, whole));
+            assert_controlled_owners(&load(&input), whole, &expected, false);
+            cases.reverse();
+        }
+    }
+}
+
+#[test]
 fn ignored_motion_does_not_prove_foreign_or_drawn_field_operators() {
     // term_word still writes its invisible cell at the actual cursor. A
     // visually matching rewind cannot prove the displaced Q's owner, and

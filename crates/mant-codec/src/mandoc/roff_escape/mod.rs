@@ -67,6 +67,8 @@ pub(super) enum PresentationKind {
     Motion,
     FormatterState,
     Postprocessor,
+    /// A complete native `ESCAPE_IGNORE` writes one invisible buffer cell.
+    IgnoredNativeCell,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

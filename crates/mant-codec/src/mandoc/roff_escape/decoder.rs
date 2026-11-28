@@ -205,10 +205,7 @@ impl Decoder {
             // corresponding device state.
             'F' | 'g' | 'k' | 'n' | 'O' | 'V' | 'Y' => {
                 let argument = self.take_argument(trigger);
-                self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::FormatterState,
-                    argument,
-                });
+                self.emit_argument_presentation(PresentationKind::FormatterState, argument);
             }
             '*' => {
                 let argument = self.take_argument(trigger);
@@ -229,10 +226,7 @@ impl Decoder {
             'o' => self.decode_overstrike(),
             'A' | 'b' | 'D' | 'R' | 'Z' => {
                 let argument = self.take_presentation_argument(trigger);
-                self.emit(RoffInlineEvent::Presentation {
-                    kind: PresentationKind::Postprocessor,
-                    argument,
-                });
+                self.emit_argument_presentation(PresentationKind::Postprocessor, argument);
             }
             'h' => self.decode_horizontal_motion(),
             'H' | 'L' | 'l' | 'S' | 'v' | 'x' => {
@@ -339,10 +333,10 @@ impl Decoder {
                 if let Some(target) = command.strip_prefix("tty: link ") {
                     self.emit(RoffInlineEvent::Link(Some(target.to_owned())));
                 } else {
-                    self.emit(RoffInlineEvent::Presentation {
-                        kind: PresentationKind::Postprocessor,
-                        argument: Some(command.to_owned()),
-                    });
+                    self.emit_argument_presentation(
+                        PresentationKind::Postprocessor,
+                        Some(command.to_owned()),
+                    );
                 }
             }
             None => self.emit(RoffInlineEvent::Presentation {
@@ -350,6 +344,21 @@ impl Decoder {
                 argument: None,
             }),
         }
+    }
+
+    fn emit_argument_presentation(&mut self, fallback: PresentationKind, argument: Option<String>) {
+        // The shared scanner already distinguishes CVS ESCAPE_IGNORE from
+        // ESCAPE_EXPAND (roff_escape.c:217-260), and from malformed arguments.
+        // Keep geometry and metadata unchanged; only record that certainty.
+        let kind = if self.argument_kind == grammar::EscapeKind::Ignore
+            && self.argument_completion == ArgumentCompletion::Complete
+            && argument.is_some()
+        {
+            PresentationKind::IgnoredNativeCell
+        } else {
+            fallback
+        };
+        self.emit(RoffInlineEvent::Presentation { kind, argument });
     }
 
     /// `\C` names one character with its quoted argument.  Only a closed,
