@@ -227,7 +227,9 @@ impl VisitMut for Remove<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mant_ir::{Block, DocumentSource, LinkTarget, SourceFormat};
+    use mant_ir::{
+        Block, DocumentMeta, DocumentSource, InlineLayout, LayoutHint, LinkTarget, SourceFormat,
+    };
 
     #[test]
     fn a_late_duplicate_revokes_only_its_own_membership() {
@@ -251,14 +253,14 @@ mod tests {
                 format: SourceFormat::Mdoc,
                 path: None,
             },
-            meta: Default::default(),
+            meta: DocumentMeta::default(),
             heading: None,
             fragment_aliases: Vec::new(),
             diagnostics: Vec::new(),
             blocks: vec![Block::Paragraph {
                 children,
-                inline_layout: Default::default(),
-                layout: Default::default(),
+                inline_layout: InlineLayout::default(),
+                layout: LayoutHint::default(),
                 source: None,
             }],
             sections: Vec::new(),
