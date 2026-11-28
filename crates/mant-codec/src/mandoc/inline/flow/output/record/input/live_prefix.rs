@@ -265,6 +265,7 @@ impl PrefixEdits {
                         // have independent scalar cursors at final flush.
                         let cell = slot.cell;
                         projection_owner = format!("{incoming_owner}:relocated:{cell}");
+                        head.note_relocated_ink(owner, &projection_owner, glyph.scalar);
                         self.detached_moves.insert(cell, projection_owner.clone());
                     }
                 } else if projection.is_none() {

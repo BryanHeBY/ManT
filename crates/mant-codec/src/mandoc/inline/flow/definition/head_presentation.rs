@@ -15,6 +15,10 @@ use super::super::output::split::painted_order;
 use super::super::output::tab_projection::{self, TabExpansion};
 use super::super::output::{INTERNAL_FIELD_WORD, deferred_blanks};
 
+mod relocation;
+use relocation::RelocatedHead;
+pub(in crate::mandoc::inline::flow) use relocation::is_detached_alias;
+
 type RowReceipt = (String, usize, RowLayoutHint);
 
 struct PendingRows {
@@ -26,6 +30,8 @@ struct PendingRows {
     coverage: BTreeMap<String, OwnerAcceptance>,
     rewinds: Vec<(String, RewoundGlyph)>,
     terms: Option<Rc<Vec<Vec<Inline>>>>,
+    relocation: Option<RelocatedHead>,
+    relocation_observed: bool,
     operands: Option<Rc<RefCell<super::super::HeadOperandCapture>>>,
 }
 
@@ -48,6 +54,8 @@ impl Clone for DeferredHeadProjection {
             coverage: source.coverage.clone(),
             rewinds: source.rewinds.clone(),
             terms: source.terms.clone(),
+            relocation: source.relocation.clone(),
+            relocation_observed: source.relocation_observed,
             operands: source
                 .operands
                 .as_ref()
@@ -76,6 +84,8 @@ impl DeferredHeadProjection {
             coverage: BTreeMap::new(),
             rewinds: Vec::new(),
             terms: None,
+            relocation: None,
+            relocation_observed: false,
             operands,
         })))
     }
@@ -100,19 +110,37 @@ impl DeferredHeadProjection {
         if let Some(saved) = self.0.borrow_mut().terms.take() {
             *terms = Rc::unwrap_or_clone(saved);
         }
-        let captured = self.apply(terms);
+        let mut captured = self.apply(terms);
         if let Some(term) = terms.last_mut()
             && let Some(Block::Paragraph { children, .. }) = body.first_mut()
         {
             painted_order::apply_shared(term, children);
+            let mut pending = self.0.borrow_mut();
+            if let Some(relocation) = pending.relocation.take()
+                && let Some(restored) = relocation.restore(term, children)
+            {
+                *term = restored;
+                if let Some(operands) = &pending.operands {
+                    let mut capture = operands.borrow_mut();
+                    capture.observe_accepted_output(term);
+                    captured = Some(capture.take());
+                }
+            }
             super::super::output::strip_native_projection_markers(children);
         }
+        let had_detached_ink = self.0.borrow().relocation_observed;
         for term in terms {
             painted_order::discard_shared(term);
+            if had_detached_ink {
+                relocation::strip_aliases(term);
+            }
         }
         for block in body {
             if let Block::Paragraph { children, .. } = block {
                 painted_order::discard_shared(children);
+            }
+            if had_detached_ink {
+                relocation::strip_block_aliases(block);
             }
         }
         captured
@@ -153,10 +181,34 @@ impl DeferredHeadProjection {
         // A proved later device position moves an authored glyph out of
         // that label exactly once, with its original style and link.
         let mut pending = self.0.borrow_mut();
+        if !pending.relocation_observed {
+            pending.relocation_observed = true;
+            if pending.operands.is_some()
+                && let Some([term]) = pending.terms.as_deref().map(Vec::as_slice)
+            {
+                pending.relocation = RelocatedHead::new(term);
+            }
+        }
         let terms = Rc::make_mut(pending.terms.as_mut()?);
         terms.iter_mut().rev().find_map(|term| {
             super::super::output::source_blanks::take_rewound_glyph(term, &mut [], owner, glyph)
         })
+    }
+
+    pub(in crate::mandoc::inline::flow) fn note_relocated_ink(
+        &self,
+        owner: &str,
+        alias: &str,
+        glyph: char,
+    ) {
+        let mut pending = self.0.borrow_mut();
+        if pending
+            .relocation
+            .as_mut()
+            .is_some_and(|proof| !proof.add(owner, alias, glyph))
+        {
+            pending.relocation = None;
+        }
     }
 
     pub(in crate::mandoc::inline::flow) fn accept(&self, receipts: &[RowReceipt]) {

@@ -1,6 +1,8 @@
 //! A new heading, definition HEAD, or declaration cannot replay the old row.
 
-use super::{Block, Inline, inline_text, parse_manual_bytes, visible_document_text};
+use super::{
+    Block, Inline, inline_text, parse_manual_bytes, projected_document_text, visible_document_text,
+};
 
 #[path = "section_owner/padding.rs"]
 mod padding;
@@ -219,4 +221,49 @@ fn native_head_session_sources_retain_their_term_and_successor_owners() {
         matches!(synopsis.sections[1].blocks.as_slice(), [Block::Paragraph { children, .. }]
         if inline_text(children) == "TERM AFTERMARK")
     );
+}
+
+#[test]
+fn relocated_surviving_head_owns_the_displayed_definition_once() {
+    // AX: the two native devices retain the actual Fl, regardless of
+    // which overwritten BODY glyph was placed at the initial position.
+    for (head, body, spelling) in [
+        ("Fl KX", "A", "-KX"),
+        ("Fl KX", "C", "-KX"),
+        ("Fl VV", "A", "-VV"),
+        ("Dv KX", "A", ""),
+    ] {
+        let source =
+            format!("{MDOC}.Bl -inset -compact\n.It {head}\n.No \"\\h'|0n'{body}\"\n.El\n");
+        let document = lower(&source);
+        assert!(
+            !serde_json::to_string(&document)
+                .unwrap()
+                .contains(":relocated:")
+        );
+        let Some(Block::DefinitionList { items, .. }) = document.sections[1].blocks.last() else {
+            panic!("{source}: '{document:#?}'");
+        };
+        let [item] = items.as_slice() else {
+            panic!("{items:#?}")
+        };
+        let names = item
+            .entry
+            .as_ref()
+            .map_or(&[][..], |facts| facts.names.as_slice());
+        if spelling.is_empty() {
+            assert!(!names.iter().any(|name| name == "KX"), "{item:#?}");
+            assert!(
+                projected_document_text(&document).contains("AX"),
+                "{item:#?}"
+            );
+        } else {
+            assert_eq!(inline_text(&item.terms[0].content), spelling, "{item:#?}");
+            assert_eq!(names, [spelling], "{item:#?}");
+            assert_eq!(
+                projected_document_text(&document).matches(spelling).count(),
+                1
+            );
+        }
+    }
 }

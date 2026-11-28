@@ -248,7 +248,8 @@ fn strip_projection_markers(nodes: &mut Vec<Inline>, literal: bool) {
             true
         }
         node if crate::mandoc::inline::ownership::is_delayed_origin(node)
-            || super::split::painted_order::is_shared_mark(node) =>
+            || super::split::painted_order::is_shared_mark(node)
+            || !literal && super::super::definition::head_presentation::is_detached_alias(node) =>
         {
             true
         }
