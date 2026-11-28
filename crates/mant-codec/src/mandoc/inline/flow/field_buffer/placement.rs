@@ -189,10 +189,23 @@ impl FieldBuffer {
         writes: &[FieldWrite],
     ) {
         // Inset and diagnostic HEAD post do not flush (mdoc_term.c:939–945).
-        // A word-end marker stays writable until term_fill() actually reads
-        // it, including when the next HEAD word already projects another row.
+        // A standalone bufferc('\n') after settled ink leaves the whole
+        // bounded field writable. Marker words with other writes still use
+        // their own acceptance rules: NBRZW can finish a blank row and a
+        // pending BACK pair can change the next graph (term.c:294–349, 901–929).
         if self.projection_owner == super::FieldProjectionOwner::RunInHead
-            && self.has_pending_break_markers()
+            && matches!(writes, [FieldWrite::Cell(FieldCell::BreakMarker)])
+            && self.break_markers.len() == 1
+            && self.writes_at_buffer_end()
+            && !self.backbefore_armed
+            && !self.backafter_armed
+            && matches!(
+                self.cells.as_slice(),
+                [.., previous, FieldCell::BreakMarker]
+                    if matches!(previous, FieldCell::Hyphen)
+                        || matches!(previous, FieldCell::Graph { text, width: 1 }
+                            if !text.is_whitespace())
+            )
             && self.has_bounded_run_in_projection()
         {
             self.hold_editable_passes();
