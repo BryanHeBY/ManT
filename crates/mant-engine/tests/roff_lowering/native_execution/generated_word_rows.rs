@@ -386,3 +386,30 @@ fn short_words_keep_proved_same_row_slots_addressable_through_backtracking() {
         assert_eq!(&actual, expected, "{source}");
     }
 }
+
+#[test]
+fn include_delimiters_follow_their_independent_device_write_heads() {
+    // Pristine CVS ASCII and UTF-8 agree, including original glyphs
+    // surviving outside the include operand's presentation wrapper.
+    let cases = [
+        (".No HEAD\nABC\n.No \"\\h'|0n'R\"\n.In x\nEND", "RE<x>BEND"),
+        (".No HEAD\nY\n.In \"\\h'|0n'Z\"\nEND", "Z>END <"),
+        (".No HEAD\nABC\n.In x\nEND", "HEAD ABC <x> END"),
+        (
+            ".ft B\n.No HEAD\n.No \"\\h'|0n'R\"\n.No Q In x\n.No \"\\h'|0n'U\"\nEND",
+            "UEEN>",
+        ),
+    ];
+    for (body, expected) in cases {
+        let source = format!(
+            ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
+             .Sh DESCRIPTION\n{body}\n.Sh NEXT\nDone.\n"
+        );
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let mut actual = body_rows(&mant_render::render_query_man(&query));
+        while actual.last().is_some_and(String::is_empty) {
+            actual.pop();
+        }
+        assert_eq!(actual, [expected], "{source}");
+    }
+}

@@ -187,37 +187,43 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     if let Some(anchor) = navigation_anchor(node) {
         builder.append(vec![anchor]);
     }
-    let saved = builder
-        .font
-        .push_scope(if node.flags.synopsis_pretty && node.flags.line_start {
-            Font::Strong
-        } else {
-            Font::Emphasis
-        });
+    let replay = builder.has_retreated_word_cursor();
+    let pretty_line = node.flags.synopsis_pretty && node.flags.line_start;
+    // The simple prose case has a provable native opening in the entry
+    // font: CVS writes "<" before selecting underline for the operand.
+    // Keep the existing conservative writer for complex projected
+    // operands or pre-existing decoration while those raw slots lack proof.
+    let regular_opening = replay
+        && !node.flags.synopsis_pretty
+        && builder.font.current == Font::Regular
+        && matches!(children, [child] if child.decoder_text().is_some_and(|text|
+            !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_graphic() && byte != b'\\')));
+    let operand_font = if pretty_line {
+        Font::Strong
+    } else {
+        Font::Emphasis
+    };
+    let saved = (!regular_opening).then(|| builder.font.push_scope(operand_font));
     // Cut delayed glyphs from preceding source out of the code span.
     // Keep the accepted ranges of "<", the operand and ">" separate
     // until native retirement. Flattening them now would discard those
     // word markers before a later blank can trigger range filtering.
     let scope = builder.begin_output_checkpoint();
     builder.zero_advance.begin_output_owner();
-    // A preceding positioned word can leave the native cursor before
-    // the end of its live row. In that case every generated word in this
-    // include participates in the same replay sequence; for a fresh
-    // append, retain the existing generated delimiter projection.
-    let replay = builder.has_retreated_word_cursor();
-    let append_delimiter = |builder: &mut InlineBuilder, word| {
+    let append_delimiter = |builder: &mut InlineBuilder, word, replay| {
         if replay {
             append_normalized_word(builder, word);
         } else {
             builder.append_text(word);
         }
     };
-    if node.flags.synopsis_pretty && node.flags.line_start {
+    if pretty_line {
         // termp_in_pre()1552-1558 writes two separate words, "#include"
         // and "<". The latter's automatic separator is its own native cell.
-        append_delimiter(builder, "#include");
+        append_delimiter(builder, "#include", replay);
     }
-    append_delimiter(builder, "<");
+    append_delimiter(builder, "<", replay);
+    let saved = saved.unwrap_or_else(|| builder.font.push_scope(operand_font));
     builder.tighten_next_boundary();
     append_inline_nodes(builder, children, default_name);
     if node.flags.synopsis_pretty {
@@ -225,7 +231,8 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     }
     builder.font.pop_scope(saved);
     builder.tighten_next_boundary();
-    append_delimiter(builder, ">");
+    // The operand may have moved the cursor after the pre call.
+    append_delimiter(builder, ">", replay || builder.has_retreated_word_cursor());
     let membership = builder.zero_advance.end_output_owner();
     builder
         .zero_advance
