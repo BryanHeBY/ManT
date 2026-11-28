@@ -354,7 +354,7 @@ mod tests {
         let fallback = super::super::ResolvedWithLinkLayout::without_native_links(
             independent.content().clone(),
         );
-        assert!(fallback.receipts().is_empty());
+        assert_eq!(fallback.receipts(), []);
 
         fs::write(&file, format!("{HEADER}{clean}")).unwrap();
         let replaced = loader
