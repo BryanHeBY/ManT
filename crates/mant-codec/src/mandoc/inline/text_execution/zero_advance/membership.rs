@@ -1,6 +1,6 @@
 //! Born membership and actual root qualification, independent of native words.
 use super::{Arc, Decoration, ZeroAdvanceState};
-use crate::mandoc::inline::ownership::{Annotation, OutputMembership, markers};
+use crate::mandoc::inline::ownership::{Annotation, NativeReceiver, OutputMembership, markers};
 
 /// The live annotation roots and their monotone member identities.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -10,7 +10,7 @@ pub(super) struct MembershipState {
     pub(super) active_links: Vec<(u64, mant_ir::LinkTarget)>,
     pub(super) output_epoch: u64,
     pub(super) authored_member_epoch: u64,
-    contiguous_native_receiver: Option<u64>,
+    native_receiver: Option<(u64, NativeReceiver)>,
 }
 
 impl MembershipState {
@@ -21,7 +21,7 @@ impl MembershipState {
             authored_member_epoch: 0,
             semantic_root: 0,
             active_links: Vec::new(),
-            contiguous_native_receiver: None,
+            native_receiver: None,
         }
     }
 }
@@ -120,7 +120,7 @@ impl ZeroAdvanceState {
                         epoch,
                         root,
                         enclosing: None,
-                        contiguous_native_receiver: false,
+                        native_receiver: None,
                     },
                     &annotation,
                     true,
@@ -160,15 +160,19 @@ impl ZeroAdvanceState {
         self.membership
             .active_links
             .retain(|(owner, _)| *owner != epoch);
-        let contiguous_native_receiver = self.membership.contiguous_native_receiver == Some(epoch);
-        if contiguous_native_receiver {
-            self.membership.contiguous_native_receiver = None;
+        let native_receiver = self
+            .membership
+            .native_receiver
+            .filter(|&(receiver, _)| receiver == epoch)
+            .map(|(_, kind)| kind);
+        if native_receiver.is_some() {
+            self.membership.native_receiver = None;
         }
         OutputMembership {
             epoch,
             root,
             enclosing: self.membership.output_owners.last().map(|scope| scope.0),
-            contiguous_native_receiver,
+            native_receiver,
         }
     }
 
@@ -177,19 +181,33 @@ impl ZeroAdvanceState {
     pub(in crate::mandoc::inline) fn native_writer_membership(&self) -> (u64, Option<u64>) {
         (
             self.membership.output_epoch,
-            self.membership.contiguous_native_receiver.filter(|&epoch| {
-                self.membership
-                    .output_owners
-                    .last()
-                    .is_some_and(|scope| scope.0 == epoch)
-            }),
+            self.membership
+                .native_receiver
+                .map(|(epoch, _)| epoch)
+                .filter(|&epoch| {
+                    self.membership
+                        .output_owners
+                        .last()
+                        .is_some_and(|scope| scope.0 == epoch)
+                }),
         )
     }
 
     /// The caller is a single bare URI word inside its active annotation.
     pub(in crate::mandoc::inline) fn mark_contiguous_native_receiver(&mut self) {
-        self.membership.contiguous_native_receiver =
-            self.membership.output_owners.last().map(|scope| scope.0);
+        self.mark_native_receiver(NativeReceiver::Contiguous);
+    }
+
+    pub(in crate::mandoc::inline) fn mark_described_native_receiver(&mut self) {
+        self.mark_native_receiver(NativeReceiver::Described);
+    }
+
+    fn mark_native_receiver(&mut self, kind: NativeReceiver) {
+        self.membership.native_receiver = self
+            .membership
+            .output_owners
+            .last()
+            .map(|scope| (scope.0, kind));
     }
 
     /// Wrapped source labels have their own reading projection.
@@ -463,7 +481,7 @@ mod preview_tests {
             epoch: 3,
             root: 7,
             enclosing: Some(2),
-            contiguous_native_receiver: false,
+            native_receiver: None,
         };
         for pending in [
             Pending::Absent,

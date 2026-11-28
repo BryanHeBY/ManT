@@ -53,7 +53,13 @@ pub(in crate::mandoc) struct OutputMembership {
     pub(super) epoch: u64,
     pub(super) root: u64,
     pub(super) enclosing: Option<u64>,
-    pub(super) contiguous_native_receiver: bool,
+    pub(super) native_receiver: Option<NativeReceiver>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum NativeReceiver {
+    Contiguous,
+    Described,
 }
 
 pub(super) fn delayed_origin(epoch: u64, children: Vec<Inline>) -> Inline {
@@ -108,6 +114,33 @@ fn relocate_origin(node: &Inline) -> Option<u64> {
     };
     (uri == title)
         .then(|| uri.strip_prefix(NATIVE_RELOCATED_ORIGIN)?.parse().ok())
+        .flatten()
+}
+
+const DESCRIBED_FOREIGN: &str = "\\0mant:lk-described-foreign:";
+
+fn described_foreign_origin(epoch: u64, children: Vec<Inline>) -> Inline {
+    let marker = format!("{DESCRIBED_FOREIGN}{epoch}");
+    Inline::Link {
+        target: LinkTarget::External {
+            uri: marker.clone(),
+        },
+        title: Some(marker),
+        children,
+    }
+}
+
+pub(super) fn described_foreign_writer(node: &Inline) -> Option<u64> {
+    let Inline::Link {
+        target: LinkTarget::External { uri },
+        title: Some(title),
+        ..
+    } = node
+    else {
+        return None;
+    };
+    (uri == title)
+        .then(|| uri.strip_prefix(DESCRIBED_FOREIGN)?.parse().ok())
         .flatten()
 }
 
@@ -212,8 +245,8 @@ impl OutputMembership {
         mut map: impl FnMut(Vec<Inline>) -> Vec<Inline>,
     ) -> Vec<Inline> {
         let mut parts = Vec::new();
-        let native_cut =
-            self.contiguous_native_receiver && prove_single_native_run(&nodes, self.epoch);
+        let native_cut = self.native_receiver == Some(NativeReceiver::Contiguous)
+            && prove_single_native_run(&nodes, self.epoch);
         self.partition(nodes, &mut parts, native_cut);
         let mut output = Vec::new();
         let mut mapped = false;
@@ -241,7 +274,14 @@ impl OutputMembership {
                 let Inline::Link { children, .. } = node else {
                     unreachable!()
                 };
-                if epoch < self.epoch && (relocated_epoch.is_none() || native_cut) {
+                if epoch < self.epoch
+                    && relocated_epoch.is_some()
+                    && self.native_receiver == Some(NativeReceiver::Described)
+                {
+                    // Keep the proved foreign writer for the description
+                    // publisher. The legacy wrapper itself stays intact.
+                    add(parts, true, vec![described_foreign_origin(epoch, children)]);
+                } else if epoch < self.epoch && (relocated_epoch.is_none() || native_cut) {
                     let nodes = if self.enclosing.is_some_and(|parent| epoch < parent) {
                         vec![delayed_origin(epoch, children)]
                     } else {
@@ -323,7 +363,7 @@ mod tests {
             root: 0,
             epoch: 4,
             enclosing: None,
-            contiguous_native_receiver: false,
+            native_receiver: None,
         };
         let result = receipt.map_owned(
             vec![
@@ -367,7 +407,7 @@ mod tests {
             root: 0,
             epoch: 2,
             enclosing: None,
-            contiguous_native_receiver: false,
+            native_receiver: None,
         }
         .map_owned(vec![new], |nodes| nodes);
         assert_eq!(
@@ -387,7 +427,7 @@ mod tests {
             root: 0,
             epoch: 4,
             enclosing: Some(2),
-            contiguous_native_receiver: false,
+            native_receiver: None,
         }
         .map_owned(
             vec![
@@ -405,7 +445,7 @@ mod tests {
                 root: 0,
                 epoch: 2,
                 enclosing: None,
-                contiguous_native_receiver: false,
+                native_receiver: None,
             }
             .map_owned(result, |nodes| code(&nodes)),
             vec![
@@ -431,7 +471,7 @@ mod tests {
                 root: 0,
                 epoch: 2,
                 enclosing: None,
-                contiguous_native_receiver: false,
+                native_receiver: None,
             }
             .map_owned(vec![forged], |nodes| code(&nodes)),
             vec![Inline::Code {

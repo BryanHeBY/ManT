@@ -61,6 +61,7 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
                 &address,
                 None,
                 |builder| {
+                    builder.zero_advance.mark_described_native_receiver();
                     builder.with_font_scope(Font::Emphasis, |builder| {
                         append_inline_nodes(builder, label, default_name);
                     });

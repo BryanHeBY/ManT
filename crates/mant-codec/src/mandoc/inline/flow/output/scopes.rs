@@ -164,7 +164,7 @@ impl InlineBuilder {
         let Some(start) = self.output_scope_start(&scope) else {
             return (false, membership);
         };
-        if membership.contiguous_native_receiver
+        if membership.native_receiver.is_some()
             && self.execution.definition.is_some()
             && self
                 .execution
@@ -177,7 +177,7 @@ impl InlineBuilder {
         {
             // The scope will be split across separate accepted/pending
             // wrappers. Do not infer complete membership from either half.
-            membership.contiguous_native_receiver = false;
+            membership.native_receiver = None;
         }
         let mut started = false;
         let mut annotated = false;

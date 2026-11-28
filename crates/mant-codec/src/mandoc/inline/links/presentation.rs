@@ -2,8 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
+mod description_runs;
+
 use super::{Inline, InlineBuilder};
 use crate::mandoc::inline::ownership::annotations::AnnotationKey;
+use description_runs::{AcceptedDescription, PhysicalWriter};
 use mant_ir::LinkTarget;
 
 const OWNER_PREFIX: &str = "\0mant:lk-presentation:";
@@ -182,6 +185,7 @@ fn has_readable_text(nodes: &[Inline]) -> bool {
 struct AcceptedLabel {
     readable: bool,
     uri_readable: bool,
+    description: AcceptedDescription,
 }
 
 /// Final native field receipts already chose these children. One collection
@@ -189,8 +193,10 @@ struct AcceptedLabel {
 /// every private placeholder disappears before public IR can be returned.
 pub(in crate::mandoc::inline) fn finalize_accepted_links(nodes: &mut Vec<Inline>) {
     let mut labels = HashMap::new();
-    collect_labels(nodes, &mut labels, None);
+    collect_labels(nodes, &mut labels, None, PhysicalWriter::Authored);
     if !labels.is_empty() {
+        #[cfg(test)]
+        description_runs::observe(&labels);
         resolve_parts(nodes, &labels, &mut HashSet::new());
     }
 }
@@ -199,31 +205,50 @@ fn collect_labels(
     nodes: &[Inline],
     labels: &mut HashMap<AnnotationKey, AcceptedLabel>,
     owned: Option<(AnnotationKey, Part)>,
+    writer: PhysicalWriter,
 ) {
     for node in nodes {
         #[cfg(test)]
         note_visit();
-        let owned = if let Some((owner, part, _)) = metadata(node) {
-            labels.entry(owner).or_default();
-            Some((owner, part))
+        let (owned, writer) = if let Some((owner, part, _)) = metadata(node) {
+            let label = labels.entry(owner).or_default();
+            if part == Part::Description {
+                label.description.enter();
+            }
+            (Some((owner, part)), PhysicalWriter::Authored)
+        } else if let Some(epoch) = crate::mandoc::inline::ownership::described_foreign_writer(node)
+        {
+            (owned, PhysicalWriter::Earlier(epoch))
         } else {
-            owned
+            (owned, writer)
         };
         match node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
-            | Inline::Link { children, .. } => collect_labels(children, labels, owned),
+            | Inline::Link { children, .. } => collect_labels(children, labels, owned, writer),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
                 if let Some((owner, part)) = owned {
                     let label = labels.entry(owner).or_default();
                     match part {
-                        Part::Description => label.readable |= text_is_readable(value),
+                        Part::Description => {
+                            label.readable |= text_is_readable(value);
+                            label.description.record(writer, value.chars().count());
+                        }
                         Part::Uri => label.uri_readable |= text_is_readable(value),
                         Part::Colon | Part::Suffix => {}
                     }
                 }
             }
-            Inline::Anchor { .. } | Inline::LineBreak { .. } => {}
+            Inline::LineBreak { .. } => {
+                if let Some((owner, Part::Description)) = owned {
+                    labels
+                        .entry(owner)
+                        .or_default()
+                        .description
+                        .record(writer, 1);
+                }
+            }
+            Inline::Anchor { .. } => {}
         }
     }
 }
@@ -244,7 +269,14 @@ fn resolve_parts(
             | Inline::Link { children, .. } => resolve_parts(children, labels, bound),
             _ => {}
         }
-        if let Some((owner, part, address)) = part {
+        if crate::mandoc::inline::ownership::described_foreign_writer(&node).is_some() {
+            let Inline::Link { children, .. } = node else {
+                unreachable!()
+            };
+            // Reconstruct the unchanged legacy subtree. The current wire
+            // cannot put separate runs under the same authored occurrence.
+            output.extend(children);
+        } else if let Some((owner, part, address)) = part {
             let Inline::Link { children, .. } = node else {
                 unreachable!();
             };
@@ -410,5 +442,94 @@ mod tests {
         // This is an intentionally invalid public-IR target for a private
         // metadata unit check, not an admitted public value or a roff oracle.
         // Public validators reject its NUL independently of this detection.
+    }
+
+    #[test]
+    fn described_link_retains_physical_runs_while_legacy_projection_stays_unchanged() {
+        use mant_ir::visit::{self, Visit};
+        use std::path::Path;
+
+        // Frozen AT split.1. CVS termp_lk_pre executes Z, U, ':' and URI
+        // at the live cursor. Pinned UTF-8/ASCII agree that Y survives in
+        // between, while mdoc_lk_pre's HTML authored description is Z U.
+        const HEADER: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n";
+        let split = ".No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n";
+        let source = format!("{HEADER}{split}.Lk https://z.test V\n.Sh ENDTEST\nDone.\n");
+        let (document, trace) = description_runs::capture(|| {
+            crate::mandoc::parse_plain_manual(Path::new("split.1"), source.as_bytes()).unwrap()
+        });
+        #[derive(Default)]
+        struct Links(Vec<String>);
+        impl<'a> Visit<'a> for Links {
+            fn visit_inline(&mut self, inline: &'a Inline) {
+                if let Inline::Link {
+                    target: LinkTarget::External { uri },
+                    children,
+                    ..
+                } = inline
+                    && uri == "https://z.test"
+                {
+                    self.0.push(mant_ir::inline_plain_text(children));
+                }
+                visit::walk_inline(self, inline);
+            }
+        }
+        let mut links = Links::default();
+        links.visit_document(&document);
+        assert_eq!(links.0.len(), 2);
+        let compact =
+            |value: &str| -> String { value.chars().filter(|ch| !ch.is_whitespace()).collect() };
+        assert_eq!(compact(&links.0[0]), "ZYU", "legacy safety boundary");
+        assert_eq!(compact(&links.0[1]), "V");
+        let body = document
+            .sections
+            .iter()
+            .find(|section| section.id.as_str() == "description")
+            .unwrap();
+        let text = body
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                mant_ir::Block::Paragraph { children, .. } => {
+                    Some(mant_ir::inline_plain_text(children))
+                }
+                _ => None,
+            })
+            .collect::<String>();
+        assert!(
+            compact(&text).starts_with("HRAZYU:https://z.testEND"),
+            "{text}"
+        );
+
+        eprintln!("{trace:?}");
+        assert_eq!(trace.len(), 2, "{trace:?}");
+        assert_ne!(trace[0].0, trace[1].0, "two authored IDs, same URI");
+        let (_, runs) = trace
+            .iter()
+            .find(|(_, runs)| {
+                runs.iter()
+                    .any(|run| matches!(run.writer, PhysicalWriter::Earlier(_)))
+            })
+            .expect("physical old-writer evidence reaches publication");
+        let accepted = links.0[0].chars().collect::<Vec<_>>();
+        let mut leaves = Vec::new();
+        for run in runs {
+            assert_eq!(run.fragment, 1);
+            let ink = accepted[run.scalars.clone()]
+                .iter()
+                .copied()
+                .collect::<String>();
+            let ink = compact(&ink);
+            if !ink.is_empty() {
+                leaves.push((run.writer, ink));
+            }
+        }
+        assert_eq!(leaves.len(), 3, "{leaves:?}");
+        assert_eq!(leaves[0], (PhysicalWriter::Authored, "Z".into()));
+        assert!(matches!(leaves[1].0, PhysicalWriter::Earlier(_)));
+        assert_eq!(leaves[1].1, "Y");
+        assert_eq!(leaves[2], (PhysicalWriter::Authored, "U".into()));
+        let json = serde_json::to_string(&document).unwrap();
+        assert!(!json.contains("lk-described-foreign"), "{json}");
     }
 }
