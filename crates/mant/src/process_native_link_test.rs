@@ -50,8 +50,7 @@ fn native_interactive_file_selector_delivers_opaque_click_regions() {
     assert_eq!(snapshot.layout().receipts.len(), 1);
 
     let mut app =
-        mant_ui::App::from_native_snapshot(&snapshot, mant_protocol::DocumentCatalog::default())
-            .unwrap();
+        mant_ui::App::from_native_snapshot(&snapshot, mant_protocol::DocumentCatalog::default());
     let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
     let cells = terminal.backend().buffer();

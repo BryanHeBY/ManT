@@ -245,13 +245,14 @@ impl DocumentView {
     ///
     /// The document and layout are an opaque, source-bound pair. This never
     /// mutates the original document, reference index or default view.
+    /// Unrepresentable matched links retain their text, not their old hits.
     #[cfg(feature = "native-link-layout")]
     #[must_use]
-    pub fn with_native_links(snapshot: &mant_loader::ResolvedWithLinkLayout) -> Option<Self> {
+    pub fn with_native_links(snapshot: &mant_loader::ResolvedWithLinkLayout) -> Self {
         let bundle = snapshot.content();
         let members =
-            link_members::LinkMembers::validate(bundle.document.as_ref(), snapshot.layout())?;
-        Some(Self::build(bundle, members))
+            link_members::LinkMembers::from_layout(bundle.document.as_ref(), snapshot.layout());
+        Self::build(bundle, members)
     }
 
     fn build(bundle: &ResolvedContent, members: link_members::LinkMembers) -> Self {

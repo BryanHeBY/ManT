@@ -354,7 +354,7 @@ fn native_snapshot_routes_mouse_only_to_authored_same_label_occurrences() {
     let source = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.No OTHER\n.Lk https://z.test ZYU\n.Sh NEXT\nDone.\n";
     let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
     assert_eq!(snapshot.layout().receipts.len(), 1);
-    let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default()).unwrap();
+    let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
     let mut terminal = Terminal::new(TestBackend::new(80, 25)).unwrap();
     terminal.draw(|frame| app.draw(frame)).unwrap();
     let width = app.geometry.content.width;
@@ -373,4 +373,62 @@ fn native_snapshot_routes_mouse_only_to_authored_same_label_occurrences() {
             );
         }
     }
+}
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn unrepresentable_native_members_leave_initial_and_follow_on_reader_open() {
+    // The combining mark is authored by the Lk, but belongs to old Y's
+    // physical grapheme. A safe reader cannot offer either half as a target.
+    let source = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z \\[u0301]U\nEND\n.br\n.Lk https://z.test AGAIN\n.br\n.Xr printf 3\n.Sh NEXT\nDone.\n";
+    let initial = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+    let follow_on = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+    assert_eq!(
+        initial.layout().receipts.len(),
+        1,
+        "native proof includes the unsupported split"
+    );
+    let mut app = App::from_native_snapshot(&initial, DocumentCatalog::default());
+    let mut terminal = Terminal::new(TestBackend::new(80, 25)).unwrap();
+    let region = |app: &App, text: &str| {
+        let width = app.geometry.content.width;
+        app.session.rendered_cache[&width]
+            .search(text)
+            .into_iter()
+            .next()
+            .unwrap()
+    };
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let mixed = region(&app, "ZY\u{301}U");
+    for offset in 0..3 {
+        click_document_cell(&mut app, mixed.start_column + offset, mixed.row);
+        assert!(app.take_external_request().is_none());
+    }
+    let good = region(&app, "AGAIN");
+    click_document_cell(&mut app, good.start_column, good.row);
+    assert_eq!(
+        app.take_external_request()
+            .as_ref()
+            .map(crate::ExternalUri::as_str),
+        Some("https://z.test")
+    );
+
+    let next = region(&app, "printf(3)");
+    click_document_cell(&mut app, next.start_column, next.row);
+    let mut called = false;
+    assert!(
+        app.service_pending_with_native_links(&mut crate::ReaderServices::default(), |_| {
+            called = true;
+            Ok(follow_on.clone())
+        })
+    );
+    assert!(called);
+    assert!(std::sync::Arc::ptr_eq(
+        &app.session.current_bundle,
+        &follow_on.content_arc()
+    ));
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let mixed = region(&app, "ZY\u{301}U");
+    click_document_cell(&mut app, mixed.start_column + 1, mixed.row);
+    assert!(app.take_external_request().is_none());
 }

@@ -9,43 +9,70 @@ pub(super) struct LinkMembers(HashMap<usize, Vec<Range<usize>>>);
 
 impl LinkMembers {
     #[cfg(feature = "native-link-layout")]
+    pub(super) fn from_layout(document: Option<&Document>, layout: &LinkLayout) -> Self {
+        Self::collect(document, layout).0
+    }
+
+    #[cfg(all(test, feature = "native-link-layout"))]
     pub(super) fn validate(document: Option<&Document>, layout: &LinkLayout) -> Option<Self> {
-        let mut ranges = HashMap::new();
-        let mut occurrences = std::collections::HashSet::new();
+        let (members, accepted) = Self::collect(document, layout);
+        accepted.then_some(members)
+    }
+
+    #[cfg(feature = "native-link-layout")]
+    fn collect(document: Option<&Document>, layout: &LinkLayout) -> (Self, bool) {
+        let mut ranges: HashMap<usize, Vec<Range<usize>>> = HashMap::new();
+        let mut occurrences = HashMap::new();
         let mut budget = 1024 * 1024;
-        if layout.receipts.len() > 1000 {
-            return None;
-        }
-        for receipt in &layout.receipts {
-            let Inline::Link {
+        let mut supported = layout.receipts.len() <= 1000;
+        for receipt in layout.receipts.iter().take(1000) {
+            let Some(Inline::Link {
                 target, children, ..
-            } = receipt.origin.resolve_link(document?)?
+            }) = document.and_then(|document| receipt.origin.resolve_link(document))
             else {
-                return None;
+                supported = false;
+                continue;
             };
-            // This first route only supports described native external links.
+            // The paired loader supplies this position. An unrecognized
+            // origin/target cannot disable a different source link.
             if !matches!(target, LinkTarget::External { uri } if mant_ir::is_valid_external_uri(uri))
                 || target != &receipt.target
-                || !occurrences.insert(receipt.occurrence)
-                || !(2..=1024).contains(&receipt.members.len())
-                || receipt.members.windows(2).any(|w| w[0].end >= w[1].start)
             {
-                return None;
+                supported = false;
+                continue;
+            }
+            let address = std::ptr::from_ref(target).addr();
+            let repeated = occurrences.insert(receipt.occurrence, address);
+            if let Some(earlier) = repeated
+                && let Some(members) = ranges.get_mut(&earlier)
+            {
+                members.clear();
             }
             let mut actual = String::new();
             let mut expected = String::new();
-            if !checked_text(children, &mut actual, &mut budget, 64)
-                || !checked_text(&receipt.expected_children, &mut expected, &mut budget, 64)
-                || children != &receipt.expected_children
-                || !whole_members(&actual, &receipt.members)
-                || ranges
-                    .insert(std::ptr::from_ref(target).addr(), receipt.members.clone())
-                    .is_some()
-            {
-                return None;
-            }
+            let representable = repeated.is_none()
+                && !ranges.contains_key(&address)
+                && (2..=1024).contains(&receipt.members.len())
+                && receipt
+                    .members
+                    .windows(2)
+                    .all(|pair| pair[0].end < pair[1].start)
+                && checked_text(children, &mut actual, &mut budget, 64)
+                && checked_text(&receipt.expected_children, &mut expected, &mut budget, 64)
+                && children == &receipt.expected_children
+                && whole_members(&actual, &receipt.members);
+            // Do not make the document unreadable, or accidentally revive
+            // foreign glyph clicks from the legacy wrapper. A matched but
+            // unsupported origin keeps its text, with no clickable cells.
+            let members = if representable {
+                receipt.members.clone()
+            } else {
+                Vec::new()
+            };
+            ranges.insert(address, members);
+            supported &= representable;
         }
-        Some(Self(ranges))
+        (Self(ranges), supported)
     }
 
     pub(super) fn cursor(&self) -> MemberCursor<'_> {

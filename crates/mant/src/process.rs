@@ -205,13 +205,7 @@ fn run_interactive(
     };
     #[cfg(feature = "roff")]
     if let Some(snapshot) = sources.native {
-        let Some(app) = mant_ui::App::from_native_snapshot(&snapshot, catalog) else {
-            return report_failure(
-                &Failure::operational("invalid native link layout"),
-                diagnostics,
-                diagnostics_color,
-            );
-        };
+        let app = mant_ui::App::from_native_snapshot(&snapshot, catalog);
         let open_native = |target: &mant_protocol::DocumentOpenTarget| {
             let (request, policy) = request_for_navigation(target);
             application::read_full_native(&request, policy, host).map_err(Failure::into_message)

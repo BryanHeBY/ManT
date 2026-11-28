@@ -285,11 +285,11 @@ impl App {
     pub fn from_native_snapshot(
         snapshot: &mant_loader::ResolvedWithLinkLayout,
         catalog: DocumentCatalog,
-    ) -> Option<Self> {
-        let document = DocumentView::with_native_links(snapshot)?;
+    ) -> Self {
+        let document = DocumentView::with_native_links(snapshot);
         let mut options = ReaderOptions::new(snapshot.content_arc());
         options.catalog = catalog;
-        Some(Self::from_shared_view(options, document))
+        Self::from_shared_view(options, document)
     }
 
     fn from_shared_view(options: ReaderOptions, document: DocumentView) -> Self {
@@ -396,12 +396,7 @@ impl App {
         snapshot: &mant_loader::ResolvedWithLinkLayout,
         request: NavigationRequest,
     ) {
-        let Some(view) = DocumentView::with_native_links(snapshot) else {
-            self.report_open_error(
-                "Invalid native link layout; the current document was retained".into(),
-            );
-            return;
-        };
+        let view = DocumentView::with_native_links(snapshot);
         self.complete_navigation_view(
             snapshot.content_arc(),
             request.target,

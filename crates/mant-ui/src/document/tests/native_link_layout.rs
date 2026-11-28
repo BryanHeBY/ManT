@@ -50,7 +50,7 @@ fn native_layout_activates_disjoint_members_without_changing_legacy_payload() {
     );
     assert_eq!(occurrences[0], receipt.origin);
     assert_ne!(occurrences[0], occurrences[1]);
-    let opt_in = DocumentView::with_native_links(&snapshot).unwrap();
+    let opt_in = DocumentView::with_native_links(&snapshot);
     assert_rendered_members(&DocumentView::new(&legacy), &opt_in);
     let mut stale = layout.clone();
     stale.receipts[0].target = mant_ir::LinkTarget::External {
@@ -162,7 +162,7 @@ fn native_authored_member_crosses_visual_wrap_and_keeps_its_combining_glyph() {
         panic!("one long native authored link");
     };
     assert_eq!(receipt.members, [0..1, 2..2 + word.chars().count()]);
-    let view = DocumentView::with_native_links(&snapshot).unwrap();
+    let view = DocumentView::with_native_links(&snapshot);
     let rendered = view.render(28);
     let legacy = DocumentView::new(snapshot.content()).render(28);
     let [match_] = rendered.search(word).try_into().unwrap();
