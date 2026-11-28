@@ -170,7 +170,7 @@ fn a_surviving_inset_link_keeps_its_label_and_destination_in_the_term() {
         let owner = EntryOwner::Definition(item);
         let facts = owner.facts().unwrap();
         assert_eq!(facts.kind, EntryKind::Term);
-        assert!(facts.name_bindings.is_empty());
+        assert_eq!(facts.name_bindings, [] as [mant_ir::EntryNameBinding; 0]);
         let term = &item.terms[0].content;
         assert_eq!(inline_plain_text(term), "test: https://z.test");
         let links: Vec<_> = term
