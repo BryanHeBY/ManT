@@ -25,6 +25,7 @@ fn note_visit() {
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub(super) enum Part {
     Description,
+    CapturedDescription,
     Colon,
     Suffix,
     Uri,
@@ -34,6 +35,7 @@ impl Part {
     const fn spelling(self) -> &'static str {
         match self {
             Self::Description => "d",
+            Self::CapturedDescription => "d+",
             Self::Colon => "c",
             Self::Suffix => "s",
             Self::Uri => "u",
@@ -99,7 +101,7 @@ pub(super) fn wrap_suffix(
     for node in children {
         if suffix.is_empty()
             && (matches!(node, Inline::Anchor { .. } | Inline::LineBreak { .. })
-                || metadata(&node).is_some_and(|(_, part, _)| part == Part::Description))
+                || metadata(&node).is_some_and(|(_, part, _, _)| part == Part::Description))
         {
             prefix.push(node);
         } else {
@@ -110,7 +112,7 @@ pub(super) fn wrap_suffix(
     prefix
 }
 
-fn metadata(node: &Inline) -> Option<(AnnotationKey, Part, &str)> {
+fn metadata(node: &Inline) -> Option<(AnnotationKey, Part, &str, bool)> {
     let Inline::Link {
         target: mant_ir::LinkTarget::External { uri },
         title: Some(title),
@@ -123,19 +125,22 @@ fn metadata(node: &Inline) -> Option<(AnnotationKey, Part, &str)> {
     let owner = fields.next()?.parse().ok()?;
     let part = match fields.next()? {
         "d" => Part::Description,
+        "d+" => Part::CapturedDescription,
         "c" => Part::Colon,
         "s" => Part::Suffix,
         "u" => Part::Uri,
         _ => return None,
     };
-    (title == &scope_marker(owner, part)).then_some((owner, part, fields.next()?))
+    let capture = part == Part::CapturedDescription;
+    let normal_part = if capture { Part::Description } else { part };
+    (title == &scope_marker(owner, part)).then_some((owner, normal_part, fields.next()?, capture))
 }
 
 /// The URI owner carries the same authored destination fact as a typed Link,
 /// even when `term_fill()` rejects every native glyph. Preserve that receipt
 /// while trimming rejected text; `mdoc_lk_pre()` still emits its authored href.
 pub(in crate::mandoc::inline) fn retains_authored_identity(node: &Inline) -> bool {
-    metadata(node).is_some_and(|(_, part, address)| part == Part::Uri && !address.is_empty())
+    metadata(node).is_some_and(|(_, part, address, _)| part == Part::Uri && !address.is_empty())
 }
 
 /// `wrap_output_from()` can split a semantic owner at a real native commit.
@@ -143,11 +148,12 @@ pub(in crate::mandoc::inline) fn retains_authored_identity(node: &Inline) -> boo
 /// a colon/suffix is presentation rather than another link occurrence.
 pub(in crate::mandoc::inline) fn same_link_owner(left: &Inline, right: &Inline) -> bool {
     matches!((metadata(left), metadata(right)),
-        (Some((left_owner, left_part, left_address)), Some((right_owner, right_part, right_address)))
+        (Some((left_owner, left_part, left_address, left_capture)), Some((right_owner, right_part, right_address, right_capture)))
             if left_owner == right_owner
                 && left_part == right_part
                 && matches!(left_part, Part::Description | Part::Uri)
-                && left_address == right_address)
+                && left_address == right_address
+                && left_capture == right_capture)
 }
 
 pub(in crate::mandoc::inline) fn is_private_owner(node: &Inline) -> bool {
@@ -204,18 +210,18 @@ pub(in crate::mandoc::inline) fn finalize_accepted_links(nodes: &mut Vec<Inline>
 fn collect_labels(
     nodes: &[Inline],
     labels: &mut HashMap<AnnotationKey, AcceptedLabel>,
-    owned: Option<(AnnotationKey, Part)>,
+    owned: Option<(AnnotationKey, Part, bool)>,
     writer: PhysicalWriter,
 ) {
     for node in nodes {
         #[cfg(test)]
         note_visit();
-        let (owned, writer) = if let Some((owner, part, _)) = metadata(node) {
+        let (owned, writer) = if let Some((owner, part, _, capture)) = metadata(node) {
             let label = labels.entry(owner).or_default();
-            if part == Part::Description {
+            if capture {
                 label.description.enter();
             }
-            (Some((owner, part)), PhysicalWriter::Authored)
+            (Some((owner, part, capture)), PhysicalWriter::Authored)
         } else if let Some(epoch) = crate::mandoc::inline::ownership::described_foreign_writer(node)
         {
             (owned, PhysicalWriter::Earlier(epoch))
@@ -227,20 +233,22 @@ fn collect_labels(
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => collect_labels(children, labels, owned, writer),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                if let Some((owner, part)) = owned {
+                if let Some((owner, part, capture)) = owned {
                     let label = labels.entry(owner).or_default();
                     match part {
                         Part::Description => {
                             label.readable |= text_is_readable(value);
-                            label.description.record(writer, value.chars().count());
+                            if capture {
+                                label.description.record_text(writer, value);
+                            }
                         }
                         Part::Uri => label.uri_readable |= text_is_readable(value),
-                        Part::Colon | Part::Suffix => {}
+                        Part::Colon | Part::Suffix | Part::CapturedDescription => {}
                     }
                 }
             }
             Inline::LineBreak { .. } => {
-                if let Some((owner, Part::Description)) = owned {
+                if let Some((owner, Part::Description, true)) = owned {
                     labels
                         .entry(owner)
                         .or_default()
@@ -262,7 +270,8 @@ fn resolve_parts(
     for mut node in std::mem::take(nodes) {
         #[cfg(test)]
         note_visit();
-        let part = metadata(&node).map(|(owner, part, address)| (owner, part, address.to_owned()));
+        let part = metadata(&node)
+            .map(|(owner, part, address, capture)| (owner, part, address.to_owned(), capture));
         match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
@@ -276,12 +285,15 @@ fn resolve_parts(
             // Reconstruct the unchanged legacy subtree. The current wire
             // cannot put separate runs under the same authored occurrence.
             output.extend(children);
-        } else if let Some((owner, part, address)) = part {
+        } else if let Some((owner, part, address, capture)) = part {
             let Inline::Link { children, .. } = node else {
                 unreachable!();
             };
             let label = labels.get(&owner).is_some_and(|label| label.readable);
             match part {
+                Part::CapturedDescription => {
+                    unreachable!("metadata normalizes captured descriptions")
+                }
                 Part::Description if label && !address.is_empty() => {
                     if super::super::plain_text(&children).is_empty()
                         && labels.get(&owner).is_some_and(|label| match part {
@@ -292,7 +304,7 @@ fn resolve_parts(
                     {
                         output.extend(children);
                     } else {
-                        let title = labels.get(&owner).and_then(|label| {
+                        let title = labels.get(&owner).filter(|_| capture).and_then(|label| {
                             crate::mandoc::link_layout::marker(
                                 owner,
                                 &children,
@@ -495,7 +507,12 @@ mod tests {
         let split = ".No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n";
         let source = format!("{HEADER}{split}.Lk https://z.test V\n.Sh ENDTEST\nDone.\n");
         let (document, trace) = description_runs::capture(|| {
-            crate::mandoc::parse_plain_manual(Path::new("split.1"), source.as_bytes()).unwrap()
+            crate::mandoc::parse_plain_manual_with_link_layout(
+                Path::new("split.1"),
+                source.as_bytes(),
+            )
+            .unwrap()
+            .0
         });
         let mut links = Links::default();
         links.visit_document(&document);
@@ -552,7 +569,12 @@ mod tests {
         assert!(matches!(leaves[1].0, PhysicalWriter::Earlier(_)));
         assert_eq!(leaves[1].1, "Y");
         assert_eq!(leaves[2], (PhysicalWriter::Authored, "U".into()));
-        let json = serde_json::to_string(&document).unwrap();
+        let (legacy, legacy_trace) = description_runs::capture(|| {
+            crate::mandoc::parse_plain_manual(Path::new("split.1"), source.as_bytes()).unwrap()
+        });
+        assert!(legacy_trace.is_empty(), "legacy parse never captures runs");
+        let json = serde_json::to_string(&legacy).unwrap();
+        assert_eq!(serde_json::to_string(&document).unwrap(), json);
         assert!(!json.contains("lk-described-foreign"), "{json}");
         assert_public_layout(&source, &json);
     }

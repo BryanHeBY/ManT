@@ -54,14 +54,24 @@ pub(super) fn append_link(builder: &mut InlineBuilder, node: &Node, default_name
             // termp_lk_pre() executes the label, colon and URI before
             // authored trailing delimiters. Treat their punctuation as
             // part of the reference when reading an enclosing declaration.
+            let capture =
+                builder.zero_advance.annotations.as_ref().is_some_and(
+                    super::ownership::annotations::AnnotationPool::captures_link_layout,
+                );
             presentation::append_owned_part(
                 builder,
                 owner,
-                presentation::Part::Description,
+                if capture {
+                    presentation::Part::CapturedDescription
+                } else {
+                    presentation::Part::Description
+                },
                 &address,
                 None,
                 |builder| {
-                    builder.zero_advance.mark_described_native_receiver();
+                    if capture {
+                        builder.zero_advance.mark_described_native_receiver();
+                    }
                     builder.with_font_scope(Font::Emphasis, |builder| {
                         append_inline_nodes(builder, label, default_name);
                     });

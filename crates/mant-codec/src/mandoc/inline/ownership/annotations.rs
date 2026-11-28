@@ -299,6 +299,10 @@ impl AnnotationPool {
         *first = first.or(source);
     }
 
+    pub(in crate::mandoc) fn captures_link_layout(&self) -> bool {
+        self.0.borrow().capture_link_layout
+    }
+
     pub(in crate::mandoc) fn capture_link_layout(&self, capture: bool) {
         self.0.borrow_mut().capture_link_layout = capture;
     }

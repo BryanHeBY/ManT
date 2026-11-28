@@ -3,6 +3,18 @@ use mant_ir::{LinkLayout, ResolvedContent};
 use std::sync::Arc;
 
 /// One immutable resolved snapshot and the native link facts derived from it.
+///
+/// Consumers cannot transplant facts from another resolved snapshot:
+///
+/// ```compile_fail
+/// # use mant_loader::ResolvedWithLinkLayout;
+/// fn splice(a: &ResolvedWithLinkLayout, b: &ResolvedWithLinkLayout) {
+///     let _ = ResolvedWithLinkLayout {
+///         content: a.content_arc(),
+///         layout: b.layout().clone(),
+///     };
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub struct ResolvedWithLinkLayout {
     content: Arc<ResolvedContent>,

@@ -8,8 +8,8 @@ use mant_ir::{
 };
 
 const TOKEN: &str = "\0mant:link-layout:";
-const MAX_LABEL: usize = 4096;
-const MAX_RUNS: usize = 64;
+pub(super) const MAX_LABEL: usize = 4096;
+pub(super) const MAX_RUNS: usize = 64;
 const MAX_RECEIPTS: usize = 256;
 
 pub(super) fn marker(
@@ -20,10 +20,7 @@ pub(super) fn marker(
     if !(2..=MAX_RUNS).contains(&runs.len()) {
         return None;
     }
-    let expected = mant_ir::inline_plain_text(children);
-    if expected.len() > MAX_LABEL {
-        return None;
-    }
+    let expected = bounded_label(children)?;
     let mut marker = format!("{TOKEN}{occurrence};");
     for range in runs {
         use std::fmt::Write;
@@ -32,6 +29,42 @@ pub(super) fn marker(
     marker.push(';');
     marker.push_str(&expected);
     Some(marker)
+}
+
+// Bound both collected text and the number/depth of styled nodes copied at sealing.
+fn bounded_label(nodes: &[Inline]) -> Option<String> {
+    fn append(
+        nodes: &[Inline],
+        text: &mut String,
+        remaining: &mut usize,
+        depth: usize,
+    ) -> Option<()> {
+        if depth > 64 {
+            return None;
+        }
+        *remaining = remaining.checked_sub(nodes.len())?;
+        for node in nodes {
+            let leaf = match node {
+                Inline::Text { value } | Inline::Code { value } => value,
+                Inline::Strong { children } | Inline::Emphasis { children } => {
+                    append(children, text, remaining, depth + 1)?;
+                    continue;
+                }
+                Inline::LineBreak {} => "\n",
+                Inline::Anchor { .. } | Inline::Equation { .. } | Inline::Link { .. } => {
+                    return None;
+                }
+            };
+            if leaf.len() > MAX_LABEL - text.len() {
+                return None;
+            }
+            text.push_str(leaf);
+        }
+        Some(())
+    }
+    let mut label = String::new();
+    append(nodes, &mut label, &mut 512, 0)?;
+    Some(label)
 }
 
 pub(super) fn is_marker(title: &str) -> bool {
@@ -43,7 +76,7 @@ fn decode(title: &str, children: &[Inline]) -> Option<(u32, Vec<Range<usize>>)> 
     let occurrence = fields.next()?.parse().ok()?;
     let members = fields.next()?.strip_suffix(',')?;
     let expected = fields.next()?;
-    if expected.len() > MAX_LABEL || expected != mant_ir::inline_plain_text(children) {
+    if expected.len() > MAX_LABEL || expected != bounded_label(children)? {
         return None;
     }
     let len = expected.chars().count();

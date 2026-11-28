@@ -28,6 +28,7 @@ pub(super) struct AcceptedDescription {
     cursor: usize,
     preceding: Vec<PhysicalRun>,
     tail: Option<PhysicalRun>,
+    disqualified: bool,
 }
 
 impl AcceptedDescription {
@@ -37,7 +38,7 @@ impl AcceptedDescription {
     }
 
     pub(super) fn authored_members(&self) -> Vec<Range<usize>> {
-        if self.fragment != 1 || self.preceding.is_empty() {
+        if self.disqualified || self.fragment != 1 || self.preceding.is_empty() {
             return Vec::new();
         }
         self.preceding
@@ -48,12 +49,29 @@ impl AcceptedDescription {
             .collect()
     }
 
+    pub(super) fn record_text(&mut self, writer: PhysicalWriter, value: &str) {
+        if !self.disqualified {
+            // Byte length is a quick bound; don't scan a huge leaf just to reject it.
+            if value.len() > crate::mandoc::link_layout::MAX_LABEL {
+                self.disqualified = true;
+            } else {
+                self.record(writer, value.chars().count());
+            }
+        }
+    }
+
     pub(super) fn record(&mut self, writer: PhysicalWriter, count: usize) {
-        if count == 0 {
+        if self.disqualified || count == 0 {
             return;
         }
         let start = self.cursor;
         self.cursor += count;
+        if self.cursor > crate::mandoc::link_layout::MAX_LABEL
+            || self.preceding.len() >= crate::mandoc::link_layout::MAX_RUNS * 2
+        {
+            self.disqualified = true;
+            return;
+        }
         if let Some(last) = &mut self.tail
             && last.fragment == self.fragment
             && last.writer == writer

@@ -300,6 +300,59 @@ mod no_roff_tests {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "roff")]
+    #[test]
+    fn same_visible_link_does_not_transfer_membership_between_snapshots() {
+        use mant_protocol::InputFormat;
+        const HEADER: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n";
+        let split = ".No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n";
+        let clean = ".No HEAD\n.Lk https://z.test ZYU\nEND\n";
+        let root = std::env::temp_dir().join(format!("mant-layout-{}", std::process::id()));
+        let man1 = root.join("man1");
+        fs::create_dir_all(&man1).unwrap();
+        let file = man1.join("glyphs.1");
+        fs::write(&file, format!("{HEADER}{split}")).unwrap();
+        let loader = DocumentLoader {
+            registered: OnceLock::new(),
+            manual_roots: vec![root.clone()],
+            manuals: OnceLock::new(),
+            available: OnceLock::new(),
+        };
+        let direct = LoadSpec::File {
+            path: file.to_str().unwrap(),
+            format: InputFormat::Auto,
+        };
+        let named = LoadSpec::Document {
+            selector: "manual/1/glyphs",
+            source: None,
+            manual_section: None,
+        };
+        let direct_pair = loader
+            .load_with_link_layout(direct, LoadPolicy::Combined)
+            .unwrap();
+        let indexed_pair = loader
+            .load_with_link_layout(named, LoadPolicy::ManualOnly)
+            .unwrap();
+        assert_eq!(direct_pair.layout().receipts.len(), 1);
+        assert_eq!(indexed_pair.layout(), direct_pair.layout());
+        assert_eq!(direct_pair.layout().receipts[0].members, [0..1, 2..3]);
+        assert!(std::ptr::eq(
+            direct_pair.content(),
+            direct_pair.content_arc().as_ref()
+        ));
+
+        fs::write(&file, format!("{HEADER}{clean}")).unwrap();
+        let replaced = loader
+            .load_with_link_layout(direct, LoadPolicy::Combined)
+            .unwrap();
+        assert!(replaced.layout().receipts.is_empty(), "{replaced:?}");
+        assert!(!std::ptr::eq(replaced.content(), direct_pair.content()));
+        assert_eq!(direct_pair.layout().receipts[0].members, [0..1, 2..3]);
+        fs::remove_file(&file).unwrap();
+        fs::remove_dir(&man1).unwrap();
+        fs::remove_dir(&root).unwrap();
+    }
+
     #[test]
     fn invalid_discovery_preserves_uninitialized_snapshot_indexes() {
         let loader = DocumentLoader {
