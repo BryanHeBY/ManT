@@ -3,6 +3,8 @@ use std::fmt::Display;
 
 use mant_ir::LinkTarget;
 
+use super::annotations::AnnotationKey;
+
 const TARGET: &str = "\0mant:annotation:";
 const ENTRY: &str = "\0mant:annotation-entry:";
 const END: &str = "\0mant:annotation-end:";
@@ -15,6 +17,13 @@ pub(in crate::mandoc) fn target_key(key: impl Display) -> String {
 
 pub(in crate::mandoc::inline) fn is_target(uri: &str) -> bool {
     uri.starts_with(TARGET)
+}
+
+pub(in crate::mandoc::inline) fn target_owner(target: &LinkTarget) -> Option<AnnotationKey> {
+    let LinkTarget::External { uri } = target else {
+        return None;
+    };
+    uri.strip_prefix(TARGET)?.parse().ok()
 }
 
 /// Mark a provisional link whose accepted glyphs include cells retired by

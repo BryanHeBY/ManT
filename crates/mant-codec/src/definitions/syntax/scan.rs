@@ -436,7 +436,9 @@ impl<'a> Scanner<'a> {
             && self.view.text[end..].chars().next().is_none_or(|next| {
                 next.is_whitespace()
                     || matches!(next, ',' | '|' | '=' | '[' | '{' | '(' | '<' | '⟨')
-                    || native && self.view.native_argument_starts(end)
+                    || native
+                        && (self.view.native_argument_starts(end)
+                            || self.view.option_closing_punctuation(end))
                     // Consume the independent Fl even if its joined suffix
                     // cannot prove the complete form.
                     || native && self.view.independent_option_suffix(end)
@@ -525,7 +527,9 @@ impl<'a> Scanner<'a> {
             let offset = start + 1 + index;
             if !option_character(next)
                 || self.view.is_parameter(offset)
-                || native && self.view.independent_option_suffix(offset)
+                || native
+                    && (self.view.independent_option_suffix(offset)
+                        || self.view.option_closing_punctuation(offset))
             {
                 break;
             }
@@ -541,6 +545,11 @@ impl<'a> Scanner<'a> {
         self.names
             .push(RecognizedName::contiguous(name, self.cursor));
         self.cursor += name.len();
+        if native {
+            while self.view.option_closing_punctuation(self.cursor) {
+                self.cursor += self.current().expect("accepted punctuation").len_utf8();
+            }
+        }
         // A whole authored slash leading to another Fl belongs between
         // arms, not to the first Fl as an empty joined Li argument.
         if native
@@ -587,6 +596,7 @@ impl<'a> Scanner<'a> {
                         ch.is_whitespace()
                             || matches!(ch, ',' | '|' | '/')
                             || self.view.independent_option_suffix(end)
+                            || self.view.option_closing_punctuation(end)
                             || self
                                 .wrappers
                                 .last()

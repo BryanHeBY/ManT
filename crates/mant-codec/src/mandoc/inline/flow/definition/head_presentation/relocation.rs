@@ -1,6 +1,8 @@
 //! Recover a completely surviving relocated definition prefix, never BODY ink.
 
+use super::super::super::output::INTERNAL_FIELD_PREFIX;
 use super::INTERNAL_FIELD_WORD;
+use crate::mandoc::inline::ownership::{annotations::AnnotationKey, markers::target_owner};
 use mant_ir::{
     Block, DefinitionItem, Inline,
     visit::{self, VisitMut},
@@ -13,51 +15,65 @@ const MAX_GLYPHS: usize = 64;
 #[derive(Clone)]
 pub(super) struct RelocatedHead {
     original: Vec<Inline>,
-    ink: Vec<(u64, char)>,
-    aliases: BTreeMap<String, (u64, char)>,
+    cells: Vec<HeadCell>,
+    aliases: BTreeMap<String, NativeCell>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct NativeCell {
+    owner: u64,
+    scalar: char,
+}
+
+#[derive(Clone)]
+struct HeadCell {
+    native: NativeCell,
+    link: Option<AnnotationKey>,
 }
 
 impl RelocatedHead {
     pub(super) fn new(term: &[Inline]) -> Option<Self> {
-        let mut ink = Vec::new();
-        if !project_source_word(term, &mut None, &mut ink, &mut 0) || ink.is_empty() {
+        let mut source = SourceCells::default();
+        if !source.project(term, None)
+            || ![source.cells.first(), source.cells.last()]
+                .into_iter()
+                .all(|cell| cell.is_some_and(|cell| !cell.native.scalar.is_whitespace()))
+        {
             return None;
         }
         Some(Self {
             original: term.to_vec(),
-            ink,
+            cells: source.cells,
             aliases: BTreeMap::new(),
         })
     }
 
-    pub(super) fn add(&mut self, owner: &str, alias: &str, glyph: char) -> bool {
-        let Some(serial) = native_word(owner) else {
+    pub(super) fn add(&mut self, owner: &str, alias: &str, scalar: char) -> bool {
+        let Some(owner) = native_word(owner) else {
             return false;
         };
-        self.aliases.len() < self.ink.len()
+        self.aliases.len() < self.cells.len()
             && self
                 .aliases
-                .insert(alias.to_owned(), (serial, glyph))
+                .insert(alias.to_owned(), NativeCell { owner, scalar })
                 .is_none()
     }
 
-    /// Only repatriate a simple term whose source cells were all moved, in
-    /// original owner/glyph order, to the beginning of the first accepted
-    /// BODY paragraph. A real BODY character before or among those cells,
-    /// a changed spelling, a hard row, or ambiguous alias defeats this
-    /// limited proof. Keep the existing published layout in those cases.
+    /// All source cells, including interior word spaces, must witness the
+    /// first accepted BODY prefix in original order. The detached term
+    /// holds the authored link scope even if the BODY drain split its label.
     pub(super) fn restore(self, term: &[Inline], body: &mut Vec<Inline>) -> Option<Vec<Inline>> {
-        if self.aliases.len() != self.ink.len() || !has_no_ink_or_break(term) {
+        if self.aliases.len() != self.cells.len() || !has_no_ink_or_break(term) {
             return None;
         }
         let mut cursor = AcceptedInk {
-            ink: &self.ink,
+            cells: &self.cells,
             aliases: &self.aliases,
             matched: 0,
             seen: BTreeSet::new(),
             owner: None,
         };
-        if !cursor.scan(body, false) || cursor.matched != self.ink.len() {
+        if !cursor.scan(body, None) || cursor.in_prefix() {
             return None;
         }
         remove_witnessed_ink(body, &self.aliases, &mut false);
@@ -114,67 +130,96 @@ pub(super) fn strip_block_aliases(block: &mut Block) {
     Scrub.visit_block_mut(block);
 }
 
-fn project_source_word(
-    nodes: &[Inline],
-    owner: &mut Option<u64>,
-    ink: &mut Vec<(u64, char)>,
-    visited: &mut usize,
-) -> bool {
-    for node in nodes {
-        *visited += 1;
-        if *visited > MAX_NODES {
-            return false;
-        }
-        match node {
-            Inline::Anchor { id, .. } => {
-                if id.as_str().len() > 256 {
-                    return false;
-                }
-                if id.as_str().starts_with(INTERNAL_FIELD_WORD) {
-                    *owner = native_word(id.as_str());
-                }
+#[derive(Default)]
+struct SourceCells {
+    owner: Option<u64>,
+    cells: Vec<HeadCell>,
+    visited: usize,
+}
+
+impl SourceCells {
+    fn project(&mut self, nodes: &[Inline], link: Option<AnnotationKey>) -> bool {
+        for node in nodes {
+            self.visited += 1;
+            if self.visited > MAX_NODES {
+                return false;
             }
-            Inline::Text { value } | Inline::Code { value } => {
-                for ch in value.chars() {
-                    let Some(serial) = *owner else { return false };
-                    if ch.is_whitespace() || ink.len() >= MAX_GLYPHS {
+            match node {
+                Inline::Anchor { id, .. } => {
+                    if id.as_str().len() > 256 {
                         return false;
                     }
-                    ink.push((serial, ch));
+                    if id.as_str().starts_with(INTERNAL_FIELD_WORD) {
+                        self.owner = native_word(id.as_str());
+                    } else if id.as_str().starts_with(INTERNAL_FIELD_PREFIX) {
+                        self.owner = None;
+                    }
                 }
-            }
-            Inline::Strong { children } | Inline::Emphasis { children } => {
-                if !project_source_word(children, owner, ink, visited) {
-                    return false;
+                Inline::Text { value } | Inline::Code { value } => {
+                    for scalar in value.chars() {
+                        let Some(owner) = self.owner else {
+                            return false;
+                        };
+                        // A breakable space must move as a native word
+                        // cell too. Tabs and fixed padding have separate
+                        // layout receipts and cannot prove this prefix.
+                        if scalar.is_whitespace() && scalar != ' ' || self.cells.len() >= MAX_GLYPHS
+                        {
+                            return false;
+                        }
+                        self.cells.push(HeadCell {
+                            native: NativeCell { owner, scalar },
+                            link,
+                        });
+                    }
                 }
+                Inline::Strong { children } | Inline::Emphasis { children } => {
+                    if !self.project(children, link) {
+                        return false;
+                    }
+                }
+                Inline::Link {
+                    target, children, ..
+                } => {
+                    let Some(owner) = target_owner(target) else {
+                        return false;
+                    };
+                    if link.is_some() || !self.project(children, Some(owner)) {
+                        return false;
+                    }
+                }
+                Inline::LineBreak {} | Inline::Equation { .. } => return false,
             }
-            Inline::LineBreak {} | Inline::Link { .. } | Inline::Equation { .. } => return false,
         }
+        true
     }
-    true
 }
 
 fn has_no_ink_or_break(nodes: &[Inline]) -> bool {
     nodes.iter().all(|node| match node {
         Inline::Anchor { .. } => true,
         Inline::Text { value } | Inline::Code { value } => value.is_empty(),
-        Inline::Strong { children } | Inline::Emphasis { children } => {
-            has_no_ink_or_break(children)
-        }
+        Inline::Strong { children }
+        | Inline::Emphasis { children }
+        | Inline::Link { children, .. } => has_no_ink_or_break(children),
         _ => false,
     })
 }
 
 struct AcceptedInk<'a> {
-    ink: &'a [(u64, char)],
-    aliases: &'a BTreeMap<String, (u64, char)>,
+    cells: &'a [HeadCell],
+    aliases: &'a BTreeMap<String, NativeCell>,
     matched: usize,
     seen: BTreeSet<&'a str>,
-    owner: Option<(&'a str, (u64, char))>,
+    owner: Option<(&'a str, NativeCell)>,
 }
 
 impl AcceptedInk<'_> {
-    fn scan(&mut self, nodes: &[Inline], linked: bool) -> bool {
+    fn in_prefix(&self) -> bool {
+        self.matched < self.cells.len()
+    }
+
+    fn scan(&mut self, nodes: &[Inline], link: Option<AnnotationKey>) -> bool {
         for node in nodes {
             match node {
                 Inline::Anchor { id, .. } => {
@@ -183,40 +228,60 @@ impl AcceptedInk<'_> {
                             .aliases
                             .get_key_value(id.as_str())
                             .map(|(key, &ink)| (key.as_str(), ink));
-                    } else if !id.as_str().starts_with('\0') && self.matched < self.ink.len() {
+                    } else if !id.as_str().starts_with('\0') && (self.in_prefix() || link.is_some())
+                    {
                         // An authored anchor makes this a different
                         // leading BODY surface, not a contiguous HEAD.
                         return false;
                     }
                 }
                 Inline::Text { value } | Inline::Code { value } if !value.is_empty() => {
-                    if let Some((key, ink)) = self.owner {
+                    if let Some((key, native)) = self.owner {
                         let mut chars = value.chars();
-                        if linked
-                            || chars.next() != Some(ink.1)
+                        if chars.next() != Some(native.scalar)
                             || chars.next().is_some()
-                            || self.ink.get(self.matched) != Some(&ink)
+                            || !self
+                                .cells
+                                .get(self.matched)
+                                .is_some_and(|cell| cell.native == native && cell.link == link)
                             || !self.seen.insert(key)
                         {
                             return false;
                         }
                         self.matched += 1;
                         self.owner = None;
-                    } else if self.matched < self.ink.len() {
+                    } else if self.in_prefix() || link.is_some() {
                         return false;
                     }
                 }
                 Inline::Strong { children } | Inline::Emphasis { children } => {
-                    if !self.scan(children, linked) {
+                    if !self.scan(children, link) {
                         return false;
                     }
                 }
-                Inline::Link { children, .. } => {
-                    if !self.scan(children, true) {
+                Inline::Link {
+                    target, children, ..
+                } => {
+                    // A BODY link can give back a fragment of the same
+                    // authored occurrence. Its entire label must move.
+                    if link.is_some() {
+                        return false;
+                    }
+                    if self.in_prefix() {
+                        let Some(owner) = target_owner(target) else {
+                            return false;
+                        };
+                        let before = self.matched;
+                        if !self.scan(children, Some(owner)) || self.matched == before {
+                            return false;
+                        }
+                    } else if !self.scan(children, None) {
                         return false;
                     }
                 }
-                Inline::LineBreak {} | Inline::Equation { .. } if self.matched < self.ink.len() => {
+                Inline::LineBreak {} | Inline::Equation { .. }
+                    if self.in_prefix() || link.is_some() =>
+                {
                     return false;
                 }
                 _ => (),
@@ -228,25 +293,44 @@ impl AcceptedInk<'_> {
 
 fn remove_witnessed_ink(
     nodes: &mut Vec<Inline>,
-    aliases: &BTreeMap<String, (u64, char)>,
+    aliases: &BTreeMap<String, NativeCell>,
     owned: &mut bool,
-) {
-    nodes.retain_mut(|node| match node {
-        Inline::Anchor { id, .. } if id.as_str().starts_with(INTERNAL_FIELD_WORD) => {
-            *owned = aliases.contains_key(id.as_str());
-            !*owned
+) -> bool {
+    let mut removed = false;
+    let mut remaining = Vec::with_capacity(nodes.len());
+    for mut node in std::mem::take(nodes) {
+        let is_link = matches!(node, Inline::Link { .. });
+        match &mut node {
+            Inline::Anchor { id, .. } if id.as_str().starts_with(INTERNAL_FIELD_WORD) => {
+                *owned = aliases.contains_key(id.as_str());
+                if *owned {
+                    continue;
+                }
+            }
+            Inline::Text { value } | Inline::Code { value }
+                if !value.is_empty() && std::mem::take(owned) =>
+            {
+                removed = true;
+                continue;
+            }
+            Inline::Strong { children }
+            | Inline::Emphasis { children }
+            | Inline::Link { children, .. } => {
+                if remove_witnessed_ink(children, aliases, owned) {
+                    removed = true;
+                    if is_link {
+                        // Its authored scope stays in the restored term.
+                        remaining.append(children);
+                        continue;
+                    }
+                }
+            }
+            _ => {}
         }
-        Inline::Text { value } | Inline::Code { value } if !value.is_empty() => {
-            !std::mem::take(owned)
-        }
-        Inline::Strong { children }
-        | Inline::Emphasis { children }
-        | Inline::Link { children, .. } => {
-            remove_witnessed_ink(children, aliases, owned);
-            true
-        }
-        _ => true,
-    });
+        remaining.push(node);
+    }
+    *nodes = remaining;
+    removed
 }
 
 #[cfg(test)]

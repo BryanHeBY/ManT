@@ -200,6 +200,18 @@ impl<'a> HeadView<'a> {
             .is_some_and(|operand| operand.role == NativeOperandRole::ExplicitOption)
     }
 
+    pub(super) fn option_closing_punctuation(&self, offset: usize) -> bool {
+        #[cfg(feature = "roff")]
+        return self
+            .operand(offset)
+            .is_some_and(|operand| operand.role == NativeOperandRole::OptionClosingPunctuation);
+        #[cfg(not(feature = "roff"))]
+        {
+            let _ = offset;
+            false
+        }
+    }
+
     pub(super) fn literal_punctuation(&self, offset: usize) -> bool {
         self.operand(offset)
             .is_some_and(|operand| match operand.role {

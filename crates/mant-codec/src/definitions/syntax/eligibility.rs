@@ -75,6 +75,10 @@ pub(super) fn permits_option_spelling(
             // never turn a foreign replacement glyph into a Fl operand.
             return allow_literal_suffix
                 && intersecting_operands(operands, end..span.end).all(|next| {
+                    #[cfg(feature = "roff")]
+                    if next.role == NativeOperandRole::OptionClosingPunctuation {
+                        return false;
+                    }
                     !next.role.is_parameter() && next.role != NativeOperandRole::ExplicitOption
                 });
         }

@@ -345,6 +345,15 @@ impl super::InlineBuilder {
                     .then_some(NativeOperandRole::OptionPunctuation)
                 })
                 .or_else(|| {
+                    // in_line() closes Fl before these sibling delimiters.
+                    // They also belong to the lexical option alphabet.
+                    let node = text?.0;
+                    (capture.has_option
+                        && node.flags.delimiter_close
+                        && matches!(node.decoder_text(), Some("?" | "." | r"\.")))
+                    .then_some(NativeOperandRole::OptionClosingPunctuation)
+                })
+                .or_else(|| {
                     let role = capture.operand_role?;
                     if matches!(role, NativeOperandRole::LiteralContinuation(_)) {
                         return text

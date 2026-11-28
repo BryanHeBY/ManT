@@ -42,6 +42,8 @@ mod cvs_renderer_contracts;
 mod declaration_names;
 #[path = "roff_lowering/definition_consumers.rs"]
 mod definition_consumers;
+#[path = "roff_lowering/definition_handoff.rs"]
+mod definition_handoff;
 #[path = "roff_lowering/definition_relations.rs"]
 mod definition_relations;
 #[path = "roff_lowering/driver.rs"]

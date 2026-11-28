@@ -64,6 +64,9 @@ pub(crate) enum NativeOperandRole {
     /// A closing TEXT delimiter can be adjacent to an empty Fl's dash.
     #[cfg(feature = "roff")]
     OptionPunctuation,
+    /// A closing TEXT delimiter whose glyph could extend an option spelling.
+    #[cfg(feature = "roff")]
+    OptionClosingPunctuation,
     /// The first actual man OP operand still has to spell a complete flag.
     #[cfg(feature = "roff")]
     OptionalKey,
