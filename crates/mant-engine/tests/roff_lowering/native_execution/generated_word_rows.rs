@@ -264,115 +264,116 @@ fn macro_generated_words_use_the_current_absolute_writer() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+// AU witnesses, confirmed by the pristine CVS ASCII/UTF-8 device pair.
+// Cover BSD's ordinary and versioned words, the generated apostrophe,
+// four fonts, and a real .br which must retire the earlier writer.
+// A non-TABREF tail control has a separate accepted-spacing path.
+const BACKTRACKING_WORD_ROWS: &[(&str, &[&str])] = &[
+    (
+        ".ft R\n.No HEAD\n.No \"\\zR\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND RBSD"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND4.4SD-Lite"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEENDSD-Lite"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"Q\\z\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
+        &["UEENDSD"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND.4SD-Lite"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND4.4SD-Lite"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND4.4SD-Lite"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEENDSD-Lite"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"Q\\z\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
+        &["UEENDSD"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND.4SD-Lite"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND4.4SD-Lite"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEN.4SD-Lite"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"\\zR\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEENDSD-Lite"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND.4SD-Lite"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEN.4SD-Lite"],
+    ),
+    (
+        ".ft R\n.No HEAD\n.No \"\\zR\"\n.Bx\n.br\n.No \"\\h'|0n'U\"\nEND",
+        &["HEAD RBSD", "U END"],
+    ),
+    (
+        ".ft R\n.No HEAD\n.No \"\\zR\"\n.No BSD\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND RBSD"],
+    ),
+    (
+        ".No HEAD\nY\n.No \"\\zR\"\n.Em Z\n.No \"\\h'|0n'U\"\nEND",
+        &["UEEND Y RZ"],
+    ),
+    (
+        ".ft B\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
+        &["HEAD R<x> END"],
+    ),
+    (
+        ".ft I\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
+        &["HEAD R<x> END"],
+    ),
+    (
+        ".ft BI\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
+        &["HEAD R<x> END"],
+    ),
+];
+
 #[test]
 fn short_words_keep_proved_same_row_slots_addressable_through_backtracking() {
-    // AU witnesses, confirmed by the pristine CVS ASCII/UTF-8 device pair.
-    // Cover BSD's ordinary and versioned words, the generated apostrophe,
-    // four fonts, and a real .br which must retire the earlier writer.
-    // A non-TABREF tail control has a separate accepted-spacing path.
-    let cases: &[(&str, &[&str])] = &[
-        (
-            ".ft R\n.No HEAD\n.No \"\\zR\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND RBSD"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND4.4SD-Lite"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEENDSD-Lite"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"Q\\z\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
-            &["UEENDSD"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND.4SD-Lite"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND4.4SD-Lite"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND4.4SD-Lite"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEENDSD-Lite"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"Q\\z\"\n.Bx\n.No \"\\h'|0n'U\"\nEND",
-            &["UEENDSD"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND.4SD-Lite"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND4.4SD-Lite"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"ABC\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEN.4SD-Lite"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"\\zR\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"\\h'|0n'R\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEENDSD-Lite"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"Q\\z\"\n.Ap\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"Q\\c\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND.4SD-Lite"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"\\&\"\n.Bx \"4.4\\z\" \"lite\"\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEN.4SD-Lite"],
-        ),
-        (
-            ".ft R\n.No HEAD\n.No \"\\zR\"\n.Bx\n.br\n.No \"\\h'|0n'U\"\nEND",
-            &["HEAD RBSD", "U END"],
-        ),
-        (
-            ".ft R\n.No HEAD\n.No \"\\zR\"\n.No BSD\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND RBSD"],
-        ),
-        (
-            ".No HEAD\nY\n.No \"\\zR\"\n.Em Z\n.No \"\\h'|0n'U\"\nEND",
-            &["UEEND Y RZ"],
-        ),
-        (
-            ".ft B\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
-            &["HEAD R<x> END"],
-        ),
-        (
-            ".ft I\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
-            &["HEAD R<x> END"],
-        ),
-        (
-            ".ft BI\n.No HEAD\n.No \"\\zR\"\n.In \"x\\z\"\n.No \"\\&\"\nEND",
-            &["HEAD R<x> END"],
-        ),
-    ];
-    for (body, expected) in cases {
+    for (body, expected) in BACKTRACKING_WORD_ROWS {
         let source = format!(
             ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
              .Sh DESCRIPTION\n{body}\n.Sh NEXT\nDone.\n"
