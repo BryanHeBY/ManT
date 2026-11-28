@@ -267,3 +267,42 @@ fn relocated_surviving_head_owns_the_displayed_definition_once() {
         }
     }
 }
+
+#[test]
+fn relocated_head_in_a_native_include_replay_only_binds_a_surviving_original() {
+    // Pinned devices: without END they paint U backspace H at column
+    // zero and the resulting H belongs to HEAD. With END the original
+    // H is overwritten; no exact semantic binding may survive.
+    for (suffix, expected_head) in [("", Some("H")), ("END\n", None)] {
+        let source = format!(
+            "{MDOC}.Bl -diag -compact\n.It H\n.No \"\\zR\"\n.In x\n.No \"\\h'|0n'U\"\n{suffix}.El\n"
+        );
+        let document = lower(&source);
+        let Some(Block::DefinitionList { items, .. }) = document.sections[1].blocks.last() else {
+            panic!("{document:#?}")
+        };
+        let [item] = items.as_slice() else {
+            panic!("{items:#?}")
+        };
+        let found = item
+            .entry
+            .as_ref()
+            .and_then(|entry| entry.names.iter().find(|name| *name == "H"))
+            .map(String::as_str);
+        assert_eq!(found, expected_head, "{suffix:?}: {item:#?}");
+        let projected = projected_document_text(&document);
+        assert_eq!(
+            projected.matches("R<x>").count(),
+            1,
+            "{suffix:?}: {item:#?}"
+        );
+        assert_eq!(
+            projected.matches("ENDR<x>").count(),
+            usize::from(expected_head.is_none()),
+            "{item:#?}"
+        );
+        if let Some(head) = expected_head {
+            assert_eq!(inline_text(&item.terms[0].content), head, "{item:#?}");
+        }
+    }
+}
