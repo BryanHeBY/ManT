@@ -148,3 +148,75 @@ fn assert_rendered_members(legacy: &DocumentView, projected: &DocumentView) {
         );
     }
 }
+
+#[test]
+fn native_authored_member_crosses_visual_wrap_and_keeps_its_combining_glyph() {
+    let source = SRC.replacen(
+        ".Lk https://z.test Z U",
+        ".Lk https://z.test Z U\\[u0301]abcdefghijklmnopqrstuvwxyzABCDEFGHIJ",
+        1,
+    );
+    let word = "U\u{301}abcdefghijklmnopqrstuvwxyzABCDEFGHIJ";
+    let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+    let [receipt] = snapshot.layout().receipts.as_slice() else {
+        panic!("one long native authored link");
+    };
+    assert_eq!(receipt.members, [0..1, 2..2 + word.chars().count()]);
+    let view = DocumentView::with_native_links(&snapshot).unwrap();
+    let rendered = view.render(28);
+    let legacy = DocumentView::new(snapshot.content()).render(28);
+    let [match_] = rendered.search(word).try_into().unwrap();
+    let last = match_
+        .additional_fragments
+        .last()
+        .expect("the authored word itself wraps");
+    assert!(last.row > match_.row);
+    let regions = std::iter::once((match_.row, match_.start_column, match_.end_column)).chain(
+        match_
+            .additional_fragments
+            .iter()
+            .map(|f| (f.row, f.start_column, f.end_column)),
+    );
+    let area = Rect::new(0, 0, 28, rendered.row_count.try_into().unwrap());
+    let mut cells = Buffer::empty(area);
+    Paragraph::new(rendered.text.clone()).render(area, &mut cells);
+    let mut painted = String::new();
+    for (row, start, end) in regions {
+        for col in start..end {
+            assert!(matches!(rendered.link_target_at(row, col),
+                Some(LinkTarget::External(uri)) if uri.as_str() == "https://z.test"));
+            painted.push_str(cells[(col.try_into().unwrap(), row.try_into().unwrap())].symbol());
+        }
+    }
+    assert_eq!(painted, word);
+    let [prefix] = rendered.search("ZY").try_into().unwrap();
+    assert_eq!(
+        rendered.link_target_at(prefix.row, prefix.start_column + 1),
+        None
+    );
+    let selection = crate::document::RenderedSelection {
+        anchor: crate::document::TextPosition {
+            row: match_.row,
+            column: match_.start_column,
+        },
+        focus: crate::document::TextPosition {
+            row: last.row,
+            column: last.end_column - 1,
+        },
+    };
+    let copy = rendered.selected_text(selection);
+    assert_eq!(copy, legacy.selected_text(selection));
+    assert_eq!(copy.lines().map(str::trim).collect::<String>(), word);
+
+    // The accent occupies its base character's whole glyph. Even an in-range
+    // scalar starting at the accent cannot give that glyph a new link owner.
+    let mut invalid = snapshot.layout().clone();
+    invalid.receipts[0].members[1].start += 1;
+    assert!(
+        crate::document::link_members::LinkMembers::validate(
+            snapshot.content().document.as_ref(),
+            &invalid,
+        )
+        .is_none()
+    );
+}
