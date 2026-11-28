@@ -215,3 +215,51 @@ fn inset_head_marker_replay_keeps_decoded_controls_and_fonts() {
         assert_eq!(&rows, expected, "{source}");
     }
 }
+
+#[test]
+fn macro_generated_words_use_the_current_absolute_writer() {
+    // Full inputs checked using pristine CVS lint, ASCII and UTF-8.
+    // Ordinary words, Xr, enclosure and Lk keep their existing writer;
+    // motion is restricted to the same native row by a real .br.
+    let cases = [
+        (".Ap No B", "R'BDEND", "R'B END"),
+        (".In stdio.h", "RE<stdio.h> END", "R <stdio.h> END"),
+        (".Bx", "REBSD END", "R BSD END"),
+        (".Bx 4.4 Lite", "RE4.4BSD-Lite END", "R 4.4BSD-Lite END"),
+        (".No B", "REBDEND", "R B END"),
+        (".Xr printf 3", "REprintf(3) END", "R printf(3) END"),
+        (".Pq No T", "RE(T) END", "R (T) END"),
+        (
+            ".Lk https://z.test Z",
+            "REZ:Yhttps://z.test END",
+            "R Z: https://z.test END",
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (node, absolute, no_motion) in cases {
+        for (mid, expected) in [
+            (".No \"\\h'|0n'R\"", vec![absolute.to_owned()]),
+            (".No R", vec![format!("HEAD Y {no_motion}")]),
+            (
+                ".br\n.No \"\\h'|0n'R\"",
+                vec!["HEAD Y".to_owned(), no_motion.to_owned()],
+            ),
+        ] {
+            let source = format!(
+                ".Dd September 28, 2026\n.Dt TEST 1\n.Os\n.Sh NAME\n.Nm test\n.Nd probe\n\
+                 .Sh DESCRIPTION\n.No HEAD\nY\n{mid}\n{node}\nEND\n.Sh NEXT\nDone.\n"
+            );
+            let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+            let json = serde_json::to_string(&mant_protocol::QueryBundle::from(&query)).unwrap();
+            let decoded: mant_protocol::QueryBundle = serde_json::from_str(&json).unwrap();
+            let mut actual = body_rows(&mant_render::render_query_man(&decoded.into()));
+            while actual.last().is_some_and(String::is_empty) {
+                actual.pop();
+            }
+            if actual != expected {
+                failures.push((node, mid, actual, expected));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}

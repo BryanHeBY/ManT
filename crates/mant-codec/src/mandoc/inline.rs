@@ -200,12 +200,24 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     // word markers before a later blank can trigger range filtering.
     let scope = builder.begin_output_checkpoint();
     builder.zero_advance.begin_output_owner();
+    // A preceding positioned word can leave the native cursor before
+    // the end of its live row. In that case every generated word in this
+    // include participates in the same replay sequence; for a fresh
+    // append, retain the existing generated delimiter projection.
+    let replay = builder.has_retreated_word_cursor();
+    let append_delimiter = |builder: &mut InlineBuilder, word| {
+        if replay {
+            append_normalized_word(builder, word);
+        } else {
+            builder.append_text(word);
+        }
+    };
     if node.flags.synopsis_pretty && node.flags.line_start {
         // termp_in_pre()1552-1558 writes two separate words, "#include"
         // and "<". The latter's automatic separator is its own native cell.
-        builder.append_text("#include");
+        append_delimiter(builder, "#include");
     }
-    builder.append_text("<");
+    append_delimiter(builder, "<");
     builder.tighten_next_boundary();
     append_inline_nodes(builder, children, default_name);
     if node.flags.synopsis_pretty {
@@ -213,7 +225,7 @@ pub(super) fn append_include(builder: &mut InlineBuilder, node: &Node, default_n
     }
     builder.font.pop_scope(saved);
     builder.tighten_next_boundary();
-    builder.append_text(">");
+    append_delimiter(builder, ">");
     let membership = builder.zero_advance.end_output_owner();
     builder
         .zero_advance

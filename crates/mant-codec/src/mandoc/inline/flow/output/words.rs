@@ -210,28 +210,9 @@ impl InlineBuilder {
         }
     }
 
-    /// Execute validator-generated text as a complete formatter word.
-    ///
-    /// This differs from appending generated punctuation inside an existing
-    /// word: `term_word()` consumes an authored `\c`, participates in deferred
-    /// `\p` handling, and closes physical source continuation before the next
-    /// source node. CVS uses this path for the generated `BSD` child of `.Bx`.
-    pub(in crate::mandoc) fn append_generated_word(&mut self, value: &str) {
-        self.execution.native_word_writes = Some(FieldWrite::literal(value));
-        self.note_produced_formatter_cell(!value.is_empty());
-        self.begin_word_projection(!value.is_empty());
-        self.begin_native_word_owner();
-        let mut projected = Vec::new();
-        self.execution.zero_advance.append_generated_text(
-            value,
-            &mut projected,
-            self.execution.font.display_current(),
-        );
-        self.append_word(projected);
-        if !value.is_empty() {
-            self.execution.final_word_join = Some(false);
-            self.execution.final_source_continuation = Some(false);
-        }
+    /// Probe the current native input, not a macro name or its projection.
+    pub(in crate::mandoc) fn has_retreated_word_cursor(&self) -> bool {
+        self.execution.word_input().0.has_retained_word_cursor()
     }
 
     /// Consume a generated HEAD field whose visible marker belongs to the

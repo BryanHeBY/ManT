@@ -242,7 +242,7 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
         })
         .collect::<Vec<_>>();
     let Some(first) = authored.first().copied() else {
-        builder.append_generated_word("BSD");
+        super::word_input::append_normalized_word(builder, "BSD");
         return;
     };
     // Execute positional operands and generated spelling in the caller's one
@@ -251,10 +251,10 @@ pub(super) fn append_bsd_reference(builder: &mut InlineBuilder, node: &Node, nam
     // Visibility must not rewrite that native arity or reorder execution.
     append_isolated_inline_node(builder, first, name);
     builder.tighten_next_boundary();
-    builder.append_generated_word("BSD");
+    super::word_input::append_normalized_word(builder, "BSD");
     for child in &authored[1..] {
         builder.tighten_next_boundary();
-        builder.append_generated_word("-");
+        super::word_input::append_normalized_word(builder, "-");
         builder.tighten_next_boundary();
         let checkpoint = builder.begin_output_checkpoint();
         append_isolated_inline_node(builder, child, name);
