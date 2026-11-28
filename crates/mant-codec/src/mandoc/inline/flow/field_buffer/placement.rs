@@ -184,10 +184,20 @@ impl FieldBuffer {
         }
     }
 
-    pub(in crate::mandoc::inline::flow) fn hold_pending_glyph_passes(
+    pub(in crate::mandoc::inline::flow) fn defer_editable_word_passes(
         &mut self,
         writes: &[FieldWrite],
     ) {
+        // Inset and diagnostic HEAD post do not flush (mdoc_term.c:939–945).
+        // A word-end marker stays writable until term_fill() actually reads
+        // it, including when the next HEAD word already projects another row.
+        if self.projection_owner == super::FieldProjectionOwner::RunInHead
+            && self.has_pending_break_markers()
+            && self.has_bounded_run_in_projection()
+        {
+            self.hold_editable_passes();
+            return;
+        }
         // ASCII_NBRZW counts as graph for term_fill() and has no reading
         // scalar. In a proved control prefix, the following space may
         // stop a pass only after every term_word() has finished writing

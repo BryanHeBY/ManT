@@ -111,6 +111,54 @@ fn a_surviving_inset_head_keeps_both_option_bindings() {
 }
 
 #[test]
+fn cross_line_inset_replay_binds_only_the_surviving_first_option() {
+    // CVS mdoc_term.c::termp_it_post keeps both HEAD rows in the field.
+    // term.c::term_word buffers \p and applies HORIZ before term_fill
+    // consumes the marker. A hits decoration, while ABC overwrites the dash.
+    // A real .br calls term_newln() first, so its later rewind sees a new
+    // buffer and leaves both accepted HEAD rows where they were.
+    for (source_body, expected_rows, exact_names) in [
+        (r#".No "\h'|0n'ABC""#, &["ABCa -", "-b"][..], &[][..]),
+        (r#".No "\h'|0n'A""#, &["-a -", "-b"][..], &["-a"][..]),
+        (
+            "Description.",
+            &["-a -", "-b Description."][..],
+            &["-a"][..],
+        ),
+        (
+            ".br\n.No \"\\h'|0n'ABC\"",
+            &["-a -", "-b", "ABC"][..],
+            &["-a"][..],
+        ),
+    ] {
+        let content = lowered(r"Fl a \p Fl b", source_body);
+        let item = item(&content);
+        let whole = mant_render::render_query_man(&content);
+        let rows: Vec<_> = whole
+            .split_once("\nFIRST\n")
+            .unwrap()
+            .1
+            .trim()
+            .lines()
+            .map(str::trim)
+            .collect();
+        let names = item
+            .entry
+            .as_ref()
+            .map_or(&[][..], |facts| facts.names.as_slice());
+        assert_eq!(names, exact_names, "{source_body}: {rows:?}");
+        assert_eq!(
+            direct_entries(&content, "-a"),
+            u32::from(!exact_names.is_empty())
+        );
+        if !exact_names.is_empty() {
+            assert_bindings(&content, exact_names);
+        }
+        assert_eq!(rows, expected_rows, "{source_body}");
+    }
+}
+
+#[test]
 fn a_surviving_inset_link_keeps_its_label_and_destination_in_the_term() {
     // CVS termp_lk_pre executes the label, then the terminal suffix.
     // mdoc_html.c::mdoc_lk_pre keeps the original label and href in dt.

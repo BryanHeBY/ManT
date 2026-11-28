@@ -72,12 +72,24 @@ impl RelocatedHead {
             matched: 0,
             seen: BTreeSet::new(),
             owner: None,
+            before_skipped_space: false,
+            rows: BTreeMap::new(),
         };
         if !cursor.scan(body, None) || cursor.in_prefix() {
             return None;
         }
-        remove_witnessed_ink(body, &self.aliases, &mut false);
-        Some(self.original)
+        let mut remaining_rows = cursor.rows.values().map(Vec::len).sum();
+        remove_witnessed_ink(body, &self.aliases, &mut false, &mut remaining_rows);
+        if cursor.rows.is_empty() {
+            Some(self.original)
+        } else {
+            Some(
+                super::super::super::output::native_passes::split_retired_native_field_passes(
+                    &self.original,
+                    &cursor.rows,
+                ),
+            )
+        }
     }
 }
 
@@ -212,11 +224,31 @@ struct AcceptedInk<'a> {
     matched: usize,
     seen: BTreeSet<&'a str>,
     owner: Option<(&'a str, NativeCell)>,
+    before_skipped_space: bool,
+    rows: BTreeMap<String, Vec<usize>>,
 }
 
-impl AcceptedInk<'_> {
+impl<'a> AcceptedInk<'a> {
     fn in_prefix(&self) -> bool {
         self.matched < self.cells.len()
+    }
+
+    fn accept_cell(
+        &mut self,
+        key: &'a str,
+        native: NativeCell,
+        link: Option<AnnotationKey>,
+    ) -> bool {
+        if !self
+            .cells
+            .get(self.matched)
+            .is_some_and(|cell| cell.native == native && cell.link == link)
+            || !self.seen.insert(key)
+        {
+            return false;
+        }
+        self.matched += 1;
+        true
     }
 
     fn scan(&mut self, nodes: &[Inline], link: Option<AnnotationKey>) -> bool {
@@ -228,6 +260,22 @@ impl AcceptedInk<'_> {
                             .aliases
                             .get_key_value(id.as_str())
                             .map(|(key, &ink)| (key.as_str(), ink));
+                        if std::mem::take(&mut self.before_skipped_space) {
+                            let Some((key, native)) = self.owner.take() else {
+                                return false;
+                            };
+                            if native.scalar != ' ' || !self.accept_cell(key, native, link) {
+                                return false;
+                            }
+                            let offset = self.cells[..self.matched]
+                                .iter()
+                                .filter(|cell| cell.native.owner == native.owner)
+                                .count();
+                            self.rows
+                                .entry(format!("{INTERNAL_FIELD_WORD}{}", native.owner))
+                                .or_default()
+                                .push(offset);
+                        }
                     } else if !id.as_str().starts_with('\0') && (self.in_prefix() || link.is_some())
                     {
                         // An authored anchor makes this a different
@@ -240,15 +288,10 @@ impl AcceptedInk<'_> {
                         let mut chars = value.chars();
                         if chars.next() != Some(native.scalar)
                             || chars.next().is_some()
-                            || !self
-                                .cells
-                                .get(self.matched)
-                                .is_some_and(|cell| cell.native == native && cell.link == link)
-                            || !self.seen.insert(key)
+                            || !self.accept_cell(key, native, link)
                         {
                             return false;
                         }
-                        self.matched += 1;
                         self.owner = None;
                     } else if self.in_prefix() || link.is_some() {
                         return false;
@@ -279,9 +322,20 @@ impl AcceptedInk<'_> {
                         return false;
                     }
                 }
-                Inline::LineBreak {} | Inline::Equation { .. }
-                    if self.in_prefix() || link.is_some() =>
-                {
+                Inline::LineBreak {} if self.in_prefix() || link.is_some() => {
+                    // term_flushln skips the SP at a row end (term.c:205–220).
+                    // Require that exact HEAD space's alias after the cut,
+                    // with no emitted scalar between it and the next owner.
+                    if link.is_some()
+                        || self.owner.is_some()
+                        || self.before_skipped_space
+                        || self.cells[self.matched].native.scalar != ' '
+                    {
+                        return false;
+                    }
+                    self.before_skipped_space = true;
+                }
+                Inline::Equation { .. } if self.in_prefix() || link.is_some() => {
                     return false;
                 }
                 _ => (),
@@ -295,6 +349,7 @@ fn remove_witnessed_ink(
     nodes: &mut Vec<Inline>,
     aliases: &BTreeMap<String, NativeCell>,
     owned: &mut bool,
+    remaining_rows: &mut usize,
 ) -> bool {
     let mut removed = false;
     let mut remaining = Vec::with_capacity(nodes.len());
@@ -313,10 +368,14 @@ fn remove_witnessed_ink(
                 removed = true;
                 continue;
             }
+            Inline::LineBreak {} if *remaining_rows > 0 => {
+                *remaining_rows -= 1;
+                continue;
+            }
             Inline::Strong { children }
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => {
-                if remove_witnessed_ink(children, aliases, owned) {
+                if remove_witnessed_ink(children, aliases, owned, remaining_rows) {
                     removed = true;
                     if is_link {
                         // Its authored scope stays in the restored term.

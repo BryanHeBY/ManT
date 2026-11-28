@@ -54,7 +54,7 @@ impl ExecutedWordEntry {
                 .map_or(start, |next| next.start.min(next.content))
         });
         let mut receipt = buffer.apply_writes(&writes);
-        buffer.hold_pending_glyph_passes(&writes);
+        buffer.defer_editable_word_passes(&writes);
         match rewind {
             EntryRewind::Positioned(retreat)
             | EntryRewind::Executed {
