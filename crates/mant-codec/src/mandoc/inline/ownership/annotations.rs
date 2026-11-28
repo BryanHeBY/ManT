@@ -475,20 +475,11 @@ impl AnnotationPool {
                     });
                     output.push(Inline::Link {
                         target,
-                        title: if destinations.capture_link_layout {
-                            title
-                                .take()
-                                .filter(|title| crate::mandoc::link_layout::is_marker(title))
-                                .and_then(|marker| {
-                                    if foreign.is_some() {
-                                        crate::mandoc::link_layout::restrict_marker(&marker)
-                                    } else {
-                                        Some(marker)
-                                    }
-                                })
-                        } else {
-                            None
-                        },
+                        title: Self::link_layout_title(
+                            title,
+                            destinations.capture_link_layout,
+                            foreign.is_some(),
+                        ),
                         children: std::mem::take(children),
                     });
                 } else {
@@ -511,6 +502,20 @@ impl AnnotationPool {
             output.push(node);
         }
         *nodes = output;
+    }
+
+    fn link_layout_title(title: &mut Option<String>, capture: bool, cut: bool) -> Option<String> {
+        use crate::mandoc::link_layout;
+
+        if !capture {
+            return None;
+        }
+        let marker = title.take().filter(|title| link_layout::is_marker(title))?;
+        if cut {
+            link_layout::restrict_marker(&marker)
+        } else {
+            Some(marker)
+        }
     }
 
     fn is_link_destination(&self, uri: &str) -> bool {
