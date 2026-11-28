@@ -19,7 +19,9 @@ mod tldr;
 
 pub use mant_ir::ResolvedContent;
 pub use markdown::{MarkdownParseError, ParsedMarkdown, TldrDirectiveError, parse_markdown};
-pub use native_link_snapshot::{DecodedLinkDocument, SourceBoundLinkLayout};
+pub use native_link_snapshot::{
+    DecodedLinkDocument, NativeLinkLayout, NativeLinkRestriction, SourceBoundLinkLayout,
+};
 pub use tldr::{TldrPageLocation, TldrParseError, parse_tldr_command, parse_tldr_page};
 
 #[cfg(feature = "roff")]

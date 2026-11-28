@@ -475,10 +475,17 @@ impl AnnotationPool {
                     });
                     output.push(Inline::Link {
                         target,
-                        title: if destinations.capture_link_layout && foreign.is_none() {
+                        title: if destinations.capture_link_layout {
                             title
                                 .take()
                                 .filter(|title| crate::mandoc::link_layout::is_marker(title))
+                                .and_then(|marker| {
+                                    if foreign.is_some() {
+                                        crate::mandoc::link_layout::restrict_marker(&marker)
+                                    } else {
+                                        Some(marker)
+                                    }
+                                })
                         } else {
                             None
                         },

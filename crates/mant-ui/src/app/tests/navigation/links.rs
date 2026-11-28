@@ -432,3 +432,135 @@ fn unrepresentable_native_members_leave_initial_and_follow_on_reader_open() {
     click_document_cell(&mut app, mixed.start_column + 1, mixed.row);
     assert!(app.take_external_request().is_none());
 }
+#[cfg(feature = "native-link-layout")]
+const AU_MEMBER_HEADER: &str = ".Dd November 28, 2026\n.Dt MEMBER 1\n.Os\n.Sh NAME\n.Nm member\n.Nd source membership\n.Sh DESCRIPTION\n";
+
+#[cfg(feature = "native-link-layout")]
+const AU_MIXED_LINK: &str = ".No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n";
+
+#[cfg(feature = "native-link-layout")]
+fn au_native_hits(app: &mut App, text: &str, index: usize, expected: [bool; 3]) {
+    let width = app.geometry.content.width;
+    let group = &app.session.rendered_cache[&width].search(text)[index];
+    assert_eq!(
+        group.end_column - group.start_column,
+        3,
+        "{text} must fit on a row"
+    );
+    assert!(group.row >= app.session.content_scroll);
+    assert!(group.row - app.session.content_scroll < usize::from(app.geometry.content.height));
+    for (offset, linked) in expected.into_iter().enumerate() {
+        click_document_cell(app, group.start_column + offset, group.row);
+        assert_eq!(
+            app.take_external_request()
+                .as_ref()
+                .map(crate::ExternalUri::as_str),
+            linked.then_some("https://z.test"),
+            "width {width}, label {text}[{index}] offset {offset}"
+        );
+    }
+}
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_link_au_receipt_cap_keeps_a_verified_prefix_and_restricts_tail() {
+    // Frozen AU count-255/256/257: CVS termp_lk_pre paints ZYU to ASCII/UTF-8;
+    // mdoc_lk_pre emits only the Z U author link in HTML before the real .br.
+    for count in [255, 256, 257] {
+        let source = format!(
+            "{AU_MEMBER_HEADER}{}.br\n.Xr printf 3\n.Sh ENDTEST\nDone.\n",
+            std::iter::repeat_n(AU_MIXED_LINK, count)
+                .collect::<Vec<_>>()
+                .join(".br\n")
+        );
+        let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+        let pair = snapshot.content_arc();
+        let layout = snapshot.layout_for(&pair).unwrap();
+        assert_eq!(layout.receipts().len(), count.min(256));
+        assert_eq!(layout.restrictions().len(), count.saturating_sub(256));
+        assert!(!layout.restrict_unidentified());
+        let legacy = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        assert_eq!(pair.document, legacy.document, "legacy IR remains intact");
+        for width in [60, 80, 140] {
+            let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
+            let mut terminal = Terminal::new(TestBackend::new(width, 400)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            au_native_hits(&mut app, "ZYU", 0, [true, false, true]);
+            let content = app.geometry.content.width;
+            app.session.content_scroll =
+                app.session.rendered_cache[&content].search("ZYU")[count - 1].row;
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            au_native_hits(
+                &mut app,
+                "ZYU",
+                count - 1,
+                if count <= 256 {
+                    [true, false, true]
+                } else {
+                    [false; 3]
+                },
+            );
+        }
+    }
+}
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_link_au_label_cap_does_not_expand_hits() {
+    // Physical paint always starts ZYU followed by x; HTML from the same
+    // pinned termp_lk_pre/mdoc_lk_pre pair owns only Z and U+x… in all cases.
+    for length in [4095, 4096, 4097] {
+        let part = AU_MIXED_LINK.replace(" Z U", &format!(" Z U{}", "x".repeat(length - 3)));
+        let source = format!("{AU_MEMBER_HEADER}{part}.br\n.Xr printf 3\n.Sh ENDTEST\nDone.\n");
+        let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+        let pair = snapshot.content_arc();
+        let layout = snapshot.layout_for(&pair).unwrap();
+        let fits = length <= 4096;
+        assert_eq!(layout.receipts().len(), usize::from(fits));
+        assert_eq!(layout.restrictions().len(), usize::from(!fits));
+        assert!(!layout.restrict_unidentified());
+        assert_eq!(
+            pair.document,
+            mant_loader::load_roff_bytes(source.as_bytes())
+                .unwrap()
+                .document
+        );
+        for width in [60, 80, 140] {
+            let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
+            let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            au_native_hits(&mut app, "ZYU", 0, [fits, false, fits]);
+        }
+    }
+}
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_link_au_independent_prior_link_does_not_take_the_new_owners_receipt() {
+    // Pinned CVS termp_lk_pre final ink puts K/L/M between Z and U after the
+    // offset move. HTML author links are independent: Q→p.test, Z U→z.test.
+    let header = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd small roff inputs\n.Sh DESCRIPTION\n";
+    for (position, old) in [("1", "K"), ("2", "L"), ("3", "M")] {
+        let source = format!(
+            "{header}.No HEAD\n.No KLM\n.Lk https://p.test Q\n.No \"\\h'|{position}n'R\"\n.Lk https://z.test Z U\nEND\n.Sh ENDTEST\nDone.\n"
+        );
+        let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+        let pair = snapshot.content_arc();
+        let layout = snapshot.layout_for(&pair).unwrap();
+        assert_eq!(layout.receipts().len(), 1, "{old}: {layout:?}");
+        assert_eq!(layout.receipts()[0].members, [0..1, 2..3]);
+        assert!(layout.restrictions().is_empty());
+        assert_eq!(
+            pair.document,
+            mant_loader::load_roff_bytes(source.as_bytes())
+                .unwrap()
+                .document
+        );
+        for width in [60, 80, 140] {
+            let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default());
+            let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            au_native_hits(&mut app, &format!("Z{old}U"), 0, [true, false, true]);
+        }
+    }
+}

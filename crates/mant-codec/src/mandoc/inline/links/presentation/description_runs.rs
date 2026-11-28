@@ -10,35 +10,36 @@ pub(super) enum PhysicalWriter {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct PhysicalRun {
-    pub(super) fragment: usize,
     pub(super) scalars: Range<usize>,
     pub(super) writer: PhysicalWriter,
 }
 
-/// The enclosing map is keyed by source occurrence, never by the URI.
-/// Coordinates are local to original surviving description fragments after
-/// native paint, before releasing existing legacy link wrappers.
-/// No run spans a physical fragment/cut. This is local publication evidence,
-/// not a globally addressable span: a cut may disable the native receiver,
-/// so absence of an Earlier run is not proof that an arbitrary fragment can
-/// be safely republished under a narrower annotation.
+/// Capture one surviving description wrapper, never all fragments sharing
+/// an authored occurrence. Empty native seam wrappers have no local paint.
 #[derive(Default)]
 pub(super) struct AcceptedDescription {
-    fragment: usize,
     cursor: usize,
     preceding: Vec<PhysicalRun>,
     tail: Option<PhysicalRun>,
     disqualified: bool,
+    requires_restriction: bool,
 }
 
 impl AcceptedDescription {
-    pub(super) fn enter(&mut self) {
-        self.fragment += 1;
-        self.cursor = 0;
+    pub(super) fn mark_uncertain(&mut self) {
+        self.requires_restriction = true;
+    }
+
+    pub(super) fn proven_scalars(&self) -> Option<usize> {
+        (!self.disqualified).then_some(self.cursor)
+    }
+
+    pub(super) const fn requires_restriction(&self) -> bool {
+        self.requires_restriction
     }
 
     pub(super) fn authored_members(&self) -> Vec<Range<usize>> {
-        if self.disqualified || self.fragment != 1 || self.preceding.is_empty() {
+        if self.disqualified {
             return Vec::new();
         }
         self.preceding
@@ -50,6 +51,10 @@ impl AcceptedDescription {
     }
 
     pub(super) fn record_text(&mut self, writer: PhysicalWriter, value: &str) {
+        if value.is_empty() {
+            return;
+        }
+        self.requires_restriction |= matches!(writer, PhysicalWriter::Earlier(_));
         if !self.disqualified {
             // Byte length is a quick bound; don't scan a huge leaf just to reject it.
             if value.len() > crate::mandoc::link_layout::MAX_LABEL {
@@ -61,7 +66,11 @@ impl AcceptedDescription {
     }
 
     pub(super) fn record(&mut self, writer: PhysicalWriter, count: usize) {
-        if self.disqualified || count == 0 {
+        if count == 0 {
+            return;
+        }
+        self.requires_restriction |= matches!(writer, PhysicalWriter::Earlier(_));
+        if self.disqualified {
             return;
         }
         let start = self.cursor;
@@ -73,12 +82,10 @@ impl AcceptedDescription {
             return;
         }
         if let Some(last) = &mut self.tail
-            && last.fragment == self.fragment
             && last.writer == writer
         {
             last.scalars.end = self.cursor;
         } else if let Some(previous) = self.tail.replace(PhysicalRun {
-            fragment: self.fragment,
             scalars: start..self.cursor,
             writer,
         }) {
@@ -111,15 +118,16 @@ mod trace {
                 trace.extend(
                     labels
                         .iter()
-                        .filter(|(_, label)| label.description.fragment != 0)
+                        .filter(|(_, label)| !label.descriptions.is_empty())
                         .map(|(&key, label)| {
                             (
                                 key,
                                 label
-                                    .description
-                                    .preceding
-                                    .iter()
-                                    .chain(&label.description.tail)
+                                    .descriptions
+                                    .values()
+                                    .flat_map(|fragment| {
+                                        fragment.preceding.iter().chain(&fragment.tail)
+                                    })
                                     .cloned()
                                     .collect(),
                             )

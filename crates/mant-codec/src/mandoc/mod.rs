@@ -91,7 +91,7 @@ pub fn parse_plain_manual_with_link_layout(
     path: &Path,
     source: &[u8],
 ) -> Result<crate::DecodedLinkDocument, ParseError> {
-    let mut layout = mant_ir::LinkLayout::default();
+    let mut layout = crate::NativeLinkLayout::default();
     let (document, _) =
         parse_with_reading_policy(path, source, InitialCodeRow::OmitSingle, Some(&mut layout))?;
     Ok(crate::DecodedLinkDocument::from_decode(document, layout))
@@ -116,7 +116,7 @@ fn parse_with_reading_policy(
     path: &Path,
     source: &[u8],
     initial_code_row: InitialCodeRow,
-    link_layout: Option<&mut mant_ir::LinkLayout>,
+    link_layout: Option<&mut crate::NativeLinkLayout>,
 ) -> Result<(Document, ParseReport), ParseError> {
     let (source, masked_controls) = mask_terminal_control_bytes(source);
     let report = Parser::new(ParseOptions {
@@ -158,7 +158,7 @@ fn lower_mandoc_document_with_source(
     report: &ParseReport,
     source: Option<&str>,
     initial_code_row: InitialCodeRow,
-    link_layout: Option<&mut mant_ir::LinkLayout>,
+    link_layout: Option<&mut crate::NativeLinkLayout>,
 ) -> Document {
     let parsed: &MandocDocument = &report.document;
     let mut context = LoweringContext::new(parsed.metadata.name.as_deref(), source);

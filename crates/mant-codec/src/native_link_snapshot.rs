@@ -1,8 +1,48 @@
 //! Opaque decoded link annotations and their presentation handoff.
 use mant_ir::{
-    Document, DocumentAddress, LinkLayout, LinkLayoutReceipt, ResolvedContent, TldrDocument,
+    ContentLocation, Document, DocumentAddress, LinkLayoutReceipt, LinkTarget, ResolvedContent,
+    TldrDocument,
 };
 use std::sync::Arc;
+
+/// The presentation-only state of a paired native snapshot. The compatible
+/// raw `mant_ir::LinkLayout` and the document wire are unchanged.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct NativeLinkLayout {
+    pub(crate) receipts: Vec<LinkLayoutReceipt>,
+    pub(crate) restrictions: Vec<NativeLinkRestriction>,
+    pub(crate) restrict_unidentified: bool,
+}
+
+impl NativeLinkLayout {
+    /// Fully validated memberships in final structural document order.
+    #[must_use]
+    pub fn receipts(&self) -> &[LinkLayoutReceipt] {
+        &self.receipts
+    }
+
+    /// Known mixed wrappers without enough proof to activate any glyph.
+    #[must_use]
+    pub fn restrictions(&self) -> &[NativeLinkRestriction] {
+        &self.restrictions
+    }
+
+    /// Unidentified external links may be mixed. Proven memberships are
+    /// still usable and unrelated non-external navigation is unaffected.
+    #[must_use]
+    pub const fn restrict_unidentified(&self) -> bool {
+        self.restrict_unidentified
+    }
+}
+
+/// An exact legacy wrapper requiring evidence that was not representable.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeLinkRestriction {
+    /// Final structural location in the paired document.
+    pub origin: ContentLocation,
+    /// Expected original target, for structural validation before rendering.
+    pub target: LinkTarget,
+}
 
 /// The immutable document that produced its native link receipts.
 ///
@@ -11,12 +51,12 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct DecodedLinkDocument {
     document: Document,
-    layout: LinkLayout,
+    layout: NativeLinkLayout,
 }
 
 impl DecodedLinkDocument {
     #[cfg(feature = "roff")]
-    pub(crate) const fn from_decode(document: Document, layout: LinkLayout) -> Self {
+    pub(crate) const fn from_decode(document: Document, layout: NativeLinkLayout) -> Self {
         Self { document, layout }
     }
 
@@ -25,7 +65,7 @@ impl DecodedLinkDocument {
     pub fn from_plain(document: Document) -> Self {
         Self {
             document,
-            layout: LinkLayout::default(),
+            layout: NativeLinkLayout::default(),
         }
     }
 
@@ -98,7 +138,7 @@ impl DecodedLinkDocument {
 #[derive(Clone, Debug)]
 pub struct SourceBoundLinkLayout {
     content: Arc<ResolvedContent>,
-    layout: LinkLayout,
+    layout: NativeLinkLayout,
 }
 
 impl SourceBoundLinkLayout {
@@ -107,7 +147,7 @@ impl SourceBoundLinkLayout {
     pub fn without_native_links(content: ResolvedContent) -> Self {
         Self {
             content: Arc::new(content),
-            layout: LinkLayout::default(),
+            layout: NativeLinkLayout::default(),
         }
     }
 
@@ -123,10 +163,18 @@ impl SourceBoundLinkLayout {
         Arc::clone(&self.content)
     }
 
+    /// All presentation facts, including budget restrictions, are valid only
+    /// for the exact decoded allocation.
+    #[must_use]
+    pub fn layout_for(&self, content: &Arc<ResolvedContent>) -> Option<&NativeLinkLayout> {
+        Arc::ptr_eq(&self.content, content).then_some(&self.layout)
+    }
+
     /// Presentation facts are valid only for the exact decoded allocation.
     #[must_use]
     pub fn receipts_for(&self, content: &Arc<ResolvedContent>) -> Option<&[LinkLayoutReceipt]> {
-        Arc::ptr_eq(&self.content, content).then_some(self.layout.receipts.as_slice())
+        self.layout_for(content)
+            .map(|layout| layout.receipts.as_slice())
     }
 
     /// Borrow source facts for this resolved snapshot.

@@ -191,7 +191,7 @@ fn has_readable_text(nodes: &[Inline]) -> bool {
 struct AcceptedLabel {
     readable: bool,
     uri_readable: bool,
-    description: AcceptedDescription,
+    descriptions: HashMap<usize, AcceptedDescription>,
 }
 
 /// Final native field receipts already chose these children. One collection
@@ -210,18 +210,34 @@ pub(in crate::mandoc::inline) fn finalize_accepted_links(nodes: &mut Vec<Inline>
 fn collect_labels(
     nodes: &[Inline],
     labels: &mut HashMap<AnnotationKey, AcceptedLabel>,
-    owned: Option<(AnnotationKey, Part, bool)>,
+    owned: Option<(AnnotationKey, Part, Option<usize>)>,
     writer: PhysicalWriter,
 ) {
     for node in nodes {
         #[cfg(test)]
         note_visit();
         let (owned, writer) = if let Some((owner, part, _, capture)) = metadata(node) {
-            let label = labels.entry(owner).or_default();
-            if capture {
-                label.description.enter();
+            let fragment = description_fragment(node);
+            if fragment.is_some()
+                && let Some((parent, Part::Description, Some(parent_fragment))) = owned
+            {
+                // Do not count nested owners as the outer proof. Resolution
+                // only unwraps known leaves; if extra scalars remain after
+                // removing the nested wrappers, seal rejects those offsets.
+                labels
+                    .entry(parent)
+                    .or_default()
+                    .descriptions
+                    .entry(parent_fragment)
+                    .or_default()
+                    .mark_uncertain();
             }
-            (Some((owner, part, capture)), PhysicalWriter::Authored)
+            let fragment = if capture { fragment } else { None };
+            let label = labels.entry(owner).or_default();
+            if let Some(fragment) = fragment {
+                label.descriptions.entry(fragment).or_default();
+            }
+            (Some((owner, part, fragment)), PhysicalWriter::Authored)
         } else if let Some(epoch) = crate::mandoc::inline::ownership::described_foreign_writer(node)
         {
             (owned, PhysicalWriter::Earlier(epoch))
@@ -233,13 +249,17 @@ fn collect_labels(
             | Inline::Emphasis { children }
             | Inline::Link { children, .. } => collect_labels(children, labels, owned, writer),
             Inline::Text { value } | Inline::Code { value } | Inline::Equation { value, .. } => {
-                if let Some((owner, part, capture)) = owned {
+                if let Some((owner, part, fragment)) = owned {
                     let label = labels.entry(owner).or_default();
                     match part {
                         Part::Description => {
                             label.readable |= text_is_readable(value);
-                            if capture {
-                                label.description.record_text(writer, value);
+                            if let Some(fragment) = fragment {
+                                label
+                                    .descriptions
+                                    .entry(fragment)
+                                    .or_default()
+                                    .record_text(writer, value);
                             }
                         }
                         Part::Uri => label.uri_readable |= text_is_readable(value),
@@ -248,17 +268,30 @@ fn collect_labels(
                 }
             }
             Inline::LineBreak { .. } => {
-                if let Some((owner, Part::Description, true)) = owned {
+                if let Some((owner, Part::Description, Some(fragment))) = owned {
                     labels
                         .entry(owner)
                         .or_default()
-                        .description
+                        .descriptions
+                        .entry(fragment)
+                        .or_default()
                         .record(writer, 1);
                 }
             }
             Inline::Anchor { .. } => {}
         }
     }
+}
+
+// The allocation is unique for a nonempty child vector and does not move on
+// moving its Inline wrapper. The key is used only by this collect/rewrite call,
+// before mutating child vectors; final seal independently resolves structural
+// location and validates the exact label.
+fn description_fragment(node: &Inline) -> Option<usize> {
+    let Inline::Link { children, .. } = node else {
+        return None;
+    };
+    (!children.is_empty()).then(|| children.as_ptr().addr())
 }
 
 fn resolve_parts(
@@ -270,8 +303,14 @@ fn resolve_parts(
     for mut node in std::mem::take(nodes) {
         #[cfg(test)]
         note_visit();
-        let part = metadata(&node)
-            .map(|(owner, part, address, capture)| (owner, part, address.to_owned(), capture));
+        let part = metadata(&node).map(|(owner, part, address, capture)| {
+            let fragment = if capture {
+                description_fragment(&node)
+            } else {
+                None
+            };
+            (owner, part, address.to_owned(), fragment)
+        });
         match &mut node {
             Inline::Strong { children }
             | Inline::Emphasis { children }
@@ -285,7 +324,7 @@ fn resolve_parts(
             // Reconstruct the unchanged legacy subtree. The current wire
             // cannot put separate runs under the same authored occurrence.
             output.extend(children);
-        } else if let Some((owner, part, address, capture)) = part {
+        } else if let Some((owner, part, address, fragment)) = part {
             let Inline::Link { children, .. } = node else {
                 unreachable!();
             };
@@ -304,12 +343,16 @@ fn resolve_parts(
                     {
                         output.extend(children);
                     } else {
-                        let title = labels.get(&owner).filter(|_| capture).and_then(|label| {
-                            crate::mandoc::link_layout::marker(
-                                owner,
-                                &children,
-                                &label.description.authored_members(),
-                            )
+                        let title = fragment.and_then(|fragment| {
+                            let description = labels.get(&owner)?.descriptions.get(&fragment)?;
+                            description.requires_restriction().then(|| {
+                                crate::mandoc::link_layout::marker(
+                                    owner,
+                                    &children,
+                                    description.proven_scalars(),
+                                    &description.authored_members(),
+                                )
+                            })
                         });
                         bind_accepted_link(
                             &mut output,
@@ -553,8 +596,13 @@ mod tests {
             .expect("physical old-writer evidence reaches publication");
         let accepted = links.0[0].chars().collect::<Vec<_>>();
         let mut leaves = Vec::new();
+        assert_eq!(
+            runs.iter()
+                .map(|run| run.scalars.clone())
+                .collect::<Vec<_>>(),
+            [0..1, 1..2, 2..3]
+        );
         for run in runs {
-            assert_eq!(run.fragment, 1);
             let ink = accepted[run.scalars.clone()]
                 .iter()
                 .copied()

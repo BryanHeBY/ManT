@@ -252,7 +252,7 @@ impl DocumentView {
         let bundle = snapshot.content_arc();
         let members = link_members::LinkMembers::from_layout(
             bundle.document.as_ref(),
-            snapshot.receipts_for(&bundle).unwrap_or_default(),
+            snapshot.layout_for(&bundle),
         );
         Self::build(&bundle, members)
     }

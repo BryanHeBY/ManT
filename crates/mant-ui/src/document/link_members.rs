@@ -5,12 +5,40 @@ use mant_ir::{Document, Inline, LinkLayoutReceipt};
 use std::{collections::HashMap, ops::Range};
 
 #[derive(Default)]
-pub(super) struct LinkMembers(HashMap<usize, Vec<Range<usize>>>);
+pub(super) struct LinkMembers {
+    membership: HashMap<usize, Vec<Range<usize>>>,
+    restrict_unidentified: bool,
+}
 
 impl LinkMembers {
     #[cfg(feature = "native-link-layout")]
-    pub(super) fn from_layout(document: Option<&Document>, receipts: &[LinkLayoutReceipt]) -> Self {
-        Self::collect(document, receipts).0
+    pub(super) fn from_layout(
+        document: Option<&Document>,
+        layout: Option<&mant_render::NativeLinkLayout>,
+    ) -> Self {
+        let Some(layout) = layout else {
+            return Self::default();
+        };
+        let (mut members, _) = Self::collect(document, layout.receipts());
+        members.restrict_unidentified |= layout.restrict_unidentified();
+        for restriction in layout.restrictions() {
+            let Some(target) = document
+                .and_then(|doc| restriction.origin.resolve_link(doc))
+                .and_then(|link| match link {
+                    Inline::Link { target, .. } if target == &restriction.target => Some(target),
+                    _ => None,
+                })
+            else {
+                // SourceBoundLinkLayout cannot name another document; a
+                // failed structural check cannot be interpreted as Whole.
+                members.restrict_unidentified = true;
+                continue;
+            };
+            members
+                .membership
+                .insert(std::ptr::from_ref(target).addr(), Vec::new());
+        }
+        members
     }
 
     #[cfg(all(test, feature = "native-link-layout"))]
@@ -55,7 +83,7 @@ impl LinkMembers {
             let mut expected = String::new();
             let representable = repeated.is_none()
                 && !ranges.contains_key(&address)
-                && (2..=1024).contains(&receipt.members.len())
+                && (1..=1024).contains(&receipt.members.len())
                 && receipt
                     .members
                     .windows(2)
@@ -75,12 +103,19 @@ impl LinkMembers {
             ranges.insert(address, members);
             supported &= representable;
         }
-        (Self(ranges), supported)
+        (
+            Self {
+                membership: ranges,
+                restrict_unidentified: receipts.len() > 1000,
+            },
+            supported,
+        )
     }
 
     pub(super) fn cursor(&self) -> MemberCursor<'_> {
         MemberCursor {
-            membership: &self.0,
+            membership: &self.membership,
+            restrict_unidentified: self.restrict_unidentified,
             positions: HashMap::new(),
         }
     }
@@ -157,6 +192,7 @@ fn whole_members(text: &str, members: &[Range<usize>]) -> bool {
 
 pub(super) struct MemberCursor<'a> {
     membership: &'a HashMap<usize, Vec<Range<usize>>>,
+    restrict_unidentified: bool,
     positions: HashMap<usize, (usize, usize)>,
 }
 
@@ -171,9 +207,15 @@ impl MemberCursor<'_> {
             let address = std::ptr::from_ref(target).addr();
             Some((address, target, self.membership.get(&address)?))
         }) else {
-            emit(target, text);
+            let restricted =
+                self.restrict_unidentified && matches!(target, Some(LinkTarget::External { .. }));
+            emit(if restricted { None } else { target }, text);
             return;
         };
+        if ranges.is_empty() {
+            emit(None, text);
+            return;
+        }
         let (scalar, index) = self.positions.entry(address).or_default();
         let mut start = 0;
         let mut admitted = ranges
