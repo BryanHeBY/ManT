@@ -36,10 +36,46 @@ impl App {
     /// Returns whether any request was consumed and the reader should redraw.
     /// Failures become notices and do not commit a failed document navigation.
     pub fn service_pending(&mut self, services: &mut ReaderServices<'_>) -> bool {
+        self.service_pending_using(services, |app, services| {
+            let mut unavailable_open = |_: &DocumentOpenTarget| {
+                Err("document loading is unavailable in this host".to_owned())
+            };
+            service_open_request(
+                app,
+                services
+                    .open_document
+                    .as_deref_mut()
+                    .unwrap_or(&mut unavailable_open),
+            )
+        })
+    }
+
+    /// Service reader requests while keeping native opens bound to one decode.
+    #[cfg(feature = "native-link-layout")]
+    pub fn service_pending_with_native_links(
+        &mut self,
+        services: &mut ReaderServices<'_>,
+        mut open: impl FnMut(&DocumentOpenTarget) -> Result<mant_loader::ResolvedWithLinkLayout, String>,
+    ) -> bool {
+        self.service_pending_using(services, |app, _| {
+            let Some(request) = app.take_open_request() else {
+                return false;
+            };
+            match open(&request.document) {
+                Ok(snapshot) => app.complete_open_native(&snapshot, request),
+                Err(message) => app.report_open_error(message),
+            }
+            true
+        })
+    }
+
+    fn service_pending_using(
+        &mut self,
+        services: &mut ReaderServices<'_>,
+        load: impl FnOnce(&mut Self, &mut ReaderServices<'_>) -> bool,
+    ) -> bool {
         let mut unavailable_discovery =
             |_: &CatalogQuery| Err("document discovery is unavailable in this host".to_owned());
-        let mut unavailable_open =
-            |_: &DocumentOpenTarget| Err("document loading is unavailable in this host".to_owned());
         let mut unavailable_external =
             |_: &ExternalUri| Err("external links are unavailable in this host".to_owned());
         let mut unavailable_copy =
@@ -51,13 +87,7 @@ impl App {
                 .as_deref_mut()
                 .unwrap_or(&mut unavailable_discovery),
         );
-        redraw |= service_open_request(
-            self,
-            services
-                .open_document
-                .as_deref_mut()
-                .unwrap_or(&mut unavailable_open),
-        );
+        redraw |= load(self, services);
         redraw |= service_external_request(
             self,
             services

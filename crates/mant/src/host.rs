@@ -21,6 +21,15 @@ pub(crate) trait CliHost {
     fn doctor(&self) -> Result<DoctorReport, Failure>;
     fn discover(&self, query: &CatalogQuery) -> Result<DocumentCatalog, Failure>;
     fn query(&self, request: &PreparedQueryRequest<'_>) -> Result<QueryViewResult, Failure>;
+    #[cfg(all(feature = "tui", feature = "roff"))]
+    fn read_native_snapshot(
+        &self,
+        _request: &PreparedQueryRequest<'_>,
+    ) -> Result<mant_loader::ResolvedWithLinkLayout, Failure> {
+        Err(Failure::operational(
+            "native interactive document loading is unavailable in this host",
+        ))
+    }
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure>;
     #[cfg(any(feature = "tui", test))]
     fn resolve_scope(
@@ -74,6 +83,16 @@ impl CliHost for SystemHost {
         request
             .execute(self.resolver())
             .map_err(query_execution_failure)
+    }
+
+    #[cfg(all(feature = "tui", feature = "roff"))]
+    fn read_native_snapshot(
+        &self,
+        request: &PreparedQueryRequest<'_>,
+    ) -> Result<mant_loader::ResolvedWithLinkLayout, Failure> {
+        request
+            .resolve_with_link_layout(self.resolver())
+            .map_err(crate::error::query_failure)
     }
 
     fn query_markdown(&self, source: &str) -> Result<ResolvedContent, Failure> {

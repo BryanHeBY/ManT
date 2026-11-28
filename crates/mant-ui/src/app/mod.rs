@@ -275,12 +275,29 @@ impl App {
     /// snapshot is prepended to the supplied search scope.
     #[must_use]
     pub fn from_shared(options: ReaderOptions) -> Self {
+        let document = DocumentView::new(&options.current);
+        Self::from_shared_view(options, document)
+    }
+
+    /// Start a reader with a layout tied to the exact decoded snapshot.
+    #[cfg(feature = "native-link-layout")]
+    #[must_use]
+    pub fn from_native_snapshot(
+        snapshot: &mant_loader::ResolvedWithLinkLayout,
+        catalog: DocumentCatalog,
+    ) -> Option<Self> {
+        let document = DocumentView::with_native_links(snapshot)?;
+        let mut options = ReaderOptions::new(snapshot.content_arc());
+        options.catalog = catalog;
+        Some(Self::from_shared_view(options, document))
+    }
+
+    fn from_shared_view(options: ReaderOptions, document: DocumentView) -> Self {
         let ReaderOptions {
             current: current_bundle,
             catalog,
             scope: mut scope_documents,
         } = options;
-        let document = DocumentView::new(&current_bundle);
         let mut finder = FinderState::default();
         finder.replace_catalog(catalog);
         let expanded = document
@@ -373,6 +390,26 @@ impl App {
         self.complete_loaded_navigation(bundle, request.target, request.direction);
     }
 
+    #[cfg(feature = "native-link-layout")]
+    pub(crate) fn complete_open_native(
+        &mut self,
+        snapshot: &mant_loader::ResolvedWithLinkLayout,
+        request: NavigationRequest,
+    ) {
+        let Some(view) = DocumentView::with_native_links(snapshot) else {
+            self.report_open_error(
+                "Invalid native link layout; the current document was retained".into(),
+            );
+            return;
+        };
+        self.complete_navigation_view(
+            snapshot.content_arc(),
+            request.target,
+            request.direction,
+            view,
+        );
+    }
+
     fn complete_loaded_navigation(
         &mut self,
         bundle: Arc<ResolvedContent>,
@@ -380,6 +417,16 @@ impl App {
         direction: HistoryDirection,
     ) {
         let candidate = DocumentView::new(&bundle);
+        self.complete_navigation_view(bundle, target, direction, candidate);
+    }
+
+    fn complete_navigation_view(
+        &mut self,
+        bundle: Arc<ResolvedContent>,
+        target: LocalTarget,
+        direction: HistoryDirection,
+        candidate: DocumentView,
+    ) {
         if let LocalTarget::Fragment(target) = &target
             && let Err(message) = candidate.validate_fragment(target)
         {

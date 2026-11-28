@@ -345,3 +345,32 @@ fn clicking_encoded_invalid_mailto_links_never_reaches_the_host() {
         );
     }
 }
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_snapshot_routes_mouse_only_to_authored_same_label_occurrences() {
+    // The second native Lk has the same target and identical visible label,
+    // but was independently authored and wholly owns its visible glyphs.
+    let source = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.No OTHER\n.Lk https://z.test ZYU\n.Sh NEXT\nDone.\n";
+    let snapshot = mant_loader::load_roff_bytes_with_link_layout(source.as_bytes()).unwrap();
+    assert_eq!(snapshot.layout().receipts.len(), 1);
+    let mut app = App::from_native_snapshot(&snapshot, DocumentCatalog::default()).unwrap();
+    let mut terminal = Terminal::new(TestBackend::new(80, 25)).unwrap();
+    terminal.draw(|frame| app.draw(frame)).unwrap();
+    let width = app.geometry.content.width;
+    let groups = app.session.rendered_cache[&width].search("ZYU");
+    let [mixed, authored] = groups.as_slice() else {
+        panic!("two equal visible labels");
+    };
+    for (region, expected) in [(mixed, [true, false, true]), (authored, [true, true, true])] {
+        for (offset, owned) in expected.into_iter().enumerate() {
+            click_document_cell(&mut app, region.start_column + offset, region.row);
+            assert_eq!(
+                app.take_external_request()
+                    .as_ref()
+                    .map(crate::ExternalUri::as_str),
+                owned.then_some("https://z.test"),
+            );
+        }
+    }
+}

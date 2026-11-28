@@ -172,50 +172,11 @@ fn run_interactive(
             diagnostics_color,
         );
     };
-    let scope_documents = match source {
-        QuerySource::Arguments(request) => {
-            if !matches!(request.view, QueryView::Full {}) {
-                return report_failure(
-                    &Failure::usage("interactive mode requires the complete document view"),
-                    diagnostics,
-                    diagnostics_color,
-                );
-            }
-            let query = match application::read_full(&request, policy, host) {
-                Ok(query) => query,
-                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
-            };
-            vec![Arc::new(query)]
-        }
-        QuerySource::ScopeArguments { scope, view: None } => {
-            if policy != LoadPolicy::Combined {
-                return report_failure(
-                    &Failure::usage("--manual and --tldr do not apply to document scopes"),
-                    diagnostics,
-                    diagnostics_color,
-                );
-            }
-            let loaded = match host.resolve_scope(&scope) {
-                Ok(loaded) => loaded,
-                Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
-            };
-            loaded.into_parts().1.into_iter().map(Arc::new).collect()
-        }
-        QuerySource::ScopeArguments { view: Some(_), .. } => {
-            return report_failure(
-                &Failure::usage("interactive mode does not accept --search or --explain"),
-                diagnostics,
-                diagnostics_color,
-            );
-        }
-        QuerySource::StdinJson | QuerySource::InputStdin { .. } => {
-            return report_failure(
-                &Failure::usage("interactive mode requires a registered document selector"),
-                diagnostics,
-                diagnostics_color,
-            );
-        }
+    let sources = match interactive_sources(source, policy, host) {
+        Ok(sources) => sources,
+        Err(error) => return report_failure(&error, diagnostics, diagnostics_color),
     };
+    let scope_documents = sources.scope;
     let Some(query) = scope_documents.first().cloned() else {
         return report_failure(
             &Failure::operational("document scope resolved no readable documents"),
@@ -236,23 +197,118 @@ fn run_interactive(
     };
     let mut external = open_external_uri;
     let mut copy = |request| clipboard.copy(request);
-    match delivery::terminal::run_reader(
+    let mut services = mant_ui::ReaderServices {
+        discover_documents: Some(&mut discover),
+        open_document: Some(&mut open),
+        open_external: Some(&mut external),
+        copy_to_clipboard: Some(&mut copy),
+    };
+    #[cfg(feature = "roff")]
+    if let Some(snapshot) = sources.native {
+        let Some(app) = mant_ui::App::from_native_snapshot(&snapshot, catalog) else {
+            return report_failure(
+                &Failure::operational("invalid native link layout"),
+                diagnostics,
+                diagnostics_color,
+            );
+        };
+        let open_native = |target: &mant_protocol::DocumentOpenTarget| {
+            let (request, policy) = request_for_navigation(target);
+            application::read_full_native(&request, policy, host).map_err(Failure::into_message)
+        };
+        let result = delivery::terminal::run_native_reader(app, &mut services, open_native);
+        return report_reader_result(result, diagnostics, diagnostics_color);
+    }
+    let result = delivery::terminal::run_reader(
         mant_ui::ReaderOptions {
             current: query,
             catalog,
             scope: scope_documents,
         },
-        &mut mant_ui::ReaderServices {
-            discover_documents: Some(&mut discover),
-            open_document: Some(&mut open),
-            open_external: Some(&mut external),
-            copy_to_clipboard: Some(&mut copy),
-        },
-    ) {
+        &mut services,
+    );
+    report_reader_result(result, diagnostics, diagnostics_color)
+}
+
+#[cfg(feature = "tui")]
+struct InteractiveSources {
+    scope: Vec<Arc<mant_ir::ResolvedContent>>,
+    #[cfg(feature = "roff")]
+    native: Option<mant_loader::ResolvedWithLinkLayout>,
+}
+
+#[cfg(feature = "tui")]
+fn interactive_sources(
+    source: QuerySource,
+    policy: LoadPolicy,
+    host: &dyn CliHost,
+) -> Result<InteractiveSources, Failure> {
+    match source {
+        QuerySource::Arguments(request) => {
+            if !matches!(request.view, QueryView::Full {}) {
+                return Err(Failure::usage(
+                    "interactive mode requires the complete document view",
+                ));
+            }
+            #[cfg(feature = "roff")]
+            {
+                let native = application::read_full_native(&request, policy, host)?;
+                Ok(InteractiveSources {
+                    scope: vec![native.content_arc()],
+                    native: Some(native),
+                })
+            }
+            #[cfg(not(feature = "roff"))]
+            {
+                let content = application::read_full(&request, policy, host)?;
+                Ok(InteractiveSources {
+                    scope: vec![Arc::new(content)],
+                })
+            }
+        }
+        QuerySource::ScopeArguments { scope, view: None } => {
+            if policy != LoadPolicy::Combined {
+                return Err(Failure::usage(
+                    "--manual and --tldr do not apply to document scopes",
+                ));
+            }
+            let scope = host
+                .resolve_scope(&scope)?
+                .into_parts()
+                .1
+                .into_iter()
+                .map(Arc::new)
+                .collect();
+            Ok(InteractiveSources {
+                scope,
+                #[cfg(feature = "roff")]
+                native: None,
+            })
+        }
+        QuerySource::ScopeArguments { view: Some(_), .. } => Err(Failure::usage(
+            "interactive mode does not accept --search or --explain",
+        )),
+        QuerySource::StdinJson | QuerySource::InputStdin { .. } => Err(Failure::usage(
+            "interactive mode requires a registered document selector",
+        )),
+    }
+}
+
+#[cfg(feature = "tui")]
+fn report_reader_result(
+    result: io::Result<()>,
+    diagnostics: &mut dyn Write,
+    diagnostics_color: bool,
+) -> u8 {
+    match result {
         Ok(()) => 0,
         Err(error) => report_failure(&Failure::operational(error), diagnostics, diagnostics_color),
     }
 }
+
+#[cfg(all(test, feature = "tui", feature = "roff"))]
+#[path = "process_native_link_test.rs"]
+mod native_link_tests;
 
 #[cfg(feature = "mcp")]
 fn run_mcp() -> u8 {

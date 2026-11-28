@@ -15,6 +15,7 @@ pub(super) struct DocumentBuilder<'a> {
     pub(super) navigation: Vec<NavNode>,
     pub(super) anchors: HashMap<String, usize>,
     pub(super) reference_origins: Arc<super::references::ReferenceOrigins>,
+    pub(super) link_members: Arc<super::link_members::LinkMembers>,
     /// A heading is evidence for signature recognition, never a new IR owner.
     highlight_context: crate::highlight::HighlightContext,
     pending_anchors: Vec<String>,
@@ -63,6 +64,7 @@ impl DocumentBuilder<'_> {
             navigation: Vec::new(),
             anchors: HashMap::new(),
             reference_origins: Arc::default(),
+            link_members: Arc::default(),
             highlight_context: crate::highlight::HighlightContext {
                 prose: true,
                 ..Default::default()

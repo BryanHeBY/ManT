@@ -47,6 +47,21 @@ pub(crate) fn read_full(
     }
 }
 
+#[cfg(all(feature = "tui", feature = "roff"))]
+pub(crate) fn read_full_native(
+    request: &QueryRequest,
+    policy: LoadPolicy,
+    host: &dyn CliHost,
+) -> Result<mant_loader::ResolvedWithLinkLayout, Failure> {
+    if !matches!(request.view, QueryView::Full {}) {
+        return Err(Failure::usage(
+            "interactive mode requires the complete document view",
+        ));
+    }
+    let prepared = PreparedQueryRequest::new(request, policy).map_err(query_failure)?;
+    host.read_native_snapshot(&prepared)
+}
+
 #[cfg(any(feature = "tui", test))]
 pub(crate) fn request_for_address(address: &DocumentAddress) -> (QueryRequest, LoadPolicy) {
     let policy = match address {

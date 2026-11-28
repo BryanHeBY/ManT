@@ -491,6 +491,8 @@ mod item_spacing;
 mod layout;
 mod markdown_hard_rows;
 mod mdoc_execution_spacing;
+#[cfg(feature = "native-link-layout")]
+mod native_link_layout;
 mod navigation;
 mod navigation_markers;
 mod ordered_source_children;

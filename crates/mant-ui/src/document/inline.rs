@@ -91,6 +91,7 @@ pub(super) fn styled_display_inline_lines(
     )
 }
 
+#[cfg(test)]
 pub(super) fn styled_reference_inline_lines(
     nodes: &[Inline],
     style: Style,
@@ -99,8 +100,36 @@ pub(super) fn styled_reference_inline_lines(
     code: crate::highlight::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
+    styled_masked_inline_lines(
+        nodes,
+        style,
+        current_address,
+        decorations,
+        code,
+        origins,
+        &super::link_members::LinkMembers::default(),
+    )
+}
+
+fn styled_masked_inline_lines(
+    nodes: &[Inline],
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    decorations: super::entries::InlineStyles<'_>,
+    code: crate::highlight::HighlightContext,
+    origins: &super::references::ReferenceOrigins,
+    members: &super::link_members::LinkMembers,
+) -> Vec<StyledInlineLine> {
     let mut lines = vec![StyledInlineLine::default()];
-    append_inline(nodes, style, current_address, decorations, code, &mut lines);
+    append_inline(
+        nodes,
+        style,
+        current_address,
+        decorations,
+        code,
+        members,
+        &mut lines,
+    );
     if !origins.is_empty() {
         reference_marks(nodes, origins, &mut lines, &mut 0, &mut 0);
     }
@@ -110,6 +139,7 @@ pub(super) fn styled_reference_inline_lines(
 /// Layout belongs to the complete owner, so style/link wrappers share its row
 /// cursor. Applying sorted hints after text projection keeps scalar positions
 /// and all reference marks independent of display corrections.
+#[cfg(test)]
 pub(super) fn styled_reference_content_lines(
     content: mant_ir::InlineContentRef<'_>,
     style: Style,
@@ -118,13 +148,34 @@ pub(super) fn styled_reference_content_lines(
     code: crate::highlight::HighlightContext,
     origins: &super::references::ReferenceOrigins,
 ) -> Vec<StyledInlineLine> {
-    let mut lines = styled_reference_inline_lines(
+    styled_masked_content_lines(
+        content,
+        style,
+        current_address,
+        decorations,
+        code,
+        origins,
+        &super::link_members::LinkMembers::default(),
+    )
+}
+
+pub(super) fn styled_masked_content_lines(
+    content: mant_ir::InlineContentRef<'_>,
+    style: Style,
+    current_address: Option<&DocumentAddress>,
+    decorations: super::entries::InlineStyles<'_>,
+    code: crate::highlight::HighlightContext,
+    origins: &super::references::ReferenceOrigins,
+    members: &super::link_members::LinkMembers,
+) -> Vec<StyledInlineLine> {
+    let mut lines = styled_masked_inline_lines(
         content.content,
         style,
         current_address,
         decorations,
         code,
         origins,
+        members,
     );
     let mut hints = content.layout.row_hints.iter().peekable();
     for (row, line) in lines.iter_mut().enumerate() {
@@ -233,52 +284,62 @@ fn append_inline(
     current_address: Option<&DocumentAddress>,
     decorations: super::entries::InlineStyles<'_>,
     code: crate::highlight::HighlightContext,
+    members: &super::link_members::LinkMembers,
     lines: &mut Vec<StyledInlineLine>,
 ) {
     let literal = code.literal;
     let mut code = crate::highlight::CodeHighlights::for_inlines(nodes, code);
     let mut entry = crate::highlight::entry::AccentCursor::new(decorations.accents);
     let mut scalar_cursor = 0;
+    let mut cursor = members.cursor();
     mant_render::visit_inline_text(nodes, decorations.names, |source, target, text| {
-        let first_line = lines.len() - 1;
-        let first_scalar = scalar_cursor;
-        if let Some(code) = &mut code {
-            // Fonts supply fallback appearance before lexical colors. The
-            // theme then preserves their modifiers, links and validated names
-            // without allowing generic emphasis colors to erase code roles.
-            let base = if literal {
-                theme::DEFAULT_THEME.code_base_style(style, source)
-            } else {
-                theme::inline_style(style, source)
+        cursor.emit(target, text, |target, text| {
+            let source = mant_render::InlinePresentation {
+                link: source.link && target.is_some(),
+                ..source
             };
-            for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
-                for decorated in entry.spans(
-                    &span.content,
-                    theme::DEFAULT_THEME.code_inline_style(span.style, source),
+            let first_line = lines.len() - 1;
+            let first_scalar = scalar_cursor;
+            if let Some(code) = &mut code {
+                // Fonts supply fallback appearance before lexical colors. The
+                // theme then preserves their modifiers, links and validated names
+                // without allowing generic emphasis colors to erase code roles.
+                let base = if literal {
+                    theme::DEFAULT_THEME.code_base_style(style, source)
+                } else {
+                    theme::inline_style(style, source)
+                };
+                for span in code.spans(text, base, theme::DEFAULT_THEME.code_styles()) {
+                    for decorated in entry.spans(
+                        &span.content,
+                        theme::DEFAULT_THEME.code_inline_style(span.style, source),
+                        &theme::DEFAULT_THEME,
+                        source.link,
+                    ) {
+                        append_text(
+                            &decorated.content,
+                            decorated.style,
+                            lines,
+                            &mut scalar_cursor,
+                        );
+                    }
+                }
+            } else {
+                for span in entry.spans(
+                    text,
+                    theme::inline_style(style, source),
                     &theme::DEFAULT_THEME,
                     source.link,
                 ) {
-                    append_text(
-                        &decorated.content,
-                        decorated.style,
-                        lines,
-                        &mut scalar_cursor,
-                    );
+                    append_text(&span.content, span.style, lines, &mut scalar_cursor);
                 }
             }
-        } else {
-            for span in entry.spans(
-                text,
-                theme::inline_style(style, source),
-                &theme::DEFAULT_THEME,
-                source.link,
-            ) {
-                append_text(&span.content, span.style, lines, &mut scalar_cursor);
+            if let Some(target) =
+                target.and_then(|target| local_link_target(target, current_address))
+            {
+                record_link(lines, first_line, first_scalar, scalar_cursor, &target);
             }
-        }
-        if let Some(target) = target.and_then(|target| local_link_target(target, current_address)) {
-            record_link(lines, first_line, first_scalar, scalar_cursor, &target);
-        }
+        });
     });
 }
 

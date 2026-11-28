@@ -1,5 +1,5 @@
 //! Project borrowed inline owners into styled rows and deferred targets.
-use super::super::inline::{styled_plain_text_lines, styled_reference_content_lines};
+use super::super::inline::{styled_masked_content_lines, styled_plain_text_lines};
 use super::super::{
     LineSurface, LogicalLine, Style, StyledInlineLine, WrapMode, inline_anchor_rows, theme,
 };
@@ -60,7 +60,7 @@ impl DocumentBuilder<'_> {
         style: Style,
         prose: bool,
     ) -> Vec<StyledInlineLine> {
-        styled_reference_content_lines(
+        styled_masked_content_lines(
             content,
             style,
             self.address.as_ref(),
@@ -70,6 +70,7 @@ impl DocumentBuilder<'_> {
                 ..self.highlight_context
             },
             &self.reference_origins,
+            &self.link_members,
         )
     }
 
@@ -112,7 +113,7 @@ impl DocumentBuilder<'_> {
     ) {
         let nodes = content.content;
         let targets = inline_anchor_rows(nodes);
-        let mut lines = styled_reference_content_lines(
+        let mut lines = styled_masked_content_lines(
             content,
             base_style,
             self.address.as_ref(),
@@ -122,6 +123,7 @@ impl DocumentBuilder<'_> {
                 ..self.highlight_context
             },
             &self.reference_origins,
+            &self.link_members,
         );
         let mut deferred_targets = if trim_paragraph_tail {
             Self::trim_paragraph_tail(&mut lines)

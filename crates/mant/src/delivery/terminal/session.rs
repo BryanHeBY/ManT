@@ -8,6 +8,14 @@ use super::{
 use crate::delivery::terminal_lease::TerminalLease;
 use std::{cell::RefCell, rc::Rc};
 pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> io::Result<()> {
+    run_app(App::from_shared(options), services, App::service_pending)
+}
+
+pub(super) fn run_app(
+    mut app: App,
+    services: &mut ReaderServices<'_>,
+    mut service_pending: impl FnMut(&mut App, &mut ReaderServices<'_>) -> bool,
+) -> io::Result<()> {
     let termination = TerminationSignals::install()?;
     let lease = Rc::new(RefCell::new(
         TerminalLease::new(CrosstermTerminalOps::new()),
@@ -15,7 +23,6 @@ pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> 
     backend::acquire_tui(&lease)?;
     let backend = LeasedBackend::new(io::stdout(), Rc::clone(&lease));
     let mut terminal = Terminal::new(backend)?;
-    let mut app = App::from_shared(options);
 
     let result = panic::catch_unwind(panic::AssertUnwindSafe(|| -> io::Result<Option<i32>> {
         let mut redraw = true;
@@ -41,7 +48,7 @@ pub(super) fn run(options: ReaderOptions, services: &mut ReaderServices<'_>) -> 
                 continue;
             }
             redraw |= app.handle_event(&event::read()?).needs_redraw();
-            redraw |= app.service_pending(services);
+            redraw |= service_pending(&mut app, services);
         }
     }));
 

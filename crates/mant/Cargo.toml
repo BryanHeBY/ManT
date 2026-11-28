@@ -32,7 +32,7 @@ all-features = true
 
 [features]
 default = ["roff", "tui", "pager", "mcp", "update"]
-roff = ["mant-engine/roff"]
+roff = ["mant-engine/roff", "mant-ui?/native-link-layout"]
 tui = ["dep:mant-ui", "dep:ratatui", "dep:crossterm", "dep:arboard", "dep:base64", "dep:signal-hook"]
 pager = ["dep:crossterm", "dep:crossbeam-channel", "dep:parking_lot", "dep:regex", "dep:textwrap", "dep:thiserror", "dep:signal-hook"]
 mcp = ["dep:rmcp", "dep:rmcp-macros", "dep:tokio"]

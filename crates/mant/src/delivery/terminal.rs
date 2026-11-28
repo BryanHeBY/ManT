@@ -48,5 +48,18 @@ pub(crate) fn run_reader(
     session::run(options, services)
 }
 
+#[cfg(feature = "roff")]
+pub(crate) fn run_native_reader(
+    app: App,
+    services: &mut ReaderServices<'_>,
+    mut open: impl FnMut(
+        &mant_protocol::DocumentOpenTarget,
+    ) -> Result<mant_loader::ResolvedWithLinkLayout, String>,
+) -> io::Result<()> {
+    session::run_app(app, services, |app, services| {
+        app.service_pending_with_native_links(services, &mut open)
+    })
+}
+
 #[cfg(all(test, unix))]
 mod tests;

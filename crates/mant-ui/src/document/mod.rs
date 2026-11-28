@@ -6,6 +6,7 @@
 
 mod entries;
 mod inline;
+mod link_members;
 mod lower;
 mod navigation;
 use lower::DocumentBuilder;
@@ -237,7 +238,25 @@ impl DocumentView {
     /// Build one immutable view from the normalized query contract.
     #[must_use]
     pub fn new(bundle: &ResolvedContent) -> Self {
+        Self::build(bundle, link_members::LinkMembers::default())
+    }
+
+    /// Paint only the authored cells proved by a paired native decode.
+    ///
+    /// The document and layout are an opaque, source-bound pair. This never
+    /// mutates the original document, reference index or default view.
+    #[cfg(feature = "native-link-layout")]
+    #[must_use]
+    pub fn with_native_links(snapshot: &mant_loader::ResolvedWithLinkLayout) -> Option<Self> {
+        let bundle = snapshot.content();
+        let members =
+            link_members::LinkMembers::validate(bundle.document.as_ref(), snapshot.layout())?;
+        Some(Self::build(bundle, members))
+    }
+
+    fn build(bundle: &ResolvedContent, members: link_members::LinkMembers) -> Self {
         let mut builder = DocumentBuilder::new(bundle.label.clone(), bundle.address.clone());
+        builder.link_members = Arc::new(members);
         let mut references = bundle.document.as_ref().map_or_else(
             references::ReferenceNavigation::default,
             references::ReferenceNavigation::build,

@@ -290,6 +290,7 @@ impl DocumentBuilder<'_> {
         let mut builder = Self::new(String::new(), self.address.clone());
         builder.entry_styles = Arc::clone(&self.entry_styles);
         builder.reference_origins = Arc::clone(&self.reference_origins);
+        builder.link_members = Arc::clone(&self.link_members);
         builder.highlight_context = self.highlight_context;
         if inherit_parent_boundary {
             builder.pending_gap = std::mem::take(shared_gap);
