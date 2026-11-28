@@ -84,6 +84,11 @@ witness, status, error = capture_direct(
 assert (witness.replace(b'\r\n', b'\n'), status, error) == (b'PTY-WITNESS\n', 0, b'')
 
 with tempfile.TemporaryDirectory(prefix='mant-table-pty-') as scratch:
+    # These cases read standalone files, not installed manuals. Keep the
+    # host's manpath discovery work outside the bounded PTY rendering test.
+    manual_root = Path(scratch) / 'man'
+    manual_root.mkdir()
+    environment['MANPATH'] = str(manual_root)
     for case in json.loads(sys.argv[2]):
         source = Path(scratch) / 'source.1'
         source.write_bytes(case['source'].encode())
