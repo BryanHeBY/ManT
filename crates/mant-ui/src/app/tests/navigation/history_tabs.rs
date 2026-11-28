@@ -227,3 +227,106 @@ fn missing_page_fragment_does_not_modify_history() {
         Some("No outline node matches #missing")
     );
 }
+
+#[cfg(feature = "native-link-layout")]
+#[test]
+fn native_unaddressed_history_and_tab_restore_the_exact_click_members() {
+    // AU members/history.json: source-bound Z and U overwrite the cursor,
+    // while the physically surviving old Y was never authored by Lk.
+    const INPUT: &str = ".Dd November 28, 2026\n.Dt PROBE 1\n.Os\n.Sh NAME\n.Nm probe\n.Nd use\n.Sh DESCRIPTION\n.No HEAD\nY\n.No \"\\h'|1n'R\"\n.Lk https://z.test Z U\nEND\n.br\n.Xr printf 3\n.Sh NEXT\nDone.\n";
+    let initial = mant_loader::load_roff_bytes_with_link_layout(INPUT.as_bytes()).unwrap();
+    let original = initial.content_arc();
+    assert_eq!(initial.receipts().len(), 1);
+    let addressed =
+        mant_loader::ResolvedWithLinkLayout::without_native_links(manual_bundle("printf", "3"));
+    for width in [80, 140] {
+        let mut app = App::from_native_snapshot(&initial, DocumentCatalog::default());
+        let mut terminal = Terminal::new(TestBackend::new(width, 25)).unwrap();
+        for step in [0, 1, 2] {
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+            let rendered = &app.session.rendered_cache[&app.geometry.content.width];
+            let labels = rendered.search("ZYU");
+            let [label] = labels.as_slice() else {
+                panic!("one mixed label");
+            };
+            let nexts = rendered.search("printf(3)");
+            let [next] = nexts.as_slice() else {
+                panic!("one manual link");
+            };
+            for (index, owned) in [true, false, true].into_iter().enumerate() {
+                click_document_cell(&mut app, label.start_column + index, label.row);
+                assert_eq!(
+                    app.take_external_request()
+                        .as_ref()
+                        .map(crate::ExternalUri::as_str),
+                    owned.then_some("https://z.test"),
+                    "width={width}, step={step}, glyph={index}",
+                );
+            }
+            if step == 2 {
+                break;
+            }
+            click_document_cell(&mut app, next.start_column, next.row);
+            if step == 0 {
+                assert!(app.service_pending_with_native_links(
+                    &mut crate::ReaderServices::default(),
+                    |_| Err("unavailable".into()),
+                ));
+                assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+                assert_eq!(app.navigation.history_lengths(), (0, 0));
+                assert_eq!(app.navigation.active_tab(), 0);
+                click_document_cell(&mut app, next.start_column, next.row);
+            }
+            let mut source_opens = 0;
+            assert!(app.service_pending_with_native_links(
+                &mut crate::ReaderServices::default(),
+                |_| {
+                    source_opens += 1;
+                    Ok(addressed.clone())
+                },
+            ));
+            assert_eq!(source_opens, 1);
+            assert_eq!(app.session.document.label(), "printf");
+            terminal.draw(|frame| app.draw(frame)).unwrap();
+            if step == 0 {
+                app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+                assert!(app.take_open_request().is_none());
+                assert_eq!(app.navigation.history_lengths(), (0, 1));
+                app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+                // Addressed forward navigation still asks the host. A failed
+                // reload neither advances the history cursor nor changes source.
+                assert!(app.service_pending_with_native_links(
+                    &mut crate::ReaderServices::default(),
+                    |_| Err("forward unavailable".into()),
+                ));
+                assert_eq!(app.navigation.history_lengths(), (0, 1));
+                assert!(Arc::ptr_eq(&app.session.current_bundle, &original));
+                app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::ALT));
+                assert!(app.service_pending_with_native_links(
+                    &mut crate::ReaderServices::default(),
+                    |_| Ok(addressed.clone()),
+                ));
+                assert_eq!(app.session.document.label(), "printf");
+                app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::ALT));
+                assert!(app.take_open_request().is_none());
+            } else {
+                let native_tab = app
+                    .geometry
+                    .document_tabs
+                    .iter()
+                    .find(|tab| tab.index == 0)
+                    .unwrap()
+                    .area;
+                app.handle_mouse(MouseEvent {
+                    kind: MouseEventKind::Down(MouseButton::Left),
+                    column: native_tab.x + 1,
+                    row: native_tab.y,
+                    modifiers: KeyModifiers::NONE,
+                });
+                assert!(app.take_open_request().is_none());
+                assert_eq!(app.navigation.active_tab(), 0);
+            }
+        }
+    }
+}

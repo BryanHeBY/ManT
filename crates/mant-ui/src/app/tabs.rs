@@ -1,7 +1,5 @@
 //! Maintains the bounded, first-opened document tab stack.
 
-use std::sync::Arc;
-
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     Frame,
@@ -24,13 +22,8 @@ struct VisibleDocumentTab {
 
 impl App {
     pub(super) fn sync_current_document_tab(&mut self) {
-        let fallback = self
-            .navigation
-            .address()
-            .is_none()
-            .then(|| Arc::clone(&self.session.current_bundle));
         let label = self.session.document.terminal_label().to_owned();
-        self.navigation.sync_tab(label, fallback);
+        self.navigation.sync_tab(label);
     }
 
     pub(super) fn remember_current_document_tab(&mut self) {
@@ -47,9 +40,9 @@ impl App {
                 target: location.target().clone(),
                 direction: HistoryDirection::New,
             });
-        } else if let Some(bundle) = location.fallback() {
+        } else if let Some(source) = location.fallback() {
             self.complete_local_bundle(
-                Arc::clone(bundle),
+                source.clone(),
                 location.target().clone(),
                 HistoryDirection::New,
             );

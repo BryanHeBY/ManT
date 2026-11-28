@@ -62,7 +62,7 @@ impl App {
                 return false;
             };
             match open(&request.document) {
-                Ok(snapshot) => app.complete_open_native(&snapshot, request),
+                Ok(snapshot) => app.complete_open_native(snapshot, request),
                 Err(message) => app.report_open_error(message),
             }
             true

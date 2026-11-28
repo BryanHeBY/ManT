@@ -10,7 +10,9 @@ mod input;
 mod menu;
 mod navigation;
 mod navigation_state;
-use navigation_state::{HistoryDirection, HistoryLocation, LocalTarget, NavigationState};
+use navigation_state::{
+    HistoryDirection, HistoryLocation, LocalDocument, LocalTarget, NavigationState,
+};
 mod references;
 mod render;
 mod search;
@@ -275,8 +277,8 @@ impl App {
     /// snapshot is prepended to the supplied search scope.
     #[must_use]
     pub fn from_shared(options: ReaderOptions) -> Self {
-        let document = DocumentView::new(&options.current);
-        Self::from_shared_view(options, document)
+        let source = LocalDocument::Plain(Arc::clone(&options.current));
+        Self::from_shared_view(options, source)
     }
 
     /// Start a reader with a layout tied to the exact decoded snapshot.
@@ -286,13 +288,13 @@ impl App {
         snapshot: &mant_render::SourceBoundLinkLayout,
         catalog: DocumentCatalog,
     ) -> Self {
-        let document = DocumentView::with_native_links(snapshot);
         let mut options = ReaderOptions::new(snapshot.content_arc());
         options.catalog = catalog;
-        Self::from_shared_view(options, document)
+        Self::from_shared_view(options, LocalDocument::Native(Arc::new(snapshot.clone())))
     }
 
-    fn from_shared_view(options: ReaderOptions, document: DocumentView) -> Self {
+    fn from_shared_view(options: ReaderOptions, source: LocalDocument) -> Self {
+        let document = source.view();
         let ReaderOptions {
             current: current_bundle,
             catalog,
@@ -334,10 +336,7 @@ impl App {
             effects: PendingEffects::default(),
             navigation: NavigationState::new(
                 current_bundle.address.clone(),
-                current_bundle
-                    .address
-                    .is_none()
-                    .then(|| Arc::clone(&current_bundle)),
+                source.unaddressed(),
                 Arc::downgrade(&current_bundle),
             ),
             notice: None,
@@ -393,15 +392,13 @@ impl App {
     #[cfg(feature = "native-link-layout")]
     pub(crate) fn complete_open_native(
         &mut self,
-        snapshot: &mant_render::SourceBoundLinkLayout,
+        snapshot: mant_render::SourceBoundLinkLayout,
         request: NavigationRequest,
     ) {
-        let view = DocumentView::with_native_links(snapshot);
-        self.complete_navigation_view(
-            snapshot.content_arc(),
+        self.complete_local_bundle(
+            LocalDocument::Native(Arc::new(snapshot)),
             request.target,
             request.direction,
-            view,
         );
     }
 
@@ -411,17 +408,16 @@ impl App {
         target: LocalTarget,
         direction: HistoryDirection,
     ) {
-        let candidate = DocumentView::new(&bundle);
-        self.complete_navigation_view(bundle, target, direction, candidate);
+        self.complete_local_bundle(LocalDocument::Plain(bundle), target, direction);
     }
 
-    fn complete_navigation_view(
+    fn complete_local_bundle(
         &mut self,
-        bundle: Arc<ResolvedContent>,
+        source: LocalDocument,
         target: LocalTarget,
         direction: HistoryDirection,
-        candidate: DocumentView,
     ) {
+        let candidate = source.view();
         if let LocalTarget::Fragment(target) = &target
             && let Err(message) = candidate.validate_fragment(target)
         {
@@ -440,23 +436,25 @@ impl App {
             return;
         }
         self.commit_history(direction);
-        self.replace_document_view(bundle, DocumentChangeReason::from(direction), candidate);
+        self.replace_document_view(source, DocumentChangeReason::from(direction), candidate);
         if let LocalTarget::Fragment(target) | LocalTarget::ReferenceOccurrence(target) = target {
             self.reveal_anchor(&target);
         }
     }
 
     fn replace_document(&mut self, bundle: Arc<ResolvedContent>, reason: DocumentChangeReason) {
-        let view = DocumentView::new(&bundle);
-        self.replace_document_view(bundle, reason, view);
+        let source = LocalDocument::Plain(bundle);
+        let view = source.view();
+        self.replace_document_view(source, reason, view);
     }
 
     fn replace_document_view(
         &mut self,
-        bundle: Arc<ResolvedContent>,
+        source: LocalDocument,
         reason: DocumentChangeReason,
         view: DocumentView,
     ) {
+        let bundle = source.bundle();
         if reason != DocumentChangeReason::SearchResult {
             // A single-page reader follows its new current snapshot. Explicit
             // multi-page scopes retain host order and at most one extra current
@@ -475,7 +473,7 @@ impl App {
         self.remember_current_document_tab();
         self.navigation.replace_current(
             bundle.address.clone(),
-            bundle.address.is_none().then(|| Arc::clone(&bundle)),
+            source.unaddressed(),
             Arc::downgrade(&bundle),
         );
         self.session = DocumentSession::new(bundle, view);
@@ -644,8 +642,8 @@ impl App {
                 target: location.target().clone(),
                 direction,
             });
-        } else if let Some(bundle) = location.fallback() {
-            self.complete_local_bundle(Arc::clone(bundle), location.target().clone(), direction);
+        } else if let Some(source) = location.fallback() {
+            self.complete_local_bundle(source.clone(), location.target().clone(), direction);
         }
     }
 
@@ -677,15 +675,6 @@ impl App {
         if let Some(target) = location.target().id() {
             self.reveal_anchor(target);
         }
-    }
-
-    fn complete_local_bundle(
-        &mut self,
-        bundle: Arc<ResolvedContent>,
-        target: LocalTarget,
-        direction: HistoryDirection,
-    ) {
-        self.complete_loaded_navigation(bundle, target, direction);
     }
 
     fn commit_history(&mut self, direction: HistoryDirection) {

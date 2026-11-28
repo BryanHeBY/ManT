@@ -6,7 +6,7 @@ use std::sync::{Arc, Weak};
 use mant_ir::ResolvedContent;
 use mant_protocol::DocumentAddress;
 
-use super::HISTORY_LIMIT;
+use super::{DocumentView, HISTORY_LIMIT};
 
 /// A reference occurrence is private to a scanned document view. Unlike a
 /// fragment, it is not a public content selector. Reloading still requires
@@ -39,10 +39,45 @@ pub(super) enum HistoryDirection {
     Forward,
 }
 
+/// Only unaddressed pages need a cached source; addressed pages reload via the host.
+#[derive(Debug, Clone)]
+pub(super) enum LocalDocument {
+    Plain(Arc<ResolvedContent>),
+    #[cfg(feature = "native-link-layout")]
+    Native(Arc<mant_render::SourceBoundLinkLayout>),
+}
+
+impl LocalDocument {
+    pub(super) fn bundle(&self) -> Arc<ResolvedContent> {
+        match self {
+            Self::Plain(bundle) => Arc::clone(bundle),
+            #[cfg(feature = "native-link-layout")]
+            Self::Native(snapshot) => snapshot.content_arc(),
+        }
+    }
+
+    pub(super) fn view(&self) -> DocumentView {
+        match self {
+            Self::Plain(bundle) => DocumentView::new(bundle),
+            #[cfg(feature = "native-link-layout")]
+            Self::Native(snapshot) => DocumentView::with_native_links(snapshot),
+        }
+    }
+
+    pub(super) fn unaddressed(self) -> Option<Self> {
+        let address = match &self {
+            Self::Plain(bundle) => &bundle.address,
+            #[cfg(feature = "native-link-layout")]
+            Self::Native(snapshot) => &snapshot.content().address,
+        };
+        address.is_none().then_some(self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct HistoryLocation {
     address: Option<DocumentAddress>,
-    fallback: Option<Arc<ResolvedContent>>,
+    fallback: Option<LocalDocument>,
     target: LocalTarget,
     origin: Weak<ResolvedContent>,
 }
@@ -56,7 +91,7 @@ impl HistoryLocation {
         self.address.as_ref()
     }
 
-    pub(super) fn fallback(&self) -> Option<&Arc<ResolvedContent>> {
+    pub(super) fn fallback(&self) -> Option<&LocalDocument> {
         self.fallback.as_ref()
     }
 
@@ -84,7 +119,7 @@ impl DocumentTab {
 
 pub(super) struct NavigationState {
     address: Option<DocumentAddress>,
-    fallback: Option<Arc<ResolvedContent>>,
+    fallback: Option<LocalDocument>,
     origin: Weak<ResolvedContent>,
     back: Vec<HistoryLocation>,
     forward: Vec<HistoryLocation>,
@@ -98,7 +133,7 @@ pub(super) struct NavigationState {
 impl NavigationState {
     pub(super) fn new(
         address: Option<DocumentAddress>,
-        fallback: Option<Arc<ResolvedContent>>,
+        fallback: Option<LocalDocument>,
         origin: Weak<ResolvedContent>,
     ) -> Self {
         Self {
@@ -168,7 +203,7 @@ impl NavigationState {
     pub(super) fn replace_current(
         &mut self,
         address: Option<DocumentAddress>,
-        fallback: Option<Arc<ResolvedContent>>,
+        fallback: Option<LocalDocument>,
         origin: Weak<ResolvedContent>,
     ) {
         self.address = address;
@@ -176,7 +211,8 @@ impl NavigationState {
         self.origin = origin;
     }
 
-    pub(super) fn sync_tab(&mut self, label: String, fallback: Option<Arc<ResolvedContent>>) {
+    pub(super) fn sync_tab(&mut self, label: String) {
+        let fallback = self.fallback.clone();
         let existing = self
             .tabs
             .iter()
@@ -282,11 +318,11 @@ mod tests {
             LocalTarget::ReferenceOccurrence("private-occurrence-2".into()),
         ] {
             let mut state = NavigationState::new(Some(address("first")), None, Weak::new());
-            state.sync_tab("First".into(), None);
+            state.sync_tab("First".into());
             state.remember_tab(target.clone());
             state.commit(HistoryDirection::New, state.location(target.clone()));
             state.replace_current(Some(address("second")), None, Weak::new());
-            state.sync_tab("Second".into(), None);
+            state.sync_tab("Second".into());
 
             // Repeated plans, including abandoned host requests, are read-only.
             for _ in 0..2 {
