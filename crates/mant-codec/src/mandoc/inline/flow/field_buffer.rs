@@ -200,6 +200,13 @@ impl<'a> AcceptedPasses<'a> {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum CursorOnlyPaint {
+    #[default]
+    Unproved,
+    Intact,
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 enum WordScanPolicy {
     #[default]
@@ -318,6 +325,8 @@ pub(in crate::mandoc::inline) struct FieldBuffer {
     /// unmodeled rewinds whose conservative raw-cursor lower bound stays
     /// `>= scanned_end` (term.c:143-146, 701-718).
     proved_rejection: Option<ProvedRejection>,
+    // Cursor addressability can be lost without changing existing paint.
+    cursor_only_paint: CursorOnlyPaint,
     #[cfg(test)]
     scan_work: usize,
     #[cfg(test)]

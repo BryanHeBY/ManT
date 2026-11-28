@@ -153,6 +153,7 @@ impl FieldWrite {
             | Self::DrawSpaces(_)
             | Self::MoveInDrawing { .. }
             | Self::UnprovedMotion
+            | Self::UnprovedCursorOnly
             | Self::KeepPlacedRetreat { .. }
             | Self::PlacedZeroWidthRetreat { .. }
             | Self::ReplacePlacedTail { .. }

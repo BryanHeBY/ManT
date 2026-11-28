@@ -289,7 +289,8 @@ fn execute_formatter_word_events(
         }
     }
     if unproved_motion || unrecorded_prior_edit(prior_edit, &word.native_writes) {
-        word.native_writes.push(FieldWrite::UnprovedMotion);
+        word.native_writes
+            .push(unproved_motion_write(events, context.slot_entry.domain));
     }
     if (non_font_opaque
         || wrote_decorated
@@ -309,6 +310,23 @@ fn execute_formatter_word_events(
     word.finish_content_prefix();
     word.flush_segment();
     finish_text_execution(events, context.zero_advance, word)
+}
+
+fn unproved_motion_write(
+    events: &[RoffInlineEvent],
+    domain: super::flow::native_slots::ReplayDomain,
+) -> FieldWrite {
+    // term.c:678-718: exact absolute zero moves col without encoding a
+    // byte. The buffer still tests BACKBEFORE because it can move origin.
+    if domain == super::flow::native_slots::ReplayDomain::Filled
+        && matches!(events, [RoffInlineEvent::HorizontalMotion { argument: Some(value), .. }]
+            if value.strip_prefix('|').and_then(libmandoc_rs::TableColumnMetrics::motion_argument)
+                .is_some_and(|(units, remainder)| units == 0 && remainder.is_empty()))
+    {
+        FieldWrite::UnprovedCursorOnly
+    } else {
+        FieldWrite::UnprovedMotion
+    }
 }
 
 fn unrecorded_prior_edit(edit: Option<PriorSlotEdit>, writes: &[FieldWrite]) -> bool {

@@ -18,8 +18,8 @@
 use std::sync::Arc;
 
 use super::{
-    FieldBuffer, FieldCell, FieldWrite, LeadingBlankRetreat, PassStop, TabStops, WordScanPolicy,
-    WordWriteReceipt, WriteCursor,
+    CursorOnlyPaint, FieldBuffer, FieldCell, FieldWrite, LeadingBlankRetreat, PassStop, TabStops,
+    WordScanPolicy, WordWriteReceipt, WriteCursor,
 };
 
 #[cfg(test)]
@@ -29,6 +29,7 @@ std::thread_local! {
 
 impl FieldBuffer {
     pub(super) fn push_cell(&mut self, cell: FieldCell) {
+        self.cursor_only_paint = CursorOnlyPaint::Unproved;
         // One compressed drawing run can stand for many raw bytes. This
         // conservative flag costs nothing to recompute during tail edits.
         if matches!(
@@ -280,6 +281,7 @@ impl FieldBuffer {
         self.committed_passes.clear();
         self.normalized_until = 0;
         self.word_scan = WordScanPolicy::Incremental;
+        self.cursor_only_paint = CursorOnlyPaint::Unproved;
         self.break_markers.clear();
         self.projected_pass_ends.clear();
         self.deferred_projected_gaps.clear();
@@ -399,6 +401,7 @@ impl FieldBuffer {
                     self.move_in_drawing(drawing_start, *absolute, *units);
                 }
                 FieldWrite::UnprovedMotion => self.invalidate_rewound_scan(),
+                FieldWrite::UnprovedCursorOnly => self.invalidate_cursor_only_motion(),
                 FieldWrite::Placed { .. }
                 | FieldWrite::PlacedUnderlineStroke
                 | FieldWrite::KeepPlacedRetreat { .. }
@@ -607,7 +610,19 @@ impl FieldBuffer {
         }
     }
 
+    fn invalidate_cursor_only_motion(&mut self) {
+        let paint_intact = !self.backbefore_armed
+            && (self.cursor_only_paint == CursorOnlyPaint::Intact
+                || !matches!(self.word_scan, WordScanPolicy::UnmodeledRewind))
+            && self.has_pass_retreats();
+        self.invalidate_rewound_scan();
+        if paint_intact {
+            self.cursor_only_paint = CursorOnlyPaint::Intact;
+        }
+    }
+
     fn invalidate_rewound_scan(&mut self) {
+        self.cursor_only_paint = CursorOnlyPaint::Unproved;
         self.word_scan = WordScanPolicy::UnmodeledRewind;
         self.scan = None;
         self.proved_rejection = None;
@@ -648,6 +663,15 @@ impl FieldBuffer {
     /// to `UnmodeledRewind` while preserving any proved `nbr == 0` rejection
     /// whose `scanned_end` lies at or before `cells.len() - retreat`.
     fn begin_word_writes(&mut self, writes: &[FieldWrite]) {
+        // An unknown cursor must not certify later writes. Consecutive
+        // cursor-only events can retain the unchanged raw paint.
+        if self.cursor_only_paint == CursorOnlyPaint::Intact
+            && !writes
+                .iter()
+                .any(|write| matches!(write, FieldWrite::UnprovedCursorOnly))
+        {
+            self.cursor_only_paint = CursorOnlyPaint::Unproved;
+        }
         if matches!(
             writes.first(),
             Some(FieldWrite::AdvanceOverBufferedBlanks(_))

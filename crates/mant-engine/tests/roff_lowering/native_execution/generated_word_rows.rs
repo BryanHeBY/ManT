@@ -470,3 +470,33 @@ fn include_uses_native_font_and_write_head_for_every_operand_spelling() {
         assert_eq!(actual, expected, "{source}");
     }
 }
+
+#[test]
+fn cursor_only_word_does_not_resurrect_a_covered_enclosure_mark() {
+    // Pinned term.c:678-718, 901-929: encode the retained opener, BACKBEFORE
+    // and its covering X; a following absolute-zero HORIZ changes only col.
+    // The original brace is still a raw byte, but can no longer paint ink.
+    const HEADER: &str = ".Dd November 27, 2026\n.Dt GLYPHS 1\n.Os\n.Sh NAME\n.Nm glyphs\n.Nd exercise bounded output\n.Sh DESCRIPTION\n";
+    const PREFIX: &str = ".No \"A\\p \" Sy \"Q\\z\"\n";
+    const MOTION: &str = ".No \"\\h'|0n'\"\n";
+    let real_break = format!(".br\n{MOTION}");
+    for (prefix, wrapper, tail, row) in [
+        (PREFIX, ".Pq X\n", MOTION, "Q X)"),
+        (PREFIX, ".Op X\n", MOTION, "Q X]"),
+        (PREFIX, ".Pq X\n", "", "Q X)"),
+        (PREFIX, ".Pq X\n", &real_break, "Q X)"),
+        (PREFIX, ".No ( Ns No X Ns No )\n", MOTION, "Q X)"),
+        (".No \"A\\p \" Sy Q\n", ".Pq X\n", MOTION, "Q (X)"),
+    ] {
+        let source = format!("{HEADER}{prefix}{wrapper}{tail}.Sh NEXT\nDone.\n");
+        let query = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let json = serde_json::to_vec(&mant_protocol::QueryBundle::from(&query)).unwrap();
+        let rebuilt: mant_protocol::QueryBundle = serde_json::from_slice(&json).unwrap();
+        let text = mant_render::render_query_man(&rebuilt.into());
+        let mut rows = body_rows(&text);
+        while rows.last().is_some_and(String::is_empty) {
+            rows.pop();
+        }
+        assert_eq!(rows, ["A", row], "{wrapper:?} {tail:?}");
+    }
+}

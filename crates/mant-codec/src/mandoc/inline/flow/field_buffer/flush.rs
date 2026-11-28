@@ -210,7 +210,9 @@ impl FieldBuffer {
         targets: FillTargets,
         brtrsp: bool,
     ) -> FlushReceipt {
-        if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind) {
+        if matches!(self.word_scan, super::WordScanPolicy::UnmodeledRewind)
+            && self.cursor_only_paint == super::CursorOnlyPaint::Unproved
+        {
             if self.proved_rejection.is_some() {
                 return FlushReceipt::Rejected {
                     passes: self.committed_passes.clone(),
@@ -313,6 +315,7 @@ impl FieldBuffer {
             deferred_projected_gaps: BTreeSet::new(),
             scan: None,
             proved_rejection: None,
+            cursor_only_paint: super::CursorOnlyPaint::Unproved,
             word_first_content: None,
             completed_empty_pass_end: None,
             #[cfg(test)]
