@@ -335,6 +335,15 @@ impl super::super::InlineExecutionState {
         }
     }
 
+    /// A run-in row still has independent input or occupies the native device.
+    /// A wholly invisible generated word can have no public output at all.
+    pub(in crate::mandoc) fn has_live_native_run_in_row(&self) -> bool {
+        self.definition.as_ref().is_some_and(|field| {
+            field.run_in_continuation
+                && (!field.field_buffer.is_empty() || field.hang_row.native_row_occupied())
+        })
+    }
+
     /// A consumed field may leave its physical device row open under
     /// NOBREAK/HANG (term.c:233-253). This is independent of IR ownership
     /// and of whether the next source node is filled or no-fill.

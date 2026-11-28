@@ -473,7 +473,16 @@ impl BlockState {
             && !self.paragraph.is_empty()
             && self.literal.is_empty()
         {
-            if self.pre_break_with_owner(RowOwner::Paragraph, CompletedRowOrigin::Layout) {
+            let shared_native_row = self.formatter.definition_head_row_pending()
+                && self.formatter.execution.has_live_native_run_in_row();
+            let changed =
+                self.pre_break_with_owner(RowOwner::Paragraph, CompletedRowOrigin::Layout);
+            // A diagnostic run-in separator can consist entirely of deferred
+            // blanks. pre_br consumes its native cells without projecting an
+            // IR delimiter; a later BODY word does not share that closed row.
+            if changed
+                || shared_native_row && !self.formatter.execution.has_live_native_run_in_row()
+            {
                 self.run_in_mode_row = RunInModeRow::Closed;
             }
         } else {

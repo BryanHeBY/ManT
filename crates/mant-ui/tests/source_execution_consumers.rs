@@ -460,3 +460,39 @@ fn accepted_pass_alignment_positions_the_next_styled_row() {
         );
     }
 }
+
+#[test]
+fn compact_diag_blank_body_gets_its_own_layout_row() {
+    for (body, distance) in [(".No \"\\&\"\n", 2), ("", 1), (".No BODYINK\n", 2)] {
+        let source = format!(
+            "{MDOC}BEFORE\n.nf\n.Bl -diag -compact\n.It AUHEAD\n.fi\n.nf\n{body}.El\n.fi\nAFTER\n"
+        );
+        let content = json_roundtrip::json_string_roundtrip(
+            &mant_loader::load_roff_bytes(source.as_bytes()).unwrap(),
+        );
+        for width in [28, 40, 78] {
+            let (_, terminal) = paint(&content, width);
+            let buffer = terminal.backend().buffer();
+            let head = position(buffer, "AUHEAD").1;
+            assert_eq!(
+                position(buffer, "AFTER").1,
+                head + distance,
+                "{width}: {body:?}"
+            );
+            if body.is_empty() {
+                continue;
+            }
+            if body.contains("BODYINK") {
+                assert_eq!(position(buffer, "BODYINK").1, head + 1, "{width}");
+            } else {
+                for column in 1..width + 1 {
+                    assert_eq!(
+                        buffer[(column, head + 1)].symbol(),
+                        " ",
+                        "{width}, col {column}"
+                    );
+                }
+            }
+        }
+    }
+}

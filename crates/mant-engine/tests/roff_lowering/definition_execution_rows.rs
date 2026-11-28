@@ -939,3 +939,47 @@ fn fill_transition_does_not_consume_a_later_authored_invisible_body_word() {
         );
     }
 }
+
+#[test]
+fn au_diag_mode_keeps_independent_empty_body_row() {
+    // Both pinned CVS terminal devices execute a separate BODY row after
+    // pre_br retires diag's generated blanks, even without a projected
+    // delimiter. Retiring the separator alone cannot create a new row.
+    for (style, middle, end_fill, expected) in [
+        (
+            "diag",
+            ".fi\n.nf\n.No \"\\&\"\n",
+            ".fi\n",
+            &["L", "A", "", "R"][..],
+        ),
+        (
+            "diag",
+            ".fi\n.nf\n.No \"\\&\"\n",
+            "",
+            &["L", "A", "", "R"][..],
+        ),
+        ("diag", ".fi\n.No \"\\&\"\n", "", &["L", "A", "", "R"][..]),
+        ("diag", ".No \"\\&\"\n", ".fi\n", &["L", "A", "", "R"][..]),
+        ("diag", ".fi\n.nf\n", ".fi\n", &["L", "A", "R"][..]),
+        (
+            "diag",
+            ".fi\n.nf\n.No Y\n",
+            ".fi\n",
+            &["L", "A", "Y", "R"][..],
+        ),
+        (
+            "inset",
+            ".fi\n.nf\n.No \"\\&\"\n",
+            ".fi\n",
+            &["L", "A", "", "R"][..],
+        ),
+    ] {
+        let input = format!("L\n.nf\n.Bl -{style} -compact\n.It A\n{middle}.El\n{end_fill}R\n");
+        let actual = description_rows(&input);
+        assert_eq!(
+            actual.iter().map(|x| x.trim()).collect::<Vec<_>>(),
+            expected,
+            "{input}"
+        );
+    }
+}
