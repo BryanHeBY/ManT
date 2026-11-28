@@ -30,6 +30,7 @@ pub(super) fn retire_plain_presentation(
     anchors: &[super::super::NativeWordAnchor],
     passes: &[super::super::field_buffer::FillPass],
     output_start: usize,
+    fresh_literal_row: bool,
 ) -> super::super::output::row_origins::OutputNodeEdits {
     let offset = execution
         .definition
@@ -40,9 +41,11 @@ pub(super) fn retire_plain_presentation(
     let projected_gaps = OnceCell::new();
     for (index, pass) in passes.iter().enumerate() {
         let mut hint = presentation.hint_at(execution.text_alignment, offset);
-        if index > 0
-            && execution.text_alignment == mant_ir::TextAlignment::Left
-            && passes[index - 1].boundary == super::super::field_buffer::FillBoundary::WordEndBreak
+        if execution.text_alignment == mant_ir::TextAlignment::Left
+            && ((index == 0 && fresh_literal_row)
+                || (index > 0
+                    && passes[index - 1].boundary
+                        == super::super::field_buffer::FillBoundary::WordEndBreak))
         {
             hint.first_line_indent_columns += leading_native_motion(buffer, pass, || {
                 projected_gaps.get_or_init(|| {
@@ -80,9 +83,9 @@ fn leading_native_motion<'a>(
     projected_gaps: impl FnOnce() -> &'a BTreeSet<usize>,
 ) -> i32 {
     use super::super::field_buffer::{FieldCell, MAX_EDITABLE_APPEND_CELLS};
-    // After term_flushln() ends a physical line, term_field() releases
-    // a surviving leading motion at the first emitted ink. These columns
-    // are row positioning and have no source scalars.
+    // On a fresh physical line, term_field() releases surviving leading
+    // motion at the first emitted ink (term.c:389-427), including the
+    // first pass. These columns are positioning, not source scalars.
     let prefix_cells = buffer.cells()[pass.start..pass.end]
         .iter()
         .take_while(|cell| {

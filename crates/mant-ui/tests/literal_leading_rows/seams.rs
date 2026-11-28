@@ -115,3 +115,52 @@ fn initial_row_normalization_rebases_temporary_origins_without_touching_table_te
     };
     assert_eq!(mant_ir::inline_plain_text(children), " CODE");
 }
+
+#[test]
+fn first_pass_literal_motion_positions_the_row_without_copyable_padding() {
+    // These exact sources ran against the registered pristine ASCII oracle.
+    // term.c's ESCAPE_HORIZ buffers NBRSP; term_field releases the advance
+    // before the first ink on the first pass as well as on later passes.
+    let mdoc = |body: &str| {
+        format!(".Dd January 1, 2024\n.Dt TEST 1\n.Os\n.Sh TEST\n.Bd -literal\nLEFT\n{body}\n.Ed\n")
+    };
+    let man = |body: &str| format!(".TH TEST 1\n.SH TEST\n.nf\nLEFT\n{body}\n.fi\n");
+    for (source, offset) in [
+        (mdoc("\\h'|1n'\\c\nRIGHT"), 1),
+        (mdoc("\\h'|1n'RIGHT"), 1),
+        (man("\\h'|1n'RIGHT"), 1),
+        (mdoc("\\h'|0n'RIGHT"), 0),
+    ] {
+        let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
+        let content = restored(&loaded);
+        for content in [&loaded, &content] {
+            let document = content.document.as_ref().unwrap();
+            let Block::Preformatted {
+                children,
+                inline_layout,
+                ..
+            } = &document.sections[0].blocks[0]
+            else {
+                panic!("expected one literal owner: {document:#?}");
+            };
+            assert_eq!(mant_ir::inline_plain_text(children), "LEFT\nRIGHT");
+            let left = inline_layout.row_layout(0).resolve(0, 0);
+            let right = inline_layout.row_layout(1).resolve(0, 0);
+            assert_eq!(right.first_visual_origin - left.first_visual_origin, offset);
+            let plain = plain_rows(content);
+            let left = plain.iter().find(|row| row.ends_with("LEFT")).unwrap();
+            let right = plain.iter().find(|row| row.ends_with("RIGHT")).unwrap();
+            assert_eq!(
+                right.len() - "RIGHT".len(),
+                left.len() - "LEFT".len() + offset as usize
+            );
+            for width in [40, 120] {
+                let rendered = DocumentView::new(content).render(width);
+                let left = &rendered.search("LEFT")[0];
+                let right = &rendered.search("RIGHT")[0];
+                assert_eq!(right.row, left.row + 1);
+                assert_eq!(right.start_column, left.start_column + offset as usize);
+            }
+        }
+    }
+}

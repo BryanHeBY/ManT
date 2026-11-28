@@ -256,7 +256,16 @@ fn retire_plain_paint(
             .borrow_mut()
             .record_accepted_covers(buffer, anchors, passes);
     }
-    let edits = retire_plain_presentation(execution, nodes, buffer, anchors, passes, *output_start);
+    let fresh_literal_row = execution.no_fill_word_active && !inherited.0;
+    let edits = retire_plain_presentation(
+        execution,
+        nodes,
+        buffer,
+        anchors,
+        passes,
+        *output_start,
+        fresh_literal_row,
+    );
     edits.remap(output_start);
     edits
 }
