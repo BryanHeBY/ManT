@@ -131,6 +131,7 @@ fn first_pass_literal_motion_positions_the_row_without_copyable_padding() {
         (man("\\h'|1n'RIGHT"), 1),
         (mdoc("\\h'|0n'RIGHT"), 0),
     ] {
+        let column_offset = usize::try_from(offset).unwrap();
         let loaded = mant_loader::load_roff_bytes(source.as_bytes()).unwrap();
         let content = restored(&loaded);
         for content in [&loaded, &content] {
@@ -152,14 +153,14 @@ fn first_pass_literal_motion_positions_the_row_without_copyable_padding() {
             let right = plain.iter().find(|row| row.ends_with("RIGHT")).unwrap();
             assert_eq!(
                 right.len() - "RIGHT".len(),
-                left.len() - "LEFT".len() + offset as usize
+                left.len() - "LEFT".len() + column_offset
             );
             for width in [40, 120] {
                 let rendered = DocumentView::new(content).render(width);
                 let left = &rendered.search("LEFT")[0];
                 let right = &rendered.search("RIGHT")[0];
                 assert_eq!(right.row, left.row + 1);
-                assert_eq!(right.start_column, left.start_column + offset as usize);
+                assert_eq!(right.start_column, left.start_column + column_offset);
             }
         }
     }
