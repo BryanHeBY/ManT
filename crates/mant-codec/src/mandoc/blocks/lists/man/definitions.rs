@@ -373,7 +373,7 @@ fn append_definition(
     let ManDefinitionEmission {
         mut item,
         indent_columns,
-        spacing_before: paragraph_distance,
+        spacing_before: mut paragraph_distance,
         source,
         max_width: max_term_width,
         merge,
@@ -398,6 +398,13 @@ fn append_definition(
                 DefinitionMerge::None | DefinitionMerge::From { .. } => None,
             };
             if let Some((first_pending, last_key)) = first_pending {
+                // The first pending TP already executed pre_TP's outer
+                // paragraph distance. A TQ continues that owner; its own
+                // zero distance must not overwrite the settled boundary.
+                paragraph_distance = items[first_pending]
+                    .layout
+                    .spacing_before_lines
+                    .unwrap_or(paragraph_distance);
                 let mut evidence = context.native_heads.borrow_mut();
                 let operands = evidence
                     .combine_operands(items[first_pending..].iter().chain(std::iter::once(&item)));
@@ -610,6 +617,70 @@ mod tests {
                 block,
                 Block::Paragraph { children, .. } if super::plain_text(children) == "BODY"
             )));
+        }
+    }
+
+    #[test]
+    fn native_tq_preserves_the_first_tags_settled_external_gap() {
+        // AX pinned CVS ASCII and UTF-8: prior IP/TP, optional real br,
+        // and successive TQ heads share POST without adding alias gaps.
+        for (prior, control, pd, aliases, expected) in [
+            (".IP A 6n\nPRE\n", "", 0, 1, 0),
+            (".TP 6n\n.B A\nPRE\n", "", 1, 1, 1),
+            (".IP A 6n\nPRE\n", ".br\n", 2, 2, 2),
+            (".IP A 6n\nPRE\n", "", 3, 3, 3),
+            (".IP A 6n\nPRE\n", "", 2, 0, 2),
+            ("", "", 2, 1, 0),
+        ] {
+            let mut source =
+                format!(".TH AX 1\n.SH DESCRIPTION\n.PD {pd}\n{prior}{control}.TP 6n\n.B BETA\n");
+            use std::fmt::Write as _;
+            for index in 0..aliases {
+                writeln!(source, ".TQ\n.I GAMMA{index}").unwrap();
+            }
+            source.push_str("POST\n");
+            let document = crate::mandoc::parse_plain_manual(
+                std::path::Path::new("ax-tq-gap.1"),
+                source.as_bytes(),
+            )
+            .unwrap();
+            let items = document.sections[0]
+                .blocks
+                .iter()
+                .filter_map(|block| match block {
+                    Block::DefinitionList { items, .. } => Some(items),
+                    _ => None,
+                })
+                .flatten()
+                .collect::<Vec<_>>();
+            assert_eq!(
+                items.len(),
+                if prior.is_empty() { 1 } else { 2 },
+                "{source}"
+            );
+            let owner = items.last().unwrap();
+            assert_eq!(
+                owner.layout.spacing_before_lines,
+                Some(expected),
+                "{source}"
+            );
+            let tags = owner
+                .terms
+                .iter()
+                .map(|term| super::plain_text(term))
+                .collect::<Vec<_>>();
+            let mut expected_tags = vec!["BETA".to_owned()];
+            expected_tags.extend((0..aliases).map(|index| format!("GAMMA{index}")));
+            assert_eq!(tags, expected_tags, "{source}");
+            let assert_body = |item: &DefinitionItem, text| {
+                assert!(item.description.iter().any(|block| matches!(
+                    block, Block::Paragraph { children, .. } if super::plain_text(children) == text
+                )), "{source}");
+            };
+            assert_body(owner, "POST");
+            if !prior.is_empty() {
+                assert_body(items[0], "PRE");
+            }
         }
     }
 
