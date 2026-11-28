@@ -727,6 +727,13 @@ fn literal_word_can_carry_native_backtracking(
         && text.bytes().all(|byte| byte.is_ascii_graphic())
         && entry.prefix.as_ref().is_some_and(|prefix| {
             prefix.start == 0
+                // A still-buffered glyph in an incremental definition
+                // pass has not settled its boundary spacing. Keep the
+                // pass owner's existing separator decision (e.g. a link
+                // suffix following a HEAD break).
+                && !(entry.domain == ReplayDomain::DefinitionLine
+                    && prefix.pass == ReplayPass::Incremental
+                    && context.zero_advance.has_buffered_glyph())
                 && prefix.cursor_retreat == 0
                 && (prefix.backbefore || prefix.backafter)
                 // A source TABREF changes neither BACK flag; other tail
