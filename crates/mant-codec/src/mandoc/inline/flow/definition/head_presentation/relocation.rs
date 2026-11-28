@@ -218,6 +218,19 @@ fn has_no_ink_or_break(nodes: &[Inline]) -> bool {
     })
 }
 
+// An overwritten annotation label can leave empty formatting shells in the
+// native BODY. Anchors, breaks, whitespace, and nested links aren't shells:
+// they can carry ownership or occupy a visible position.
+fn is_empty_annotation_label(nodes: &[Inline]) -> bool {
+    nodes.iter().all(|node| match node {
+        Inline::Text { value } | Inline::Code { value } => value.is_empty(),
+        Inline::Strong { children } | Inline::Emphasis { children } => {
+            is_empty_annotation_label(children)
+        }
+        _ => false,
+    })
+}
+
 struct AcceptedInk<'a> {
     cells: &'a [HeadCell],
     aliases: &'a BTreeMap<String, NativeCell>,
@@ -314,6 +327,9 @@ impl<'a> AcceptedInk<'a> {
                         let Some(owner) = target_owner(target) else {
                             return false;
                         };
+                        if is_empty_annotation_label(children) {
+                            continue;
+                        }
                         let before = self.matched;
                         if !self.scan(children, Some(owner)) || self.matched == before {
                             return false;
@@ -414,7 +430,32 @@ mod tests {
         );
         assert_eq!(beside_body, [text("  R<x>")]);
 
+        let provisional = |children| Inline::Link {
+            target: mant_ir::LinkTarget::External {
+                uri: crate::mandoc::inline::ownership::markers::target_key(0),
+            },
+            title: None,
+            children,
+        };
+        let mut after_empty_annotation = vec![
+            provisional(vec![Inline::Emphasis {
+                children: vec![text("")],
+            }]),
+            witness.clone(),
+            text("H"),
+        ];
+        assert_eq!(
+            proof.clone().restore(&[], &mut after_empty_annotation),
+            Some(original)
+        );
+
         for mut wrong in [
+            vec![provisional(vec![text(" ")]), witness.clone(), text("H")],
+            vec![
+                provisional(vec![Inline::anchor("authored-body")]),
+                witness.clone(),
+                text("H"),
+            ],
             vec![text("H")],                               // same glyph, BODY source
             vec![text("END"), witness.clone(), text("H")], // foreign prefix
             vec![Inline::line_break(), witness.clone(), text("H")],
